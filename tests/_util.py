@@ -21,6 +21,12 @@ class TempDirTestCase(unittest.TestCase):
         TMP_ROOT.mkdir(exist_ok=True)
         self.tmp = Path(tempfile.mkdtemp(prefix="test-", dir=str(TMP_ROOT)))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        # .tmp/ nằm trong repo agent-stack: chặn git tìm ngược lên để fixture là project độc lập.
+        import os
+        old = os.environ.get("GIT_CEILING_DIRECTORIES")
+        os.environ["GIT_CEILING_DIRECTORIES"] = str(TMP_ROOT)
+        self.addCleanup(lambda: os.environ.pop("GIT_CEILING_DIRECTORIES") if old is None
+                        else os.environ.__setitem__("GIT_CEILING_DIRECTORIES", old))
 
     def write(self, rel: str, text: str) -> Path:
         path = self.tmp / rel

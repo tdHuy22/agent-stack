@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (skill `vet-skill`, skill-scanner 2.1.0 trong `.venv`, kiểm duyệt 3 repo).
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`; plugin validate đạt; 49 test đạt).
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ2: dựng plugin, hook giữ trạng thái phiên, statusline, skill `session-keeper`.
-  2. GĐ2b: skill `tien-do`.
-  3. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh`.
+  1. GĐ2b: skill `tien-do` (dùng lại `plugin/lib/agentstack.py`).
+  2. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh`.
+  3. GĐ4: đội agent và bộ eval (chưa chạy eval khi chưa được duyệt ngân sách).
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -36,12 +36,14 @@
 - [ ] **Bạn làm:** đọc báo cáo, rồi chạy `vet.py approve <khóa> --note "..."` cho mục bạn đồng ý.
 
 ### GĐ2: Bền bỉ phiên (#3)
-- [ ] Plugin `plugin/` + `.claude-plugin/plugin.json`; `claude plugin validate`.
-- [ ] `global/AGENTS.global.md`, `global/CLAUDE.global.md`, `templates/`.
-- [ ] Hook: SessionStart, UserPromptSubmit (cảnh báo hạn mức), PreCompact, Stop, SessionEnd.
-- [ ] Statusline ghi `state/limits.json`.
-- [ ] Skill `session-keeper`.
-- [ ] Test hook bằng dữ liệu giả; chạy thử 1 phiên `claude -p --plugin-dir`.
+- [x] Plugin `plugin/` + `.claude-plugin/plugin.json`; `claude plugin validate plugin` → passed.
+- [x] `global/AGENTS.global.md`, `global/CLAUDE.global.md`. Mẫu PLAN/HANDOFF nằm trong `plugin/skills/session-keeper/templates/`.
+- [x] Hook: SessionStart (nạp §0), UserPromptSubmit (cảnh báo hạn mức), PreCompact, Stop (chỉ nhắc, không thêm lượt), SessionEnd (ghi phiên). Chống chạy trùng bằng file đánh dấu O_EXCL.
+- [x] `statusline/statusline.py` ghi `state/limits.json`.
+- [x] Skill `session-keeper` + `scripts/state.py` (show / init / handoff).
+- [x] Test hook bằng dữ liệu giả, trên Python 3.9 và 3.11.
+- [x] Chạy thử 1 phiên `claude -p --plugin-dir`: hook chạy đúng và context chèn vào đúng. Bước gọi model bị lỗi vì **CLI ở terminal hết phiên đăng nhập**.
+- [ ] **Bạn làm:** chạy `claude /login` ở terminal, rồi thử `claude --plugin-dir ~/Documents/Claude/agent-stack/plugin` trong một thư mục có PLAN.md.
 
 ### GĐ2b: Theo dõi tiến độ (#7)
 - [ ] Skill `tien-do` + `scripts/collect.py` + test.

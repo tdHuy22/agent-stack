@@ -346,7 +346,7 @@ Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc pl
 │   └── lib/      thư viện dùng chung: đọc §0/checkbox, git chỉ đọc, thư mục state
 ├── global/                              # AGENTS.global.md, CLAUDE.global.md (chỉ link khi cài)
 ├── opencode/agents/worker.md            # agent OpenCode
-├── statusline/ · templates/ · tools/ · evals/ · tests/
+├── statusline/ · tools/ · evals/ · tests/      # mẫu PLAN/HANDOFF nằm trong skill session-keeper
 ├── vet-reports/ · vetted.lock           # kết quả kiểm duyệt đồ bên thứ ba
 ├── install.sh                           # kích hoạt toàn cục; mặc định chỉ in ra việc sẽ làm
 └── state/ · backups/ · .venv/ · .tmp/   # không đưa vào git

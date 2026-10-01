@@ -1,0 +1,8 @@
+{
+  "name": "agent-stack",
+  "displayName": "Agent Stack",
+  "version": "0.2.0",
+  "description": "Bộ công cụ cá nhân: kiểm duyệt skill bên thứ ba, giữ trạng thái phiên, theo dõi tiến độ, gợi ý model và effort, chỉnh giọng văn.",
+  "author": {"name": "tdHuy22", "url": "https://github.com/tdHuy22"},
+  "keywords": ["session", "progress", "routing", "security", "writing"]
+}
