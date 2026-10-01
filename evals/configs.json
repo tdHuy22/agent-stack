@@ -1,0 +1,10 @@
+{
+  "configs": {
+    "A": {"model": "sonnet", "effort": "medium", "note": "gần với cấu hình hiện tại (settings.json đặt sonnet)"},
+    "B": {"model": "sonnet", "effort": "high", "note": "Sonnet nghĩ sâu hơn"},
+    "C": {"model": "opus", "effort": "medium", "note": "mặc định của gói Pro/Max"},
+    "D": {"model": "opus", "effort": "low", "note": "model mạnh, effort thấp: thường rẻ mà vẫn tốt"},
+    "E": {"model": "sonnet", "effort": "medium", "plugin": true, "note": "A + plugin agent-stack (subagent rẻ, hook)"},
+    "H": {"model": "haiku", "effort": "medium", "note": "chỉ để đo trần dưới; không dùng cho việc khó"}
+  }
+}

@@ -68,7 +68,7 @@ class InstallTests(TempDirTestCase):
         claude_md = self.home / ".claude" / "CLAUDE.md"
         self.assertEqual(os.readlink(claude_md), str(self.stack / "global" / "CLAUDE.global.md"))
         self.assertTrue((self.home / ".config" / "opencode" / "AGENTS.md").is_symlink())
-        self.assertTrue((self.home / ".agents" / "skills" / "tien-do").is_symlink())
+        self.assertTrue((self.home / ".config" / "opencode" / "skills" / "tien-do").is_symlink())
         self.assertTrue((self.home / ".config" / "opencode" / "agents" / "worker.md").is_symlink())
         data = json.loads(settings.read_text())
         self.assertEqual(data["model"], "sonnet")
@@ -119,7 +119,7 @@ class InstallTests(TempDirTestCase):
         self.assertIn("project: tự cài khi cần", out)
         self.assertTrue((self.stack / "vendor" / "skills" / "demo" / "SKILL.md").exists())
         self.assertFalse((self.stack / "vendor" / "skills" / "demo" / ".claude-plugin").exists())
-        self.assertTrue((self.home / ".agents" / "skills" / "demo").is_symlink())
+        self.assertTrue((self.home / ".config" / "opencode" / "skills" / "demo").is_symlink())
         mp = json.loads((self.stack / ".claude-plugin" / "marketplace.json").read_text())
         self.assertIn("agent-stack-vendor", [p["name"] for p in mp["plugins"]])
         made = self.calls_made()

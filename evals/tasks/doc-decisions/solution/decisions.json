@@ -1,0 +1,17 @@
+[
+  {
+    "decision": "Chuyển CI sang runner mới",
+    "owner": "Đỗ Minh An",
+    "due": "2026-10-15"
+  },
+  {
+    "decision": "Thêm kiểm tra secret vào pre-commit",
+    "owner": "Vũ Thu Hà",
+    "due": "2026-10-05"
+  },
+  {
+    "decision": "Viết lại tài liệu onboarding",
+    "owner": "Ngô Thanh Bình",
+    "due": "2026-10-31"
+  }
+]

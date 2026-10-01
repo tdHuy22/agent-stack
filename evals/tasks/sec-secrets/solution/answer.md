@@ -1,0 +1,1 @@
+settings.py: API_TOKEN hardcode trong code. auth.py login: ghi password vào log, và mật khẩu admin hardcode.

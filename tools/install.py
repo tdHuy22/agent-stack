@@ -10,7 +10,7 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   plugin      marketplace cục bộ agent-stack-local + plugin agent-stack (scope user)
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh
-  opencode    symlink skill (agent-stack + vendor) vào ~/.agents/skills/, agent vào ~/.config/opencode/agents/
+  opencode    symlink skill (agent-stack + vendor) vào ~/.config/opencode/skills/, agent vào ~/.config/opencode/agents/
 
 Ví dụ:
   python3 tools/install.py                 # xem trước
@@ -228,7 +228,8 @@ class Installer:
 
     def step_opencode(self) -> None:
         self.say("[opencode] skill và agent cho OpenCode")
-        skills_dir = self.home / ".agents" / "skills"
+        # OpenCode v2 theo dõi ~/.config/opencode/skills; glob của nó đi theo symlink.
+        skills_dir = self.oc_dir / "skills"
         sources = sorted((HOME_STACK / "plugin" / "skills").glob("*/SKILL.md"))
         sources += sorted((HOME_STACK / "vendor" / "skills").glob("*/SKILL.md"))
         for skill_md in sources:

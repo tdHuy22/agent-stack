@@ -1,0 +1,1 @@
+Tối đa 120 request mỗi phút; header X-RateLimit-Remaining; vượt giới hạn trả 429.

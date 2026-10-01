@@ -1,0 +1,1 @@
+get_user: SQL injection vì ghép chuỗi f-string vào câu lệnh SQL. Sửa: dùng tham số `?`.

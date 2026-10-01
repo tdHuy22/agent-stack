@@ -1,0 +1,1 @@
+download: path traversal, filename như ../../etc/passwd thoát khỏi BASE. Sửa: realpath rồi kiểm tra nằm trong BASE.
