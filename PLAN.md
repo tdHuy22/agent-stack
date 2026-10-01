@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, sao lưu cấu hình, số liệu nền trong `BASELINE.md`).
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (skill `vet-skill`, skill-scanner 2.1.0 trong `.venv`, kiểm duyệt 3 repo).
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ1: cài skill-scanner vào `.venv`, viết `vet-skill`, kiểm duyệt 3 repo mẫu.
-  2. GĐ2: dựng plugin, hook giữ trạng thái phiên, statusline, skill `session-keeper`.
-  3. GĐ2b: skill `tien-do`.
+  1. GĐ2: dựng plugin, hook giữ trạng thái phiên, statusline, skill `session-keeper`.
+  2. GĐ2b: skill `tien-do`.
+  3. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh`.
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -27,9 +27,13 @@
 - [ ] **Bạn làm:** điền số liệu `/usage` và `/insights` vào `BASELINE.md`.
 
 ### GĐ1: Cổng kiểm duyệt
-- [ ] Cài `cisco-ai-skill-scanner` vào `.venv` (sau khi kiểm giấy phép).
-- [ ] Skill `vet-skill` + `scripts/vet.py` + test.
-- [ ] Kiểm duyệt 3 repo: anthropics/skills, OthmanAdi/planning-with-files, blader/humanizer. Ghi `vetted.lock` và `vet-reports/`.
+- [x] Cài `cisco-ai-skill-scanner==2.1.0` vào `.venv` (Apache-2.0; kéo theo nhiều thư viện nặng như litellm, openai, fastapi, nên cài cô lập).
+- [x] Skill `vet-skill`: `scripts/vet.py` + `scripts/redflags.py` + test (FAIL khi có dấu hiệu mã độc trong code, REVIEW khi cần người đọc).
+- [x] Kiểm duyệt 3 repo, ghi `vetted.lock` và `vet-reports/`:
+  - humanizer: REVIEW → Claude đọc tay, khuyến nghị cài.
+  - webapp-testing: REVIEW → Claude đọc tay, khuyến nghị cài khi cần.
+  - planning-with-files: REVIEW → không cài cả repo (507 file, 17 hook), dùng `session-keeper` tự viết thay thế.
+- [ ] **Bạn làm:** đọc báo cáo, rồi chạy `vet.py approve <khóa> --note "..."` cho mục bạn đồng ý.
 
 ### GĐ2: Bền bỉ phiên (#3)
 - [ ] Plugin `plugin/` + `.claude-plugin/plugin.json`; `claude plugin validate`.

@@ -1,0 +1,103 @@
+{
+  "entries": {
+    "OthmanAdi/planning-with-files": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-27",
+      "redflags": {
+        "medium": 12
+      },
+      "ref": "master",
+      "report": "vet-reports/OthmanAdi__planning-with-files@51c1caa27f9f.md",
+      "scanner": {
+        "counts": {
+          "critical": 16,
+          "high": 1,
+          "info": 17,
+          "low": 1,
+          "medium": 37
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "51c1caa27f9fefe259e45a7cc92fa79ee8787cd7",
+      "source": "github:OthmanAdi/planning-with-files",
+      "stars": 27234,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/skills:skills/webapp-testing": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "none",
+      "license_files": [
+        "LICENSE.txt: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-29",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__skills__skills-webapp-testing@8a1541c4a3ff.md",
+      "scanner": {
+        "counts": {
+          "high": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
+      "source": "github:anthropics/skills",
+      "stars": 179266,
+      "subpath": "skills/webapp-testing",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "blader/humanizer": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-28",
+      "redflags": {
+        "medium": 1
+      },
+      "ref": "main",
+      "report": "vet-reports/blader__humanizer@225a6f39ac85.md",
+      "scanner": {
+        "counts": {
+          "low": 2
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+      "source": "github:blader/humanizer",
+      "stars": 53305,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    }
+  },
+  "version": 1
+}

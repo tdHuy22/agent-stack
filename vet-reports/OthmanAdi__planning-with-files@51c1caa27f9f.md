@@ -1,0 +1,657 @@
+# Kiểm duyệt: OthmanAdi/planning-with-files
+
+- Ngày: 2026-10-01 · Công cụ: vet.py/1 + skill-scanner 2.1.0
+- Nguồn: github:OthmanAdi/planning-with-files · Commit: `51c1caa27f9fefe259e45a7cc92fa79ee8787cd7`
+- **Phán quyết: REVIEW**
+
+## Repo
+
+| Sao | Cập nhật | Archived | Giấy phép | Chủ sở hữu |
+|---:|---|---|---|---|
+| 27234 | 2026-09-27 | False | MIT | User |
+
+File giấy phép: LICENSE: MIT
+
+## Thống kê file
+
+binary: 7, code: 507, md: 196, other: 26 · tổng 30241 KB
+
+## Lý do
+
+- ⚠️ [skill-scanner PATH_TRAVERSAL_OPEN] Path traversal vulnerability - user-controlled file path (mẫu lỗ hổng, có thể báo nhầm) (×14, ví dụ .cursor/skills/planning-with-files/scripts/inject-plan.py:1268)
+- ⚠️ [skill-scanner COMMAND_INJECTION_JS_CHILD_PROCESS] Node.js child_process module usage for shell command execution (mẫu lỗ hổng, có thể báo nhầm) (×2, ví dụ .pi/skills/planning-with-files/extensions/planning-with-files/runtime.ts:7)
+- ⚠️ [skill-scanner ALLOWED_TOOLS_BASH_VIOLATION] Code executes bash but Bash tool not in allowed-tools (mẫu lỗ hổng, có thể báo nhầm) (.kiro/skills/planning-with-files/SKILL.md:None)
+- ⚠️ Có 17 hook tự chạy khi dùng.
+- ⚠️ allowed-tools cấp Bash không giới hạn.
+- ⚠️ Có 507 file mã hoặc cấu hình chạy được; cần đọc trước khi cài.
+
+## Thành phần tự chạy hoặc có quyền
+
+- **Hook:** 
+  - `SessionStart` [] command: `$GEMINI_PROJECT_DIR/.gemini/hooks/session-start.sh` (.gemini/settings.json)
+  - `BeforeAgent` [] command: `$GEMINI_PROJECT_DIR/.gemini/hooks/before-agent.sh` (.gemini/settings.json)
+  - `AfterTool` [write_file|edit_file|replace|create_file|patch] command: `$GEMINI_PROJECT_DIR/.gemini/hooks/after-tool.sh` (.gemini/settings.json)
+  - `SessionEnd` [] command: `$GEMINI_PROJECT_DIR/.gemini/hooks/session-end.sh` (.gemini/settings.json)
+  - `SessionStart` [startup|resume|clear|compact] command: `python3 .codex/hooks/run_sh.py session-start.sh 2>/dev/null || python3 "$HOME/.codex/hooks/run_sh.py" session-start.sh 2>/dev/null || true` (.codex/hooks.json)
+  - `UserPromptSubmit` [] command: `python3 .codex/hooks/run_sh.py user-prompt-submit.sh 2>/dev/null || python3 "$HOME/.codex/hooks/run_sh.py" user-prompt-submit.sh 2>/dev/null` (.codex/hooks.json)
+  - `PreToolUse` [Bash|apply_patch|Edit|Write] command: `python3 .codex/hooks/pre_tool_use.py 2>/dev/null || python3 "$HOME/.codex/hooks/pre_tool_use.py" 2>/dev/null || true` (.codex/hooks.json)
+  - `PermissionRequest` [] command: `python3 .codex/hooks/permission_request.py 2>/dev/null || python3 "$HOME/.codex/hooks/permission_request.py" 2>/dev/null || true` (.codex/hooks.json)
+  - `PostToolUse` [apply_patch|Edit|Write] command: `python3 .codex/hooks/post_tool_use.py 2>/dev/null || python3 "$HOME/.codex/hooks/post_tool_use.py" 2>/dev/null || true` (.codex/hooks.json)
+  - `PreCompact` [*] command: `python3 .codex/hooks/run_sh.py pre-compact.sh 2>/dev/null || python3 "$HOME/.codex/hooks/run_sh.py" pre-compact.sh 2>/dev/null || true` (.codex/hooks.json)
+  - `Stop` [] command: `python3 .codex/hooks/stop.py 2>/dev/null || python3 "$HOME/.codex/hooks/stop.py" 2>/dev/null || true` (.codex/hooks.json)
+  - `SessionStart` [startup|resume|clear|compact] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh session-start` (hooks/hooks.json)
+  - `UserPromptSubmit` [] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh user-prompt-submit` (hooks/hooks.json)
+  - `PreToolUse` [Write|Edit|Bash|Read|Glob|Grep] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh pre-tool-use` (hooks/hooks.json)
+  - `PostToolUse` [Write|Edit] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh post-tool-use` (hooks/hooks.json)
+  - `PreCompact` [*] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh pre-compact` (hooks/hooks.json)
+  - `Stop` [] command: `sh ${CLAUDE_PLUGIN_ROOT}/hooks/claude-hook.sh stop` (hooks/hooks.json)
+- **MCP:** không có
+- **Monitor:** không có
+- **bin/ trên PATH:** không có
+- **Script khi cài:** không có
+- **Nguồn plugin bên ngoài:** không có
+
+## Skill và agent
+
+- `.cursor/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.gemini/skills/planning-with-files`: name=`planning-with-files`, mô tả 604 ký tự
+- `.mastracode/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.continue/skills/planning-with-files`: name=`planning-with-files`, mô tả 623 ký tự
+- `.opencode/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.agents/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.codex/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.factory/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.kiro/skills/planning-with-files`: name=`planning-with-files`, mô tả 493 ký tự, allowed-tools=`shell read write`
+- `skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `skills/i18n/planning-with-files-es`: name=`planning-with-files-es`, mô tả 775 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `skills/i18n/planning-with-files-zh`: name=`planning-with-files-zh`, mô tả 314 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `skills/i18n/planning-with-files-de`: name=`planning-with-files-de`, mô tả 728 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `skills/i18n/planning-with-files-zht`: name=`planning-with-files-zht`, mô tả 318 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `skills/i18n/planning-with-files-ar`: name=`planning-with-files-ar`, mô tả 627 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.codebuddy/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+- `.hermes/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự
+- `.pi/skills/planning-with-files`: name=`planning-with-files`, mô tả 606 ký tự, allowed-tools=`Read Write Edit Bash Glob Grep`, **có hook**
+
+## Dấu hiệu (luật riêng)
+
+| Mức | Luật | Vị trí | Loại file | Trích |
+|---|---|---|---|---|
+| medium | hidden-unicode | .dsh/packages/dsh-planning-with-files/__tests__/core.test.ts:150 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | .dsh/packages/dsh-planning-with-files/src/core.ts:175 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | .opencode/packages/opencode-planning-with-files/__tests__/core.test.ts:150 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | .opencode/packages/opencode-planning-with-files/src/core.ts:175 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_planning_disabled_optout.py:358 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_planning_disabled_optout.py:359 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_planning_disabled_optout.py:363 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_planning_disabled_optout.py:369 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_planning_disabled_optout.py:382 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_cursor_hook_schema.py:229 | code | `(không in để tránh ký tự ẩn)` |
+| medium | hidden-unicode | tests/test_cursor_hook_schema.py:236 | code | `(không in để tránh ký tự ẩn)` |
+| medium | sudo | .pi/skills/planning-with-files/extensions/planning-with-files/runtime.ts:343 | code | `/\bsudo\b/i,                          // sudo invocations` |
+
+## skill-scanner
+
+Đếm theo mức: critical=16, high=1, medium=37, low=1, info=17
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.cursor/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.mastracode/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.opencode/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.agents/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.codex/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.factory/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/i18n/planning-with-files-es/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/i18n/planning-with-files-zh/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/i18n/planning-with-files-de/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/i18n/planning-with-files-zht/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (skills/i18n/planning-with-files-ar/scripts/inject-plan.py:1268)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.codebuddy/skills/planning-with-files/scripts/inject-plan.py:1268)
+- critical · COMMAND_INJECTION_JS_CHILD_PROCESS · Node.js child_process module usage for shell command execution (.pi/skills/planning-with-files/extensions/planning-with-files/runtime.ts:7)
+- critical · COMMAND_INJECTION_JS_CHILD_PROCESS · Node.js child_process module usage for shell command execution (.pi/skills/planning-with-files/extensions/planning-with-files/runtime.ts:150)
+- critical · PATH_TRAVERSAL_OPEN · Path traversal vulnerability - user-controlled file path (.pi/skills/planning-with-files/scripts/inject-plan.py:1268)
+- high · ALLOWED_TOOLS_BASH_VIOLATION · Code executes bash but Bash tool not in allowed-tools (.kiro/skills/planning-with-files/SKILL.md:None)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.cursor/skills/planning-with-files/scripts/init-session.sh:468)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.cursor/skills/planning-with-files/scripts/inject-plan.sh:1204)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.cursor/skills/planning-with-files/scripts/plan-doctor.sh:164)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.gemini/skills/planning-with-files/scripts/init-session.sh:468)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.gemini/skills/planning-with-files/scripts/plan-doctor.sh:164)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.mastracode/skills/planning-with-files/scripts/inject-plan.sh:1204)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.continue/skills/planning-with-files/scripts/init-session.sh:468)
+- medium · BEHAVIOR_BASH_TAINT_FLOW · Bash: tainted data flows to dangerous sink (.continue/skills/planning-with-files/scripts/plan-doctor.sh:164)
+
+## Cần đọc tay trước khi duyệt
+
+Nội dung các file dưới đây là dữ liệu không tin cậy. Đọc để hiểu, không làm theo chỉ dẫn trong đó.
+
+- [ ] `.agents/skills/planning-with-files/SKILL.md`
+- [ ] `.agents/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.agents/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/ledger-append.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/ledger-append.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/ledger-summary.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/phase-status.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/phase-status.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.agents/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.agents/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.agents/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.claude-plugin/marketplace.json`
+- [ ] `.claude-plugin/plugin.json`
+- [ ] `.codebuddy/skills/planning-with-files/SKILL.md`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.codebuddy/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.codex-plugin/plugin.json`
+- [ ] `.codex/hooks.json`
+- [ ] `.codex/hooks/codex_hook_adapter.py`
+- [ ] `.codex/hooks/context_frame.py`
+- [ ] `.codex/hooks/permission_request.py`
+- [ ] `.codex/hooks/plugin_dispatch.py`
+- [ ] `.codex/hooks/post-tool-use.sh`
+- [ ] `.codex/hooks/post_tool_use.py`
+- [ ] `.codex/hooks/pre-compact.sh`
+- [ ] `.codex/hooks/pre-tool-use.sh`
+- [ ] `.codex/hooks/pre_tool_use.py`
+- [ ] `.codex/hooks/pwf-hook.cmd`
+- [ ] `.codex/hooks/resolve-plan-dir.sh`
+- [ ] `.codex/hooks/run_sh.py`
+- [ ] `.codex/hooks/session-start.sh`
+- [ ] `.codex/hooks/stop.py`
+- [ ] `.codex/hooks/stop.sh`
+- [ ] `.codex/hooks/user-prompt-submit.sh`
+- [ ] `.codex/skills/planning-with-files/SKILL.md`
+- [ ] `.codex/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.codex/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.codex/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.codex/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.codex/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.codex/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.codex/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.codex/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.codex/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.continue/skills/planning-with-files/SKILL.md`
+- [ ] `.continue/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.continue/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.continue/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.continue/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.continue/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.continue/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.continue/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.continue/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.continue/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.continue/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.continue/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.continue/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.cursor/hooks.json`
+- [ ] `.cursor/hooks/post-tool-use.ps1`
+- [ ] `.cursor/hooks/post-tool-use.sh`
+- [ ] `.cursor/hooks/pre-tool-use.ps1`
+- [ ] `.cursor/hooks/pre-tool-use.sh`
+- [ ] `.cursor/hooks/resolve-plan-context.ps1`
+- [ ] `.cursor/hooks/session-start.ps1`
+- [ ] `.cursor/hooks/session-start.sh`
+- [ ] `.cursor/hooks/stop.ps1`
+- [ ] `.cursor/hooks/stop.sh`
+- [ ] `.cursor/hooks/user-prompt-submit.ps1`
+- [ ] `.cursor/hooks/user-prompt-submit.sh`
+- [ ] `.cursor/skills/planning-with-files/SKILL.md`
+- [ ] `.cursor/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.cursor/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.cursor/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.cursor/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.cursor/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.cursor/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.cursor/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.cursor/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.cursor/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.dsh/packages/dsh-planning-with-files/__tests__/core.test.ts`
+- [ ] `.dsh/packages/dsh-planning-with-files/__tests__/plugin.test.ts`
+- [ ] `.dsh/packages/dsh-planning-with-files/package.json`
+- [ ] `.dsh/packages/dsh-planning-with-files/src/core.ts`
+- [ ] `.dsh/packages/dsh-planning-with-files/src/index.ts`
+- [ ] `.factory/skills/planning-with-files/SKILL.md`
+- [ ] `.factory/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.factory/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.factory/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.factory/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.factory/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.factory/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.factory/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.factory/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.factory/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.gemini/hooks/after-tool.sh`
+- [ ] `.gemini/hooks/before-agent.sh`
+- [ ] `.gemini/hooks/session-end.sh`
+- [ ] `.gemini/hooks/session-start.sh`
+- [ ] `.gemini/settings.json`
+- [ ] `.gemini/skills/planning-with-files/SKILL.md`
+- [ ] `.gemini/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.gemini/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.gemini/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.gemini/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.gemini/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.gemini/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.gemini/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.gemini/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.gemini/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.gemini/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.gemini/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.gemini/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.github/hooks/scripts/agent-stop.ps1`
+- [ ] `.github/hooks/scripts/agent-stop.sh`
+- [ ] `.github/hooks/scripts/error-occurred.ps1`
+- [ ] `.github/hooks/scripts/error-occurred.sh`
+- [ ] `.github/hooks/scripts/post-tool-use.ps1`
+- [ ] `.github/hooks/scripts/post-tool-use.sh`
+- [ ] `.github/hooks/scripts/pre-tool-use.ps1`
+- [ ] `.github/hooks/scripts/pre-tool-use.sh`
+- [ ] `.github/hooks/scripts/session-start.ps1`
+- [ ] `.github/hooks/scripts/session-start.sh`
+- [ ] `.hermes/plugins/planning-with-files/__init__.py`
+- [ ] `.hermes/plugins/planning-with-files/constants.py`
+- [ ] `.hermes/plugins/planning-with-files/context_frame.py`
+- [ ] `.hermes/plugins/planning-with-files/hook_state.py`
+- [ ] `.hermes/plugins/planning-with-files/hooks.py`
+- [ ] `.hermes/plugins/planning-with-files/paths.py`
+- [ ] `.hermes/plugins/planning-with-files/planning_files.py`
+- [ ] `.hermes/plugins/planning-with-files/shell_hook.py`
+- [ ] `.hermes/plugins/planning-with-files/tools.py`
+- [ ] `.hermes/skills/planning-with-files/SKILL.md`
+- [ ] `.hermes/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.hermes/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.hermes/skills/planning-with-files/scripts/check-continue.sh`
+- [ ] `.hermes/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.hermes/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.hermes/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.hermes/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.hermes/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.hermes/skills/planning-with-files/scripts/sync-ide-folders.py`
+- [ ] `.kiro/skills/planning-with-files/SKILL.md`
+- [ ] `.kiro/skills/planning-with-files/assets/scripts/bootstrap.ps1`
+- [ ] `.kiro/skills/planning-with-files/assets/scripts/bootstrap.sh`
+- [ ] `.kiro/skills/planning-with-files/assets/scripts/check-complete.ps1`
+- [ ] `.kiro/skills/planning-with-files/assets/scripts/check-complete.sh`
+- [ ] `.kiro/skills/planning-with-files/assets/scripts/session-catchup.py`
+- [ ] `.mastracode/hooks.json`
+- [ ] `.mastracode/skills/planning-with-files/SKILL.md`
+- [ ] `.mastracode/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.mastracode/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.mastracode/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.mastracode/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.mastracode/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.mastracode/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.mastracode/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.opencode/package.json`
+- [ ] `.opencode/packages/opencode-planning-with-files/__tests__/core.test.ts`
+- [ ] `.opencode/packages/opencode-planning-with-files/__tests__/plugin.test.ts`
+- [ ] `.opencode/packages/opencode-planning-with-files/package.json`
+- [ ] `.opencode/packages/opencode-planning-with-files/src/core.ts`
+- [ ] `.opencode/packages/opencode-planning-with-files/src/index.ts`
+- [ ] `.opencode/plugins/planning-with-files.ts`
+- [ ] `.opencode/skills/planning-with-files/SKILL.md`
+- [ ] `.opencode/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.opencode/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.opencode/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.opencode/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.opencode/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.opencode/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.opencode/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.pi/skills/planning-with-files/SKILL.md`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/__tests__/attestation.test.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/__tests__/plan-anchor.test.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/__tests__/runtime.test.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/attestation.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/constants.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/index.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/package.json`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/plan.ts`
+- [ ] `.pi/skills/planning-with-files/extensions/planning-with-files/runtime.ts`
+- [ ] `.pi/skills/planning-with-files/package.json`
+- [ ] `.pi/skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/init-session.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `.pi/skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/ledger-append.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/ledger-append.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/ledger-summary.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/phase-status.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/phase-status.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `.pi/skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `.pi/skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `.pi/skills/planning-with-files/scripts/verify-shell-line-endings.mjs`
+- [ ] `examples/boxlite/quickstart.py`
+- [ ] `hooks/claude-hook.sh`
+- [ ] `hooks/hooks.json`
+- [ ] `scripts/_v240_update_hook_bodies.py`
+- [ ] `scripts/attest-plan.ps1`
+- [ ] `scripts/attest-plan.sh`
+- [ ] `scripts/build-clawhub-upload.py`
+- [ ] `scripts/bump-version.py`
+- [ ] `scripts/check-complete.ps1`
+- [ ] `scripts/check-complete.sh`
+- [ ] `scripts/check-continue.sh`
+- [ ] `scripts/gate-stop.sh`
+- [ ] `scripts/init-session.ps1`
+- [ ] `scripts/init-session.sh`
+- [ ] `scripts/inject-plan.py`
+- [ ] `scripts/inject-plan.sh`
+- [ ] `scripts/ledger-append.ps1`
+- [ ] `scripts/ledger-append.sh`
+- [ ] `scripts/ledger-summary.ps1`
+- [ ] `scripts/ledger-summary.sh`
+- [ ] `scripts/phase-status.ps1`
+- [ ] `scripts/phase-status.sh`
+- [ ] `scripts/plan-doctor.sh`
+- [ ] `scripts/resolve-plan-dir.ps1`
+- [ ] `scripts/resolve-plan-dir.sh`
+- [ ] `scripts/session-catchup.py`
+- [ ] `scripts/set-active-plan.ps1`
+- [ ] `scripts/set-active-plan.sh`
+- [ ] `scripts/skill-hook.sh`
+- [ ] `scripts/sync-ide-folders.py`
+- [ ] `skills/i18n/planning-with-files-ar/SKILL.md`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/attest-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/attest-plan.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/check-complete.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/check-complete.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/gate-stop.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/init-session.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/init-session.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/inject-plan.py`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/inject-plan.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/ledger-append.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/ledger-append.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/ledger-summary.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/ledger-summary.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/phase-status.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/phase-status.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/plan-doctor.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/resolve-plan-dir.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/session-catchup.py`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/set-active-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/set-active-plan.sh`
+- [ ] `skills/i18n/planning-with-files-ar/scripts/skill-hook.sh`
+- [ ] `skills/i18n/planning-with-files-de/SKILL.md`
+- [ ] `skills/i18n/planning-with-files-de/scripts/attest-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/attest-plan.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/check-complete.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/check-complete.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/gate-stop.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/init-session.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/init-session.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/inject-plan.py`
+- [ ] `skills/i18n/planning-with-files-de/scripts/inject-plan.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/ledger-append.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/ledger-append.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/ledger-summary.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/ledger-summary.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/phase-status.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/phase-status.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/plan-doctor.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/resolve-plan-dir.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/session-catchup.py`
+- [ ] `skills/i18n/planning-with-files-de/scripts/set-active-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-de/scripts/set-active-plan.sh`
+- [ ] `skills/i18n/planning-with-files-de/scripts/skill-hook.sh`
+- [ ] `skills/i18n/planning-with-files-es/SKILL.md`
+- [ ] `skills/i18n/planning-with-files-es/scripts/attest-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/attest-plan.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/check-complete.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/check-complete.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/gate-stop.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/init-session.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/init-session.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/inject-plan.py`
+- [ ] `skills/i18n/planning-with-files-es/scripts/inject-plan.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/ledger-append.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/ledger-append.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/ledger-summary.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/ledger-summary.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/phase-status.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/phase-status.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/plan-doctor.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/resolve-plan-dir.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/session-catchup.py`
+- [ ] `skills/i18n/planning-with-files-es/scripts/set-active-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-es/scripts/set-active-plan.sh`
+- [ ] `skills/i18n/planning-with-files-es/scripts/skill-hook.sh`
+- [ ] `skills/i18n/planning-with-files-zh/SKILL.md`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/attest-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/attest-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/check-complete.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/check-complete.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/gate-stop.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/init-session.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/init-session.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/inject-plan.py`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/inject-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/ledger-append.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/ledger-append.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/ledger-summary.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/ledger-summary.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/phase-status.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/phase-status.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/plan-doctor.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/resolve-plan-dir.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/session-catchup.py`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/set-active-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/set-active-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zh/scripts/skill-hook.sh`
+- [ ] `skills/i18n/planning-with-files-zht/SKILL.md`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/attest-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/attest-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/check-complete.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/check-complete.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/gate-stop.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/init-session.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/init-session.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/inject-plan.py`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/inject-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/ledger-append.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/ledger-append.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/ledger-summary.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/ledger-summary.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/phase-status.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/phase-status.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/plan-doctor.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/resolve-plan-dir.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/session-catchup.py`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/set-active-plan.ps1`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/set-active-plan.sh`
+- [ ] `skills/i18n/planning-with-files-zht/scripts/skill-hook.sh`
+- [ ] `skills/planning-with-files/SKILL.md`
+- [ ] `skills/planning-with-files/scripts/attest-plan.ps1`
+- [ ] `skills/planning-with-files/scripts/attest-plan.sh`
+- [ ] `skills/planning-with-files/scripts/check-complete.ps1`
+- [ ] `skills/planning-with-files/scripts/check-complete.sh`
+- [ ] `skills/planning-with-files/scripts/gate-stop.sh`
+- [ ] `skills/planning-with-files/scripts/init-session.ps1`
+- [ ] `skills/planning-with-files/scripts/init-session.sh`
+- [ ] `skills/planning-with-files/scripts/inject-plan.py`
+- [ ] `skills/planning-with-files/scripts/inject-plan.sh`
+- [ ] `skills/planning-with-files/scripts/ledger-append.ps1`
+- [ ] `skills/planning-with-files/scripts/ledger-append.sh`
+- [ ] `skills/planning-with-files/scripts/ledger-summary.ps1`
+- [ ] `skills/planning-with-files/scripts/ledger-summary.sh`
+- [ ] `skills/planning-with-files/scripts/phase-status.ps1`
+- [ ] `skills/planning-with-files/scripts/phase-status.sh`
+- [ ] `skills/planning-with-files/scripts/plan-doctor.sh`
+- [ ] `skills/planning-with-files/scripts/resolve-plan-dir.ps1`
+- [ ] `skills/planning-with-files/scripts/resolve-plan-dir.sh`
+- [ ] `skills/planning-with-files/scripts/session-catchup.py`
+- [ ] `skills/planning-with-files/scripts/set-active-plan.ps1`
+- [ ] `skills/planning-with-files/scripts/set-active-plan.sh`
+- [ ] `skills/planning-with-files/scripts/skill-hook.sh`
+- [ ] `tests/test_active_pointer_bom.py`
+- [ ] `tests/test_adapter_python_isolation.py`
+- [ ] `tests/test_attest_plan_powershell.py`
+- [ ] `tests/test_automatic_catchup_callers.py`
+- [ ] `tests/test_bsd_userland_sim.py`
+- [ ] `tests/test_build_clawhub_upload.py`
+- [ ] `tests/test_bump_version.py`
+- [ ] `tests/test_canonical_script_sync.py`
+- [ ] `tests/test_catchup_cross_project_guard.py`
+- [ ] `tests/test_catchup_i18n_security.py`
+- [ ] `tests/test_catchup_project_dir.py`
+- [ ] `tests/test_catchup_store_resolution_parity.py`
+- [ ] `tests/test_check_complete_resolver.py`
+- [ ] `tests/test_claude_plugin_operations.py`
+- [ ] `tests/test_clear_recovery.sh`
+- [ ] `tests/test_codex_hooks.py`
+- [ ] `tests/test_codex_nested_root_isolation.py`
+- [ ] `tests/test_codex_plugin_operations.py`
+- [ ] `tests/test_codex_session_isolation.py`
+- [ ] `tests/test_containment.py`
+- [ ] `tests/test_context_frame_security.py`
+- [ ] `tests/test_copilot_agent_stop.py`
+- [ ] `tests/test_cursor_hook_schema.py`
+- [ ] `tests/test_cursor_nested_root_isolation.py`
+- [ ] `tests/test_cursor_powershell_named_plans.py`
+- [ ] `tests/test_custom_adapter_catchup_privacy.py`
+- [ ] `tests/test_dsh_plugin_core_parity.py`
+- [ ] `tests/test_gate.py`
+- [ ] `tests/test_gemini_hook_contract.py`
+- [ ] `tests/test_hermes_adapter.py`
+- [ ] `tests/test_hermes_first_class.py`
+- [ ] `tests/test_hook_body_v240.py`
+- [ ] `tests/test_hook_resolver_integration.py`
+- [ ] `tests/test_hook_script_modes.py`
+- [ ] `tests/test_init_modes.py`
+- [ ] `tests/test_init_session_attestation_reporting.py`
+- [ ] `tests/test_init_session_powershell_slug.py`
+- [ ] `tests/test_init_session_slug.py`
+- [ ] `tests/test_inject_plan_python_parity.py`
+- [ ] `tests/test_inject_smart.py`
+- [ ] `tests/test_injection_determinism.py`
+- [ ] `tests/test_ledger.py`
+- [ ] `tests/test_ledger_utf8.py`
+- [ ] `tests/test_line_endings.py`
+- [ ] `tests/test_llms_txt.py`
+- [ ] `tests/test_nested_plan_isolation.py`
+- [ ] `tests/test_npm_package_line_endings.py`
+- [ ] `tests/test_path_fix.py`
+- [ ] `tests/test_phase_status_locking.py`
+- [ ] `tests/test_pi_docs_hook_support.py`
+- [ ] `tests/test_pi_extension_capabilities.py`
+- [ ] `tests/test_pi_extension_packaging.py`
+- [ ] `tests/test_plan_attestation.py`
+- [ ] `tests/test_plan_doctor_classification.py`
+- [ ] `tests/test_plan_listing.py`
+- [ ] `tests/test_plan_listing_distribution.py`
+- [ ] `tests/test_plan_regression_guard.py`
+- [ ] `tests/test_plan_selector_binding.py`
+- [ ] `tests/test_planning_disabled_optout.py`
+- [ ] `tests/test_plugin_skill_surface.py`
+- [ ] `tests/test_post_tool_nudge.py`
+- [ ] `tests/test_powershell_literal_paths.py`
+- [ ] `tests/test_precompact_hook.py`
+- [ ] `tests/test_ps1_windows_encoding.py`
+- [ ] `tests/test_public_capability_disclosure.py`
+- [ ] `tests/test_quiet_completion_hooks.py`
+- [ ] `tests/test_resolve_plan_dir.py`
+- [ ] `tests/test_resolver_parity.py`
+- [ ] `tests/test_resolver_plan_root_pin.py`
+- [ ] `tests/test_root_mode_floor.py`
+- [ ] `tests/test_script_location_parity.py`
+- [ ] `tests/test_script_permissions.py`
+- [ ] `tests/test_seo_docs_pages.py`
+- [ ] `tests/test_session_catchup.py`
+- [ ] `tests/test_session_catchup_copies_exact_basename.py`
+- [ ] `tests/test_session_catchup_opencode.py`
+- [ ] `tests/test_session_plan_ambiguity.py`
+- [ ] `tests/test_set_active_plan.py`
+- [ ] `tests/test_skill_frontmatter_valid.py`
+- [ ] `tests/test_skill_hook_dispatch_parity.py`
+- [ ] `tests/test_skill_md_version_parity.py`
+- [ ] `tests/test_standalone_post_tool_nudge.py`
+- [ ] `tests/test_standalone_skill_references.py`
+- [ ] `tests/test_stop_hook_dispatch.py`
+- [ ] `tests/test_sync_ide_folders.py`
+- [ ] `tests/test_template_transparency.py`
+- [ ] `tests/test_unarmed_plan_ambiguity.py`
+- [ ] `tests/test_v238_command_files.py`
+- [ ] `tests/test_verified_plan_snapshot.py`
+
+Duyệt xong thì ghi lại: `vet.py approve <khóa> --note "..."` (hoặc `reject`).
+
+## Nhận xét của Claude (2026-10-01, chưa phải xác nhận của bạn)
+
+- Khuyến nghị: **không cài cả repo.** Repo gộp bản cho khoảng 15 agent khác nhau: 507 file mã hoặc cấu hình, 17 hook, và `allowed-tools` cấp Bash không giới hạn. Đọc tay toàn bộ là không khả thi.
+- Các cảnh báo CRITICAL của skill-scanner (`PATH_TRAVERSAL_OPEN` ở `inject-plan.py:1268`) là báo nhầm. Đoạn code đó kiểm symlink, kiểm file nằm trong thư mục gốc, và mở file với `O_EXCL` và quyền `0600`.
+- Ý tưởng (ba file kế hoạch, nạp lại trạng thái qua hook) được dùng lại trong skill `session-keeper` tự viết, gọn hơn và đọc hết được.
