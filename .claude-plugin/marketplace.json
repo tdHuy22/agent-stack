@@ -1,0 +1,12 @@
+{
+  "name": "agent-stack-local",
+  "owner": {"name": "tdHuy22", "url": "https://github.com/tdHuy22"},
+  "description": "Marketplace cục bộ của agent-stack. Plugin được nạp tại chỗ từ thư mục này.",
+  "plugins": [
+    {
+      "name": "agent-stack",
+      "source": "./plugin",
+      "description": "Bộ công cụ cá nhân: kiểm duyệt skill, giữ trạng thái phiên, theo dõi tiến độ, gợi ý model và effort, chỉnh giọng văn."
+    }
+  ]
+}

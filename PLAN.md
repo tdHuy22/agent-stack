@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`, nối vào hook SessionStart). 61 test đạt.
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py` chỉ chạy thử). 70 test đạt.
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh` (chỉ chạy thử, không kích hoạt).
-  2. GĐ4: đội agent và bộ eval (chưa chạy eval khi chưa được duyệt ngân sách).
-  3. GĐ5: skill `task-router`, nối vào hook UserPromptSubmit và vào `tien-do`.
+  1. GĐ4: đội agent và bộ eval (chưa chạy eval khi chưa được duyệt ngân sách).
+  2. GĐ5: skill `task-router`, nối vào hook UserPromptSubmit và vào `tien-do`.
+  3. GĐ6: skill `giong-van`.
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -52,8 +52,12 @@
 - [ ] **Bạn làm (tùy chọn):** `python3 plugin/skills/tien-do/scripts/collect.py --all --md` để xem tổng quan mọi project. Lệnh chỉ đọc; mình không tự chạy vì bạn dặn không đụng vào project khác.
 
 ### GĐ3: Danh mục v1
-- [ ] Kiểm duyệt các mục ghi "Cài" ở mục 6 của kế hoạch; ghi `catalog.json`.
-- [ ] `install.sh` (mặc định chỉ chạy thử).
+- [x] Kiểm duyệt 18 mục mới (ghim đúng commit mà marketplace chính thức dùng) + 3 mục cũ. Claude đã đọc tay và ghi nhận xét vào `vetted.lock`: 11 cài, 7 có điều kiện hoặc chỉ dùng trong project, 1 thử trong 1 project, 2 không cài (semgrep plugin, planning-with-files).
+- [x] Tinh chỉnh luật sau khi chạy thật: mẫu trong chú thích hạ một bậc; U+200B trước code fence là lành; bắt `allowed-tools` tự duyệt sẵn lệnh tải-rồi-chạy; nhận xét đọc tay giữ được qua các lần quét lại.
+- [x] Sửa lỗi của chính repo: mã nguồn từng chứa ký tự vô hình thật (do escape bị giải mã khi ghi file). Có test vệ sinh chặn lỗi này.
+- [x] `catalog.json` + `tools/install.py` (`install.sh`): mặc định chỉ xem trước; chỉ cài mục bạn đã `approve`; skill chỉ có chỉ dẫn được chép đúng commit đã kiểm vào `vendor/`; có `--rollback`. Test chạy trên HOME giả.
+- [ ] **Bạn làm:** đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve <khóa> --note "..."` cho mục đồng ý.
+- [ ] **Bạn làm:** xem trước bằng `./install.sh`, rồi `./install.sh --apply` khi đồng ý (thêm `--restore-workflow-warning` để bật lại cảnh báo usage).
 
 ### GĐ4: Đội agent và eval
 - [ ] Agent: reviewer, researcher, test-runner, oc-worker, explore-lite; agent OpenCode `worker`.

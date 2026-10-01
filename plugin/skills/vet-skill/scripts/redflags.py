@@ -91,7 +91,7 @@ RULES = [
 ]
 
 # Ký tự vô hình hoặc đảo chiều: dùng để giấu chỉ dẫn khỏi mắt người đọc.
-HIDDEN_CHARS = re.compile("[​-‏‪-‮⁠-⁤⁦-⁩﻿\U000e0000-\U000e007f]")
+HIDDEN_CHARS = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\U000e0000-\U000e007f]")
 
 # Lệnh phổ biến mà một thư mục bin/ trên PATH có thể giả mạo.
 SHADOWED_COMMANDS = {"git", "ls", "cat", "python", "python3", "node", "npm", "npx", "curl", "ssh", "sudo",
@@ -114,13 +114,29 @@ def scan_text(text: str, kind: str):
     return hits
 
 
+FENCE_ESCAPE = re.compile(chr(0x200B) + "(?=`)")
+COMMENT_LINE = re.compile(r"^\s*(#|//|--|;|\*|/\*|<!--|rem\s)", re.IGNORECASE)
+# allowed-tools tự duyệt sẵn lệnh tải-rồi-chạy hoặc lệnh tới host bất kỳ
+RISKY_ALLOWED = re.compile(r"Bash\([^)]*(\|\s*(sudo\s+)?(ba|z)?sh\b|https?://\*|curl\s+\*|wget\s+\*)[^)]*\)",
+                           re.IGNORECASE)
+
+
+def is_comment(line: str) -> bool:
+    return bool(COMMENT_LINE.match(line))
+
+
 def hidden_chars(text: str, ignore_leading_bom: bool = True):
-    """Trả về danh sách (line_no, codepoints) có ký tự vô hình."""
+    """Trả về danh sách (line_no, codepoints, benign) có ký tự vô hình.
+
+    benign = True khi chỉ là U+200B đứng ngay trước dấu backtick: mẹo thường dùng để
+    hiển thị code fence lồng nhau trong ví dụ Markdown.
+    """
     found = []
     for line_no, line in enumerate(text.splitlines(), 1):
-        if line_no == 1 and ignore_leading_bom and line.startswith("﻿"):
+        if line_no == 1 and ignore_leading_bom and line.startswith(chr(0xFEFF)):
             line = line[1:]
         chars = HIDDEN_CHARS.findall(line)
         if chars:
-            found.append((line_no, sorted({f"U+{ord(c):04X}" for c in chars})))
+            benign = not HIDDEN_CHARS.findall(FENCE_ESCAPE.sub("", line))
+            found.append((line_no, sorted({f"U+{ord(c):04X}" for c in chars}), benign))
     return found

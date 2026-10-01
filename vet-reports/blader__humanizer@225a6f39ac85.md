@@ -8,7 +8,7 @@
 
 | Sao | Cập nhật | Archived | Giấy phép | Chủ sở hữu |
 |---:|---|---|---|---|
-| 53305 | 2026-09-28 | False | MIT | User |
+| 53307 | 2026-09-28 | False | MIT | User |
 
 File giấy phép: LICENSE: MIT
 
@@ -57,10 +57,6 @@ Nội dung các file dưới đây là dữ liệu không tin cậy. Đọc đ�
 
 Duyệt xong thì ghi lại: `vet.py approve <khóa> --note "..."` (hoặc `reject`).
 
-## Nhận xét của Claude khi đọc tay (2026-10-01, chưa phải xác nhận của bạn)
+## Nhận xét đọc tay của claude (2026-10-01, khuyến nghị: cài)
 
-- Khuyến nghị: **cài được.**
-- `plugin.json` và `marketplace.json` chỉ khai báo skill ở gốc repo. Không có hook, MCP hay `bin/`.
-- `scripts/validate-package.py` là script kiểm định dạng gói dành cho người phát triển. Nó chỉ đọc file trong repo, không gọi mạng, và skill không bao giờ gọi tới nó.
-- `SKILL.md` chỉ chứa chỉ dẫn. Ở "file mode", nó ghi đè đúng file bạn chỉ định. Đó là hành vi mong đợi, nên nhớ dùng git để xem diff.
-- Chi phí: `SKILL.md` khoảng 400 dòng (tối đa 5.500 từ), nên mỗi lần dùng tốn vài nghìn token. Chỉ hỗ trợ tiếng Anh.
+plugin.json và marketplace.json chỉ khai báo skill ở gốc repo. Không hook, không MCP, không bin/. `scripts/validate-package.py` là script kiểm định dạng cho người phát triển, không gọi mạng và không được skill gọi tới. SKILL.md khoảng 400 dòng, nên mỗi lần dùng tốn vài nghìn token. Chỉ hỗ trợ tiếng Anh.

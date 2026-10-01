@@ -8,7 +8,7 @@
 
 | Sao | Cập nhật | Archived | Giấy phép | Chủ sở hữu |
 |---:|---|---|---|---|
-| 179266 | 2026-09-29 | False | none | Organization |
+| 179270 | 2026-09-29 | False | none | Organization |
 
 File giấy phép: LICENSE.txt: Apache-2.0
 
@@ -55,10 +55,6 @@ Nội dung các file dưới đây là dữ liệu không tin cậy. Đọc đ�
 
 Duyệt xong thì ghi lại: `vet.py approve <khóa> --note "..."` (hoặc `reject`).
 
-## Nhận xét của Claude khi đọc tay (2026-10-01, chưa phải xác nhận của bạn)
+## Nhận xét đọc tay của claude (2026-10-01, khuyến nghị: có-điều-kiện)
 
-- Khuyến nghị: **cài được**, khi cần test web app cục bộ. Cần cài Playwright cho Python.
-- `scripts/with_server.py` chạy lệnh server bằng `shell=True`. Lệnh này do chính Claude truyền vào, script chỉ dò cổng trên `localhost` rồi dọn tiến trình khi xong. Đây là cảnh báo đúng về mẫu code, không phải dấu hiệu độc hại.
-- Các file `examples/` chỉ mở `http://localhost:5173`.
-- Giấy phép Apache-2.0 (`LICENSE.txt` trong thư mục skill).
-- `SKILL.md` dặn model không đọc mã nguồn script trước khi chạy `--help`. Mục đích là tiết kiệm context, không có gì đáng ngại.
+Cài khi cần test web app cục bộ; cần Playwright cho Python. `with_server.py` chạy lệnh server bằng shell=True, nhưng lệnh do chính Claude truyền vào và script chỉ dò cổng trên localhost. Giấy phép Apache-2.0.

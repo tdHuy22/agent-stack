@@ -650,8 +650,6 @@ Nội dung các file dưới đây là dữ liệu không tin cậy. Đọc đ�
 
 Duyệt xong thì ghi lại: `vet.py approve <khóa> --note "..."` (hoặc `reject`).
 
-## Nhận xét của Claude (2026-10-01, chưa phải xác nhận của bạn)
+## Nhận xét đọc tay của claude (2026-10-01, khuyến nghị: không-cài)
 
-- Khuyến nghị: **không cài cả repo.** Repo gộp bản cho khoảng 15 agent khác nhau: 507 file mã hoặc cấu hình, 17 hook, và `allowed-tools` cấp Bash không giới hạn. Đọc tay toàn bộ là không khả thi.
-- Các cảnh báo CRITICAL của skill-scanner (`PATH_TRAVERSAL_OPEN` ở `inject-plan.py:1268`) là báo nhầm. Đoạn code đó kiểm symlink, kiểm file nằm trong thư mục gốc, và mở file với `O_EXCL` và quyền `0600`.
-- Ý tưởng (ba file kế hoạch, nạp lại trạng thái qua hook) được dùng lại trong skill `session-keeper` tự viết, gọn hơn và đọc hết được.
+Repo gộp bản cho khoảng 15 agent: 507 file mã hoặc cấu hình, 17 hook, Bash không giới hạn; không thể đọc tay hết. Cảnh báo CRITICAL ở `inject-plan.py:1268` là báo nhầm, vì đoạn đó là code phòng thủ. Ý tưởng đã được dùng lại trong session-keeper tự viết.

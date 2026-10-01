@@ -17,6 +17,15 @@
       },
       "ref": "master",
       "report": "vet-reports/OthmanAdi__planning-with-files@51c1caa27f9f.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "không-cài",
+          "sha": "51c1caa27f9fefe259e45a7cc92fa79ee8787cd7",
+          "text": "Repo gộp bản cho khoảng 15 agent: 507 file mã hoặc cấu hình, 17 hook, Bash không giới hạn; không thể đọc tay hết. Cảnh báo CRITICAL ở `inject-plan.py:1268` là báo nhầm, vì đoạn đó là code phòng thủ. Ý tưởng đã được dùng lại trong session-keeper tự viết."
+        }
+      ],
       "scanner": {
         "counts": {
           "critical": 16,
@@ -36,6 +45,313 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "anthropics/claude-plugins-official:external_plugins/context7": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__external_plugins-context7@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "MCP qua HTTP tới mcp.context7.com (dịch vụ của Upstash). Nội dung câu tra tài liệu được gửi ra ngoài, nên không dán code riêng tư vào câu tra."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "external_plugins/context7",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:external_plugins/playwright": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__external_plugins-playwright@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "MCP chạy `npx @playwright/mcp@latest`: không ghim phiên bản, mỗi lần khởi động có thể tải mã mới từ npm. Nên tự khai báo MCP với phiên bản ghim thay cho plugin, và chỉ bật khi test web."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "external_plugins/playwright",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/clangd-lsp": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-clangd-lsp@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Chỉ khai báo LSP, không có hook, MCP hay script. Cần có `clangd` trên PATH (ví dụ `brew install llvm`)."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/clangd-lsp",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/claude-code-setup": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-claude-code-setup@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Chỉ có skill dạng chỉ dẫn, plugin.json và ảnh minh họa. Không hook, không MCP, không script."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/claude-code-setup",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/claude-md-management": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-claude-md-management@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Chỉ có skill dạng chỉ dẫn, plugin.json và ảnh minh họa. Không hook, không MCP, không script."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/claude-md-management",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/hookify": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-hookify@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "4 hook Python chạy ở mọi lần dùng công cụ, đọc luật từ `.claude/hookify.*.local.md`. Không gọi mạng. Chỉ cài khi bạn muốn tự tạo luật chặn hành vi, vì mỗi lần gọi công cụ tốn thêm một tiến trình Python."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/hookify",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/pyright-lsp": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-pyright-lsp@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Chỉ khai báo LSP, không có hook, MCP hay script. Cần có `pyright` trên PATH."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/pyright-lsp",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/session-report": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-09-30",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-session-report@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Script Node `analyze-sessions.mjs` đọc transcript cục bộ trong ~/.claude/projects rồi tạo báo cáo HTML. Không gọi mạng."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1,
+          "low": 2
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37271,
+      "subpath": "plugins/session-report",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
     "anthropics/skills:skills/webapp-testing": {
       "archived": false,
       "human_review": {
@@ -51,6 +367,15 @@
       "redflags": {},
       "ref": "main",
       "report": "vet-reports/anthropics__skills__skills-webapp-testing@8a1541c4a3ff.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
+          "text": "Cài khi cần test web app cục bộ; cần Playwright cho Python. `with_server.py` chạy lệnh server bằng shell=True, nhưng lệnh do chính Claude truyền vào và script chỉ dò cổng trên localhost. Giấy phép Apache-2.0."
+        }
+      ],
       "scanner": {
         "counts": {
           "high": 1
@@ -60,7 +385,7 @@
       },
       "sha": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
       "source": "github:anthropics/skills",
-      "stars": 179266,
+      "stars": 179270,
       "subpath": "skills/webapp-testing",
       "tool": "vet.py/1",
       "verdict": "REVIEW",
@@ -83,6 +408,15 @@
       },
       "ref": "main",
       "report": "vet-reports/blader__humanizer@225a6f39ac85.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+          "text": "plugin.json và marketplace.json chỉ khai báo skill ở gốc repo. Không hook, không MCP, không bin/. `scripts/validate-package.py` là script kiểm định dạng cho người phát triển, không gọi mạng và không được skill gọi tới. SKILL.md khoảng 400 dòng, nên mỗi lần dùng tốn vài nghìn token. Chỉ hỗ trợ tiếng Anh."
+        }
+      ],
       "scanner": {
         "counts": {
           "low": 2
@@ -92,8 +426,412 @@
       },
       "sha": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
       "source": "github:blader/humanizer",
-      "stars": 53305,
+      "stars": 53307,
       "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "mattpocock/skills:skills/engineering/diagnosing-bugs": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-29",
+      "redflags": {},
+      "ref": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "report": "vet-reports/mattpocock__skills__skills-engineering-diagnosing-bugs@c55ee46073ed.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+          "text": "Chỉ dẫn, một script mẫu `hitl-loop.template.sh` (mẫu để người dùng tự sửa, không tự chạy) và cấu hình cho Codex."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "source": "github:mattpocock/skills",
+      "stars": 273558,
+      "subpath": "skills/engineering/diagnosing-bugs",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "mattpocock/skills:skills/engineering/tdd": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-29",
+      "redflags": {},
+      "ref": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "report": "vet-reports/mattpocock__skills__skills-engineering-tdd@c55ee46073ed.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+          "text": "Chỉ có chỉ dẫn. Ghim commit c55ee46."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "source": "github:mattpocock/skills",
+      "stars": 273558,
+      "subpath": "skills/engineering/tdd",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-10-01"
+    },
+    "mattpocock/skills:skills/productivity/grill-me": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-29",
+      "redflags": {},
+      "ref": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "report": "vet-reports/mattpocock__skills__skills-productivity-grill-me@c55ee46073ed.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+          "text": "Chỉ có chỉ dẫn. Ghim commit c55ee46, đúng bản mà marketplace chính thức dùng."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "source": "github:mattpocock/skills",
+      "stars": 273558,
+      "subpath": "skills/productivity/grill-me",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-10-01"
+    },
+    "mattpocock/skills:skills/productivity/handoff": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-29",
+      "redflags": {},
+      "ref": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "report": "vet-reports/mattpocock__skills__skills-productivity-handoff@c55ee46073ed.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+          "text": "Chỉ có chỉ dẫn. Bổ sung tốt cho session-keeper khi cần nén hội thoại để bàn giao."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "c55ee46073ed923f86ce59a5eb3b6d895095d1b7",
+      "source": "github:mattpocock/skills",
+      "stars": 273558,
+      "subpath": "skills/productivity/handoff",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-10-01"
+    },
+    "obra/superpowers": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-09-27",
+      "redflags": {
+        "high": 3,
+        "medium": 14
+      },
+      "ref": "5bf4e78011075bcfc0dc295f0724994cd123ee71",
+      "report": "vet-reports/obra__superpowers@5bf4e7801107.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "thử-1-project",
+          "sha": "5bf4e78011075bcfc0dc295f0724994cd123ee71",
+          "text": "Hook SessionStart chèn toàn bộ skill using-superpowers vào context mỗi lần mở phiên, clear hoặc compact. Việc này tốn token ở mọi phiên và áp quy trình bắt buộc. 88 file mã, phần lớn là script test; hook không gọi mạng. Thử trong một project trước khi bật toàn cục. Trùng vai với bộ skill của Matt Pocock."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "critical": 2,
+          "info": 15,
+          "low": 16
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "5bf4e78011075bcfc0dc295f0724994cd123ee71",
+      "source": "github:obra/superpowers",
+      "stars": 293768,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "semgrep/mcp-marketplace:plugin": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "none",
+      "license_files": [],
+      "pushed_at": "2026-10-01",
+      "redflags": {
+        "critical": 3,
+        "high": 1
+      },
+      "ref": "f97e1ce43533ffde2eae9af2a80f95a7250c365f",
+      "report": "vet-reports/semgrep__mcp-marketplace__plugin@f97e1ce43533.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "không-cài",
+          "sha": "f97e1ce43533ffde2eae9af2a80f95a7250c365f",
+          "text": "Hook chạy file nhị phân đóng gói sẵn (Mach-O, ELF, PE) ở mọi lần ghi file và chạy Bash, kèm MCP 'guardian'; file nhị phân không đọc tay được. Skill `install-mfw` tự duyệt sẵn `curl … https://*/…/install.sh | sh` với host bất kỳ. Khi cần, dùng Semgrep CLI và gọi chủ động."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "high": 1,
+          "info": 1,
+          "low": 3
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "f97e1ce43533ffde2eae9af2a80f95a7250c365f",
+      "source": "github:semgrep/mcp-marketplace",
+      "stars": 14,
+      "subpath": "plugin",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "trailofbits/skills:plugins/audit-context-building": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "CC-BY-SA-4.0",
+      "license_files": [
+        "LICENSE: CC"
+      ],
+      "pushed_at": "2026-09-28",
+      "redflags": {
+        "low": 2
+      },
+      "ref": "main",
+      "report": "vet-reports/trailofbits__skills__plugins-audit-context-building@82fe82262526.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "cài",
+          "sha": "82fe8226252622fa807643bdca1710901198553a",
+          "text": "Chỉ có chỉ dẫn và tài liệu tham khảo. Ký tự U+200B đứng trước code fence là mẹo hiển thị, không phải chỉ dẫn ẩn."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "82fe8226252622fa807643bdca1710901198553a",
+      "source": "github:trailofbits/skills",
+      "stars": 7323,
+      "subpath": "plugins/audit-context-building",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "trailofbits/skills:plugins/c-review": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "CC-BY-SA-4.0",
+      "license_files": [
+        "LICENSE: CC"
+      ],
+      "pushed_at": "2026-09-28",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/trailofbits__skills__plugins-c-review@82fe82262526.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "82fe8226252622fa807643bdca1710901198553a",
+          "text": "Review bảo mật C/C++, hợp với trục bán dẫn và firmware. Bash không giới hạn để chạy công cụ phân tích. Chỉ cài trong project cần dùng."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "82fe8226252622fa807643bdca1710901198553a",
+      "source": "github:trailofbits/skills",
+      "stars": 7323,
+      "subpath": "plugins/c-review",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "trailofbits/skills:plugins/differential-review": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "CC-BY-SA-4.0",
+      "license_files": [
+        "LICENSE: CC"
+      ],
+      "pushed_at": "2026-09-28",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/trailofbits__skills__plugins-differential-review@82fe82262526.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "82fe8226252622fa807643bdca1710901198553a",
+          "text": "Skill review bảo mật theo diff. `allowed-tools: Bash` không giới hạn vì cần chạy git và công cụ phân tích. Chỉ cài trong project bảo mật (trục security-whitebox). Giấy phép CC-BY-SA-4.0."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "82fe8226252622fa807643bdca1710901198553a",
+      "source": "github:trailofbits/skills",
+      "stars": 7323,
+      "subpath": "plugins/differential-review",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-01"
+    },
+    "trailofbits/skills:plugins/static-analysis": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "CC-BY-SA-4.0",
+      "license_files": [
+        "LICENSE: CC"
+      ],
+      "pushed_at": "2026-09-28",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/trailofbits__skills__plugins-static-analysis@82fe82262526.md",
+      "reviews": [
+        {
+          "at": "2026-10-01T15:22:18Z",
+          "by": "claude",
+          "recommend": "có-điều-kiện",
+          "sha": "82fe8226252622fa807643bdca1710901198553a",
+          "text": "Cảnh báo 'mã độc' của skill-scanner ở `test_merge_sarif.py:197` là báo nhầm: test chỉ glob các file .sarif trong thư mục tạm. Bash không giới hạn để chạy Semgrep và CodeQL. Cài trong project bảo mật."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "critical": 5,
+          "high": 1,
+          "info": 3,
+          "low": 1,
+          "medium": 6
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "82fe8226252622fa807643bdca1710901198553a",
+      "source": "github:trailofbits/skills",
+      "stars": 7323,
+      "subpath": "plugins/static-analysis",
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
