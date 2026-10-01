@@ -21,7 +21,11 @@ print(json.dumps({"result": "Đã sửa.", "total_cost_usd": 0.05, "num_turns": 
 
 class Graders(unittest.TestCase):
     def test_self_test_passes(self):
-        self.assertEqual(run_eval.self_test(run_eval.load_tasks("all")), 0)
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()) as buf:
+            code = run_eval.self_test(run_eval.load_tasks("all"))
+        self.assertEqual(code, 0, buf.getvalue())
 
     def grade(self, name, answer, overlay=None):
         task = run_eval.TASKS / name

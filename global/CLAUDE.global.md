@@ -26,6 +26,5 @@ Bỏ qua dòng này với câu hỏi nhanh. Chọn theo bảng dưới. Chỉ kh
 ## Subagent
 
 - Subagent của agent-stack có tiền tố `agent-stack:`, ví dụ `agent-stack:reviewer`, `agent-stack:test-runner`.
-
 - Giao cho subagent các việc đọc nhiều hoặc sinh output dài (log test, kết quả tìm kiếm), để context chính gọn.
 - Subagent vẫn tính vào hạn mức. Không chia nhỏ việc nếu một model làm liền mạch thì tốt hơn.

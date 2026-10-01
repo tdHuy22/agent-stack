@@ -1,0 +1,47 @@
+{"prompt": "Mình định cài skill này từ GitHub, kiểm tra giúp có an toàn không", "expect": "vet-third-party"}
+{"prompt": "thêm plugin marketplace của trailofbits vào claude code được không", "expect": "vet-third-party"}
+{"prompt": "is this MCP server safe to install? github.com/x/mcp-foo", "expect": "vet-third-party"}
+{"prompt": "Review bảo mật hàm đăng nhập này, có lỗ hổng gì không?", "expect": "security-review"}
+{"prompt": "kiem tra lo hong sql injection trong file repo.py", "expect": "security-review"}
+{"prompt": "Làm threat model cho dịch vụ thanh toán mới", "expect": "security-review"}
+{"prompt": "check this endpoint for SSRF and path traversal issues", "expect": "security-review"}
+{"prompt": "Review code trong PR này giúp mình trước khi merge", "expect": "code-review"}
+{"prompt": "xem lai code module parser truoc khi commit nhe", "expect": "code-review"}
+{"prompt": "Test cứ lúc pass lúc fail, hình như race condition, debug giúp", "expect": "debug-hard"}
+{"prompt": "chương trình bị segfault khi chạy với file lớn, không hiểu sao", "expect": "debug-hard"}
+{"prompt": "Here is the traceback, the worker crashes on startup", "expect": "debug-hard"}
+{"prompt": "Thiết kế kiến trúc cho hệ thống ingest log, cân nhắc trade-off", "expect": "architecture"}
+{"prompt": "lap ke hoach migration tu monolith sang service rieng", "expect": "architecture"}
+{"prompt": "Write a design doc for the new caching layer", "expect": "architecture"}
+{"prompt": "Dự án đang làm tới đâu rồi, việc tiếp theo là gì?", "expect": "progress"}
+{"prompt": "con task nao dang do khong", "expect": "progress"}
+{"prompt": "what's next on this project after the refactor?", "expect": "progress"}
+{"prompt": "Sắp hết limit rồi, lưu tiến độ để mai làm tiếp", "expect": "session-save"}
+{"prompt": "ban giao viec nay sang OpenCode giup minh", "expect": "session-save"}
+{"prompt": "write a handoff so another agent can continue tomorrow", "expect": "session-save"}
+{"prompt": "Chạy test rồi báo lại test nào đang hỏng", "expect": "tests"}
+{"prompt": "viet unit test cho ham slugify", "expect": "tests"}
+{"prompt": "pytest is failing in CI, run tests and summarize failures", "expect": "tests"}
+{"prompt": "Nghiên cứu và so sánh ba thư viện vector database cho dự án", "expect": "research"}
+{"prompt": "tim hieu tai lieu chinh thuc ve rate limit cua API nay", "expect": "research"}
+{"prompt": "Compare Inspect AI and promptfoo for running LLM evals", "expect": "research"}
+{"prompt": "Đổi tên hàm getUser thành fetchUser trong cả project", "expect": "mechanical"}
+{"prompt": "format lai toan bo file json trong thu muc config", "expect": "mechanical"}
+{"prompt": "dịch tài liệu README sang tiếng Anh, giữ nguyên định dạng", "expect": "mechanical"}
+{"prompt": "Viết lại đoạn văn này cho tự nhiên hơn, đúng giọng mình", "expect": "writing"}
+{"prompt": "sua bai luan xin hoc bong nay cho mach lac hon", "expect": "writing"}
+{"prompt": "proofread this cover letter and make it less stiff", "expect": "writing"}
+{"prompt": "Thêm tính năng xuất CSV cho trang báo cáo", "expect": "feature"}
+{"prompt": "implement the --json flag for the wc command", "expect": "feature"}
+{"prompt": "viet ham tinh thue thu nhap ca nhan theo bac", "expect": "feature"}
+{"prompt": "Sự khác nhau giữa TCP và UDP là gì?", "expect": "quick-question"}
+{"prompt": "what is a mutex, explain briefly please", "expect": "quick-question"}
+{"prompt": "ok cảm ơn", "expect": "none"}
+{"prompt": "tiếp tục đi", "expect": "none"}
+{"prompt": "/compact", "expect": "none"}
+{"prompt": "Mình vừa đi học về, hôm nay mệt quá", "expect": "none"}
+{"prompt": "So sánh các công cụ quét bảo mật mã nguồn mở cho Python", "expect": "research"}
+{"prompt": "review bảo mật diff này giúp mình trước khi merge", "expect": "security-review"}
+{"prompt": "Refactor module thanh toán này cho dễ đọc hơn", "expect": "refactor"}
+{"prompt": "tach ham xu ly don hang thanh cac ham nho, bo trung lap", "expect": "refactor"}
+{"prompt": "clean up this module without changing behavior", "expect": "refactor"}

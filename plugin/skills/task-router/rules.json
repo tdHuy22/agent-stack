@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "status": "giả thuyết ban đầu, chờ số liệu eval ở GĐ4 (xem routing-table.md)",
+  "min_words": 4,
+  "rules": [
+    {"id": "vet-third-party", "skills": ["vet-skill"], "model": "opus", "effort": "high", "match": ["cai skill", "cai plugin", "them plugin", "plugin marketplace", "marketplace", "mcp server", "npx skills", "plugin install", "co an toan khong", "an toan khong", "kiem duyet", "vet skill", "skill nay", "install skill"]},
+    {"id": "security-review", "agent": "agent-stack:reviewer", "skills": ["differential-review"], "model": "opus", "effort": "high", "match": ["bao mat", "lo hong", "security", "vulnerab", "threat model", "injection", "xss", "csrf", "ssrf", "path traversal", "secret", "phan quyen", "xac thuc", "cve", "secure code", "review bao mat", "kiem tra bao mat"]},
+    {"id": "code-review", "agent": "agent-stack:reviewer", "model": "opus", "effort": "high", "match": ["review code", "review pr", "code review", "xem lai code", "review giup", "truoc khi commit", "truoc khi merge", "soat code", "review diff"]},
+    {"id": "debug-hard", "model": "opus", "effort": "high", "match": ["debug", "khong hieu sao", "loi la", "race condition", "memory leak", "segfault", "crash", "flaky", "deadlock", "bug kho", "chay sai", "loi ngau nhien", "stack trace", "traceback"]},
+    {"id": "architecture", "agent": "Plan", "model": "opus", "effort": "high", "match": ["kien truc", "thiet ke he thong", "architecture", "design doc", "lap ke hoach", "chien luoc", "trade-off", "tradeoff", "migration plan", "thiet ke module", "chia module"]},
+    {"id": "progress", "skills": ["tien-do"], "model": "sonnet", "effort": "low", "match": ["tien do", "lam gi tiep", "viec tiep theo", "dang do", "dang o dau", "what's next", "whats next", "con viec gi", "task dang do", "lam toi dau", "toi dau roi", "status project"]},
+    {"id": "session-save", "skills": ["session-keeper"], "model": "sonnet", "effort": "low", "match": ["luu tien do", "luu lai", "het limit", "sap het limit", "usage limit", "ban giao", "handoff", "dung phien", "lam tiep tu", "checkpoint", "chuyen sang opencode", "mai lam tiep"]},
+    {"id": "tests", "agent": "agent-stack:test-runner", "skills": ["tdd"], "model": "sonnet", "effort": "medium", "match": ["chay test", "run test", "test fail", "test hong", "pytest", "unit test", "viet test", "coverage", "test do"]},
+    {"id": "research", "agent": "agent-stack:researcher", "model": "sonnet", "effort": "medium", "match": ["nghien cuu", "tim hieu", "so sanh", "research", "compare", "tra cuu", "tong hop", "danh gia cong cu", "doc paper", "tai lieu chinh thuc", "nguon nao", "so sanh cac", "cac cong cu"]},
+    {"id": "mechanical", "agent": "agent-stack:oc-worker", "model": "haiku", "effort": "low", "match": ["doi ten", "rename", "format lai", "boilerplate", "hang loat", "dich file", "dich tai lieu", "sap xep import", "doi dinh dang", "chuyen dinh dang", "them header"]},
+    {"id": "writing", "skills": ["giong-van", "humanizer"], "model": "sonnet", "effort": "medium", "match": ["viet lai", "bai luan", "essay", "blog", "email", "giong van", "cho tu nhien", "rewrite", "cover letter", "doan van", "van phong", "proofread"]},
+    {"id": "refactor", "model": "sonnet", "effort": "medium", "match": ["refactor", "tai cau truc", "don dep code", "clean up", "tach ham", "gom code", "bo trung lap"]},
+    {"id": "feature", "model": "sonnet", "effort": "medium", "match": ["them tinh nang", "implement", "viet ham", "viet code", "tao api", "them endpoint", "feature", "lam chuc nang", "them cot", "them nut", "tich hop"]},
+    {"id": "quick-question", "model": "sonnet", "effort": "low", "match": ["la gi", "nghia la gi", "giai thich ngan", "what is", "khac nhau", "khac gi", "co nghia"]}
+  ]
+}

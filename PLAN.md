@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py`). GĐ4 (5 agent + worker OpenCode, bộ eval 11 việc). 77 test đạt.
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py`). GĐ4 (5 agent + worker OpenCode, bộ eval 11 việc). GĐ5 (`task-router`, hook gợi ý, 10 case đo kích hoạt skill). 85 test đạt.
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ5: skill `task-router`, nối vào hook UserPromptSubmit và vào `tien-do`.
-  2. GĐ6: skill `giong-van`.
-  3. GĐ7: `tools/maintain.py`.
+  1. GĐ6: skill `giong-van` + `tells.py`.
+  2. GĐ7: `tools/maintain.py`.
+  3. Chờ bạn: duyệt mục trong `vetted.lock`, chạy `./install.sh --apply`, duyệt ngân sách eval.
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -69,8 +69,11 @@
 - Ghi chú: OpenCode v2 báo các thiết lập `reasoning` và `temperature` kiểu cũ của provider `tuf` trong `opencode.jsonc` đang bị bỏ qua. Bạn có thể dọn khi tiện; mình không sửa file của bạn.
 
 ### GĐ5: Router (#4, #5)
-- [ ] Skill `task-router`: `rules.json`, `route.py`, gắn vào hook UserPromptSubmit.
-- [ ] Bộ 40 prompt có nhãn; độ chính xác ≥ 85%.
+- [x] Skill `task-router`: `rules.json` (14 luật), `route.py`. Đã nối vào hook UserPromptSubmit: chỉ gợi ý khi có việc nên làm (đổi model/effort, skill, subagent), mỗi luật nhắc tối đa một lần mỗi giờ trong một phiên, bỏ qua lệnh `/` và câu ngắn. Đã nối vào `tien-do`.
+- [x] Bộ 47 prompt có nhãn (`evals/router-prompts.jsonl`): đúng 47/47. **Lưu ý thiên lệch:** Claude viết cả luật lẫn prompt, nên hãy thêm prompt thật của bạn.
+- [x] `routing-table.md` (giả thuyết, chờ số liệu eval).
+- [x] `plugin/evals/`: 10 case đo kích hoạt skill (7 nên kích hoạt, 3 không nên).
+- [ ] **Bạn làm (tốn một ít hạn mức):** `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`. Dùng `--no-publish` để báo cáo chỉ nằm trên máy.
 
 ### GĐ6: Viết tự nhiên (#6)
 - [ ] Skill `giong-van` + `tells.py` + danh sách dấu hiệu văn AI tiếng Việt.
