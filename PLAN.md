@@ -5,14 +5,17 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py`). GĐ4 (5 agent + worker OpenCode, bộ eval 11 việc). GĐ5 (`task-router`). GĐ6 (`giong-van`, `tells.py`, việc eval viết lại). 89 test đạt.
+- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1` (9 commit). Plugin `agent-stack` gồm 5 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 92 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
 - **Đang dở:** không có.
-- **Việc tiếp theo, theo thứ tự:**
-  1. GĐ7: `tools/maintain.py`.
-  2. Chờ bạn: duyệt mục trong `vetted.lock`, chạy `./install.sh --apply`, duyệt ngân sách eval.
-  3. Chờ bạn: đặt 5–10 bài tự viết vào `plugin/skills/giong-van/samples/` để tạo style card.
-- **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
+- **Việc tiếp theo, theo thứ tự (đều cần bạn):**
+  1. Đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` cho những mục đồng ý (danh sách: `vet.py list`).
+  2. Xem trước bằng `./install.sh`, rồi `./install.sh --apply` (thêm `--restore-workflow-warning` để bật lại cảnh báo usage của workflow).
+  3. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
+  4. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
+  5. Đặt 5–10 bài tự viết vào `plugin/skills/giong-van/samples/` để tạo style card.
+  6. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
+- **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, câu "(luôn kiểm tra" bị cắt, provider cho worker OpenCode, mục đích viết, project cần theo dõi).
+- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 92 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
 
 ## 1. Giai đoạn
@@ -23,7 +26,7 @@
 - [x] Kiểm chứng OpenCode bằng `opencode debug config`: đọc được cả `tuf` lẫn `openai-oauth`.
 - [x] `tools/usage_snapshot.py` kèm test; viết `BASELINE.md`.
 - [x] Bỏ Jev khỏi kế hoạch; ghi các quyết định đã chốt vào đầu `KE-HOACH.md`.
-- [ ] **Bạn làm:** `brew upgrade --cask claude-code` (cần bản ≥ 2.1.277 để đọc `AGENTS.md`).
+- [x] Claude Code CLI đã tự nâng lên 2.1.285 trong lúc triển khai (≥ 2.1.277, đọc được `AGENTS.md`). OpenCode 2.0.21.
 - [ ] **Bạn làm:** điền số liệu `/usage` và `/insights` vào `BASELINE.md`.
 
 ### GĐ1: Cổng kiểm duyệt
@@ -83,4 +86,4 @@
 - [ ] **Bạn làm:** thêm 5–10 bài tự viết vào `samples/`, rồi nhờ Claude chạy `giong-van tao-style-card` và duyệt từng mục.
 
 ### GĐ7: Vận hành
-- [ ] `tools/maintain.py`: kiểm tra phiên bản, kiểm duyệt lại khi upstream đổi, chạy test.
+- [x] `tools/maintain.py`: phiên bản, đồ bên thứ ba có commit mới (so với commit đã kiểm), test và validate, ngân sách mô tả skill, mức dùng 7 ngày so với nền, dọn cache. Chạy mỗi tháng: `python3 tools/maintain.py`.
