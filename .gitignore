@@ -1,0 +1,12 @@
+# Trạng thái chạy, sao lưu, môi trường cục bộ: không đưa vào git
+state/
+backups/
+.venv/
+.cache/
+.tmp/
+.vet-cache/
+__pycache__/
+*.pyc
+.DS_Store
+# Kết quả eval có thể chứa nội dung phiên
+evals/results/

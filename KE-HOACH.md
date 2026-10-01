@@ -1,0 +1,766 @@
+# Kế hoạch: hệ thống làm việc Claude Code + OpenCode
+
+> Lập ngày 2026-10-01. Trạng thái: **bản kế hoạch, chưa triển khai gì**.
+> Bổ sung cùng ngày: yêu cầu **#7**, theo dõi tiến độ project, việc cần làm tiếp và việc dang dở (mục 7.8, GĐ2b).
+> Cập nhật lần 2 (2026-10-01): bỏ Jev; bắt đầu triển khai. Tiến độ thực hiện theo dõi ở [`PLAN.md`](PLAN.md).
+
+**Quyết định đã chốt (2026-10-01):**
+- Bỏ Jev khỏi kế hoạch. Router chỉ còn tầng A (luật từ khóa) và tầng B (model local).
+- Chỉ làm việc trong `agent-stack/`. Không đụng các project khác. Không sửa `~/.claude` hay `~/.config/opencode` cho tới khi bạn duyệt chạy `install.sh`.
+- Claude viết v1 các skill lõi kèm test, bạn review.
+- Commit sau mỗi giai đoạn trong repo `agent-stack` (không push).
+- Đóng gói thành **plugin Claude Code** đặt ở `agent-stack/plugin/`, thử bằng `claude --plugin-dir`, không cần symlink. OpenCode dùng skill qua `~/.agents/skills/` khi cài (mục 7.1).
+> Căn cứ: docs chính thức Claude Code (code.claude.com) và OpenCode (opencode.ai), số liệu GitHub API lấy ngày 2026-10-01, và cấu hình thực tế trên máy bạn. Nguồn ở mục 11.
+> File này nằm trên đĩa nên không mất khi phiên hết hạn mức. Đó cũng là nguyên tắc chính của yêu cầu #3.
+
+**Ký hiệu:** ✍️ bạn tự viết (Claude hướng dẫn và review, đúng nguyên tắc học-qua-build của bạn) · 📦 cài từ nguồn đã qua kiểm duyệt · ⚙️ chỉ cấu hình
+
+---
+
+## 0. Tóm tắt
+
+Bảy yêu cầu của bạn thực chất là **một hệ thống bốn lớp**, không phải bảy món rời:
+
+1. **Kho năng lực** (yêu cầu #1, #6): skills, MCP, plugin đã kiểm duyệt.
+2. **Định tuyến** (#2, #4, #5): chọn skill nào, model và effort nào, giao cho agent nào. Ba yêu cầu này là cùng một bài toán ở ba mức chi tiết, nên chỉ cần **một** bộ luật và **một** hook.
+3. **Bền bỉ phiên** (#3, #7): trạng thái công việc nằm trên đĩa, nên Claude Code hay OpenCode đều tiếp tục được. #3 lo **ghi** trạng thái; #7 lo **đọc** trạng thái đó để báo tiến độ, việc dang dở và việc nên làm tiếp.
+4. **Kiểm chứng** (lớp mới, yêu cầu gốc còn thiếu): đo xem đổi model/effort có giữ được chất lượng không. Bạn đặt "giữ nguyên hiệu suất" là **bắt buộc**, mà không đo thì không thể biết mình có giữ được hay không.
+
+Năm phát hiện quan trọng nhất:
+
+| # | Phát hiện | Hệ quả cho kế hoạch |
+|---|---|---|
+| 1 | Claude Code **đã tự chờ và tự làm tiếp** khi chạm giới hạn 5 giờ (mặc định bật từ v2.1.234). Nó **không** xử lý: giới hạn tuần, phiên `-p` hoặc background, phiên đã thoát, và crash. | Skill #3 chỉ cần lấp các khoảng trống đó, không viết lại cơ chế retry. |
+| 2 | Kho skill công khai có rủi ro thật. Snyk quét 3.984 skill (02/2026): **13,4% có lỗi nghiêm trọng**, 76 payload độc. Chiến dịch ClawHavoc có 341 skill độc phát tán phần mềm đánh cắp dữ liệu **cho macOS**. | Dựng cổng kiểm duyệt **trước** khi cài bất cứ thứ gì. |
+| 3 | Số đo của Anthropic: **hạ effort trên model mạnh thường giữ chất lượng tốt hơn đổi sang model yếu.** Haiku 4.5 chỉ đạt 63% so với 92% của Opus ở câu hỏi kiến thức. | Quy tắc: hạ effort trước, hạ model sau, và mọi thay đổi phải qua eval. |
+| 4 | **Hook không thể đổi model hay effort** (docs chính thức), và đổi model giữa chừng làm mất prompt cache. | Router chỉ **gợi ý**, bạn tự đổi ở ranh giới việc. Không tự động đổi theo từng tin nhắn. |
+| 5 | Danh sách task có sẵn của Claude Code **không bật mặc định trên Opus 5.5 và Sonnet 5.5**, và chỉ dùng chung giữa các phiên khi đặt `CLAUDE_CODE_TASK_LIST_ID`. Trong khi đó `SCEE/PLAN.md` của bạn đã có sẵn mẫu rất tốt: mục §0 "Đang ở đâu, việc tiếp theo". | Skill #7 lấy file Markdown theo mẫu SCEE làm nguồn sự thật. Task list chỉ là công cụ phụ trong phiên. |
+
+Lộ trình: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18 buổi × 2 giờ**. GĐ4 và GĐ5 có thể tính vào giờ lab của trục AI Engineer.
+
+---
+
+## 1. Hiện trạng máy bạn (đã kiểm tra ngày 2026-10-01)
+
+| Thành phần | Hiện trạng | Nhận xét |
+|---|---|---|
+| Claude Code CLI | 2.1.267 (Homebrew cask `claude-code`) | Bản mới nhất khoảng 2.1.286. Bản của bạn **chưa có**: đọc `AGENTS.md` trực tiếp (cần ≥2.1.277), `/doctor prompt-audit` (cần ≥2.1.283). Cần nâng cấp. |
+| Model mặc định | `"model": "sonnet"` (Sonnet 5.5) | Hợp lý về chi phí. Mặc định của gói Pro/Max là Opus 5.5. |
+| `switchModelsOnFlag: false` | Khi bộ lọc an toàn gắn cờ (ví dụ nhóm "cyber", dễ gặp khi học security), Claude dừng lại để bạn chọn, thay vì tự chuyển sang Opus 4.8. | Giữ nguyên, hợp với hướng security. |
+| `enableWorkflows: true` + `skipWorkflowUsageWarning: true` | Workflow/ultracode có thể sinh rất nhiều agent, và bạn đã tắt cảnh báo usage. | ⚠️ Nên bật lại cảnh báo, vì đây là nguồn đốt hạn mức nhanh nhất. |
+| Skill, agent, hook cá nhân | Trống (`~/.claude/skills`, `agents`, `hooks` chưa tồn tại) | Nền sạch, thuận lợi. |
+| Plugin | Đã thêm marketplace chính thức `claude-plugins-official` (314 plugin), chưa cài plugin nào. | |
+| Skill đồng bộ từ claude.ai | skill-creator, pdf/docx/xlsx/pptx, paper-anatomy (của bạn), consolidate-memory… | Tận dụng, không cài trùng. |
+| OpenCode | v2.0.12 (cask `opencode-v2`). Model mặc định `opencode/muse-spark-1.3-contributor-free`. Provider `tuf` (llama-server trong LAN, 192.168.1.13) có gpt-oss 20B, Coder 4B/9B, Qwen3.5 4B/9B, Phi-4-mini. | Worker miễn phí tốt cho việc cơ học, nhưng chỉ dùng được khi ở mạng nhà. |
+| Khối `providers` → `openai-oauth` trong `opencode.jsonc` | Đã kiểm chứng bằng `opencode debug config`: OpenCode v2 nhận cả khối này lẫn khối `provider` kiểu v1 (tự chuyển sang `providers`). | Không cần sửa. Nhận định ban đầu (khối bị bỏ qua) là sai, vì docs mình đọc lúc đầu là của v1. |
+| jcode v0.86.0 | Harness dùng OAuth của Claude Max/ChatGPT Pro, có hook SessionStart. | ⚠️ Rủi ro điều khoản dịch vụ (mục 9). |
+| Ollama 0.34.2, `gh` (đã đăng nhập), uv, Node 24, Python 3.11 | | Đủ công cụ cho mọi giai đoạn. |
+| Dấu vết tiến độ hiện có | SCEE: `PLAN.md` có §0 "Đang ở đâu, việc tiếp theo" và checklist kiểm tra sau khi bị ngắt vì hết limit. Ba thư mục học: `PROGRESS.md` + `ROADMAP.md` dạng checkbox, **không phải git repo**. pdf-translator: 1 file chưa commit. XiaomiMiMo: 138 file chứa TODO/FIXME, phần lớn là code bên thứ ba. | Mẫu §0 của SCEE nên thành chuẩn chung. Quét TODO phải loại code bên thứ ba. |
+| Task list có sẵn (`~/.claude/tasks/`) | Trống | Không bật mặc định trên model 5.5 (mục N7). |
+
+---
+
+## 2. Đánh giá bảy yêu cầu
+
+| # | Yêu cầu | Điểm tốt | Vấn đề, khoảng trống | Hướng xử lý |
+|---|---|---|---|---|
+| 1 | Nghiên cứu skills/MCP/plugins cho coding, research, build-ship-production, benchmark, QA, security, reuse-best | Phạm vi đúng, có ý thức "luôn kiểm tra" | (a) Câu "(luôn kiểm tra" bị cắt, nên chưa có tiêu chí. (b) **Cài nhiều là phản tác dụng**: phần mô tả skill chỉ được khoảng 1% context window, vượt ngân sách thì mô tả bị cắt và skill kích hoạt kém. Mỗi MCP thêm nhiễu. (c) 13% skill công khai có lỗi nghiêm trọng. | Thang quyết định "dùng lại" (N3), cổng kiểm duyệt (7.6), giới hạn khoảng 20 skill bật toàn cục. |
+| 2 | Subagent Sonnet/Haiku/OpenCode, giữ hiệu suất, rẻ hơn càng tốt | Đúng hướng: chia việc theo độ khó | "Giữ nguyên hiệu suất" chưa có cách đo. Haiku không thay được model lớn ở việc khó. Model local 4B–20B yếu hơn nhiều. **Subagent vẫn ăn chung hạn mức.** | Bộ eval nhỏ (7.7), và mọi output từ tầng rẻ phải qua cổng chất lượng (test, lint, review). |
+| 3 | Skill chống mất dữ liệu khi hết limit hoặc qua phiên mới | Đúng nỗi đau thật | Retry ở giới hạn 5 giờ đã có sẵn. Khoảng trống thật là: giới hạn tuần, crash, `-p`/background, đổi công cụ, và compaction làm rơi chi tiết. | Trạng thái trên đĩa, git checkpoint, bàn giao sang OpenCode (7.3). |
+| 4 | Luôn dùng skill, có skill chọn skill | Đúng tinh thần tái sử dụng | "Luôn" dễ biến thành ép skill vào việc vặt (tốn token, lệch hướng). | Gộp vào router (7.4). |
+| 5 | Sau mỗi tin, gợi ý model, effort, subagent cho bước tiếp | Rất hữu ích để tự kỷ luật chi phí | Hook không đổi được model/effort. Đổi liên tục làm mất cache, nên có thể **đắt hơn**. | Chỉ gợi ý (dòng ➡️ cuối câu trả lời + hook), chỉ đổi ở ranh giới việc. |
+| 6 | Viết như người thật, tránh trang phát hiện AI | Muốn văn bản tự nhiên, có hồn | Detector không đáng tin, báo nhầm cả bài người thật viết, nhất là người viết bằng ngôn ngữ thứ hai. Chính humanizer (53k★) tuyên bố không nhằm qua mặt detector. Skill có sẵn chỉ hỗ trợ tiếng Anh. Với bài nộp có quy định về AI, mục tiêu "né detector" là vi phạm. | Đổi mục tiêu thành: **giọng văn của chính bạn** + bỏ dấu hiệu văn AI. Bạn viết ý hoặc nháp, skill chỉnh (7.5). |
+| 7 | Theo dõi tiến độ project, cần làm gì tiếp theo, task dang dở | Đúng nhu cầu khi chạy nhiều project song song (SCEE, pdf-translator, ba lộ trình học…) | Dễ thành một hệ thống quản lý thứ hai, lệch với file kế hoạch đang có. Task list có sẵn không bật mặc định trên model 5.5. Để LLM tự quét repo mỗi lần thì tốn token. Quét TODO bị nhiễu bởi code bên thứ ba. | Dùng lại mẫu §0 của `SCEE/PLAN.md` làm chuẩn. Script thu thập dữ liệu (0 token), LLM chỉ xếp hạng. Bản tóm tắt chạy miễn phí ở đầu mỗi phiên (7.8). |
+
+---
+
+## 3. Làm rõ: các giả định đang dùng
+
+| Mã | Giả định | Nếu sai thì sao |
+|---|---|---|
+| G1 | "(luôn kiểm tra" nghĩa là luôn kiểm tra **bảo mật, độ bảo trì và giấy phép** trước khi cài. | Đổi tiêu chí ở cổng kiểm duyệt. |
+| G2 | "Rẻ hơn" là **tốn ít hạn mức gói thuê bao** (cửa sổ 5 giờ và tuần), không phải tiền API. | Nếu dùng API key thì đo bằng đô la. |
+| G3 | OpenCode đóng hai vai: (a) worker cho việc cơ học bằng model local hoặc miễn phí, (b) phương án dự phòng khi hết hạn mức tuần của Claude. Không chạy tài khoản Claude bên trong OpenCode. | |
+| G4 | Viết luận là cho bài của chính bạn (blog, email, tài liệu, hồ sơ cho phép dùng AI), bằng tiếng Việt và tiếng Anh. | |
+| G5 | **Đã chốt:** Claude viết v1 các skill lõi (vet-skill, session-keeper, tien-do, task-router, giong-van) kèm test và ghi chú thiết kế; bạn review. | — |
+| G6 | "Project" gồm mọi thư mục trong `~/Documents/Claude/`, kể cả ba thư mục học. Nguồn sự thật về tiến độ là file Markdown trong project, không phải công cụ quản lý task bên ngoài. | Nếu bạn muốn GitHub Issues hoặc beads làm nguồn chính thì đổi tầng dữ liệu của skill #7. |
+
+Các câu hỏi cần bạn trả lời nằm ở mục 10.
+
+---
+
+## 4. Liên kết: một kiến trúc chung
+
+```
+┌────────────────────────── Lớp 0: Nền chung (repo git agent-stack) ──────────────────────────┐
+│ AGENTS.md (luật chung, cả Claude Code và OpenCode đều đọc) · ~/.claude/skills (một kho skill) │
+│ vetted.lock (danh sách đồ bên thứ ba đã kiểm, ghim commit SHA)                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+        │
+prompt ─┼─► [Lớp 2: Định tuyến]  hook UserPromptSubmit + router-rules.json
+        │        └─► gợi ý: skill · model · effort · subagent   (#4, #5)
+        │                  │                         │
+        │                  ▼                         ▼
+        │   [Lớp 1: Kho năng lực]          [Đội agent]                                    (#2)
+        │   skills/MCP/plugin đã kiểm      Explore(haiku) · researcher(sonnet)
+        │   (#1, #6)                        reviewer(opus) · test-runner(haiku)
+        │                                   oc-worker ─► OpenCode (model local, miễn phí)
+        │                  │                         │
+        │                  └───────────┬─────────────┘
+        │                              ▼
+        ├─► [Lớp 3: Bền bỉ]  PLAN §0 · PROGRESS · HANDOFF + git checkpoint          (#3 ghi)
+        │        ├─ hết 5 giờ  → Claude Code tự chờ rồi làm tiếp (sẵn có)
+        │        ├─ hết hạn mức tuần, crash → mở OpenCode, đọc HANDOFF, làm tiếp
+        │        └─ tien-do: đọc PLAN/PROGRESS + git + mốc test → tiến độ, việc dang dở,
+        │           việc tiếp theo (kèm gợi ý model/effort lấy từ router)       (#7 đọc)
+        │
+        └─► [Lớp 4: Kiểm chứng]  skill verify trước commit · claude plugin eval (so model)
+                                 · /usage (phân bổ theo skill/subagent/MCP)    (ràng buộc "giữ hiệu suất")
+```
+
+**Sáu mối liên kết:**
+
+1. **#2, #4, #5 là một bộ định tuyến** ở ba mức chi tiết: skill nào, model+effort nào, ai làm. Dùng một file luật `router-rules.json` và một hook. Bảng luật lấy từ kết quả eval ở GĐ4, không đoán.
+2. **#3 là điều kiện để #2 dùng OpenCode làm dự phòng.** Trạng thái lưu ở dạng trung lập (Markdown + git), và cả hai công cụ đều đọc chung `AGENTS.md` cùng `~/.claude/skills/`.
+3. **#1 cung cấp danh mục để #4 định tuyến tới**, và cổng kiểm duyệt bảo vệ #1.
+4. **#6 là một skill trong danh mục.** Router gọi nó khi gặp việc viết.
+5. **Lớp 4 biến "bắt buộc giữ hiệu suất" thành con số.** Mọi thay đổi model, effort hay agent phải qua lớp này.
+6. **#7 là mặt "đọc" của #3.** #3 ghi trạng thái, #7 đọc lại để báo tiến độ. Hai yêu cầu dùng **chung một file**: mục §0 trong `PLAN.md` vừa là chỗ #3 ghi bàn giao, vừa là nguồn chính của #7. Mỗi việc tiếp theo mà #7 đề xuất được gắn gợi ý model/effort/subagent từ bảng định tuyến (#5). #7 cũng dùng mốc test của lớp 4 để phát hiện hồi quy.
+
+**Nền chung giữa hai công cụ (đã kiểm chứng trong docs):**
+
+- Claude Code đọc `AGENTS.md` trực tiếp từ v2.1.277. Mặc định nó chỉ đọc khi không có `CLAUDE.md`; muốn đọc cả hai thì đặt **Project instructions** = `claude-md-and-agents-md`, hoặc thêm `@AGENTS.md` vào `CLAUDE.md`.
+- OpenCode đọc `AGENTS.md`, không có thì đọc `CLAUDE.md`. Ở mức toàn cục, nó đọc `~/.config/opencode/AGENTS.md`, không có thì đọc `~/.claude/CLAUDE.md`.
+- OpenCode tự tìm skill trong `~/.claude/skills/`, `~/.agents/skills/`, `~/.config/opencode/skills/` và các thư mục tương ứng trong project. Vậy **một kho skill dùng được cho cả hai**.
+- Chuẩn Agent Skills (agentskills.io): các trường riêng của Claude Code (`model`, `effort`, `context: fork`, `hooks`, `paths`) bị OpenCode bỏ qua, không gây lỗi.
+- Để chạy được ở cả hai: `name` dài 1–64 ký tự, chỉ chữ thường và gạch nối; `description` **≤ 1.024 ký tự** (giới hạn của OpenCode; Claude Code cho tới 1.536).
+
+---
+
+## 5. Hoàn thiện và nâng cấp: những gì yêu cầu gốc còn thiếu
+
+**N1. Lớp đo lường (bắt buộc).** Không có eval thì "giữ hiệu suất" chỉ là hy vọng. Claude Code có sẵn `claude plugin eval`: chạy bộ case có plugin so với không plugin, có cờ `--model` để so model, có grader miễn phí (regex, tool_used, file_exists) và grader có giám khảo. Mỗi lượt chạy tính vào hạn mức. Thiết kế ở 7.7.
+
+**N2. Nguyên tắc định tuyến dựa trên số đo của Anthropic** (lấy từ hướng dẫn tối ưu chi phí trong skill `claude-api`; đo trên Fable 5 và Opus 5, cần đo lại trên bản 5.5, đó chính là GĐ4):
+
+- **Hạ effort trước, hạ model sau.** Việc nghiên cứu: đường cong gần phẳng, `medium` đạt bằng mức mặc định với 70–85% chi phí. Coding dài hơi thì có đánh đổi thật: `medium` mất khoảng 2 điểm và tốn một nửa chi phí; `low` mất khoảng 8 điểm và tốn một phần tư.
+- **Chạy rẻ trước, hỏng thì chạy lại ở mức cao.** Kết quả khoảng 93% đạt với khoảng một nửa chi phí, so với 91,7% khi chạy mọi thứ ở mức mặc định. Chỉ áp dụng khi có tín hiệu thất bại tự động như test hoặc linter.
+- **Haiku 4.5** hợp việc khối lượng lớn mà kết quả kiểm tra được. Không hợp vòng agent dài.
+- **Mô hình "điều phối viên + worker rẻ"** chỉ có lời khi có nhiều phần việc độc lập. Với một chuỗi việc phụ thuộc nhau, một model mạnh ở effort thấp hơn thường thắng.
+- **Cache gắn với từng model.** Đổi model hoặc effort giữa chừng làm mất cache, nên chỉ đổi ở ranh giới việc (sau `/clear` hoặc khi sang việc mới).
+
+**N3. Thang quyết định "dùng lại tốt nhất" (reuse-best).** Với mỗi nhu cầu, dừng ở bậc đầu tiên đáp ứng được:
+tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → plugin chính chủ của hãng (Microsoft Playwright, Semgrep…) → repo cộng đồng (≥1k★, có cập nhật trong 3 tháng, giấy phép rõ, qua cổng kiểm duyệt) → ✍️ tự viết.
+
+**N4. Ngân sách ngữ cảnh.** Tối đa khoảng 20 skill bật toàn cục; phần còn lại để theo project hoặc đặt `skillOverrides: "name-only"`. Tối đa 4 MCP. Ưu tiên CLI hơn MCP: docs khuyên dùng `gh` thay GitHub MCP vì tiết kiệm context hơn. Mỗi tháng chạy `/skill-doctor`, `/context`, `/usage`.
+
+**N5. Cổng kiểm duyệt chuỗi cung ứng**, cụ thể hóa chữ "luôn kiểm tra" (7.6).
+
+**N6. Một repo git `agent-stack` làm nguồn sự thật**, symlink vào `~/.claude/` và `~/.config/opencode/`. Có lịch sử thay đổi, dễ sao lưu và chuyển máy.
+
+**N7. Tính năng có sẵn nên dùng (ít người biết):**
+
+| Tính năng | Tác dụng |
+|---|---|
+| Alias `opusplan` | Opus khi lập kế hoạch, Sonnet khi thực thi. Đây là một router có sẵn. |
+| `autoContinueAtUsageLimit` | Tự chờ và làm tiếp khi chạm giới hạn 5 giờ, tự kích hoạt lại tối đa 2 lần liên tiếp. |
+| Skill tên `verify` | Từ v2.1.284, Claude Code tự chạy skill này ngay trước khi commit. Đây là cổng QA miễn phí. |
+| `model:` / `effort:` trong frontmatter skill và subagent | Gán model theo từng việc. |
+| `ultrathink` trong prompt | Nghĩ sâu hơn cho đúng một lượt, không đổi effort của phiên. |
+| `/usage` | Phân bổ hạn mức theo skill, subagent, plugin, MCP. `/insights` cho báo cáo thói quen làm việc. |
+| `/skill-doctor`, `/doctor prompt-audit` | Tìm skill tốn ngân sách mà ít dùng; tìm chỉ dẫn lỗi thời hoặc mâu thuẫn. |
+| `--fallback-model` | **Chỉ** dùng khi model quá tải. Không cứu được hạn mức (hạn mức tính chung cho mọi model). |
+| `/goal <điều kiện>` | Claude làm tiếp cho đến khi một điều kiện kiểm chứng được (test pass, `git status` sạch…) thành đúng. Goal được khôi phục khi resume; chạm hạn mức thì tạm dừng rồi tự làm tiếp khi hết chờ. Hợp để "làm nốt việc dang dở". |
+| `/recap`, session recap | Tóm tắt phiên trong ≤ 400 ký tự khi bạn quay lại (tự động, hoặc gõ `/recap`). |
+| Task list (`Ctrl+T`) | Checklist trong phiên, giữ được qua compaction; dùng chung giữa các phiên bằng `CLAUDE_CODE_TASK_LIST_ID=<tên>`. **Không bật mặc định trên Opus 5.5 và Sonnet 5.5**, phải đặt thêm `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. |
+
+**N8. Gắn với lộ trình học.** Router cộng eval là một dự án L2 lên L3 đúng nghĩa trong trục AI Engineer của bạn (skill có output cấu trúc và có eval, rồi điều phối nhiều skill). Còn `vet-skill` thuộc trục security, mảng supply chain của agent, giao điểm AI × Security trong `LO-TRINH-TONG-QUAN.md`.
+
+---
+
+## 6. Kết quả nghiên cứu: danh mục đề xuất
+
+★ = GitHub stars ngày 2026-10-01 · CC = Claude Code · OC = OpenCode · "chính thức" = có trong marketplace `claude-plugins-official`
+
+**Nguồn tra cứu chính:** [anthropics/skills](https://github.com/anthropics/skills) (179k★), marketplace chính thức (314 plugin, đã có trên máy), [skills.sh](https://skills.sh) (Vercel, cài bằng `npx skills add <owner/repo>`), [agentskills.io](https://agentskills.io) (chuẩn mở), các danh sách awesome-claude-code (55k★), ComposioHQ/awesome-claude-skills (76k★), VoltAgent/awesome-agent-skills (35k★), awesome-opencode (10k★).
+
+### 6.1 Coding
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| superpowers (obra) | plugin skills | 294k / 09-27 | CC (chính thức), OC | **Thử ở 1 project trước** | Quy trình bắt buộc: brainstorm → plan → subagent → TDD → verify. Có cơ chế "kiểm tra skill trước mọi việc", liên quan #4. Nặng, có chủ kiến riêng, trùng vai với bộ của Matt Pocock. |
+| mattpocock/skills | skills | 273k / 09-29 | CC, OC | **Cài lẻ**: grill-me, tdd, diagnosing-bugs, handoff | `handoff` phục vụ trực tiếp #3. `ask-matt` là router cho bộ skill của ông. |
+| feature-dev, code-review, pr-review-toolkit, code-simplifier, commit-commands | plugin chính thức | — | CC | Chọn 2–3 theo nhu cầu | Của Anthropic. |
+| pyright-lsp, clangd-lsp (+ typescript/rust nếu cần) | plugin chính thức | — | CC | **Cài** Python và C/C++ | Nhảy tới định nghĩa thay vì grep, giảm đọc file thừa. clangd hợp hướng bán dẫn và firmware. |
+| context7 | MCP | 62.6k / 10-01 | CC, OC | **Cài** | Tra docs thư viện bản mới nhất. |
+| serena | MCP | 29.9k / 09-30 | CC, OC | Thử khi repo lớn | Trùng một phần với plugin LSP. |
+| wshobson/agents | plugin | 40.1k / 09-29 | CC, OC | Tham khảo, lấy lẻ | Hỗ trợ nhiều harness. |
+| github/spec-kit | bộ công cụ | 139.6k / 09-30 | CC, OC | Để sau | Spec-driven development, hợp dự án lớn. |
+
+### 6.2 Research
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| `/deep-research`, WebSearch, WebFetch | có sẵn | — | CC | **Dùng ngay** | |
+| Tavily | MCP / plugin chính thức | 2.4k / 09-29 | CC, OC | Đã kết nối trong desktop app | search, extract, crawl, research. |
+| exa, firecrawl | plugin chính thức | 5.1k / 7.5k | CC | Tùy chọn | |
+| K-Dense scientific-agent-skills | skills | 47.2k / 10-01 | CC, OC | Thử chọn lẻ | Đọc paper khoa học, hợp trục bán dẫn và AI. |
+| paper-anatomy (của bạn) | skill | — | CC | **Dùng tiếp** | Đã có sẵn. |
+| `research` (mattpocock) | skill | — | CC, OC | Thử | Ưu tiên nguồn gốc (primary sources). |
+
+### 6.3 Build, ship, production
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| `gh` CLI | CLI | — | CC, OC | **Dùng thay GitHub MCP** | Đã đăng nhập sẵn. |
+| `/security-review`, `/code-review`, `/ultrareview` | có sẵn | — | CC | Dùng trước khi merge | `/ultrareview` chạy trên cloud và **tính phí**. |
+| claude-code-security-review | GitHub Action | 6.3k / 02-11 | CI | Khi có repo dùng CI | |
+| sentry, vercel, cloudflare, railway… | plugin chính thức | — | CC | Chỉ khi dùng dịch vụ đó | |
+| langfuse, deepeval, mlflow | plugin chính thức | — | CC | Khi build ứng dụng LLM | Observability và eval cho trục AI Engineer. |
+| Skill PRR + threat model (security-whitebox) | ✍️ skill | — | CC, OC | Làm theo roadmap | Bản tham khảo đã có trong `reference/skills/`. |
+
+### 6.4 Benchmark và eval
+
+| Tên | Loại | ★ / cập nhật | Đề xuất | Ghi chú |
+|---|---|---|---|---|
+| `claude plugin eval` | có sẵn | — | **Dùng ở GĐ4–5** | So có/không plugin; `--model` để so model; `--max-cost-usd` đặt trần. |
+| skill-creator (evals/evals.json) | skill chính thức | — | Dùng khi viết skill | Đã có sẵn qua claude.ai. |
+| promptfoo | CLI | 25.6k / 10-01 | Khi làm ứng dụng LLM | Có red-team, hợp trục AI security. |
+| inspect_ai (UK AISI) | framework | 2.9k / 10-01 | Khi học eval bài bản | |
+| hyperfine | CLI | 28.9k / 04-30 | `brew install hyperfine` | Benchmark thời gian chạy lệnh. |
+| codspeed, k6 (AGPL) | plugin / CLI | — / 31.7k | Tùy chọn | Hiệu năng, kiểm thử tải. |
+| session-report (chính thức), ccusage | plugin / CLI | — / 18.8k | **Cài** | Đo token, cache, subagent. Phục vụ baseline GĐ0. |
+
+### 6.5 QA
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| webapp-testing (anthropics/skills) | skill | 179k | CC, OC | **Cài** | |
+| playwright (Microsoft) | MCP / plugin chính thức | 37.7k / 09-28 | CC, OC | **Cài** | Kiểm thử e2e. |
+| chrome-devtools-mcp | MCP | 52.8k / 10-01 | CC, OC | Tùy chọn | Debug hiệu năng trình duyệt. |
+| `verify` theo từng project | ✍️ skill | — | CC | **Viết** | Tự chạy trước mỗi commit. |
+| mutation-testing (Trail of Bits) | skill | 7.3k | CC | Thử | Đo xem test có bắt được lỗi thật không. |
+| tdd (mattpocock) hoặc TDD (superpowers) | skill | — | CC, OC | Chọn **một** | Tránh hai skill tranh nhau kích hoạt. |
+
+### 6.6 Security (whitebox, phòng thủ)
+
+| Tên | Loại | ★ / cập nhật | Đề xuất | Ghi chú |
+|---|---|---|---|---|
+| trailofbits/skills: differential-review, static-analysis, audit-context-building, variant-analysis, c-review, constant-time-analysis, zeroize-audit | skills | 7.3k / 09-28 (CC-BY-SA-4.0) | **Cài chọn lọc** | Rất hợp trục security và bán dẫn (C/C++, crypto). Giấy phép share-alike nếu bạn phân phối lại bản sửa. |
+| security-guidance, claude-security | plugin chính thức | — | Thử | security-guidance review diff bằng LLM, nên tốn hạn mức. |
+| semgrep | plugin chính thức + CLI | 16.8k | **Cài** | Repo `semgrep/mcp` cũ đã archived, dùng plugin chính thức. |
+| gitleaks / trufflehog | CLI | 29.6k / 28.2k | **Cài gitleaks** | Quét secret trước commit. |
+| osv-scanner / trivy | CLI | 11.1k / 38.2k | Cài một | Lỗ hổng trong dependency. |
+| garak (NVIDIA), promptfoo red-team | CLI | 9.4k / 25.6k | Khi học AI security | Quét lỗ hổng của LLM. |
+| skill-scanner (Cisco) | CLI | 2.6k / 10-01 | **Cài ở GĐ1** | Lõi chạy local, không cần API key. |
+| agent-scan (Snyk) | CLI | 3.1k / 09-30 | Tùy chọn | Cần `SNYK_TOKEN`, gửi thông tin thành phần lên Snyk. |
+
+### 6.7 Reuse-best và meta
+
+| Tên | Loại | Đề xuất | Ghi chú |
+|---|---|---|---|
+| claude-code-setup | plugin chính thức | **Chạy 1 lần mỗi project** | Phân tích codebase rồi đề xuất hook, skill, MCP, subagent phù hợp. |
+| claude-md-management, hookify | plugin chính thức | Cài | Giữ CLAUDE.md gọn; tạo hook từ mẫu hội thoại. |
+| skill-creator | skill | Có sẵn | Viết skill và chạy eval cho skill. |
+| find-skills (skills.sh) | skill | **Chỉ dùng để tìm** | Đứng đầu skills.sh với 3,6 triệu lượt cài trong 8 tuần. Cài thì phải qua cổng kiểm duyệt. |
+| `/doctor prompt-audit`, `/skill-doctor`, `/insights` | có sẵn | Chạy hằng tháng | |
+
+### 6.8 Bền bỉ phiên và hạn mức (cho #3)
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| Tự chờ và làm tiếp ở giới hạn 5 giờ | có sẵn (≥2.1.234) | — | CC | **Giữ bật** | Không áp dụng cho: hạn mức tuần, `-p`, background, phiên đã thoát. |
+| `--continue`, `--resume <tên>`, `-n`, `/rename`, `/branch`, `/rewind`, resume-from-summary, auto-memory | có sẵn | — | CC | **Dùng** | |
+| planning-with-files | skill + hooks | 27.2k / 09-27 | CC, OC (cả hai có hook) | 📦 **Thử 1 tuần làm nền** | Ba file kế hoạch, có hook SessionStart/PreCompact/Stop. Tác giả đo phục hồi trong 5 lượt, so với 13,3 khi không dùng. |
+| handoff (mattpocock) | skill | — | CC, OC | Cài | Nén hội thoại để agent khác làm tiếp. |
+| claude-mem | plugin | 95k / 10-01 | CC, OC | Để sau | Nặng (worker Bun, Chroma). Nén bằng AI nên tốn token. Có cloud sync tùy chọn. |
+| beads | CLI | 27.6k / 10-01 | CC, OC | Để sau | Bộ nhớ dạng issue tracker cho dự án lớn. |
+| Statusline 5h/7d | ⚙️ script | — | CC (terminal) | **Tự làm đơn giản** | Hoặc dùng ccstatusline (13.1k★). |
+
+### 6.9 Định tuyến model (cho #2, #4, #5)
+
+| Tên | Loại | ★ / cập nhật | Đề xuất | Ghi chú |
+|---|---|---|---|---|
+| `opusplan`, `model`/`effort` theo agent và skill, `/effort`, `ultrathink` | có sẵn | — | **Dùng** | Không cần cài gì. |
+| Agent OpenCode có `model` riêng | có sẵn | OpenCode 211k | **Dùng** | |
+| claude-code-router | gateway | 37.5k / 09-26 | Chưa cần | Cần API key của provider khác. |
+| oh-my-openagent (tên cũ oh-my-opencode) | plugin OC | 69.7k / 10-01, giấy phép riêng | Tham khảo | Điều phối nhiều model trong OpenCode. |
+
+### 6.10 Viết (cho #6)
+
+| Tên | Loại | ★ / cập nhật | Đề xuất | Ghi chú |
+|---|---|---|---|---|
+| humanizer | plugin skill | 53.2k / 09-28 | **Cài** (tiếng Anh) | 26 dấu hiệu lấy từ trang "Signs of AI writing" của Wikipedia. Tác giả viết rõ: qua mặt detector không phải mục tiêu, và detector vẫn gắn cờ phần lớn output của nó. |
+| stop-slop | skill | 17.7k / 03-17 | Tham khảo | |
+| giong-van (VI + EN) | ✍️ skill | — | **Viết ở GĐ6** | Xem 7.5. |
+
+### 6.11 Theo dõi tiến độ (cho #7)
+
+| Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
+|---|---|---|---|---|---|
+| Mẫu §0 trong `SCEE/PLAN.md` | quy ước của bạn | — | CC, OC | **Chuẩn hóa thành mẫu chung** | Đã chạy tốt trong SCEE: một nguồn sự thật, mục "Đang ở đâu, việc tiếp theo", checklist kiểm tra sau khi bị ngắt. |
+| `/goal`, `/recap`, task list, `/resume` theo tên, `claude agents` | có sẵn | — | CC | **Dùng** | Xem bảng N7. |
+| project-artifact | plugin chính thức | — | CC | Thử cho project lớn (SCEE) | Trang trạng thái "sống" có dải "Next steps". Lấy trạng thái PR/CI qua `gh`; làm mới thì đăng lại đúng URL cũ. Cần đăng nhập claude.ai và có tính năng Artifact. |
+| beads | CLI | 27.6k / 10-01 (MIT) | CC, OC | Để sau | Issue tracker dành cho agent, có quan hệ phụ thuộc giữa các việc; `bd ready` liệt kê việc không bị chặn. Hợp khi việc nhiều và đan xen. |
+| Backlog.md | CLI + MCP | 6.9k / 09-28 (MIT) | CC, OC | Tham khảo | Task dạng Markdown nằm trong repo, có bảng kanban. |
+| planning-with-files | skill | 27.2k | CC, OC | (đã có ở 6.8) | `tien-do` đọc được file `progress.md` của nó. |
+| `tien-do` | ✍️ skill + script | — | CC, OC | **Viết ở GĐ2b** | Xem 7.8. |
+
+### 6.12 Không khuyến nghị lúc này
+
+| Tên | Lý do |
+|---|---|
+| get-shit-done (64k★) | Đã archived từ 05/2026. |
+| claude-task-master (28.1k★) | Không cập nhật từ 04/2026, giấy phép không rõ ràng. |
+| ccpm (8.4k★) | Không cập nhật từ 03/2026. |
+| pal-mcp-server (zen) | Không cập nhật từ 12/2025. |
+| Continuous-Claude-v3 | Không cập nhật từ 01/2026. |
+| semgrep/mcp, open_deep_research | Đã archived. |
+| ECC / everything-claude-code (270k★) | Gói "mọi thứ", trùng lặp hook và skill, làm phình context. Chỉ nên đọc để lấy ý. |
+| SuperClaude, BMAD | Khung nặng, trùng vai superpowers. Quá tải cho người học một mình. |
+| Skill từ ClawHub | Nơi xảy ra chiến dịch ClawHavoc (341 skill độc nhắm macOS). |
+| Dùng tài khoản Claude Pro/Max trong công cụ bên thứ ba | Rủi ro điều khoản dịch vụ (mục 9). |
+
+---
+
+## 7. Thiết kế chi tiết
+
+### 7.1 Cấu trúc repo `agent-stack`
+
+Bản đầu của kế hoạch dùng symlink từng skill vào `~/.claude/`. Khi triển khai, mình đổi sang **đóng gói thành plugin Claude Code**, vì ba lý do:
+(a) thử được bằng `claude --plugin-dir agent-stack/plugin` mà không sửa gì trong `~/.claude`;
+(b) kiểm tra được bằng `claude plugin validate`, và đo kích hoạt skill bằng `claude plugin eval`;
+(c) khi bạn duyệt kích hoạt toàn cục, cài qua một marketplace cục bộ. Plugin được nạp tại chỗ, nên sửa trong repo là có hiệu lực ngay.
+
+Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc plugin không được nạp và `claude plugin validate` sẽ cảnh báo.
+
+```
+~/Documents/Claude/agent-stack/          # git repo, nguồn sự thật
+├── KE-HOACH.md · PLAN.md · BASELINE.md · README.md · CLAUDE.md
+├── .claude-plugin/marketplace.json      # marketplace cục bộ (dùng khi bạn duyệt cài)
+├── plugin/                              # plugin Claude Code
+│   ├── .claude-plugin/plugin.json
+│   ├── skills/   vet-skill/ session-keeper/ tien-do/ task-router/ giong-van/
+│   ├── agents/   reviewer · researcher · test-runner · oc-worker · explore-lite
+│   ├── hooks/    hooks.json + script Python (stdlib, chạy được trên Python 3.9)
+│   └── lib/      thư viện dùng chung: đọc §0/checkbox, git chỉ đọc, thư mục state
+├── global/                              # AGENTS.global.md, CLAUDE.global.md (chỉ link khi cài)
+├── opencode/agents/worker.md            # agent OpenCode
+├── statusline/ · templates/ · tools/ · evals/ · tests/
+├── vet-reports/ · vetted.lock           # kết quả kiểm duyệt đồ bên thứ ba
+├── install.sh                           # kích hoạt toàn cục; mặc định chỉ in ra việc sẽ làm
+└── state/ · backups/ · .venv/ · .tmp/   # không đưa vào git
+```
+
+OpenCode không đọc plugin Claude Code. Khi cài, `install.sh` symlink từng skill vào `~/.agents/skills/`. OpenCode đọc thư mục này, còn Claude Code thì không, nên không bị nạp trùng.
+
+### 7.2 Đội agent (#2)
+
+| Agent | Chạy ở | Model · effort | Quyền | Dùng khi | Cổng chất lượng |
+|---|---|---|---|---|---|
+| Phiên chính | CC | `opusplan` hoặc `sonnet`, effort `medium` (giả thuyết, GĐ4 quyết định) | — | — | — |
+| `Explore` (ghi đè agent có sẵn) | CC | `haiku` | chỉ đọc | Tìm và đọc code diện rộng | Phiên chính tự đọc lại các dòng then chốt trước khi sửa. A/B ở GĐ4. |
+| `researcher` | CC | `sonnet` · `medium` | WebSearch, WebFetch, Read | Nghiên cứu web, tài liệu | Mọi nhận định phải kèm URL. |
+| `reviewer` | CC | `opus` · `high` | chỉ đọc + Bash | Review code và bảo mật trước commit/PR | Chính nó là cổng. |
+| `test-runner` | CC | `haiku` | Bash, Read | Chạy test/lint, chỉ trả về lỗi | Output là kết quả thật của test, không phải nhận định. |
+| `oc-worker` | CC → OC | `haiku` để điều phối; việc thật chạy bằng `opencode run` với model local | Bash, Read | Việc cơ học hàng loạt | **Bắt buộc** qua test/lint. Chạm code quan trọng thì `reviewer` xem diff. |
+| `worker` | OC | `tuf/coder-fast`, lỗi thì thử `tuf/gpt-oss-medium` | edit: allow, bash: chỉ lệnh test, webfetch: deny | Được `oc-worker` gọi | |
+| `build` (dự phòng) | OC | Model tốt nhất không phải Claude mà bạn có | mặc định | Khi hết hạn mức tuần của Claude | Đọc `.agent/HANDOFF.md` trước tiên. |
+
+Ví dụ một file agent ⚙️ (`agents/reviewer.md`). Các agent khác viết theo cùng mẫu:
+
+```markdown
+---
+name: reviewer
+description: Review code và bảo mật trước commit hoặc PR. Dùng chủ động sau khi xong một thay đổi chạm tới xác thực, xử lý input, crypto, quyền truy cập hoặc cấu hình.
+tools: Read, Grep, Glob, Bash
+disallowedTools: Write, Edit
+model: opus
+effort: high
+# skills: [differential-review]   # bật sau khi cài Trail of Bits ở GĐ3
+---
+Bạn chỉ đọc, không sửa. Với mỗi vấn đề nêu: mức độ, file:dòng, vì sao sai, cách sửa.
+Ưu tiên lỗi đúng/sai và bảo mật hơn style. Không thấy vấn đề thì liệt kê những gì đã kiểm tra.
+```
+
+Agent OpenCode ⚙️ (`opencode-agents/worker.md`):
+
+```markdown
+---
+description: Làm việc cơ học được giao (đổi tên, định dạng, boilerplate, dịch tài liệu, test đơn giản). Không tự mở rộng phạm vi.
+mode: all
+model: tuf/coder-fast
+temperature: 0.2
+steps: 30
+permission:
+  edit: allow
+  webfetch: deny
+  bash:
+    "*": deny
+    "pytest*": allow
+    "npm test*": allow
+    "git diff*": allow
+---
+Chỉ làm đúng việc được giao, trong thư mục hiện tại. Xong thì liệt kê file đã sửa và lệnh kiểm tra đã chạy.
+```
+
+`oc-worker` gọi worker bằng lệnh sau (thêm `--standalone` nếu service nền của OpenCode chưa chạy):
+`opencode run --agent worker -m tuf/coder-fast --format json --auto "<việc + tiêu chí hoàn thành>"`
+
+**Quy tắc chung:**
+- Subagent vẫn ăn chung hạn mức. Nó chỉ có lời khi (a) đẩy output dài như log test hay kết quả tìm kiếm ra khỏi context chính, hoặc (b) việc đủ đơn giản để model rẻ làm tốt.
+- **Không** đặt `CLAUDE_CODE_SUBAGENT_MODEL=haiku` toàn cục, vì làm yếu mọi subagent, kể cả general-purpose. Gán model theo từng agent.
+- Agent teams tốn khoảng 7 lần token (theo docs) và workflow/ultracode sinh nhiều agent. Chỉ dùng khi có rất nhiều phần việc độc lập.
+
+### 7.3 Bền bỉ phiên (#3), skill `session-keeper` ✍️ hoặc 📦 planning-with-files
+
+Gồm năm tầng, từ có sẵn đến tự làm:
+
+1. **Tính năng sẵn có (⚙️):** giữ `autoContinueAtUsageLimit` bật; đặt tên phiên `claude -n <việc>`; quay lại bằng `claude --resume <tên>`; thử hướng khác bằng `/branch`; lùi lại bằng `/rewind`.
+2. **Trạng thái trên đĩa**, thư mục `.agent/` trong mỗi project. Project nào đã có `PLAN.md` kiểu SCEE thì mục §0 của nó đóng vai bàn giao rút gọn, không tạo file trùng; chỉ tách `.agent/HANDOFF.md` khi cần bàn giao dài, ví dụ sang OpenCode (7.8):
+   - `PLAN.md`: các giai đoạn dạng checkbox, là điểm quay lại.
+   - `PROGRESS.md`: nhật ký từng mốc.
+   - `FINDINGS.md`: quyết định và lý do.
+   - `HANDOFF.md`, theo mẫu:
+     ```markdown
+     # HANDOFF: <việc>   ·   cập nhật <ngày giờ>   ·   công cụ/model: <...>
+     ## Mục tiêu
+     ## Trạng thái: đã xong / đang dở / chưa làm
+     ## Quyết định đã chốt (kèm lý do)
+     ## File đã chạm
+     ## Cách kiểm chứng (lệnh, kết quả mong đợi)
+     ## Bước tiếp theo (cụ thể, theo thứ tự)
+     ## Câu hỏi còn mở
+     ```
+3. **Hook ✍️:**
+
+   | Sự kiện | Việc làm |
+   |---|---|
+   | `SessionStart` (matcher `startup\|resume\|compact\|clear`) | Nếu có `.agent/HANDOFF.md`, chèn tóm tắt vào `additionalContext`. |
+   | `PreCompact` | Nhắc cập nhật PROGRESS và commit thư mục `.agent/`. Không chặn compaction. |
+   | `Stop` | Nếu đã sửa file mà PROGRESS chưa cập nhật, thêm lời nhắc. Không chặn. |
+   | `SessionEnd` | Tự commit `.agent/` với nhãn `wip`. Chỉ thư mục này, không đụng code. |
+
+4. **Cảnh báo hạn mức:** statusline ⚙️ đọc `rate_limits.five_hour.used_percentage` và `rate_limits.seven_day.used_percentage`, hiển thị `model · effort · ctx% · 5h% · 7d%`, đồng thời ghi ra `agent-stack/state/limits.json`. Hook `UserPromptSubmit` ✍️ đọc file đó:
+   - 5h ≥ 90%: nhắc ghi checkpoint.
+   - 7d ≥ 80%: nhắc cập nhật HANDOFF ngay, ưu tiên việc quan trọng, đẩy việc cơ học sang `oc-worker`.
+   - Lưu ý: statusline là tính năng của terminal, có thể không chạy trong desktop app (cần kiểm tra ở GĐ2). Trong desktop app thì xem `/usage` bằng tay.
+5. **Bàn giao chéo công cụ:** `AGENTS.md` có luật: "Nếu có `.agent/HANDOFF.md` thì đọc trước khi làm gì khác." OpenCode đọc được cả luật lẫn skill, nên tiếp tục đúng chỗ.
+
+**Diễn tập (nghiệm thu GĐ2):** (a) `kill -9` giữa chừng rồi `claude --continue`; (b) `/clear` rồi khôi phục từ file; (c) giả lập hết hạn mức tuần: mở OpenCode và làm tiếp từ HANDOFF. Mục tiêu: phục hồi trong ≤ 5 lượt và không mất quyết định nào đã chốt.
+
+### 7.4 Bộ định tuyến (#4 + #5), skill `task-router` ✍️
+
+| Tầng | Cách làm | Chi phí | Khi nào dùng |
+|---|---|---|---|
+| A. Luật | Hook `UserPromptSubmit` đọc `router-rules.json`, so khớp từ khóa tiếng Việt (đã chuẩn hóa bỏ dấu) và tiếng Anh. | 0 token, dưới 50 ms | Luôn luôn |
+| B. Model local | Ollama hoặc tuf (Qwen3.5 4B, Phi-4-mini), trả về JSON theo schema. | Miễn phí, riêng tư, 1–3 giây | Khi tầng A không khớp và prompt dài |
+
+Hook trả về hai thứ: `additionalContext` để Claude biết gợi ý, và `systemMessage` để **bạn** thấy gợi ý ngay trên màn hình. Ví dụ:
+
+```json
+{"systemMessage": "router: security-review → /model opus · /effort high · agent reviewer · skill differential-review",
+ "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+   "additionalContext": "[router] Gợi ý: dùng skill differential-review, giao agent reviewer. Lý do: prompt khớp 'bảo mật'."}}
+```
+
+Mẫu `router-rules.json` (bản thật lấy từ kết quả GĐ4):
+
+```json
+{"rules": [
+  {"id": "security-review", "match": ["bao mat", "lo hong", "review", "audit", "threat"],
+   "skills": ["differential-review"], "model": "opus", "effort": "high", "agent": "reviewer"},
+  {"id": "research", "match": ["nghien cuu", "so sanh", "tim hieu", "research"],
+   "skills": ["research"], "model": "sonnet", "effort": "medium", "agent": "researcher"},
+  {"id": "mechanical", "match": ["doi ten", "rename", "format", "boilerplate"],
+   "model": "haiku", "effort": "low", "agent": "oc-worker"},
+  {"id": "writing", "match": ["bai luan", "essay", "viet lai", "blog"],
+   "skills": ["giong-van", "humanizer"], "model": "sonnet", "effort": "medium"}
+], "default": null}
+```
+
+**Gợi ý sau mỗi tin (#5).** Thêm vào `CLAUDE.md` một luật: với câu trả lời có việc tiếp theo, kết thúc bằng một dòng
+
+`➡️ Tiếp: <việc> · Model: <...> · Effort: <...> · Subagent: <...>`
+
+Bỏ qua với câu hỏi nhanh. Chi phí khoảng 30 token mỗi lượt.
+
+Bảng định tuyến khởi điểm (giả thuyết, GĐ4 sẽ chỉnh bằng số liệu):
+
+| Việc tiếp theo | Model | Effort | Subagent |
+|---|---|---|---|
+| Hỏi nhanh, giải thích ngắn | sonnet | low | — |
+| Xem tiến độ, hỏi "làm gì tiếp?" | sonnet | low | — (skill tien-do) |
+| Tìm code, đọc nhiều file | (giữ model hiện tại) | — | Explore (haiku) |
+| Nghiên cứu web, tài liệu | sonnet | medium | researcher |
+| Viết tính năng thông thường | sonnet | medium | — |
+| Debug khó, nhiều bước | opus | high | — |
+| Lập kế hoạch, thiết kế kiến trúc | opusplan / opus | high | Plan |
+| Review code hoặc bảo mật trước commit | opus | high | reviewer |
+| Chạy test/lint và tóm tắt lỗi | — | — | test-runner (haiku) |
+| Việc cơ học hàng loạt | haiku / OpenCode local | low | oc-worker |
+| Việc tự chủ nhiều giờ, cực khó | fable (nếu gói cho phép) | high | — |
+| Viết văn bản | sonnet | medium | — (skill giong-van) |
+
+**"Luôn dùng skill" (#4)** làm bằng ba cách, không ép:
+(1) Viết `description` đặt use-case lên đầu, thêm `when_to_use`; (2) luật ngắn trong `AGENTS.md`: "Trước việc không tầm thường, xem có skill phù hợp không. Có thì dùng, không có thì nói rõ."; (3) đo bằng `claude plugin eval` với grader "skill đã kích hoạt" trên 10 prompt nên kích hoạt và 10 prompt không nên.
+
+### 7.5 Viết tự nhiên (#6), skill `giong-van` ✍️
+
+- 📦 humanizer cho tiếng Anh.
+- ✍️ Skill `giong-van` cho cả tiếng Việt và tiếng Anh:
+  ```
+  giong-van/
+  ├── SKILL.md          # quy trình + checklist
+  ├── samples/          # 5–10 bài bạn tự viết (không commit nếu riêng tư)
+  ├── style-card.md     # đặc điểm giọng văn, Claude rút ra, bạn duyệt
+  └── vi-ai-tells.md    # dấu hiệu văn AI tiếng Việt, bạn bổ sung dần
+  ```
+- Quy trình: bạn đưa ý hoặc bản nháp → skill sửa theo `style-card` → bỏ dấu hiệu văn AI → giữ nguyên ý, **không bịa trải nghiệm hay sự kiện** → trả về bản sửa kèm danh sách thay đổi để bạn duyệt.
+- Danh sách `vi-ai-tells.md` khởi đầu: mở bài "Trong bối cảnh…"; "không chỉ… mà còn…"; "đóng vai trò quan trọng", "góp phần"; mở hoặc kết bằng "Tóm lại", "Nhìn chung"; bộ ba tính từ; các câu dài đều nhau; in đậm hoặc emoji thừa; kết luận sáo rỗng; "hành trình", "khám phá".
+- **Phạm vi:** dùng cho bài của chính bạn. Detector AI không đáng tin, nên mục tiêu là chất lượng và giọng thật, không phải qua mặt công cụ. Với bài nộp có quy định về AI, làm theo quy định nơi nhận.
+- Eval: đọc mù 5 cặp (bản bạn tự viết so với bản qua skill) xem còn giữ được giọng của bạn không.
+
+### 7.6 Cổng kiểm duyệt, skill `vet-skill` ✍️
+
+Đầu vào: URL repo hoặc đường dẫn. Các bước:
+
+1. **Metadata** (`gh api repos/<owner>/<repo>`): archived thì loại; không cập nhật trên 6 tháng thì cảnh báo; không có giấy phép thì cảnh báo (không được phân phối lại); dưới 500★ thì phải đọc kỹ hơn.
+2. **Ghim phiên bản:** clone tại một commit cụ thể, ghi SHA.
+3. **Quét tĩnh:** `skill-scanner scan <path> --use-behavioral --format markdown` (chạy local).
+4. **Đọc toàn bộ:** `SKILL.md`, `scripts/`, **hook của plugin (tự chạy mỗi phiên!)**, `.mcp.json` (endpoint mạng), `allowed-tools`, các lệnh `` !`cmd` `` (chạy khi skill được gọi).
+5. **Tìm dấu hiệu xấu:** `curl | sh`, base64, `eval`, đọc `~/.ssh`, `~/.aws` hay keychain, gửi dữ liệu tới domain lạ, câu kiểu "bỏ qua hướng dẫn trước", ký tự ẩn.
+6. **Chạy thử cô lập:** trong thư mục rỗng, bằng `claude --plugin-dir <path>` (chỉ có hiệu lực cho phiên đó).
+7. **Ghi `vetted.lock`:** tên, nguồn, SHA, ngày, kết quả, ghi chú. Khi có bản mới thì diff giữa SHA cũ và mới rồi kiểm lại.
+
+Luật cứng: không cài từ ClawHub; không chạy installer `curl | sh` khi chưa đọc; không dùng `--dangerously-skip-permissions`; ưu tiên marketplace chính thức và repo chính chủ.
+
+### 7.7 Bộ eval "giữ hiệu suất" (GĐ4)
+
+- **Bộ việc:** 12–15 việc thật lấy từ project của bạn (pdf-translator, SCEE, archctl…): 4 coding có test, 3 research có đáp án kiểm được, 3 review bảo mật (file có lỗ hổng cài sẵn), 2 QA (viết test cho hàm có sẵn), 2 viết.
+- **Cấu hình so sánh:** A `sonnet/medium` (hiện tại) · B `sonnet/high` · C `opus/medium` · D `opusplan/medium` · E = A cộng subagent rẻ (Explore và test-runner chạy haiku). Bắt đầu với A, C, D; chạy B, E nếu cần.
+- **Thước đo:** tỉ lệ đạt (test pass, rubric chấm); chi phí ước tính theo giá niêm yết (`claude -p --output-format json` có trả về) dùng thay cho % hạn mức; thời gian chạy.
+- **Quy tắc chọn:** lấy cấu hình **rẻ nhất** mà tỉ lệ đạt không thấp hơn cấu hình tốt nhất quá 1 việc (trên khoảng 15 việc) qua 2 lần chạy. Nếu chênh lệch nằm trong mức nhiễu thì chạy lần thứ 3.
+- **Ngân sách:** 15 việc × 3 cấu hình × 2 lần = 90 lượt agent. Chia ra 3–4 ngày để không đốt hạn mức tuần, và đặt `--max-cost-usd` làm trần.
+
+### 7.8 Theo dõi tiến độ (#7), skill `tien-do` ✍️
+
+**Nguyên tắc:**
+- **Không tạo hệ thống quản lý thứ hai.** Đọc đúng file kế hoạch mà project đang có. Mẫu chuẩn chỉ áp dụng cho project mới.
+- **Script làm phần nặng, LLM chỉ xếp hạng.** Script thu thập dữ liệu không tốn token; Claude chỉ đọc kết quả, sắp thứ tự và giải thích.
+- **Chỉ đọc.** Muốn đánh dấu xong hay sửa §0 thì skill đề xuất kèm bằng chứng (commit, kết quả test); bạn duyệt rồi mới ghi.
+
+**Mẫu §0 chuẩn**, rút từ `SCEE/PLAN.md`, dùng cho project mới (đặt trong `PLAN.md` ở gốc hoặc `.agent/PLAN.md`):
+
+```markdown
+## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
+*Cập nhật <ngày>.*
+- **Xong:** …
+- **Đang dở:** … (kèm file, nhánh, tên phiên Claude Code liên quan)
+- **Việc tiếp theo, theo thứ tự:** 1. … 2. …
+- **Quyết định còn treo:** …
+- **Mốc kiểm tra:** lệnh test + kết quả mong đợi (ví dụ `274 passed, 37 xfailed`)
+- **Sau khi bị ngắt:** các bước kiểm tra nhanh trước khi làm tiếp
+```
+
+**Nguồn dữ liệu, theo thứ tự ưu tiên:**
+
+| Nguồn | Lấy gì | Ghi chú |
+|---|---|---|
+| `PLAN.md` §0 hoặc `.agent/HANDOFF.md` | Đang dở, việc tiếp theo, quyết định treo, mốc test | Nguồn chính. |
+| Checkbox trong `PLAN.md` / `PROGRESS.md` | % đã xong; giai đoạn hiện tại (giai đoạn đầu tiên còn ô trống) | Ba thư mục học dùng kiểu này. |
+| git | File chưa commit (và đã để bao lâu), stash, commit chưa push, nhánh chưa merge, lần commit cuối | Project không có git thì bỏ qua. |
+| TODO / FIXME | Chỉ tính trong các file bạn sửa trong 14 ngày gần nhất | Tránh nhiễu từ code bên thứ ba (XiaomiMiMo có 138 file). |
+| `gh` | PR đang mở, trạng thái CI của lần chạy cuối | Chỉ khi có remote GitHub. |
+| Mốc test | So kết quả lần chạy gần nhất (do skill `verify` ghi lại) với mốc trong §0 | Không tự chạy test, trừ khi bạn yêu cầu. |
+| Phiên Claude Code | Tên các phiên gần đây của project, để gợi ý `claude --resume <tên>` | Chỉ đọc tên và thời gian. Không phân tích transcript, vì định dạng đó là nội bộ và hay đổi. |
+
+**Cách xếp hạng "việc tiếp theo":**
+
+1. **Chặn đường:** test hoặc CI đỏ, kết quả lệch mốc test, xung đột merge, file chưa commit quá 24 giờ.
+2. **Dang dở:** mục "Đang dở" trong §0, mục chưa xong đầu tiên của "Việc tiếp theo", nhánh có commit chưa push, PR đang chờ bạn.
+3. **Giai đoạn hiện tại:** ô chưa tick đầu tiên của giai đoạn đang làm.
+4. **Nợ mới:** TODO/FIXME vừa thêm gần đây.
+5. **Bị bỏ quên:** project còn việc dở mà không có hoạt động quá 14 ngày. Skill hỏi: làm tiếp, tạm dừng hay đóng?
+
+Mỗi việc kèm gợi ý `Model · Effort · Subagent` lấy từ bảng định tuyến (7.4). Với việc kiểm chứng được, skill đề xuất luôn một câu `/goal`, ví dụ: `/goal pytest ra đúng 274 passed, 37 xfailed và git status sạch`.
+
+**Hai chế độ:**
+- `/tien-do`: project hiện tại.
+- `/tien-do all`: mọi thư mục trong `~/Documents/Claude/`, gộp thành một bảng gồm project · hoạt động gần nhất · việc dang dở · việc tiếp theo · cảnh báo.
+
+Ví dụ bản tóm tắt cho một project (minh họa, dựng từ `SCEE/PLAN.md` hiện tại; dòng cảnh báo là giả định):
+
+```
+📍 SCEE · cập nhật §0 ngày 30/09 · nhánh main · không có file chưa commit
+Tiến độ: G0 ✓ · G0.5 ✓ · G1 chưa bắt đầu
+Đang dở: §0 bước 2, danh sách dọn về một phiên bản (chờ bạn duyệt)
+Tiếp theo:
+  1. Lập danh sách dọn (06 §5–6)          · sonnet · medium
+  2. Viết tài liệu thiết kế hợp nhất      · opusplan · high
+Cảnh báo: mốc test 274 passed / 37 xfailed chưa được chạy lại kể từ commit 30/09
+```
+
+**Ba cách kích hoạt:**
+
+| Cách | Chi phí | Khi nào |
+|---|---|---|
+| Hook `SessionStart` (startup, resume) chạy script ở chế độ `--brief` | 0 token LLM, khoảng 150 token context | Mỗi lần mở phiên trong project có file kế hoạch. Hiện 3–6 dòng "đang dở / tiếp theo" cho bạn (`systemMessage`) và cho Claude (`additionalContext`). Gộp chung với hook của 7.3 để chỉ chèn một khối. |
+| Gõ `/tien-do` hoặc hỏi "làm gì tiếp?" | Khoảng 1–3k token (`sonnet · low`, chạy với `context: fork`) | Khi cần xếp hạng và giải thích. |
+| Tác vụ định kỳ của desktop app, ví dụ sáng thứ Hai | 1 lượt mỗi tuần | Chạy `/tien-do all`, ghi ra `~/Documents/Claude/TIEN-DO.md` và gửi thông báo. |
+
+**Cấu trúc skill:**
+
+```
+tien-do/
+├── SKILL.md              # name, description (≤ 1.024 ký tự), model: sonnet, effort: low, context: fork
+├── scripts/collect.py    # Python thuần (stdlib), xuất JSON; --brief cho hook; --all cho mọi project
+└── templates/PLAN-0.md   # mẫu §0 cho project mới
+```
+
+- Trong Claude Code, `SKILL.md` chèn sẵn kết quả của script bằng `` !`python3 ${CLAUDE_SKILL_DIR}/scripts/collect.py` ``. OpenCode không hỗ trợ cú pháp này, nên phần thân skill ghi thêm: "Nếu chưa thấy dữ liệu, chạy `python3 <thư mục skill>/scripts/collect.py`."
+- Mỗi project có thể có cấu hình riêng (tùy chọn) trong `.agent/tien-do.json`: file nguồn, tên mục §0, lệnh test và mốc test, các thư mục loại trừ.
+
+**Câu hỏi dẫn dắt khi bạn viết skill:**
+1. Một mục "đang dở" cần những trường nào để người khác, hoặc OpenCode, làm tiếp được mà không phải hỏi lại?
+2. Khi §0 và git mâu thuẫn (§0 ghi "xong" nhưng còn file chưa commit), nên tin nguồn nào, và báo cho bạn thế nào?
+3. Làm sao phát hiện §0 đã cũ, ví dụ ngày cập nhật §0 sớm hơn commit gần nhất?
+4. Đo bằng cách nào để biết "việc tiếp theo" mà skill đề xuất là đúng?
+
+**Nghiệm thu:**
+- Script chạy dưới 2 giây cho mỗi project và dưới 10 giây với `all`. Chế độ `--brief` không tốn token LLM.
+- Trên 3 project thật (SCEE, pdf-translator, security-whitebox) trong một tuần: việc tiếp theo mà skill đề xuất khớp với lựa chọn của bạn ở ít nhất 4/5 lần kiểm.
+- Phát hiện đủ bốn loại: file chưa commit, ô chưa tick của giai đoạn hiện tại, mục "đang dở" trong §0, project bị bỏ quên.
+- Không bao giờ tự sửa file kế hoạch khi bạn chưa duyệt.
+- Chạy được trong OpenCode qua bash.
+
+---
+
+## 8. Lộ trình triển khai
+
+Mỗi giai đoạn ghi kèm model và effort nên dùng để làm chính giai đoạn đó (tự áp dụng yêu cầu #5).
+
+### GĐ0: Chuẩn bị và đo nền (1 buổi) · `sonnet · low`
+- [ ] Trả lời các câu hỏi còn mở ở mục 10.
+- [ ] Nâng cấp: `brew upgrade --cask claude-code` và `brew upgrade --cask opencode-v2`.
+- [ ] Sao lưu `~/.claude/settings.json` và `~/.config/opencode/opencode.jsonc`.
+- [ ] `git init` trong `agent-stack/`.
+- [ ] Kiểm chứng OpenCode: `opencode models | grep -E "tuf|openai-oauth"` và `opencode run -m tuf/coder-fast "trả lời: ok"`.
+- [ ] Ghi `BASELINE.md`: `/usage` (24 giờ và 7 ngày, kèm phần phân bổ), `/insights`, `/context` của một phiên điển hình.
+- [ ] Bật lại cảnh báo usage của workflow (bỏ `skipWorkflowUsageWarning`).
+- [ ] Đọc lại điều khoản dịch vụ trước khi dùng tiếp jcode với Claude Max và proxy openai-oauth.
+
+**Nghiệm thu:** `BASELINE.md` có số liệu; hai công cụ chạy bản mới; OpenCode gọi được model local.
+
+### GĐ1: Cổng kiểm duyệt (1–2 buổi) · `opus · high` (cần phán đoán bảo mật)
+- [ ] `uv tool install cisco-ai-skill-scanner`
+- [ ] ✍️ Viết skill `vet-skill` theo 7.6, dùng skill-creator để chạy eval.
+- [ ] Tạo `vetted.lock`.
+- [ ] Thử trên 3 repo: anthropics/skills (đối chứng sạch), planning-with-files, humanizer.
+
+**Nghiệm thu:** có 3 báo cáo; mỗi skill kiểm trong ≤ 15 phút.
+
+### GĐ2: Bền bỉ phiên, yêu cầu #3 (2–3 buổi) · `sonnet · medium`, nhờ `reviewer` xem hook
+- [ ] 📦 Thử planning-with-files 1 tuần (sau khi qua GĐ1), **hoặc** ✍️ viết `session-keeper` gọn hơn theo 7.3.
+- [ ] ⚙️ Viết `AGENTS.md` chung; `~/.claude/CLAUDE.md` import nó và thêm phần riêng của Claude.
+- [ ] ⚙️ Statusline 5h/7d + `limits.json`; ✍️ hook cảnh báo hạn mức.
+- [ ] ✍️ Hook SessionStart, PreCompact, Stop, SessionEnd.
+- [ ] Diễn tập 3 kịch bản ở 7.3. Kiểm tra thêm hành vi tự chờ trong desktop app.
+
+**Nghiệm thu:** phục hồi trong ≤ 5 lượt, không mất quyết định đã chốt; OpenCode làm tiếp đúng bước ghi trong HANDOFF.
+
+### GĐ2b: Theo dõi tiến độ, yêu cầu #7 (1–2 buổi) · `sonnet · medium`
+Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionStart`.
+- [ ] Rút mẫu §0 từ `SCEE/PLAN.md` thành `templates/PLAN-0.md`; thêm §0 cho pdf-translator và archctl.
+- [ ] ✍️ Viết `scripts/collect.py` (chỉ đọc, xuất JSON) và `SKILL.md` theo 7.8.
+- [ ] ⚙️ Gộp `collect.py --brief` vào hook `SessionStart` của GĐ2, để mỗi lần mở phiên chỉ chèn một khối.
+- [ ] (Tùy chọn) `git init` cho ba thư mục học, để có lịch sử tiến độ và để các tín hiệu git hoạt động.
+- [ ] (Tùy chọn) Bật task list trên model 5.5: `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` và `CLAUDE_CODE_TASK_LIST_ID=<project>`. Đây chỉ là công cụ phụ trong phiên; nguồn sự thật vẫn là §0.
+- [ ] (Tùy chọn) Tác vụ định kỳ chạy `/tien-do all` mỗi sáng thứ Hai.
+- [ ] (Tùy chọn) Thử plugin `project-artifact` cho SCEE.
+
+**Nghiệm thu:** theo các tiêu chí ở cuối mục 7.8.
+
+### GĐ3: Kho năng lực v1, yêu cầu #1 (2 buổi) · `sonnet · medium`
+- [ ] Cài các mục ghi **Cài** ở mục 6, mỗi mục qua `vet-skill`: LSP (Python, C/C++), context7, playwright + webapp-testing, semgrep, các skill chọn lọc của Trail of Bits, skill lẻ của Matt Pocock, humanizer, session-report, claude-code-setup, claude-md-management; CLI gitleaks và osv-scanner.
+- [ ] Tắt skill không dùng bằng `skillOverrides`; kiểm tra bằng `/skills`, `/context`, `/skill-doctor`.
+- [ ] Chạy `claude-code-setup` trên một project thật.
+
+**Nghiệm thu:** ≤ 20 skill bật toàn cục; không mô tả nào bị cắt; ≤ 4 MCP.
+
+### GĐ4: Đội agent và eval, yêu cầu #2 (3 buổi) · `opus · high` để thiết kế eval; khi chạy eval thì dùng chính cấu hình cần đo
+- [ ] ⚙️ Tạo 5 agent Claude Code và 1 agent OpenCode theo 7.2.
+- [ ] ✍️ Soạn bộ 12–15 việc thật và cách chấm theo 7.7.
+- [ ] Chạy cấu hình A, C, D (mỗi cái 2 lần); thêm B, E nếu cần.
+- [ ] Chốt `routing-table.md` v1.
+
+**Nghiệm thu:** bảng định tuyến có số liệu; cấu hình được chọn đạt ≥ (tốt nhất − nhiễu) và không tốn hạn mức hơn baseline. Rẻ hơn là điểm cộng, không bắt buộc.
+
+### GĐ5: Router, yêu cầu #4 và #5 (2–3 buổi) · `sonnet · medium`
+- [ ] ✍️ Viết `router-rules.json` từ `routing-table.md`.
+- [ ] ✍️ Hook tầng A; thêm luật dòng ➡️ vào `CLAUDE.md`.
+- [ ] Soạn 40 prompt có nhãn để đo độ chính xác của router; tùy chọn so với tầng B (model local).
+- [ ] Đo kích hoạt skill bằng `claude plugin eval`.
+
+**Nghiệm thu:** router đúng ≥ 85% trên 40 prompt; hook chạy ≤ 300 ms; skill kích hoạt đúng ≥ 85% và kích hoạt nhầm ≤ 10%.
+
+### GĐ6: Viết tự nhiên, yêu cầu #6 (1–2 buổi) · `sonnet · medium`
+- [ ] 📦 humanizer.
+- [ ] ✍️ `giong-van`: gom samples, viết style-card, vi-ai-tells, SKILL.md.
+- [ ] Đọc mù 5 cặp.
+
+**Nghiệm thu:** bạn nhận ra giọng mình ở ≥ 4/5 bản; không có ý hay sự kiện nào bị bịa.
+
+### GĐ7: Vận hành định kỳ (30 phút mỗi tháng)
+- [ ] Nâng cấp hai công cụ; kiểm lại skill có bản mới (diff theo SHA).
+- [ ] Chạy lại eval khi có model mới (ví dụ Sonnet 5.5 vừa ra ngày 28/09) rồi cập nhật bảng định tuyến.
+- [ ] Chạy `/skill-doctor`, `/usage` (xem phân bổ), `/doctor prompt-audit`; tỉa skill không dùng.
+
+---
+
+## 9. Rủi ro và cách giảm
+
+| Rủi ro | Khả năng | Ảnh hưởng | Cách giảm |
+|---|---|---|---|
+| Skill hoặc plugin độc hại (chuỗi cung ứng) | Trung bình | Rất cao (đã có mã độc đánh cắp dữ liệu trên macOS) | Làm GĐ1 trước mọi cài đặt; ghim SHA; đọc kỹ hook. |
+| Chất lượng giảm khi dùng model rẻ | Cao nếu không đo | Cao | Eval ở GĐ4; cổng test và review; hỏng thì chạy lại ở mức cao hơn. |
+| Context phình vì quá nhiều skill và MCP | Cao | Trung bình | Giới hạn 20 skill / 4 MCP; `/skill-doctor`. |
+| Đổi model/effort liên tục làm mất cache | Trung bình | Trung bình (tốn hơn) | Chỉ đổi ở ranh giới việc. |
+| Rò rỉ dữ liệu qua dịch vụ ngoài (Snyk, cloud sync của claude-mem) | Trung bình | Cao với code nhạy cảm | Chỉ dùng cho project không nhạy cảm; ưu tiên công cụ local. |
+| Vi phạm điều khoản khi dùng OAuth gói Claude trong công cụ bên thứ ba (jcode, plugin kiểu opencode-with-claude) | Trung bình | Cao (có thể bị khóa tài khoản) | Chính sách đã đổi nhiều lần trong 2026: sửa ToS 02/2026, thực thi 04/2026, rồi có điều chỉnh 05/2026 theo báo chí. Không dùng Claude trong công cụ bên thứ ba khi chưa đọc điều khoản hiện hành. |
+| Chạy không người giám sát (auto-continue + quyền rộng) | Thấp đến trung bình | Cao | Không dùng `bypassPermissions`; thêm deny rule cho lệnh nguy hiểm; dùng sandbox Bash. |
+| Hook lỗi làm kẹt phiên | Trung bình | Thấp | Đặt timeout ngắn; gỡ bằng `claude --safe-mode`. |
+| File kế hoạch lệch thực tế (§0 đã cũ), khiến báo cáo tiến độ sai | Trung bình | Trung bình | Script so ngày cập nhật §0 với commit gần nhất rồi cảnh báo; hook `Stop` nhắc cập nhật §0 khi đã sửa file; skill không tự đánh dấu xong. |
+| Công cụ và docs thay đổi nhanh | Cao | Trung bình | GĐ7 hằng tháng; ghi phiên bản trong `vetted.lock`. |
+| Model local không dùng được khi ra khỏi mạng nhà | Cao | Thấp | Dự phòng bằng Ollama trên máy hoặc model miễn phí của OpenCode Zen. |
+| Dùng #6 để né detector với bài có quy định về AI | — | Cao | Giữ đúng phạm vi ở 7.5. |
+
+---
+
+## 10. Câu hỏi còn mở
+
+Đã trả lời: ai viết skill (Claude viết v1), commit (có, sau mỗi giai đoạn), Jev (bỏ), phạm vi (chỉ `agent-stack/`).
+
+1. Bạn dùng gói Claude nào: Pro, Max 5x hay Max 20x? Có bật usage credits không? (Tùy gói, Fable có thể bị tính vào usage credits.)
+2. Câu "(luôn kiểm tra …" bị cắt. Bạn định viết gì?
+3. Worker OpenCode: chỉ dùng model local và miễn phí, hay chấp nhận provider trả phí qua API key? Bạn có muốn tuyệt đối không gửi code ra ngoài không?
+4. Viết luận: dùng cho việc gì (blog, CV, hồ sơ học bổng, bài tập)? Tiếng Việt, tiếng Anh hay cả hai?
+5. Theo dõi tiến độ: khi kích hoạt toàn cục, những project nào cần theo dõi (mặc định là mọi thư mục trong `~/Documents/Claude/`)? Có muốn nhận bản tổng hợp mỗi tuần không? (Việc `git init` ba thư mục học để sau, vì hiện chỉ làm trong `agent-stack/`.)
+
+---
+
+## 11. Nguồn
+
+**Docs chính thức Claude Code:** [model-config](https://code.claude.com/docs/en/model-config) · [sub-agents](https://code.claude.com/docs/en/sub-agents) · [hooks](https://code.claude.com/docs/en/hooks) · [skills](https://code.claude.com/docs/en/skills) · [costs](https://code.claude.com/docs/en/costs) · [interactive-mode (chờ hết giới hạn)](https://code.claude.com/docs/en/interactive-mode) · [sessions](https://code.claude.com/docs/en/sessions) · [memory / AGENTS.md](https://code.claude.com/docs/en/memory) · [statusline](https://code.claude.com/docs/en/statusline) · [plugin-evals](https://code.claude.com/docs/en/plugin-evals) · [changelog](https://code.claude.com/docs/en/changelog)
+
+**Docs OpenCode:** [agents](https://opencode.ai/docs/agents/) · [skills](https://opencode.ai/docs/skills/) · [rules](https://opencode.ai/docs/rules/) · [config](https://opencode.ai/docs/config/) · [ecosystem](https://opencode.ai/docs/ecosystem/)
+
+**Số đo chi phí và chất lượng:** hướng dẫn cost-optimization trong skill `claude-api` đi kèm Claude Code (số đo của Anthropic trên Fable 5 / Opus 5).
+
+**An ninh skill:** [Snyk ToxicSkills](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/) · [arXiv: Emerging Threats of the Agent Skill Ecosystem](https://arxiv.org/html/2605.28588) · [Sự cố ClawHub](https://www.termdock.com/en/blog/clawhub-malicious-skills-incident) · [ToxicSkills & ClawHavoc](https://www.agensi.io/learn/toxicskills-clawhavoc-agent-skills-security-crisis-2026) · [cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner) · [snyk agent-scan](https://github.com/snyk/agent-scan)
+
+**Theo dõi tiến độ:** [goal](https://code.claude.com/docs/en/goal) · [task list và session recap (interactive-mode)](https://code.claude.com/docs/en/interactive-mode) · [project-artifact (marketplace chính thức)](https://github.com/anthropics/claude-plugins-official) · [beads](https://github.com/gastownhall/beads) · [Backlog.md](https://github.com/MrLesk/Backlog.md)
+
+**Điều khoản dịch vụ:** [WinBuzzer 02/2026](https://winbuzzer.com/2026/02/19/anthropic-bans-claude-subscription-oauth-in-third-party-apps-xcxwbn/) · [AlternativeTo](https://alternativeto.net/news/2026/2/anthropic-officially-bans-using-subscription-authentication-for-third-party-claude-use) · [BetterClaw: lệnh cấm và điều chỉnh](https://www.betterclaw.io/blog/openclaw-anthropic-subscription-ban)
+
+**Repo và kho skill:** [anthropics/skills](https://github.com/anthropics/skills) · [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) · [skills.sh](https://skills.sh) · [superpowers](https://github.com/obra/superpowers) · [mattpocock/skills](https://github.com/mattpocock/skills) · [planning-with-files](https://github.com/OthmanAdi/planning-with-files) · [claude-mem](https://github.com/thedotmack/claude-mem) · [trailofbits/skills](https://github.com/trailofbits/skills) · [humanizer](https://github.com/blader/humanizer) · [claude-code-router](https://github.com/musistudio/claude-code-router) · [OpenCode](https://github.com/anomalyco/opencode) · [jcode](https://github.com/1jehuang/jcode). Số sao lấy qua GitHub API ngày 2026-10-01.
