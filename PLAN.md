@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py`). GĐ4 (5 agent + worker OpenCode, bộ eval 11 việc). GĐ5 (`task-router`, hook gợi ý, 10 case đo kích hoạt skill). 85 test đạt.
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`). GĐ3 (kiểm duyệt 21 mục, `catalog.json`, `tools/install.py`). GĐ4 (5 agent + worker OpenCode, bộ eval 11 việc). GĐ5 (`task-router`). GĐ6 (`giong-van`, `tells.py`, việc eval viết lại). 89 test đạt.
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ6: skill `giong-van` + `tells.py`.
-  2. GĐ7: `tools/maintain.py`.
-  3. Chờ bạn: duyệt mục trong `vetted.lock`, chạy `./install.sh --apply`, duyệt ngân sách eval.
+  1. GĐ7: `tools/maintain.py`.
+  2. Chờ bạn: duyệt mục trong `vetted.lock`, chạy `./install.sh --apply`, duyệt ngân sách eval.
+  3. Chờ bạn: đặt 5–10 bài tự viết vào `plugin/skills/giong-van/samples/` để tạo style card.
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -76,7 +76,11 @@
 - [ ] **Bạn làm (tốn một ít hạn mức):** `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`. Dùng `--no-publish` để báo cáo chỉ nằm trên máy.
 
 ### GĐ6: Viết tự nhiên (#6)
-- [ ] Skill `giong-van` + `tells.py` + danh sách dấu hiệu văn AI tiếng Việt.
+- [x] Skill `giong-van` (chế độ chỉnh văn và chế độ `tao-style-card`): giữ nguyên ý, không bịa sự kiện, nêu rõ phạm vi (không nhằm qua mặt công cụ phát hiện AI).
+- [x] `scripts/tells.py`: dò dấu hiệu văn AI tiếng Việt và tiếng Anh, nhịp câu đều, lạm dụng gạch dài, in đậm, emoji; cho điểm trên 1.000 từ để so trước và sau.
+- [x] `vi-ai-tells.md` (danh sách có ví dụ và cách sửa), `style-card.md` (mẫu chờ điền), `samples/` (không đưa vào git).
+- [x] Việc eval thứ 12 `write-vn-rewrite` + case đo kích hoạt `writing-rewrite`.
+- [ ] **Bạn làm:** thêm 5–10 bài tự viết vào `samples/`, rồi nhờ Claude chạy `giong-van tao-style-card` và duyệt từng mục.
 
 ### GĐ7: Vận hành
 - [ ] `tools/maintain.py`: kiểm tra phiên bản, kiểm duyệt lại khi upstream đổi, chạy test.
