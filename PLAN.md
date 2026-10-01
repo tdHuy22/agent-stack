@@ -5,12 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 01/10/2026.*
 
-- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`; plugin validate đạt; 49 test đạt).
+- **Xong:** GĐ0 (khung repo, số liệu nền). GĐ1 (`vet-skill`, kiểm duyệt 3 repo). GĐ2 (plugin, 5 hook, statusline, `session-keeper`). GĐ2b (`tien-do`, nối vào hook SessionStart). 61 test đạt.
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự:**
-  1. GĐ2b: skill `tien-do` (dùng lại `plugin/lib/agentstack.py`).
-  2. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh`.
-  3. GĐ4: đội agent và bộ eval (chưa chạy eval khi chưa được duyệt ngân sách).
+  1. GĐ3: kiểm duyệt danh mục cần cài, viết `install.sh` (chỉ chạy thử, không kích hoạt).
+  2. GĐ4: đội agent và bộ eval (chưa chạy eval khi chưa được duyệt ngân sách).
+  3. GĐ5: skill `task-router`, nối vào hook UserPromptSubmit và vào `tien-do`.
 - **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md`.
 - **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `OK`. Từ GĐ2 thêm: `claude plugin validate plugin` → `Validation passed`.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
@@ -46,8 +46,10 @@
 - [ ] **Bạn làm:** chạy `claude /login` ở terminal, rồi thử `claude --plugin-dir ~/Documents/Claude/agent-stack/plugin` trong một thư mục có PLAN.md.
 
 ### GĐ2b: Theo dõi tiến độ (#7)
-- [ ] Skill `tien-do` + `scripts/collect.py` + test.
-- [ ] Gộp bản tóm tắt vào hook SessionStart.
+- [x] Skill `tien-do` + `scripts/collect.py` + test. Xếp hạng 5 bậc; chế độ `--all` cho mọi project; tùy chọn `--gh` lấy PR/CI.
+- [x] Gộp bản tóm tắt vào hook SessionStart (thêm dòng "Chặn đường" và các cảnh báo nhanh, không gọi mạng).
+- [x] Chạy thử trên chính agent-stack. Đã sửa hai lỗi lộ ra: TODO trong tài liệu và TODO nằm trong chuỗi ký tự bị tính nhầm.
+- [ ] **Bạn làm (tùy chọn):** `python3 plugin/skills/tien-do/scripts/collect.py --all --md` để xem tổng quan mọi project. Lệnh chỉ đọc; mình không tự chạy vì bạn dặn không đụng vào project khác.
 
 ### GĐ3: Danh mục v1
 - [ ] Kiểm duyệt các mục ghi "Cài" ở mục 6 của kế hoạch; ghi `catalog.json`.

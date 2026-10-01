@@ -32,7 +32,12 @@ def main():
         A.write_json_atomic(sessions / name, {"session": sid, "model": data.get("model"),
                                               "effort": (data.get("effort") or {}).get("level"),
                                               "cwd": str(root), "ts": time.time()})
-    info = A.brief(root)
+    try:  # bản tóm tắt giàu hơn của skill tien-do; không có thì dùng bản của thư viện
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "tien-do" / "scripts"))
+        import collect  # noqa: E402
+        info = collect.brief(root)
+    except ImportError:
+        info = A.brief(root)
     if not info:
         return
     context = info["context"]
