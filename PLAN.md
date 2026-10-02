@@ -106,7 +106,7 @@
 - [x] 25 test mới.
 
 ### GĐ10: Chọn skill theo project, gợi ý sau mỗi câu trả lời (#4 + #5, 02/10/2026)
-- [x] Mô tả plugin (cả `plugin.json` lẫn marketplace) nhắc đủ các phần; phiên bản 0.3.0. (Đính chính khi cài ngày 02/10/2026: Claude Code chép plugin vào cache, không nạp tại chỗ; sau khi sửa plugin phải chạy `./install.sh --apply --only plugin` rồi mở phiên mới.)
+- [x] Mô tả plugin (cả `plugin.json` lẫn marketplace) nhắc đủ các phần; phiên bản 0.3.0. (Kiểm chứng khi cài ngày 02/10/2026: CLI trong terminal nạp plugin tại chỗ từ `agent-stack/plugin`, còn desktop app chạy bản chép trong `~/.claude/plugins/cache/`. Bản chép tìm về repo nhờ file `plugin/.agent-stack-home` do `install.py` ghi. Sau khi sửa plugin: tăng `version`, chạy `./install.sh --apply --only plugin` (gồm `claude plugin update`), rồi mở phiên mới.)
 - [x] Dòng ➡️ ở cuối mọi câu trả lời, có thêm trường Skill. Luật trong `AGENTS.global.md` áp cho cả Claude Code và OpenCode; bảng chọn của Claude Code có thêm cột Skill.
 - [x] Hồ sơ project (`agentstack.project_profile`): loại code, có test, có CI, có Docker, có code nhạy cảm bảo mật. Chỉ dựng cho git repo hoặc thư mục có file kế hoạch; lưu tạm 6 giờ.
 - [x] Hook mở phiên gợi ý skill hợp với project (phân biệt skill đã có và skill chờ bạn duyệt), subagent nên dùng, và cách làm việc tiếp theo trong §0. Git repo chưa có file kế hoạch cũng nhận gợi ý.

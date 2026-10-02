@@ -27,7 +27,9 @@ def save(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump(data, open(path, "w"))
 installed = os.path.join(home, "plugins", "installed_plugins.json")
-if code == 0 and args[:2] == ["plugin", "install"]:
+if code == 0 and args[:2] == ["plugin", "install"] and args[2] in load(settings).get("enabledPlugins", {}):
+    print(f"Plugin {args[2]} is already installed")
+elif code == 0 and args[:2] == ["plugin", "install"]:
     d = load(settings); d.setdefault("enabledPlugins", {})[args[2]] = True; save(settings, d)
     i = load(installed); i.setdefault("version", 2); i.setdefault("plugins", {})[args[2]] = [{}]; save(installed, i)
     name, _, mp = args[2].partition("@")
@@ -37,12 +39,17 @@ elif code == 0 and args[:2] == ["plugin", "uninstall"]:
     # như claude thật có thể làm: bỏ khỏi danh sách nhưng để lại {} , cache và data
     d = load(settings); d.get("enabledPlugins", {}).pop(args[2], None); save(settings, d)
     i = load(installed); i.get("plugins", {}).pop(args[2], None); save(installed, i)
+elif code == 0 and args[:2] == ["plugin", "update"]:
+    print(f"{args[2]} is already at the latest version")
 elif code == 0 and args[:3] == ["plugin", "marketplace", "add"]:
     try:
         name = json.load(open(os.path.join(args[3], ".claude-plugin", "marketplace.json")))["name"]
     except Exception:
         name = args[3]
-    k = load(known); k[name] = {"source": args[3]}; save(known, k)
+    if name in load(known):
+        print(f"Marketplace '{name}' already on disk")
+    else:
+        k = load(known); k[name] = {"source": args[3]}; save(known, k)
 elif code == 0 and args[:3] == ["plugin", "marketplace", "remove"]:
     k = load(known); k.pop(args[3], None); save(known, k)
 sys.exit(code)
@@ -251,3 +258,11 @@ class InstallTests(TempDirTestCase):
         self.assertIn("đường dẫn repo", (self.stack / "INSTALLED.md").read_text(encoding="utf-8"))
         self.run_install("--rollback", "--apply")
         self.assertFalse(pointer.exists())
+
+    def test_already_installed_is_not_recorded_as_a_change(self):
+        self.run_install("--apply", "--only", "plugin")
+        self.run_install("--apply", "--only", "plugin")
+        logs = sorted((self.stack / "state" / "install-logs").glob("*.json"))
+        self.assertEqual(len(logs), 1)  # lần hai không đổi gì: không có nhật ký, không có mục gỡ trùng
+        out = self.run_install("--rollback", "--apply")
+        self.assertEqual(out.count("plugin uninstall agent-stack@agent-stack-local"), 1)

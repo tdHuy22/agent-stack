@@ -330,7 +330,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 Bản đầu của kế hoạch dùng symlink từng skill vào `~/.claude/`. Khi triển khai, mình đổi sang **đóng gói thành plugin Claude Code**, vì ba lý do:
 (a) thử được bằng `claude --plugin-dir agent-stack/plugin` mà không sửa gì trong `~/.claude`;
 (b) kiểm tra được bằng `claude plugin validate`, và đo kích hoạt skill bằng `claude plugin eval`;
-(c) khi bạn duyệt kích hoạt toàn cục, cài qua một marketplace cục bộ. Lưu ý (kiểm chứng khi cài ngày 02/10/2026): Claude Code **chép** plugin vào `~/.claude/plugins/cache/` lúc cài, không nạp tại chỗ. Vì vậy sau khi sửa code plugin, chạy `./install.sh --apply --only plugin` (lệnh này chạy cả `claude plugin update`) rồi mở phiên mới. Bản chép tìm về repo nhờ file `plugin/.agent-stack-home` do `install.py` ghi.
+(c) khi bạn duyệt kích hoạt toàn cục, cài qua một marketplace cục bộ. Kiểm chứng khi cài ngày 02/10/2026: CLI trong terminal nạp plugin tại chỗ từ `agent-stack/plugin`, còn desktop app chạy bản chép trong `~/.claude/plugins/cache/`. Bản chép tìm về repo nhờ file `plugin/.agent-stack-home` do `install.py` ghi. Sau khi sửa plugin: tăng `version`, chạy `./install.sh --apply --only plugin` (gồm `claude plugin update`), rồi mở phiên mới.
 
 Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc plugin không được nạp và `claude plugin validate` sẽ cảnh báo.
 

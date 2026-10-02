@@ -171,9 +171,13 @@ class Installer:
             self.failures.append(f"{' '.join(args[:4])}: {exc}")
             return
         text = (out.stdout + out.stderr).strip()
-        if out.returncode != 0 and not (ok_if and ok_if in text.lower()):
+        unchanged = bool(ok_if) and ok_if in text.lower()
+        if out.returncode != 0 and not unchanged:
             self.say(f"    lỗi ({out.returncode}): {text[:300]}")
             self.failures.append(f"{' '.join(args[:4])}: mã {out.returncode}: {text[:160]}")
+            return
+        if unchanged:
+            self.say("    = đã có, không đổi")  # không ghi vào nhật ký: lần gỡ không được gỡ thứ lần này không cài
             return
         self.record(type="cmd", cmd=args, undo=undo)
 
@@ -551,7 +555,8 @@ def clean_plugin_leftovers(ids: list, marketplaces: list, listing, apply: bool) 
         ours.append(root / "cache" / mp)
     for pid in ids:
         name, _, mp = pid.partition("@")
-        ours += [root / "cache" / mp / name, root / "data" / plugin_data_dir(pid)]
+        # desktop app nạp plugin dạng inline: thư mục dữ liệu khi đó là <tên>-inline
+        ours += [root / "cache" / mp / name, root / "data" / plugin_data_dir(pid), root / "data" / f"{name}-inline"]
     if apply:
         for path in ours:
             if path.is_dir() and root in path.resolve().parents:

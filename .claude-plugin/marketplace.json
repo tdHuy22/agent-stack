@@ -4,7 +4,7 @@
     "name": "tdHuy22",
     "url": "https://github.com/tdHuy22"
   },
-  "description": "Marketplace cục bộ của agent-stack. Claude Code chép plugin từ đây vào cache khi cài; cập nhật bằng ./install.sh --apply --only plugin.",
+  "description": "Marketplace cục bộ của agent-stack. CLI nạp plugin tại chỗ; desktop app dùng bản chép trong cache, cập nhật bằng ./install.sh --apply --only plugin.",
   "plugins": [
     {
       "name": "agent-stack",

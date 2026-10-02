@@ -23,7 +23,9 @@ def main():
         return  # hook bị đăng ký hai lần: chỉ chạy một
     root = A.project_root(cwd)
     A.log_event("session-start", {"session": sid, "cwd": str(root), "source": source,
-                                  "model": data.get("model")}, "sessions.jsonl")
+                                  "model": data.get("model"),
+                                  # bản plugin nào đang chạy: thư mục repo (nạp tại chỗ) hay bản chép trong cache
+                                  "plugin_root": os.environ.get("CLAUDE_PLUGIN_ROOT")}, "sessions.jsonl")
     if sid:
         sessions = A.state_dir() / "sessions"
         sessions.mkdir(exist_ok=True)

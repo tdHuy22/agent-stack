@@ -36,7 +36,7 @@ claude --plugin-dir ~/Documents/Claude/agent-stack/plugin
 
 ## Sau khi sửa code plugin
 
-Claude Code chép plugin vào `~/.claude/plugins/cache/` lúc cài, nên sửa trong repo chưa có hiệu lực ngay. Tăng `version` trong `plugin/.claude-plugin/plugin.json`, rồi:
+CLI trong terminal nạp plugin tại chỗ, nên sửa trong repo có hiệu lực từ phiên sau. Desktop app chạy bản chép trong `~/.claude/plugins/cache/`, nên cần cập nhật bản chép: tăng `version` trong `plugin/.claude-plugin/plugin.json`, rồi:
 
 ```bash
 ./install.sh --apply --only plugin   # chạy cả claude plugin update; mở phiên mới để nạp lại
