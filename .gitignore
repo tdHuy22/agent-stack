@@ -10,6 +10,7 @@ __pycache__/
 .DS_Store
 # Kết quả eval có thể chứa nội dung phiên
 evals/results/
+plugin/evals/results/
 
 # Mẫu bài viết riêng tư của người dùng
 plugin/skills/giong-van/samples/*

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "giả thuyết ban đầu, chờ số liệu eval ở GĐ4 (xem routing-table.md)",
+  "status": "giả thuyết cho việc khó; có số liệu eval 02/10/2026 cho việc nhỏ: sonnet medium đủ (xem routing-table.md)",
   "min_words": 4,
   "profiles": {
     "python": {"label": "Python", "skills": ["tdd"]},

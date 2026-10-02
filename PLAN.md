@@ -9,7 +9,7 @@
   - GĐ0 đến GĐ11 trên nhánh `trien-khai-v1`, chưa push; commit gần nhất `dafba1f`.
   - Plugin `agent-stack` 0.3.2: 6 skill, 5 agent, 5 hook. Router chọn skill theo nội dung project và việc tiếp theo trong §0; dòng ➡️ có Skill, ở cuối mọi câu trả lời.
   - 21 mục bên thứ ba đã kiểm duyệt: 11 duyệt, 2 từ chối, 8 chờ.
-  - Bộ eval 12 việc đã chạy ngoài repo, nhưng chưa chạy thật. 159 test đạt trên Python 3.9 và 3.11.
+  - Bộ eval 12 việc đã chạy thật ngày 02/10/2026 (72 lượt, khoảng 7,5 USD giá niêm yết, tính vào hạn mức gói): sonnet·medium, opus·medium và opus·low đều đạt 24/24; sonnet rẻ nhất (0,063 USD/việc, so với 0,128 và 0,121). Bộ việc chưa phân biệt được các cấu hình (xem `routing-table.md`). Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. 159 test đạt trên Python 3.9 và 3.11.
   - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`, `20261002-221518.json` (context7). Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
   - Kiểm chứng sau khi cài:
     - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
@@ -25,8 +25,8 @@
   1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`. Không cần kiểm tra cảnh báo hạn mức trong desktop app: desktop không chạy statusline, nên `state/limits.json` không được ghi và hook không cảnh báo (đã xác nhận 02/10/2026). Muốn kiểm tra cảnh báo thì mở `claude` trong terminal, thấy thanh `model · effort · ctx · 5h · 7d` và có file `state/limits.json` là đạt.
   2. ~~Chạy `claude /login`~~ Xong 02/10/2026: `claude -p` đã chạy được.
   3. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy; thiếu thì mất nhảy-tới-định-nghĩa bằng LSP), `brew install gitleaks osv-scanner` (không code nào gọi; chỉ để bạn tự quét secret và lỗ hổng thư viện).
-  4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
-  5. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
+  4. ~~Eval A, C, D~~ Xong 02/10/2026; đã cập nhật `routing-table.md` và chuỗi trạng thái trong `rules.json`. Nếu muốn phân biệt được các cấu hình: thêm vài việc khó hơn vào `evals/tasks/`, và chạy thêm H (haiku, khoảng 0,5 USD).
+  5. ~~Đo kích hoạt skill~~ Xong 02/10/2026 (xem mục Xong ở trên). Chạy hai lượt vì trần 3 USD chỉ đủ 11/13 ca.
   6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
   7. ~~Duyệt riêng 8 mục còn chờ~~ Xong 02/10/2026 (19 duyệt, 2 từ chối, 0 chờ). Đã cài `context7` (MCP gửi truy vấn tra docs tới mcp.context7.com) ở phạm vi user lúc 22:15 ngày 02/10/2026, theo đồng ý của bạn; gỡ: `claude plugin uninstall context7@claude-plugins-official --scope user`. 7 mục còn lại cài theo từng project khi cần. MCP chỉ nạp ở phiên mới.
   8. Chọn việc từ rà soát nguồn chính thức (`KE-HOACH.md` §6.13.1, thứ tự trong bảng là thứ tự đề xuất). Việc nào thêm đồ bên thứ ba thì cần bạn duyệt:
@@ -100,7 +100,7 @@
 - [x] Agent Claude Code (trong plugin, tên có tiền tố `agent-stack:`): reviewer (opus·high, chỉ đọc), researcher (sonnet·medium), test-runner (haiku), explore-lite (haiku, không ghi đè Explore có sẵn), oc-worker (haiku, điều phối OpenCode).
 - [x] Agent OpenCode `worker` (tuf/coder-fast): đã xác minh OpenCode v2 nạp được (theo symlink file) và áp đúng luật quyền (`shell` chặn hết trừ lệnh kiểm tra, `webfetch` chặn).
 - [x] Bộ eval 11 việc trong `evals/` + `run_eval.py`: grader tự kiểm bằng lời giải mẫu; test chống grader dễ dãi; mặc định chỉ in kế hoạch.
-- [ ] **Bạn duyệt ngân sách** (ước tính khoảng 13,6 USD theo giá niêm yết, tức khoảng 66 lượt, tính vào hạn mức), rồi: `claude /login`, sau đó `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`.
+- [x] **Bạn duyệt ngân sách** (ước tính khoảng 13,6 USD theo giá niêm yết, tức khoảng 66 lượt, tính vào hạn mức), rồi: `claude /login`, sau đó `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Xong 02/10/2026: chạy thành ba đợt A, C, D; thực tế khoảng 7,5 USD.
 - Ghi chú: máy `tuf` (192.168.1.13) đang không kết nối được, nên oc-worker chỉ chạy khi ở mạng nhà.
 - Ghi chú: OpenCode v2.0.x trả về danh sách skill rỗng qua API, kể cả với skill tối giản. Phương án dự phòng: `AGENTS.global.md` ghi đường dẫn của từng skill để agent tự đọc.
 - Ghi chú: OpenCode v2 báo các thiết lập `reasoning` và `temperature` kiểu cũ của provider `tuf` trong `opencode.jsonc` đang bị bỏ qua. Bạn có thể dọn khi tiện; mình không sửa file của bạn.
@@ -110,7 +110,7 @@
 - [x] Bộ 47 prompt có nhãn (`evals/router-prompts.jsonl`): đúng 47/47. **Lưu ý thiên lệch:** Claude viết cả luật lẫn prompt, nên hãy thêm prompt thật của bạn.
 - [x] `routing-table.md` (giả thuyết, chờ số liệu eval).
 - [x] `plugin/evals/`: 10 case đo kích hoạt skill (7 nên kích hoạt, 3 không nên).
-- [ ] **Bạn làm (tốn một ít hạn mức):** `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`. Dùng `--no-publish` để báo cáo chỉ nằm trên máy.
+- [x] **Bạn làm (tốn một ít hạn mức):** `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`. Dùng `--no-publish` để báo cáo chỉ nằm trên máy. Xong 02/10/2026: 13 ca, 3,67 USD giá niêm yết. 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. Cột Δ chỉ cho biết skill chạy khi có plugin, chưa đo skill làm việc tốt đến đâu.
 
 ### GĐ6: Viết tự nhiên (#6)
 - [x] Skill `giong-van` (chế độ chỉnh văn và chế độ `tao-style-card`): giữ nguyên ý, không bịa sự kiện, nêu rõ phạm vi (không nhằm qua mặt công cụ phát hiện AI).
@@ -128,7 +128,7 @@
 - [x] Skill `reuse-best` (sonnet · medium, chạy trong context riêng) và `scripts/scout.py`: GitHub qua `gh` (tìm theo độ khớp và theo sao rồi gộp), bài báo qua OpenAlex rồi Semantic Scholar rồi arXiv; đánh dấu repo đã lưu trữ, không giấy phép, copyleft, lâu không cập nhật, và bài preprint. Đã chạy thử thật với GitHub và OpenAlex.
 - [x] Luôn được nhắc: luật trong `AGENTS.global.md`, dòng mới trong bảng chọn model của `CLAUDE.global.md`, router gợi ý cho mọi việc "tính năng" và "kiến trúc" kèm lưu ý bỏ qua việc vặt, cộng luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA". Bộ prompt có nhãn: 53/53.
 - [x] 2 case đo kích hoạt mới trong `plugin/evals/` và 1 grader chặn kích hoạt nhầm với việc vặt. 12 test mới.
-- [ ] **Bạn làm (tốn một ít hạn mức):** chạy `claude plugin eval` (xem GĐ5) để đo skill có tự kích hoạt đúng lúc không.
+- [x] **Bạn làm (tốn một ít hạn mức):** chạy `claude plugin eval` (xem GĐ5) để đo skill có tự kích hoạt đúng lúc không. Xong 02/10/2026: 13 ca, 3,67 USD giá niêm yết. 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. Cột Δ chỉ cho biết skill chạy khi có plugin, chưa đo skill làm việc tốt đến đâu.
 
 ### GĐ9: Sửa sau lần rà soát yêu cầu (02/10/2026)
 - [x] A. Biên nhận kiểm tra: `session-keeper/scripts/receipt.py` chạy lệnh kiểm tra và ghi kết quả gắn với dấu vân tay nội dung code (commit mà không đổi nội dung thì vẫn khớp). `tien-do` xếp kiểm tra đang trượt vào bậc chặn đường và nhắc chạy lại khi kết quả đạt đã cũ; tín hiệu này trước đó không bao giờ hoạt động. Không viết skill `verify` riêng, vì Claude Code đã có `/verify`.
