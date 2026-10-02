@@ -512,7 +512,7 @@ Bảng định tuyến khởi điểm (giả thuyết, GĐ4 sẽ chỉnh bằng 
   ```
   giong-van/
   ├── SKILL.md          # quy trình + checklist
-  ├── samples/          # 5–10 bài bạn tự viết (không commit nếu riêng tư)
+  ├── samples/          # 5 bài bạn tự viết, nhiều loại (không commit nếu riêng tư)
   ├── style-card.md     # đặc điểm giọng văn, Claude rút ra, bạn duyệt
   └── vi-ai-tells.md    # dấu hiệu văn AI tiếng Việt, bạn bổ sung dần
   ```

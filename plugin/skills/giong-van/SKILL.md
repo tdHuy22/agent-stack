@@ -9,32 +9,31 @@ argument-hint: "[tao-style-card | <đường dẫn hoặc đoạn văn>]"
 
 ## Phạm vi
 
-Skill này dùng cho văn bản **của chính người dùng**: bản nháp, ý chính, hoặc văn họ đã viết. Mục tiêu là văn hay hơn và đúng giọng họ. Mục tiêu không phải là qua mặt công cụ phát hiện AI, vì các công cụ đó không đáng tin và báo nhầm cả văn người thật viết. Với bài nộp có quy định về AI (bài tập, hồ sơ), nhắc người dùng làm theo quy định nơi nhận.
+Skill này dùng cho văn bản của chính người dùng: bản nháp, ý chính, hoặc văn họ đã viết. Mục tiêu là văn hay hơn và đúng giọng họ, không phải qua mặt công cụ phát hiện AI. Các công cụ đó báo nhầm nhiều, nhất là với người viết bằng ngôn ngữ thứ hai, còn người đọc có kinh nghiệm vẫn nhận ra văn chỉ được sửa bề mặt. Với bài nộp có quy định về AI (bài tập, hồ sơ), nhắc người dùng làm theo quy định nơi nhận.
 
 ## Tài liệu đi kèm
 
 - `${CLAUDE_SKILL_DIR}/style-card.md`: đặc điểm giọng văn của người dùng. Nếu còn trống, đề nghị chế độ `tao-style-card`.
-- `${CLAUDE_SKILL_DIR}/vi-ai-tells.md`: các dấu hiệu văn AI trong tiếng Việt, kèm cách sửa.
-- `${CLAUDE_SKILL_DIR}/scripts/tells.py`: dò dấu hiệu tự động và cho điểm trên 1.000 từ.
+- `${CLAUDE_SKILL_DIR}/vi-ai-tells.md`: dấu hiệu văn AI trong tiếng Việt, cách sửa, và nguồn nghiên cứu.
+- `${CLAUDE_SKILL_DIR}/scripts/tells.py`: dò dấu hiệu, so từ vựng với bài mẫu trong `samples/`, cho điểm trên 1.000 từ. Chạy script và dùng kết quả; chỉ đọc mã nguồn khi kết quả không đủ để sửa.
 
 Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/giong-van/`.
 
 ## Chỉnh một văn bản
 
 1. Đọc `style-card.md` và `vi-ai-tells.md`.
-2. Đo trước: lưu văn bản vào một file tạm, chạy `python3 <tells.py> <file>`.
-3. Sửa theo thứ tự:
-   1. **Giữ nguyên ý và sự kiện.** Không thêm trải nghiệm, số liệu, tên người hay trích dẫn mà văn gốc không có. Thiếu thông tin thì hỏi.
-   2. Bỏ các dấu hiệu trong `vi-ai-tells.md`. Thay câu chung chung bằng chi tiết cụ thể *có sẵn* trong văn gốc.
-   3. Đưa văn về giọng trong `style-card.md`: cách xưng hô, độ dài câu, mức trang trọng, từ quen dùng.
-   4. Xen câu ngắn với câu dài. Không cần cân đối mọi đoạn.
-4. Đo lại bằng `tells.py`. Điểm phải giảm, nhưng không cố đẩy về 0 nếu điều đó làm hỏng ý.
-5. Trả về: bản đã sửa; tối đa 5 thay đổi chính, mỗi thay đổi một dòng; điểm trước và sau; và những chỗ cần người dùng xác nhận.
+2. Lưu văn bản vào một file tạm và chạy `python3 <tells.py> <file>` để lấy điểm trước khi sửa. Script tự so với bài mẫu trong `samples/` nếu có.
+3. Sửa nội dung trước. Mỗi câu khẳng định cần dựa trên chi tiết có trong văn gốc: câu thổi phồng thì thay bằng con số hoặc ví dụ có sẵn, ý kiến của "chuyên gia" thì ghi rõ là ai, câu bình luận chung chung thì bỏ. Chỉ dùng sự kiện, số liệu, tên người và trích dẫn có trong văn gốc; chỗ nào thiếu thì hỏi người dùng.
+4. Sau đó sửa câu chữ theo `vi-ai-tells.md` và các dòng `tells.py` báo. Từ bị đánh dấu "không giống bài mẫu" thì đổi sang cách nói người dùng hay dùng.
+5. Đưa văn về giọng trong `style-card.md`: cách xưng hô, độ dài câu, mức trang trọng, từ quen dùng. Giữ thành ngữ, cách nói và lối lập luận quen thuộc của người viết, kể cả khi chúng khác khuôn viết tiếng Anh. Xen câu ngắn với câu dài; các đoạn không cần dài bằng nhau.
+6. Chạy lại `tells.py`. Điểm cần giảm, nhưng ý của văn gốc quan trọng hơn con số: dừng khi sửa tiếp sẽ làm mất ý.
 
-Với tiếng Anh: nếu skill `humanizer` có sẵn thì dùng thêm cho phần tiếng Anh. Không có thì dùng nhóm dấu hiệu tiếng Anh trong `tells.py`.
+Viết bản sửa thành đoạn văn liền mạch, theo đúng định dạng của văn gốc: văn gốc là đoạn văn thì trả về đoạn văn, văn gốc có danh sách thì giữ danh sách. Sau bản sửa, báo ngắn gọn: tối đa 5 thay đổi chính, mỗi thay đổi một dòng; điểm trước và sau; và những chỗ cần người dùng xác nhận.
+
+Với văn tiếng Anh, dùng thêm skill `humanizer` nếu có; nếu không, dựa vào nhóm dấu hiệu tiếng Anh trong `tells.py`.
 
 ## Chế độ `tao-style-card`
 
-1. Đọc 5–10 bài người dùng tự viết. Lấy từ `samples/`, hoặc từ đường dẫn người dùng đưa.
+1. Đọc 5 bài người dùng tự viết, càng khác loại càng tốt (blog, email, ghi chú, bài luận). Lấy từ `samples/`, hoặc từ đường dẫn người dùng đưa. Thêm bài ít khi giúp bắt chước tốt hơn; đa dạng mới quan trọng.
 2. Điền `style-card.md`: mỗi mục kèm 1–2 câu trích nguyên văn làm ví dụ.
 3. Cho người dùng duyệt từng mục trước khi lưu. Đây là giọng của họ, không phải nhận xét của Claude.

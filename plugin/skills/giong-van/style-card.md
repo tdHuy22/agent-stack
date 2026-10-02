@@ -1,6 +1,6 @@
 # Style card: giọng văn của người dùng
 
-> Trạng thái: **chưa điền.** Chạy skill `giong-van` ở chế độ `tao-style-card` với 5–10 bài bạn tự viết (đặt trong `samples/`). Mỗi mục cần 1–2 câu trích nguyên văn làm ví dụ.
+> Trạng thái: **chưa điền.** Chạy skill `giong-van` ở chế độ `tao-style-card` với 5 bài bạn tự viết, càng khác loại càng tốt (đặt trong `samples/`). Mỗi mục cần 1–2 câu trích nguyên văn làm ví dụ.
 
 | Mục | Đặc điểm | Ví dụ trích từ bài của bạn |
 |---|---|---|
