@@ -10,7 +10,7 @@
   - Plugin `agent-stack` 0.3.2: 6 skill, 5 agent, 5 hook. Router chọn skill theo nội dung project và việc tiếp theo trong §0; dòng ➡️ có Skill, ở cuối mọi câu trả lời.
   - 21 mục bên thứ ba đã kiểm duyệt: 11 duyệt, 2 từ chối, 8 chờ.
   - Bộ eval 12 việc đã chạy ngoài repo, nhưng chưa chạy thật. 159 test đạt trên Python 3.9 và 3.11.
-  - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`. Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
+  - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`, `20261002-221518.json` (context7). Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
   - Kiểm chứng sau khi cài:
     - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
     - CLI nạp plugin tại chỗ, đã thấy `plugin_root` trong `state/sessions.jsonl`;
@@ -28,7 +28,7 @@
   4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
   5. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
   6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
-  7. ~~Duyệt riêng 8 mục còn chờ~~ Xong 02/10/2026 (19 duyệt, 2 từ chối, 0 chờ). Theo bản xem trước `./install.sh`, trong 8 mục chỉ `context7` (MCP gửi truy vấn tra docs tới mcp.context7.com) cài ở phạm vi user; 7 mục còn lại cài theo từng project khi cần. Muốn cài `context7`: `./install.sh --apply` (toàn cục, cần bạn đồng ý).
+  7. ~~Duyệt riêng 8 mục còn chờ~~ Xong 02/10/2026 (19 duyệt, 2 từ chối, 0 chờ). Đã cài `context7` (MCP gửi truy vấn tra docs tới mcp.context7.com) ở phạm vi user lúc 22:15 ngày 02/10/2026, theo đồng ý của bạn; gỡ: `claude plugin uninstall context7@claude-plugins-official --scope user`. 7 mục còn lại cài theo từng project khi cần. MCP chỉ nạp ở phiên mới.
   8. Chọn việc từ rà soát nguồn chính thức (`KE-HOACH.md` §6.13.1, thứ tự trong bảng là thứ tự đề xuất). Việc nào thêm đồ bên thứ ba thì cần bạn duyệt:
      - (a) Vet `sandbox-runtime`: `python3 plugin/skills/vet-skill/scripts/vet.py scan anthropics/sandbox-runtime`; rồi thử phân tích động cho `vet-skill`.
      - (b) Vet `plugin-dev`: `vet.py scan anthropics/claude-plugins-official:plugins/plugin-dev`; chạy 3 script kiểm hook một lần, rồi quyết định có nâng `timeout: 2` của SessionEnd không.
@@ -94,7 +94,7 @@
 - [x] Sửa lỗi của chính repo: mã nguồn từng chứa ký tự vô hình thật (do escape bị giải mã khi ghi file). Có test vệ sinh chặn lỗi này.
 - [x] `catalog.json` + `tools/install.py` (`install.sh`): mặc định chỉ xem trước; chỉ cài mục bạn đã `approve`; skill chỉ có chỉ dẫn được chép đúng commit đã kiểm vào `vendor/`; có `--rollback`. Test chạy trên HOME giả.
 - [x] **Bạn làm:** đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve <khóa> --note "..."` cho mục đồng ý. Xong 02/10/2026: 8 mục còn lại đã duyệt (xem dòng trên).
-- [x] **Bạn làm:** xem trước bằng `./install.sh`, rồi `./install.sh --apply` khi đồng ý (thêm `--restore-workflow-warning` để bật lại cảnh báo usage). Xong lượt đầu 02/10/2026 (cờ `--restore-workflow-warning` chưa dùng, `skipWorkflowUsageWarning` vẫn `true`). 8 mục duyệt sau đó: chỉ `context7` chưa cài ở phạm vi user (xem mục 7 ở trên).
+- [x] **Bạn làm:** xem trước bằng `./install.sh`, rồi `./install.sh --apply` khi đồng ý (thêm `--restore-workflow-warning` để bật lại cảnh báo usage). Xong lượt đầu 02/10/2026 (cờ `--restore-workflow-warning` chưa dùng, `skipWorkflowUsageWarning` vẫn `true`). Trong 8 mục duyệt sau đó, `context7` đã cài ở phạm vi user (xem mục 7 ở trên).
 
 ### GĐ4: Đội agent và eval
 - [x] Agent Claude Code (trong plugin, tên có tiền tố `agent-stack:`): reviewer (opus·high, chỉ đọc), researcher (sonnet·medium), test-runner (haiku), explore-lite (haiku, không ghi đè Explore có sẵn), oc-worker (haiku, điều phối OpenCode).
