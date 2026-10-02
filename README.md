@@ -1,6 +1,6 @@
 # agent-stack
 
-Bộ công cụ cá nhân cho Claude Code và OpenCode. Thiết kế ở `KE-HOACH.md`, tiến độ ở `PLAN.md` (mục §0), số liệu nền ở `BASELINE.md`.
+Bộ công cụ cá nhân cho Claude Code và OpenCode. Cách dùng hằng ngày ở `HUONG-DAN.md`. Thiết kế ở `KE-HOACH.md`, tiến độ ở `PLAN.md` (mục §0), số liệu nền ở `BASELINE.md`.
 
 ## Có gì
 
