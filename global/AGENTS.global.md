@@ -25,6 +25,13 @@
 - Chỉ khuyên đổi model hay effort ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
 - Trong OpenCode: Model là model trong cấu hình OpenCode (việc cơ học dùng model local của agent `worker`); Effort chỉ ghi khi model hỗ trợ; Subagent là `build`, `plan` hoặc `worker`.
 
+## Dữ liệu riêng tư và model từ xa
+
+- Model chạy qua OpenRouter hoặc model miễn phí của OpenCode nhận toàn bộ prompt và nội dung file gửi đi. Riêng `opencode/*-contributor-free` (mặc định hiện tại của OpenCode ở máy này, `muse-spark-1.3-contributor-free`) đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của hãng khác (trang OpenCode Zen, 02/10/2026).
+- Không giao cho model từ xa: file chứa secret hay khóa (`.env`, token, khóa riêng), dữ liệu cá nhân, mã riêng tư của người khác. Việc có dữ liệu như vậy chỉ giao cho model local (`tuf/*`) hoặc làm ngay trong Claude Code.
+- Nếu model local không dùng được (không ở mạng nhà), dừng và hỏi người dùng, đừng tự rơi về model từ xa.
+- Skill hay subagent chạy trong context riêng không thấy hội thoại. Khi giao việc, viết prompt tự đủ: yêu cầu gốc của người dùng, mục tiêu, ràng buộc, file hay đường dẫn liên quan, tiêu chí xong, định dạng cần trả về.
+
 ## Skill và đồ của bên thứ ba
 
 - Trước một việc không tầm thường, xem có skill phù hợp không. Có thì dùng; không có thì nói rõ.

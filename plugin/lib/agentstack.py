@@ -2,7 +2,8 @@
 
 Gồm: vị trí thư mục state, đọc/ghi JSON của hook, tìm file kế hoạch của project,
 đọc mục §0 "Đang ở đâu, việc tiếp theo", đếm checkbox, lấy trạng thái git chỉ đọc,
-và biên nhận kiểm tra (kết quả test gắn với nội dung code lúc chạy).
+biên nhận kiểm tra (kết quả test gắn với nội dung code lúc chạy),
+và yêu cầu gần nhất của người dùng theo từng phiên (che khóa, để đưa cho subagent chạy context riêng).
 """
 from __future__ import annotations
 
@@ -568,3 +569,144 @@ def brief(root: Path, max_next: int = 3) -> dict:
                                    else (f"đang dở → {clip(f['in_progress'], 90)}" if has_value(f.get("in_progress"))
                                          else f"kế hoạch ở {rel}"))
     return {"context": "\n".join(lines), "user": user, "plan": str(path), "after_interrupt": sec["after_interrupt"]}
+
+# ---------------------------------------------------------------- yêu cầu gần nhất của người dùng
+
+# Subagent và skill `context: fork` chạy trong context riêng, không thấy hội thoại. Hook UserPromptSubmit lưu yêu cầu
+# gần nhất của từng phiên vào đây; hook SubagentStart đọc lại (đúng session_id) để đưa cho chúng một bản tóm tắt ngắn.
+LAST_REQUEST_DIR = "last-request"
+LAST_REQUEST_CHARS = 1200   # độ dài tối đa của prompt được lưu
+LAST_REQUEST_DAYS = 7       # file cũ hơn số ngày này thì dọn
+LAST_REQUEST_FILES = 30     # giữ tối đa bấy nhiêu file
+LAST_REQUEST_SCAN = 20000   # chỉ rà khóa trong phần đầu này của prompt, để prompt dán cả file log vẫn nhanh
+LAST_REQUEST_FULL = 60      # tin ngắn hơn mức này ("ok", "tiếp tục") chưa đủ để làm bối cảnh một mình
+REDACTED = "[đã che]"
+SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
+# Tin do hệ thống tạo (thông báo tác vụ nền...), không phải lời người dùng: không được ghi đè yêu cầu thật.
+AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER INPUT")
+# Khóa và token có dấu hiệu nhận biết. (?<![A-Za-z0-9]) để không bắt giữa một từ khác (như "task-" hay "risk-").
+SECRET_PATTERNS = (
+    r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}",                  # sk-ant-..., sk-proj-..., sk-...
+    r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}",            # ghp_, gho_, ghu_, ghs_, ghr_
+    r"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}",
+    r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}",             # khóa truy cập AWS
+    r"(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}",          # token Slack
+    r"(?<![A-Za-z0-9])(?i:bearer)\s+[A-Za-z0-9._~+/=-]{8,}",  # Authorization: Bearer <token>
+    r"(?<![A-Za-z0-9])[0-9A-Fa-f]{32,}(?![A-Za-z0-9])",       # chuỗi hex liền từ 32 ký tự
+)
+LONG_RUN_RE = re.compile(r"[A-Za-z0-9+/_-]{32,}={0,2}")
+
+
+def is_command_prompt(prompt) -> bool:
+    """True với lệnh slash (/compact), lệnh shell (!ls) hay ghi chú bộ nhớ (#...): không phải yêu cầu công việc.
+    Cùng quy ước với router (task-router bỏ qua tin bắt đầu bằng / ! #)."""
+    return isinstance(prompt, str) and prompt.lstrip()[:1] in ("/", "!", "#")
+
+
+def is_automated_prompt(prompt) -> bool:
+    """True với tin do hệ thống tạo (thông báo tác vụ nền...), không phải lời của người dùng."""
+    return isinstance(prompt, str) and any(marker in prompt for marker in AUTOMATED_MARKERS)
+
+
+def _mask_long_run(match) -> str:
+    """Chuỗi liền từ 32 ký tự kiểu base64 chỉ bị che khi trông như dữ liệu ngẫu nhiên: có cả chữ hoa lẫn chữ thường,
+    có chữ số (hoặc kết thúc bằng '=' của base64), và không giống đường dẫn (nhiều dấu '/'). Nhờ vậy đường dẫn dài,
+    tên hàm, UUID không bị che nhầm."""
+    run = match.group(0)
+    random_like = (any(c.isupper() for c in run) and any(c.islower() for c in run)
+                   and (any(c.isdigit() for c in run) or run.endswith("=")))
+    return REDACTED if random_like and run.count("/") <= 2 else run
+
+
+def redact_secrets(text: str) -> str:
+    """Che khóa API, token, chuỗi hex và chuỗi base64 dài bằng [đã che]."""
+    for pattern in SECRET_PATTERNS:
+        text = re.sub(pattern, REDACTED, text)
+    return LONG_RUN_RE.sub(_mask_long_run, text)
+
+
+def _session_key(session_id):
+    """session_id dùng được làm tên file (chỉ chữ, số, _ và -, tối đa 128 ký tự), hoặc None."""
+    return session_id if isinstance(session_id, str) and SESSION_ID_RE.fullmatch(session_id) else None
+
+
+def _prune_last_requests(directory: Path, keep: Path) -> None:
+    """Dọn file cũ hơn LAST_REQUEST_DAYS ngày, rồi bỏ file cũ nhất cho tới khi còn tối đa LAST_REQUEST_FILES. Giữ `keep`."""
+    prune(directory, LAST_REQUEST_DAYS)
+    try:
+        files = sorted(directory.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        others = [p for p in files if p != keep]
+        for old in others[: max(0, len(files) - LAST_REQUEST_FILES)]:
+            old.unlink()
+    except OSError:
+        pass
+
+
+def _full_request(old):
+    """Yêu cầu đủ dài gần nhất trong bản ghi cũ ({ts, prompt}) hoặc None: chính prompt cũ nếu đủ dài, không thì `earlier`."""
+    if not isinstance(old, dict):
+        return None
+    for cand in (old, old.get("earlier")):
+        if isinstance(cand, dict) and isinstance(cand.get("prompt"), str) and len(cand["prompt"]) >= LAST_REQUEST_FULL:
+            ts = cand.get("ts")
+            return {"ts": float(ts) if isinstance(ts, (int, float)) and not isinstance(ts, bool) else None,
+                    "prompt": cand["prompt"]}
+    return None
+
+
+def save_last_request(session_id, cwd, prompt):
+    """Lưu yêu cầu gần nhất của người dùng trong một phiên, để hook SubagentStart đưa cho subagent.
+
+    Ghi state/last-request/<session_id>.json gồm {ts, cwd, prompt}. Che khóa trước rồi mới cắt còn LAST_REQUEST_CHARS
+    ký tự, để khóa nằm sát mốc cắt không để lại nửa chuỗi. Khi tin mới quá ngắn ("ok", "tiếp tục") mà tin dài gần nhất
+    trước đó còn đó, thêm `earlier` {ts, prompt} để subagent vẫn thấy việc thật. Mỗi lần ghi dọn file cũ. Trả None,
+    không văng lỗi, khi session_id lạ, prompt rỗng, lệnh slash/shell/ghi chú, hoặc tin do hệ thống tạo. Nếu ghi được
+    thì trả về đường dẫn file."""
+    try:
+        key = _session_key(session_id)
+        if key is None or not isinstance(prompt, str) or is_automated_prompt(prompt) or is_command_prompt(prompt):
+            return None
+        text = redact_secrets(prompt[:LAST_REQUEST_SCAN]).strip()[:LAST_REQUEST_CHARS]
+        if not text:
+            return None
+        directory = state_dir() / LAST_REQUEST_DIR
+        directory.mkdir(mode=0o700, exist_ok=True)
+        path = directory / f"{key}.json"
+        record = {"ts": time.time(), "cwd": str(cwd or ""), "prompt": text}
+        if len(text) < LAST_REQUEST_FULL:
+            earlier = _full_request(read_json(path))
+            if earlier:
+                record["earlier"] = earlier
+        write_json_atomic(path, record)
+        os.chmod(str(path), 0o600)  # prompt là thông tin riêng của người dùng
+        _prune_last_requests(directory, path)
+        return path
+    except Exception as exc:  # noqa: BLE001 (phần phụ, không được làm hỏng hook)
+        try:
+            log_event("hook-error", {"hook": "save_last_request", "error": repr(exc)[:300]})
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+
+def load_last_request(session_id):
+    """Yêu cầu gần nhất đã lưu của ĐÚNG phiên này, dạng {ts, cwd, prompt[, earlier: {ts, prompt}]}. None nếu chưa có,
+    file hỏng hoặc session_id lạ. ts là None nếu không đọc được thời điểm. Không bao giờ văng lỗi."""
+    try:
+        key = _session_key(session_id)
+        if key is None:
+            return None
+        data = read_json(state_dir() / LAST_REQUEST_DIR / f"{key}.json")
+        if not isinstance(data, dict) or not isinstance(data.get("prompt"), str) or not data["prompt"].strip():
+            return None
+        ts = data.get("ts")
+        out = {"ts": float(ts) if isinstance(ts, (int, float)) and not isinstance(ts, bool) else None,
+               "cwd": data["cwd"] if isinstance(data.get("cwd"), str) else "", "prompt": data["prompt"]}
+        earlier = data.get("earlier")
+        if isinstance(earlier, dict) and isinstance(earlier.get("prompt"), str) and earlier["prompt"].strip():
+            ets = earlier.get("ts")
+            out["earlier"] = {"ts": float(ets) if isinstance(ets, (int, float)) and not isinstance(ets, bool) else None,
+                              "prompt": earlier["prompt"]}
+        return out
+    except Exception:  # noqa: BLE001
+        return None

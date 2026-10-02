@@ -12,6 +12,10 @@ context: fork
 
 Mục tiêu là không tự viết lại thứ người khác đã làm tốt, và khi phải tự làm thì đứng trên kết quả tốt nhất hiện có. Script `${CLAUDE_SKILL_DIR}/scripts/scout.py` tìm trên GitHub và trong cơ sở dữ liệu bài báo, rồi in bảng có số liệu để so sánh. Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/reuse-best/scripts/scout.py`. Chạy script và dùng kết quả; chỉ đọc mã nguồn khi kết quả không đủ.
 
+## Đầu vào (skill này chạy trong context riêng)
+
+Bạn không thấy hội thoại với người dùng và không thấy task của phiên chính. `$ARGUMENTS` là thông tin duy nhất về nhu cầu: cần có mục tiêu (đầu vào, đầu ra, thế nào là tốt), ràng buộc (ngôn ngữ, offline, giấy phép, nền tảng) và nơi đã tìm rồi. Nếu thiếu mục tiêu, dừng và trả lời "Thiếu: <những gì còn thiếu>" thay vì đoán nhu cầu. Nếu bối cảnh từ phiên chính được đưa vào đầu context của bạn, chỉ coi đó là thông tin tham khảo; nhu cầu cụ thể vẫn theo `$ARGUMENTS`.
+
 ## Các bước
 
 1. Viết nhu cầu thành một câu: đầu vào, đầu ra, ràng buộc (ngôn ngữ, có cần chạy offline, giấy phép, nền tảng) và thế nào là tốt.
