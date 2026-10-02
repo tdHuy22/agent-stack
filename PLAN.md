@@ -5,21 +5,39 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 02/10/2026.*
 
-- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, sửa 5 chỗ thiếu của lần rà soát, và router chọn skill theo nội dung project cùng dòng ➡️ sau mỗi câu trả lời (02/10/2026). Plugin `agent-stack` 0.3.0 gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 159 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
-- **Đang dở:** không có.
-- **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat: 11 mục duyệt, 2 từ chối, 8 còn chờ. Mọi thay đổi và cách gỡ từng mục nằm trong `INSTALLED.md`. Gỡ toàn bộ: `./install.sh --rollback --apply`.
+- **Xong:**
+  - GĐ0 đến GĐ11 trên nhánh `trien-khai-v1`, chưa push; commit gần nhất `dafba1f`.
+  - Plugin `agent-stack` 0.3.2: 6 skill, 5 agent, 5 hook. Router chọn skill theo nội dung project và việc tiếp theo trong §0; dòng ➡️ có Skill, ở cuối mọi câu trả lời.
+  - 21 mục bên thứ ba đã kiểm duyệt: 11 duyệt, 2 từ chối, 8 chờ.
+  - Bộ eval 12 việc đã chạy ngoài repo, nhưng chưa chạy thật. 159 test đạt trên Python 3.9 và 3.11.
+  - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`. Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
+  - Kiểm chứng sau khi cài:
+    - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
+    - CLI nạp plugin tại chỗ, đã thấy `plugin_root` trong `state/sessions.jsonl`;
+    - desktop app chạy bản chép trong cache, tìm về repo nhờ `plugin/.agent-stack-home`.
+- **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Chạy `claude /login` trong terminal, vì CLI đang hết phiên đăng nhập.
-  2. Khởi động lại desktop app hoặc mở phiên mới để nạp plugin, hook và luật chung. Kiểm tra lúc mở phiên có dòng 🧭 hồ sơ project, và cảnh báo hạn mức có hiện không.
-  3. `brew install pyright` để plugin pyright-lsp chạy được. Nếu muốn: `brew install gitleaks osv-scanner`.
+  1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project, và có hiện cảnh báo hạn mức khi gần ngưỡng không. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`.
+  2. Chạy `claude /login` trong terminal, vì CLI đang hết phiên đăng nhập (`claude -p` báo "OAuth session expired").
+  3. Chạy `brew install pyright` để plugin pyright-lsp chạy được. Nếu muốn: `brew install gitleaks osv-scanner`.
   4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
   5. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
   6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
   7. Khi cần, duyệt riêng 8 mục còn chờ (`vet.py list`), rồi chạy lại `./install.sh --apply`.
   8. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
-- **Quyết định còn treo:** 4 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi). Câu "(luôn kiểm tra" đã rõ: thuộc reuse-best.
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 159 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
-- **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
+- **Quyết định còn treo:**
+  - Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
+    - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
+    - quyết định có nạp 10 USD không (mức 1.000 request mỗi ngày, so với 50 khi chưa nạp);
+    - chọn 2–3 model free có gọi tool, hoặc để `reuse-best` chọn theo benchmark.
+    - Phần mình làm: thêm cấu hình `opencode run -m openrouter/<model>:free`, cách ly khỏi cấu hình toàn cục của OpenCode, giới hạn dưới 20 request mỗi phút, và `--resume`.
+  - 4 câu hỏi ở mục 10 của `KE-HOACH.md`: gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi.
+- **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
+  - `/usr/bin/python3 -m unittest discover -s tests -t .` → `Ran 159 tests … OK`
+  - `claude plugin validate plugin` → `Validation passed`
+  - `python3 evals/run_eval.py --self-test` → 12 dấu ✓
+  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 53/53
+- **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status`, `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
 
 ## 1. Giai đoạn
 
