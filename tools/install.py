@@ -9,8 +9,13 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
               ~/.config/opencode/AGENTS.md -> global/AGENTS.global.md
   plugin      marketplace cục bộ agent-stack-local + plugin agent-stack (scope user)
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
+  autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
+              terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh
   opencode    symlink skill (agent-stack + vendor) vào ~/.config/opencode/skills/, agent vào ~/.config/opencode/agents/
+
+Mã thoát: 0 = cài đủ; 1 = có bước lỗi; 2 = không lỗi nhưng có mục bị bỏ qua (cài chưa đủ).
+Cài một phần không phải là thành công: phần tổng kết cuối luôn liệt kê mục bị bỏ qua và mục lỗi.
 
 Ví dụ:
   python3 tools/install.py                 # xem trước
@@ -29,7 +34,7 @@ import time
 from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
-STEPS = ("rules", "plugin", "statusline", "catalog", "opencode")
+STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "opencode")
 MARKETPLACE = "agent-stack-local"
 SKIP_IN_VENDOR = {".git", ".vet-complete", ".claude-plugin", ".cursor-plugin", ".codex-plugin"}
 
@@ -48,6 +53,8 @@ class Installer:
         self.log_path = HOME_STACK / "state" / "install-logs" / f"{stamp}.json"
         self.actions = []
         self.lines = []
+        self.skipped = []
+        self.failures = []
 
     # ------------------------------------------------------------ tiện ích
 
@@ -58,19 +65,31 @@ class Installer:
     def record(self, **action) -> None:
         self.actions.append(action)
 
+    def backup_target(self, path: Path, suffix: str = "") -> Path:
+        """Đường dẫn bản sao lưu chưa dùng. Cùng một file được sao lưu nhiều lần trong một lần cài
+        (ví dụ settings.json ở hai bước) thì mỗi bản một tên, để hoàn tác về đúng bản gốc."""
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        base = str(path.relative_to(self.home)).replace("/", "__")
+        n = 1
+        while True:
+            target = self.backup_dir / (base + (f".{n}" if n > 1 else "") + suffix)
+            if not (target.exists() or target.is_symlink()):
+                return target
+            n += 1
+
     def backup(self, path: Path):
         """Sao lưu một file (hoặc symlink) trước khi thay; trả về đường dẫn bản sao lưu."""
         if not (path.exists() or path.is_symlink()):
             return None
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
         if path.is_dir() and not path.is_symlink():
-            dest = self.backup_dir / (str(path.relative_to(self.home)).replace("/", "__") + ".dir")
+            dest = self.backup_target(path, ".dir")
             shutil.move(str(path), str(dest))
             return str(dest)
-        dest = self.backup_dir / str(path.relative_to(self.home)).replace("/", "__")
         if path.is_symlink():
-            dest.with_suffix(dest.suffix + ".symlink").write_text(os.readlink(path))
-            return str(dest.with_suffix(dest.suffix + ".symlink"))
+            dest = self.backup_target(path, ".symlink")
+            dest.write_text(os.readlink(path))
+            return str(dest)
+        dest = self.backup_target(path)
         shutil.copy2(path, dest)
         return str(dest)
 
@@ -80,6 +99,7 @@ class Installer:
             return
         if (dest.exists() or dest.is_symlink()) and not self.replace_existing:
             self.say(f"  ! bỏ qua: {dest} đã tồn tại và không phải của agent-stack (thêm --replace-existing để thay, có sao lưu)")
+            self.skipped.append(f"{dest}: đã có file không phải của agent-stack")
             return
         self.say(f"  + symlink: {dest} -> {src}")
         if not self.apply:
@@ -95,10 +115,16 @@ class Installer:
         self.say(f"  $ {' '.join(args)}")
         if not self.apply:
             return
-        out = subprocess.run(args, capture_output=True, text=True)
+        try:
+            out = subprocess.run(args, capture_output=True, text=True)
+        except OSError as exc:
+            self.say(f"    lỗi: {exc}")
+            self.failures.append(f"{' '.join(args[:4])}: {exc}")
+            return
         text = (out.stdout + out.stderr).strip()
         if out.returncode != 0 and not (ok_if and ok_if in text.lower()):
             self.say(f"    lỗi ({out.returncode}): {text[:300]}")
+            self.failures.append(f"{' '.join(args[:4])}: mã {out.returncode}: {text[:160]}")
             return
         self.record(type="cmd", cmd=args, undo=undo)
 
@@ -106,7 +132,12 @@ class Installer:
         path = self.claude_dir / "settings.json"
         data = {}
         if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError as exc:
+                self.say(f"  ! không đọc được {path}: {exc}. Không sửa file này.")
+                self.failures.append(f"{path}: JSON không hợp lệ")
+                return
         before = json.dumps(data, sort_keys=True)
         mutate(data)
         if json.dumps(data, sort_keys=True) == before:
@@ -148,6 +179,17 @@ class Installer:
             if self.restore_workflow_warning and data.get("skipWorkflowUsageWarning"):
                 self.say("  + bỏ skipWorkflowUsageWarning (bật lại cảnh báo usage của workflow)")
                 data.pop("skipWorkflowUsageWarning")
+        self.edit_settings(mutate)
+
+    def step_autocontinue(self) -> None:
+        self.say("[autocontinue] tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ (autoContinueAtUsageLimit)")
+
+        def mutate(data):
+            if "autoContinueAtUsageLimit" in data:
+                self.say(f"  = đã đặt autoContinueAtUsageLimit = {json.dumps(data['autoContinueAtUsageLimit'])}, giữ nguyên")
+            else:
+                self.say("  + autoContinueAtUsageLimit = true")
+                data["autoContinueAtUsageLimit"] = True
         self.edit_settings(mutate)
 
     def approved(self) -> dict:
@@ -200,6 +242,7 @@ class Installer:
                 continue
             if not (src / "SKILL.md").exists():
                 self.say(f"  ! thiếu bản đã kiểm trong cache cho {name}: chạy lại vet.py scan {item['key']}")
+                self.failures.append(f"{item['key']}: đã duyệt nhưng thiếu bản đã kiểm trong .vet-cache")
                 continue
             self.say(f"  + vendor: {name} @ {entry['sha'][:12]} -> vendor/skills/{name}")
             record[name] = {"key": item["key"], "sha": entry["sha"]}
@@ -249,6 +292,23 @@ class Installer:
             self.log_path.write_text(json.dumps({"backup_dir": str(self.backup_dir), "actions": self.actions},
                                                 ensure_ascii=False, indent=2) + "\n")
             self.say(f"Đã ghi nhật ký: {self.log_path}. Hoàn tác: python3 tools/install.py --rollback")
+        return self.summary()
+
+    def summary(self) -> int:
+        """In tổng kết. Cài một phần không được trông như thành công."""
+        planned = sum(1 for line in self.lines if line.startswith(("  + ", "  $ ")))
+        done = f"{len(self.actions)} thay đổi đã làm" if self.apply else f"{planned} thay đổi sẽ làm"
+        self.say(f"Tổng kết: {done}, {len(self.skipped)} mục bị bỏ qua, {len(self.failures)} lỗi.")
+        for item in self.skipped:
+            self.say(f"  - bỏ qua: {item}")
+        for item in self.failures:
+            self.say(f"  - lỗi: {item}")
+        if self.failures:
+            self.say("⚠️ Có lỗi: phần cài chưa hoàn tất. Sửa lỗi rồi chạy lại; các bước đã xong sẽ không bị làm lại.")
+            return 1
+        if self.skipped:
+            self.say("⚠️ Cài chưa đủ: các mục bị bỏ qua ở trên chưa được kích hoạt.")
+            return 2
         return 0
 
 

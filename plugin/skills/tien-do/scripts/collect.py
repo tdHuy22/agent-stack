@@ -6,16 +6,15 @@ Lệnh:
   collect.py --all [THƯ_MỤC_GỐC] [--md | --json]
 
 Thứ tự ưu tiên của "việc tiếp theo":
-  1. chặn đường: xung đột merge, CI đỏ, test lệch mốc, file chưa commit quá 24 giờ
+  1. chặn đường: xung đột merge, CI đỏ, kiểm tra đang trượt, file chưa commit quá 24 giờ
   2. dang dở: mục "Đang dở" và "Việc tiếp theo" trong §0, commit chưa push, PR đang chờ
-  3. giai đoạn hiện tại: ô chưa tick đầu tiên
+  3. giai đoạn hiện tại: ô chưa tick đầu tiên; kiểm tra đã đạt nhưng code đổi sau đó
   4. nợ mới: TODO/FIXME trong các file vừa sửa
   5. bị bỏ quên: còn việc dở mà không hoạt động quá 14 ngày
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -159,10 +158,9 @@ def recent_sessions(root: Path, limit: int = 3) -> list:
     return rows
 
 
-def last_test(root: Path):
-    """Kết quả test gần nhất do skill verify ghi (state/tests/<băm đường dẫn>.json), nếu có."""
-    name = hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json"
-    return A.read_json(A.state_dir() / "tests" / name)
+def last_tests(root: Path) -> dict:
+    """Biên nhận kiểm tra do session-keeper/scripts/receipt.py ghi, kèm cờ fresh (còn khớp code không)."""
+    return A.receipt_status(root)
 
 
 def github_signals(root: Path) -> dict:
@@ -187,7 +185,7 @@ def collect(root: Path, use_gh: bool = False, scan_todos: bool = True) -> dict:
     found = A.read_plan(root)
     git = A.git_summary(root)
     data = {"project": root.name, "root": str(root), "plan": None, "section0": None, "progress": None,
-            "git": git, "todos": [], "sessions": recent_sessions(root), "test": last_test(root), "github": {}}
+            "git": git, "todos": [], "sessions": recent_sessions(root), "tests": last_tests(root), "github": {}}
     activity = []
     if found:
         path, text, sec = found
@@ -224,9 +222,20 @@ def rank(d: dict) -> list:
     run = (d.get("github") or {}).get("last_run")
     if run and run.get("conclusion") == "failure":
         actions.append((1, f"Sửa CI đang đỏ ({run.get('name')} trên {run.get('headBranch')})", "lần chạy CI gần nhất thất bại"))
-    test = d.get("test")
-    if test and not test.get("ok"):
-        actions.append((1, f"Sửa test đang lệch mốc: {A.clip(str(test.get('result')), 100)}", "kết quả test gần nhất không đạt"))
+    tests = d.get("tests") or {}
+    for label, rec in tests.items():
+        if rec.get("ok"):
+            continue
+        detail = f": {A.clip(rec['summary'], 80)}" if rec.get("summary") else ""
+        if rec.get("fresh") is False:
+            actions.append((1, f"Chạy lại kiểm tra `{label}`: lần gần nhất trượt{detail}, code đã đổi sau đó",
+                            "chưa biết bản sửa có làm kiểm tra đạt lại không"))
+        else:
+            actions.append((1, f"Sửa kiểm tra đang trượt `{label}`{detail}", "lần chạy gần nhất trượt và code chưa đổi từ đó"))
+    stale = sorted(label for label, rec in tests.items() if rec.get("ok") and rec.get("fresh") is False)
+    if stale:
+        actions.append((3, "Chạy lại mốc kiểm tra: " + ", ".join(f"`{x}`" for x in stale[:3]),
+                        "code đã đổi sau lần đạt gần nhất; kết quả cũ không chứng minh cho code mới"))
     if git.get("dirty") and dinfo.get("oldest") and time.time() - dinfo["oldest"] > DIRTY_STALE_HOURS * 3600:
         actions.append((1, f"Commit hoặc dọn {len(git['dirty'])} file chưa commit (cũ nhất {ago(dinfo['oldest'])})",
                         "thay đổi chưa commit lâu dễ bị mất"))
@@ -317,6 +326,11 @@ def render_md(d: dict) -> str:
         L.append(f"- Đang dở: {sec['fields']['in_progress']}")
     if d.get("baseline"):
         L.append(f"- Mốc kiểm tra: {d['baseline']}")
+    for label, rec in sorted((d.get("tests") or {}).items(), key=lambda kv: kv[1].get("ts", ""), reverse=True)[:3]:
+        mark = "✓ đạt" if rec.get("ok") else f"✗ trượt (mã {rec.get('exit')})"
+        fresh = {True: "còn khớp code hiện tại", False: "code đã đổi sau đó",
+                 None: "không rõ code có đổi sau đó không"}[rec.get("fresh")]
+        L.append(f"- Kiểm tra `{label}`: {mark}, {rec.get('ts', '?')[:16].replace('T', ' ')}, {fresh}")
     L += ["", "### Việc nên làm tiếp", ""]
     if d["actions"]:
         for i, a in enumerate(d["actions"][:6], 1):

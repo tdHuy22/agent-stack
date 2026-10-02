@@ -12,6 +12,7 @@ FAKE_CLAUDE = """#!/usr/bin/env python3
 import sys, os
 with open(os.environ["FAKE_CLAUDE_LOG"], "a") as fh:
     fh.write(" ".join(sys.argv[1:]) + "\\n")
+sys.exit(int(os.environ.get("FAKE_CLAUDE_EXIT", "0")))
 """
 
 
@@ -42,11 +43,11 @@ class InstallTests(TempDirTestCase):
         (self.stack / "vetted.lock").write_text(json.dumps(self.lock, ensure_ascii=False))
         (self.stack / "catalog.json").write_text(json.dumps(self.catalog, ensure_ascii=False))
 
-    def run_install(self, *args):
+    def run_install(self, *args, expect=0, extra_env=None):
         env = dict(os.environ, HOME=str(self.home), AGENT_STACK_HOME=str(self.stack),
-                   AGENT_STACK_CLAUDE_BIN=str(self.fake), FAKE_CLAUDE_LOG=str(self.calls))
+                   AGENT_STACK_CLAUDE_BIN=str(self.fake), FAKE_CLAUDE_LOG=str(self.calls), **(extra_env or {}))
         out = subprocess.run([sys.executable, str(INSTALL), *args], capture_output=True, text=True, env=env, timeout=60)
-        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.returncode, expect, out.stdout + out.stderr)
         return out.stdout
 
     def calls_made(self):
@@ -73,6 +74,8 @@ class InstallTests(TempDirTestCase):
         data = json.loads(settings.read_text())
         self.assertEqual(data["model"], "sonnet")
         self.assertIn("statusline.py", data["statusLine"]["command"])
+        self.assertIs(data["autoContinueAtUsageLimit"], True)
+        self.assertIn("Tổng kết:", out)
         self.assertNotIn("skipWorkflowUsageWarning", data)
         self.assertIn(f"plugin marketplace add {self.stack}", self.calls_made())
         self.assertIn("plugin install agent-stack@agent-stack-local --scope user", self.calls_made())
@@ -87,8 +90,9 @@ class InstallTests(TempDirTestCase):
         claude_md = self.home / ".claude" / "CLAUDE.md"
         claude_md.parent.mkdir()
         claude_md.write_text("ghi chú riêng của tôi\n")
-        out = self.run_install("--apply", "--only", "rules")
-        self.assertIn("bỏ qua", out)
+        out = self.run_install("--apply", "--only", "rules", expect=2)
+        self.assertIn(f"- bỏ qua: {claude_md}", out)
+        self.assertIn("Cài chưa đủ", out)
         self.assertFalse(claude_md.is_symlink())
         self.run_install("--apply", "--only", "rules", "--replace-existing")
         self.assertTrue(claude_md.is_symlink())
@@ -125,3 +129,24 @@ class InstallTests(TempDirTestCase):
         made = self.calls_made()
         self.assertIn("plugin install agent-stack-vendor@agent-stack-local --scope user", made)
         self.assertFalse(any("y@m" in c or "q@m" in c for c in made))
+
+    def test_failed_command_is_reported_and_exits_1(self):
+        out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})
+        self.assertIn("0 mục bị bỏ qua, 2 lỗi", out)  # marketplace add và plugin install đều lỗi
+        self.assertIn("- lỗi:", out)
+        self.assertFalse((self.stack / "state" / "install-logs").exists())  # không ghi bước lỗi vào nhật ký hoàn tác
+
+    def test_existing_autocontinue_choice_is_kept(self):
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        settings.write_text(json.dumps({"autoContinueAtUsageLimit": False}))
+        out = self.run_install("--apply", "--only", "autocontinue")
+        self.assertIn("giữ nguyên", out)
+        self.assertIs(json.loads(settings.read_text())["autoContinueAtUsageLimit"], False)
+
+    def test_invalid_settings_json_is_left_alone(self):
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        settings.write_text("{hỏng")
+        self.run_install("--apply", "--only", "statusline,autocontinue", expect=1)
+        self.assertEqual(settings.read_text(), "{hỏng")

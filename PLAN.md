@@ -5,17 +5,18 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 02/10/2026.*
 
-- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, và skill `reuse-best` (02/10/2026). Plugin `agent-stack` gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 118 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
-- **Đang dở:** không có. Lần rà soát ngày 02/10 còn 5 chỗ thiếu chờ bạn đồng ý sửa: skill `verify` chưa có nên tín hiệu "test lệch mốc" của `tien-do` không hoạt động; eval chạy trong repo nên model thấy `CLAUDE.md`, grader và lời giải; `install.py` lỗi vẫn thoát mã 0; CLI `gitleaks`, `osv-scanner` chưa được theo dõi; `autoContinueAtUsageLimit` chưa bật.
+- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, và sửa 5 chỗ thiếu của lần rà soát (02/10/2026). Plugin `agent-stack` gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 143 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
+- **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   1. Đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` cho những mục đồng ý (danh sách: `vet.py list`).
   2. Xem trước bằng `./install.sh`, rồi `./install.sh --apply` (thêm `--restore-workflow-warning` để bật lại cảnh báo usage của workflow).
   3. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
   4. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
   5. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/` để tạo style card và bật phần so với bài mẫu của `tells.py`.
-  6. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
+  6. Cài các CLI bạn muốn dùng (mình không tự cài gì toàn cục): `brew install gitleaks osv-scanner`, và `brew install pyright` nếu duyệt plugin pyright-lsp. `python3 tools/maintain.py` sẽ nhắc nếu còn thiếu.
+  7. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
 - **Quyết định còn treo:** 4 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi). Câu "(luôn kiểm tra" đã rõ: thuộc reuse-best.
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 118 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
+- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 143 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
 
 ## 1. Giai đoạn
@@ -95,3 +96,11 @@
 - [x] Luôn được nhắc: luật trong `AGENTS.global.md`, dòng mới trong bảng chọn model của `CLAUDE.global.md`, router gợi ý cho mọi việc "tính năng" và "kiến trúc" kèm lưu ý bỏ qua việc vặt, cộng luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA". Bộ prompt có nhãn: 53/53.
 - [x] 2 case đo kích hoạt mới trong `plugin/evals/` và 1 grader chặn kích hoạt nhầm với việc vặt. 12 test mới.
 - [ ] **Bạn làm (tốn một ít hạn mức):** chạy `claude plugin eval` (xem GĐ5) để đo skill có tự kích hoạt đúng lúc không.
+
+### GĐ9: Sửa sau lần rà soát yêu cầu (02/10/2026)
+- [x] A. Biên nhận kiểm tra: `session-keeper/scripts/receipt.py` chạy lệnh kiểm tra và ghi kết quả gắn với dấu vân tay nội dung code (commit mà không đổi nội dung thì vẫn khớp). `tien-do` xếp kiểm tra đang trượt vào bậc chặn đường và nhắc chạy lại khi kết quả đạt đã cũ; tín hiệu này trước đó không bao giờ hoạt động. Không viết skill `verify` riêng, vì Claude Code đã có `/verify`.
+- [x] B. Eval chạy ngoài repo: model không thấy `CLAUDE.md`, grader hay lời giải; script từ chối chạy nếu thấy file chỉ dẫn ở thư mục cha. Bài làm được chốt thành patch, có `--regrade` và `--report`, chia nhóm lỗi vận hành và lỗi môi trường, chỉ chốt cấu hình khi ma trận đủ, ghi điều kiện chạy vào `.meta.json`.
+- [x] C. `install.py` in tổng kết: mã thoát 1 khi có lỗi, 2 khi cài chưa đủ. Sửa thêm lỗi cũ do test mới lộ ra: hai bước cùng sửa `settings.json` thì bản sao lưu sau ghi đè bản đầu, làm hoàn tác sai.
+- [x] D. `maintain.py` báo các CLI khuyến nghị chưa cài (gitleaks, osv-scanner, pyright, clangd); việc cài ghi ở §0.
+- [x] E. Bước `autocontinue` trong `install.py` đặt `autoContinueAtUsageLimit = true`, chỉ khi bạn chưa tự đặt.
+- [x] 25 test mới.

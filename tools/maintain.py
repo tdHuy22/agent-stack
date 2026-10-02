@@ -8,6 +8,7 @@ Kiểm tra:
   4. Ngân sách mô tả skill (description quá dài làm Claude Code cắt bớt)
   5. Mức dùng 7 ngày so với BASELINE.md
   6. Dung lượng .vet-cache, các bản cache không còn trong vetted.lock
+  7. Công cụ dòng lệnh khuyến nghị đã cài chưa (chỉ báo, không tự cài)
 
 Ví dụ:
   python3 tools/maintain.py                 # đầy đủ (cần mạng cho mục 2)
@@ -28,6 +29,13 @@ HOME_STACK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HOME_STACK / "plugin" / "skills" / "vet-skill" / "scripts"))
 sys.path.insert(0, str(HOME_STACK / "tools"))
 MIN_CLAUDE = (2, 1, 277)
+# (lệnh, cách cài, để làm gì). Chỉ báo; cài toàn cục là việc của người dùng.
+RECOMMENDED_CLI = (
+    ("gitleaks", "brew install gitleaks", "quét secret trước khi commit"),
+    ("osv-scanner", "brew install osv-scanner", "quét lỗ hổng đã biết trong thư viện"),
+    ("pyright", "brew install pyright", "cần cho plugin pyright-lsp"),
+    ("clangd", "brew install llvm", "cần cho plugin clangd-lsp"),
+)
 
 
 def sh(*args, cwd=None, timeout=300):
@@ -151,6 +159,12 @@ def check_cache(lines: list, clean: bool) -> None:
         lines.append("- Xóa bằng `python3 tools/maintain.py --clean-cache`.")
 
 
+def check_cli(lines: list, which=shutil.which) -> None:
+    lines.append("## 7. Công cụ dòng lệnh khuyến nghị")
+    for name, install, why in RECOMMENDED_CLI:
+        lines.append(f"- `{name}` ({why}): " + ("có" if which(name) else f"chưa cài, bạn tự chạy `{install}` nếu cần"))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Kiểm tra định kỳ cho agent-stack.")
     ap.add_argument("--offline", action="store_true", help="không gọi GitHub")
@@ -162,7 +176,7 @@ def main(argv=None) -> int:
                  lambda L: check_drift(L, args.offline),
                  lambda L: check_quality(L, args.skip_tests),
                  check_skill_budget, check_usage,
-                 lambda L: check_cache(L, args.clean_cache)):
+                 lambda L: check_cache(L, args.clean_cache), check_cli):
         try:
             step(lines)
         except Exception as exc:  # noqa: BLE001 (một mục lỗi không được chặn các mục khác)

@@ -1,10 +1,12 @@
 """Thư viện dùng chung cho hook và skill của agent-stack (chỉ thư viện chuẩn, Python 3.9+).
 
 Gồm: vị trí thư mục state, đọc/ghi JSON của hook, tìm file kế hoạch của project,
-đọc mục §0 "Đang ở đâu, việc tiếp theo", đếm checkbox, và lấy trạng thái git chỉ đọc.
+đọc mục §0 "Đang ở đâu, việc tiếp theo", đếm checkbox, lấy trạng thái git chỉ đọc,
+và biên nhận kiểm tra (kết quả test gắn với nội dung code lúc chạy).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -346,6 +348,72 @@ def git_summary(root: Path) -> dict:
             "last_commit_ts": last_ts, "last_commit": last_subject,
             "stash": len(stash.splitlines()) if stash else 0}
 
+
+# ---------------------------------------------------------------- biên nhận kiểm tra
+
+def tree_fingerprint(root: Path):
+    """Dấu vân tay nội dung của cây làm việc: file đang theo dõi và file mới chưa bị ignore.
+    Chỉ phụ thuộc nội dung, nên giống nhau trước và sau khi commit. Chỉ đọc (hash-object không ghi object).
+    None nếu không phải git repo hoặc git lỗi."""
+    top = (git_out(root, "rev-parse", "--show-toplevel") or "").strip()
+    if not top:
+        return None
+    listing = git_out(Path(top), "ls-files", "-s", "-z")
+    status = git_out(Path(top), "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    if listing is None or status is None:
+        return None
+    blobs = {}
+    for entry in listing.split("\0"):
+        meta, _, path = entry.partition("\t")
+        parts = meta.split()
+        if path and len(parts) >= 3:
+            blobs[path] = parts[1]
+    changed, tokens, i = [], status.split("\0"), 0
+    while i < len(tokens):
+        token = tokens[i]
+        i += 1
+        if len(token) < 4:
+            continue
+        xy, path = token[:2], token[3:]
+        if xy[0] in "RC":
+            i += 1  # với đổi tên, token kế tiếp là đường dẫn cũ
+        if not (Path(top) / path).exists():
+            blobs.pop(path, None)
+        elif xy == "??" or xy[1] != " ":
+            changed.append(path)
+    if changed:
+        try:
+            out = subprocess.run(["git", "--no-optional-locks", "-C", top, "hash-object", "--stdin-paths"],
+                                 input="\n".join(changed) + "\n", capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        shas = out.stdout.split()
+        if out.returncode != 0 or len(shas) != len(changed):
+            return None
+        blobs.update(zip(changed, shas))
+    digest = hashlib.sha1()
+    for path in sorted(blobs):
+        digest.update(f"{path}\0{blobs[path]}\n".encode("utf-8", "surrogateescape"))
+    return digest.hexdigest()[:16]
+
+
+def receipt_path(root: Path) -> Path:
+    return state_dir() / "tests" / (hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json")
+
+
+def receipt_status(root: Path) -> dict:
+    """Các lần kiểm tra đã ghi cho project, kèm cờ fresh: kết quả còn khớp nội dung code hiện tại không.
+    {} nếu chưa có biên nhận nào. fresh là None khi không xác định được (không phải git repo)."""
+    data = read_json(receipt_path(root), {}) or {}
+    checks = data.get("checks") or {}
+    if not checks:
+        return {}
+    now = tree_fingerprint(root)
+    out = {}
+    for label, rec in checks.items():
+        fresh = None if now is None or not rec.get("fingerprint") else rec["fingerprint"] == now
+        out[label] = dict(rec, fresh=fresh)
+    return out
 
 # ---------------------------------------------------------------- bản tóm tắt cho hook
 

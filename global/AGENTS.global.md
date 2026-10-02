@@ -12,7 +12,8 @@
 
 ## Chất lượng trước chi phí
 
-- Không nói "xong" khi chưa chạy kiểm chứng (test, lint, build) và đưa kết quả.
+- Không nói "xong" khi chưa chạy kiểm chứng (test, lint, build) và đưa kết quả. Lệnh thoát mã khác 0 không bao giờ là thành công, và kết quả đạt cũ không chứng minh cho code đã sửa sau đó.
+- Chạy kiểm chứng qua `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để kết quả được ghi lại, gắn với nội dung code lúc chạy.
 - Chỉ dùng model rẻ hơn hoặc effort thấp hơn khi có bước kiểm tra tự động. Kiểm tra thất bại thì làm lại ở mức cao hơn.
 
 ## Skill và đồ của bên thứ ba

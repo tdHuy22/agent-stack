@@ -164,7 +164,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 |---|---|
 | Alias `opusplan` | Opus khi lập kế hoạch, Sonnet khi thực thi. Đây là một router có sẵn. |
 | `autoContinueAtUsageLimit` | Tự chờ và làm tiếp khi chạm giới hạn 5 giờ, tự kích hoạt lại tối đa 2 lần liên tiếp. |
-| Skill tên `verify` | Từ v2.1.284, Claude Code tự chạy skill này ngay trước khi commit. Đây là cổng QA miễn phí. |
+| Skill `/verify` có sẵn | Claude Code có sẵn skill `/verify` để build, chạy và quan sát thay đổi ([blog Anthropic, 07/2026](https://claude.com/blog/building-verification-loops-in-claude-code-with-skills)). Theo một bài tổng hợp của bên thứ ba, từ v2.1.215 nó chỉ chạy khi được gọi. Nhận định cũ trong kế hoạch này rằng nó "tự chạy trước khi commit từ v2.1.284" không kiểm chứng được nên đã bỏ. agent-stack không viết skill `verify` riêng; phần còn thiếu (ghi kết quả kiểm tra cho phiên sau) do `session-keeper/scripts/receipt.py` làm. |
 | `model:` / `effort:` trong frontmatter skill và subagent | Gán model theo từng việc. |
 | `ultrathink` trong prompt | Nghĩ sâu hơn cho đúng một lượt, không đổi effort của phiên. |
 | `/usage` | Phân bổ hạn mức theo skill, subagent, plugin, MCP. `/insights` cho báo cáo thói quen làm việc. |
@@ -238,7 +238,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | webapp-testing (anthropics/skills) | skill | 179k | CC, OC | **Cài** | |
 | playwright (Microsoft) | MCP / plugin chính thức | 37.7k / 09-28 | CC, OC | **Cài** | Kiểm thử e2e. |
 | chrome-devtools-mcp | MCP | 52.8k / 10-01 | CC, OC | Tùy chọn | Debug hiệu năng trình duyệt. |
-| `verify` theo từng project | ✍️ skill | — | CC | **Viết** | Tự chạy trước mỗi commit. |
+| `/verify` có sẵn + biên nhận kiểm tra | có sẵn + ⚙️ script | — | CC, OC | **Dùng** | Dùng `/verify` có sẵn để kiểm tra; ghi kết quả bằng `receipt.py` để `tien-do` biết kết quả còn khớp code hay đã cũ. |
 | mutation-testing (Trail of Bits) | skill | 7.3k | CC | Thử | Đo xem test có bắt được lỗi thật không. |
 | tdd (mattpocock) hoặc TDD (superpowers) | skill | — | CC, OC | Chọn **một** | Tránh hai skill tranh nhau kích hoạt. |
 
@@ -416,7 +416,7 @@ Chỉ làm đúng việc được giao, trong thư mục hiện tại. Xong thì
 
 Gồm năm tầng, từ có sẵn đến tự làm:
 
-1. **Tính năng sẵn có (⚙️):** giữ `autoContinueAtUsageLimit` bật; đặt tên phiên `claude -n <việc>`; quay lại bằng `claude --resume <tên>`; thử hướng khác bằng `/branch`; lùi lại bằng `/rewind`.
+1. **Tính năng sẵn có (⚙️):** bật `autoContinueAtUsageLimit` (mặc định chưa đặt; `install.py` đặt `true` nếu bạn chưa chọn); đặt tên phiên `claude -n <việc>`; quay lại bằng `claude --resume <tên>`; thử hướng khác bằng `/branch`; lùi lại bằng `/rewind`.
 2. **Trạng thái trên đĩa**, thư mục `.agent/` trong mỗi project. Project nào đã có `PLAN.md` kiểu SCEE thì mục §0 của nó đóng vai bàn giao rút gọn, không tạo file trùng; chỉ tách `.agent/HANDOFF.md` khi cần bàn giao dài, ví dụ sang OpenCode (7.8):
    - `PLAN.md`: các giai đoạn dạng checkbox, là điểm quay lại.
    - `PROGRESS.md`: nhật ký từng mốc.
@@ -542,6 +542,7 @@ Luật cứng: không cài từ ClawHub; không chạy installer `curl | sh` khi
 - **Thước đo:** tỉ lệ đạt (test pass, rubric chấm); chi phí ước tính theo giá niêm yết (`claude -p --output-format json` có trả về) dùng thay cho % hạn mức; thời gian chạy.
 - **Quy tắc chọn:** lấy cấu hình **rẻ nhất** mà tỉ lệ đạt không thấp hơn cấu hình tốt nhất quá 1 việc (trên khoảng 15 việc) qua 2 lần chạy. Nếu chênh lệch nằm trong mức nhiễu thì chạy lần thứ 3.
 - **Ngân sách:** 15 việc × 3 cấu hình × 2 lần = 90 lượt agent. Chia ra 3–4 ngày để không đốt hạn mức tuần, và đặt `--max-cost-usd` làm trần.
+- **Chạy công bằng (sửa ngày 02/10/2026):** model làm việc ngoài agent-stack, nên không thấy `CLAUDE.md`, grader hay lời giải. Bài làm được chốt thành patch ngay khi lượt chạy kết thúc; đổi grader thì chấm lại bằng `--regrade`. Lượt hỏng được chia thành nhóm vận hành (tính là trượt) và nhóm môi trường (phải chạy lại). Script chỉ chốt cấu hình khi ma trận đủ; gộp kết quả nhiều ngày bằng `--report`.
 
 ### 7.8 Theo dõi tiến độ (#7), skill `tien-do` ✍️
 
@@ -549,6 +550,7 @@ Luật cứng: không cài từ ClawHub; không chạy installer `curl | sh` khi
 - **Không tạo hệ thống quản lý thứ hai.** Đọc đúng file kế hoạch mà project đang có. Mẫu chuẩn chỉ áp dụng cho project mới.
 - **Script làm phần nặng, LLM chỉ xếp hạng.** Script thu thập dữ liệu không tốn token; Claude chỉ đọc kết quả, sắp thứ tự và giải thích.
 - **Chỉ đọc.** Muốn đánh dấu xong hay sửa §0 thì skill đề xuất kèm bằng chứng (commit, kết quả test); bạn duyệt rồi mới ghi.
+- **Kết quả kiểm tra có hạn dùng.** `session-keeper/scripts/receipt.py` ghi mỗi lần kiểm tra kèm dấu vân tay nội dung code. `tien-do` xếp kiểm tra đang trượt vào bậc chặn đường, và nhắc chạy lại khi kết quả đạt đã cũ hơn code hiện tại. Commit mà không đổi nội dung thì biên nhận vẫn còn khớp.
 
 **Mẫu §0 chuẩn**, rút từ `SCEE/PLAN.md`, dùng cho project mới (đặt trong `PLAN.md` ở gốc hoặc `.agent/PLAN.md`):
 

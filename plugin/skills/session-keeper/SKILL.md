@@ -9,7 +9,7 @@ argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao]"
 
 Nguyên tắc: **trạng thái nằm trên đĩa, không nằm trong context.** Nguồn sự thật là mục §0 của file kế hoạch, thường là `PLAN.md` ở gốc project hoặc `.agent/PLAN.md`. Hook SessionStart của agent-stack tự nạp lại §0 mỗi khi mở phiên, resume, `/clear` hoặc sau compact.
 
-Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
+Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ (`receipt.py show` để xem). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
 
 Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời người dùng.
 
@@ -22,13 +22,13 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
    - **Đang dở:** việc gì, ở file nào, nhánh nào, còn thiếu gì.
    - **Việc tiếp theo, theo thứ tự:** danh sách đánh số; mỗi bước bắt đầu bằng một động từ.
    - **Quyết định còn treo:** điều cần người dùng chốt.
-   - **Mốc kiểm tra:** lệnh và kết quả mong đợi, đúng với lần chạy gần nhất.
+   - **Mốc kiểm tra:** lệnh và kết quả mong đợi, đúng với lần chạy gần nhất. Chạy lệnh đó qua `receipt.py run` để có biên nhận.
 3. Cho người dùng xem diff của §0. Chỉ commit khi project cho phép (xem CLAUDE.md của project) hoặc khi người dùng yêu cầu.
 
 ## `tiep-tuc`: làm tiếp sau khi bị ngắt
 
 1. Chạy `state.py show`.
-2. Làm các bước trong "Sau khi bị ngắt". Nếu không có, chạy `git status`, rồi chạy mốc kiểm tra.
+2. Làm các bước trong "Sau khi bị ngắt". Nếu không có, chạy `git status` và `receipt.py show`, rồi chạy lại mốc kiểm tra qua `receipt.py run` nếu biên nhận đã cũ hoặc chưa có.
 3. So kết quả với §0. Báo ngay nếu có gì lệch: test khác mốc, file chưa commit lạ, hay §0 cũ hơn commit gần nhất.
 4. Đề xuất bước tiếp theo đầu tiên. Đợi người dùng đồng ý nếu bước đó sửa nhiều file.
 

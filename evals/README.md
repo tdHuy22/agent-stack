@@ -21,13 +21,28 @@ python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes    # chạy thật, 
 ```
 
 - Cấu hình nằm trong `configs.json`: A sonnet·medium, B sonnet·high, C opus·medium, D opus·low, E = A + plugin, H haiku (chỉ để đo trần dưới).
-- Mỗi lượt chạy trong một thư mục tạm ở `.tmp/eval/`, với `--setting-sources project` (không nạp hook cá nhân) và `--no-session-persistence`.
-- Kết quả ghi ở `evals/results/` (không đưa vào git).
+- Mỗi lượt chạy trong thư mục tạm của hệ điều hành, **ngoài agent-stack**, nên model không đọc được `CLAUDE.md` của repo, grader (`check.py`) hay lời giải. Nếu `--work-root` nằm trong repo hoặc dưới một thư mục có `CLAUDE.md`/`AGENTS.md`, script từ chối chạy.
+- Chạy với `--setting-sources project` (không nạp hook cá nhân) và `--no-session-persistence`. File `evals/results/<thời điểm>.meta.json` ghi điều kiện chạy: commit, phiên bản CLI và plugin, dấu vân tay từng việc, và có `~/.claude/CLAUDE.md` hay không.
+- Bài làm được chốt ngay khi lượt chạy kết thúc: patch nằm trong `evals/results/<thời điểm>/`, câu trả lời nằm trong file JSONL (không đưa vào git). Thư mục tạm bị xóa sau khi chấm, trừ khi có `--keep-workdirs`.
 - Cần đăng nhập Claude Code ở terminal trước (`claude /login`).
 - Nên chia lượt chạy ra vài ngày để không đốt hạn mức tuần. `--max-total-usd` đặt trần.
 
 ## Đọc kết quả
 
 Quy tắc chọn: lấy cấu hình rẻ nhất trong các cấu hình có tỉ lệ đạt không thấp hơn cấu hình tốt nhất quá 1 việc. Hai cấu hình sát nhau thì chạy thêm lượt lặp trước khi chốt. Chốt xong thì ghi vào `routing-table.md` và cập nhật `plugin/skills/task-router/rules.json`.
+
+Script chỉ chốt khi ma trận đủ:
+- mọi cấu hình có cùng số lượt cho mọi việc;
+- không lượt nào hỏng vì môi trường (chưa đăng nhập, hết hạn mức);
+- mọi lượt dùng cùng đề bài và cùng grader.
+
+Lượt hỏng vì vận hành (hết giờ, chạm trần chi phí) vẫn tính là trượt và được đếm riêng ở cột "Lỗi vận hành".
+
+```bash
+python3 evals/run_eval.py --report evals/results/*.jsonl   # gộp các lần chạy ở nhiều ngày
+python3 evals/run_eval.py --regrade evals/results/X.jsonl  # đổi grader thì chấm lại bài đã chốt trước khi so
+```
+
+Self-test chỉ chứng minh grader đúng. Nó không phải số liệu về model.
 
 Hạn chế: 12 việc là ít, và do Claude soạn. Hãy thêm vài việc lấy từ chính công việc của bạn (dữ liệu giả, đặt trong `evals/tasks/`), vì số liệu chỉ đáng tin khi bộ việc giống việc thật.

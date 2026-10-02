@@ -7,7 +7,7 @@ Bộ công cụ cá nhân cho Claude Code và OpenCode. Thiết kế ở `KE-HOA
 | Thành phần | Vị trí | Việc |
 |---|---|---|
 | `vet-skill` | `plugin/skills/vet-skill` | Kiểm duyệt skill, plugin, MCP của bên thứ ba: ghim commit, dò dấu hiệu độc hại, chạy skill-scanner, ghi `vetted.lock` |
-| `session-keeper` | `plugin/skills/session-keeper` | Giữ trạng thái trên đĩa (mục §0 của PLAN.md, HANDOFF.md) để làm tiếp sau khi hết hạn mức, crash hoặc đổi sang OpenCode |
+| `session-keeper` | `plugin/skills/session-keeper` | Giữ trạng thái trên đĩa (mục §0 của PLAN.md, HANDOFF.md) để làm tiếp sau khi hết hạn mức, crash hoặc đổi sang OpenCode; `receipt.py` ghi kết quả kiểm tra gắn với nội dung code |
 | `tien-do` | `plugin/skills/tien-do` | Tiến độ, việc dang dở, việc nên làm tiếp (5 bậc ưu tiên); `--all` cho mọi project |
 | `task-router` | `plugin/skills/task-router` | Gợi ý model, effort, subagent, skill cho một việc |
 | `giong-van` | `plugin/skills/giong-van` | Chỉnh văn theo giọng người viết, bỏ dấu hiệu văn AI (`tells.py`) |
@@ -30,7 +30,7 @@ claude --plugin-dir ~/Documents/Claude/agent-stack/plugin
 
 ```bash
 ./install.sh            # xem trước, không sửa gì
-./install.sh --apply    # thực hiện: sao lưu trước, chỉ cài mục đã approve
+./install.sh --apply    # thực hiện: sao lưu trước, chỉ cài mục đã approve; mã thoát 1 = có lỗi, 2 = cài chưa đủ
 ./install.sh --rollback --apply
 ```
 

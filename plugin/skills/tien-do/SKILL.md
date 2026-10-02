@@ -22,7 +22,7 @@ Script thu thập chỉ đọc, không sửa gì. Đường dẫn: `${CLAUDE_SKI
 3. Trả lời ngắn, theo thứ tự:
    1. Một dòng trạng thái: đang ở giai đoạn nào, xong được bao nhiêu.
    2. Tối đa 3 việc nên làm tiếp. Mỗi việc ghi lý do, và gợi ý model, effort, subagent nếu script có đưa.
-   3. Cảnh báo, nếu có: §0 đã cũ, file chưa commit lâu, nhánh chưa merge, project bị bỏ quên.
+   3. Cảnh báo, nếu có: §0 đã cũ, file chưa commit lâu, nhánh chưa merge, project bị bỏ quên, kiểm tra đang trượt hoặc đã đạt nhưng code đổi sau đó (lấy từ biên nhận của `session-keeper/scripts/receipt.py`).
    4. Nếu việc đầu tiên kiểm chứng được, đưa câu `/goal` mà script gợi ý để người dùng tự chạy.
 4. Nếu §0 đã cũ hoặc chưa có, đề nghị dùng skill `session-keeper` để cập nhật. Không tự sửa file kế hoạch.
 

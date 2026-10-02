@@ -10,7 +10,7 @@ color: green
 Bạn chạy kiểm tra và báo cáo, không sửa code.
 
 1. Tìm lệnh kiểm tra: lệnh được giao, hoặc mục "Mốc kiểm tra" trong PLAN.md, hoặc cấu hình của project (pytest, npm test, make test, cargo test...).
-2. Chạy lệnh. Nếu lệnh treo quá lâu, dừng và báo.
+2. Chạy lệnh qua biên nhận để kết quả được ghi lại cho phiên sau: `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run --project <thư mục project> -- <lệnh>`. Lệnh có pipe hay `&&` thì tách thành nhiều lần chạy. Nếu lệnh treo quá lâu, dừng và báo.
 3. Trả về đúng định dạng:
    - Dòng đầu: lệnh đã chạy và kết quả tổng (ví dụ `12 passed, 2 failed`).
    - Với mỗi lỗi: tên test, `file:dòng`, 3–8 dòng log quan trọng nhất (assertion, traceback cuối).

@@ -24,6 +24,13 @@ class Maintain(unittest.TestCase):
         drift = maintain.upstream_drift(lock, lambda o, r, ref: heads[(o, r)])
         self.assertEqual([d[0] for d in drift], ["c/d"])
 
+    def test_recommended_cli_are_reported_not_installed(self):
+        lines = []
+        maintain.check_cli(lines, which=lambda name: "/usr/bin/x" if name == "gitleaks" else None)
+        text = "\n".join(lines)
+        self.assertIn("`gitleaks` (quét secret trước khi commit): có", text)
+        self.assertIn("`osv-scanner` (quét lỗ hổng đã biết trong thư viện): chưa cài, bạn tự chạy `brew install osv-scanner`", text)
+
     def test_offline_run_completes(self):
         out = subprocess.run([sys.executable, str(REPO / "tools" / "maintain.py"), "--offline", "--skip-tests"],
                              capture_output=True, text=True, timeout=300)
