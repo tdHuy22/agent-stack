@@ -16,6 +16,14 @@
 - Chạy kiểm chứng qua `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để kết quả được ghi lại, gắn với nội dung code lúc chạy.
 - Chỉ dùng model rẻ hơn hoặc effort thấp hơn khi có bước kiểm tra tự động. Kiểm tra thất bại thì làm lại ở mức cao hơn.
 
+## Gợi ý bước tiếp theo, sau mỗi câu trả lời
+
+- Cuối mọi câu trả lời, kể cả câu trả lời ngắn, thêm đúng một dòng: `➡️ Tiếp: <việc> · Model: <tên> · Effort: <mức> · Subagent: <tên|không> · Skill: <tên|không>`.
+- Việc tiếp theo lấy từ chính câu trả lời. Không có thì lấy việc đầu tiên trong §0; vẫn không có thì ghi `chờ bạn` và giữ nguyên model.
+- Chọn skill, subagent, model và effort theo gợi ý `[agent-stack]` (hồ sơ project, nạp lúc mở phiên) và `[router]` (theo từng tin nhắn) nếu có trong context, vì chúng đã tính nội dung project và việc hiện tại. Không có thì theo bảng của công cụ đang dùng.
+- Chỉ khuyên đổi model hay effort ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
+- Trong OpenCode: Model là model trong cấu hình OpenCode (việc cơ học dùng model local của agent `worker`); Effort chỉ ghi khi model hỗ trợ; Subagent là `build`, `plan` hoặc `worker`.
+
 ## Skill và đồ của bên thứ ba
 
 - Trước một việc không tầm thường, xem có skill phù hợp không. Có thì dùng; không có thì nói rõ.

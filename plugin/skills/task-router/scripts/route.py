@@ -8,6 +8,10 @@ Lệnh:
 Dùng làm thư viện:
   suggest(text)                  -> dict hoặc None (skill tien-do dùng)
   hook_suggestion(prompt, data)  -> dict {context, user} hoặc None (hook UserPromptSubmit dùng)
+  session_hint(root)             -> dict {context, user} hoặc None (hook SessionStart dùng)
+
+Gợi ý tính cả hồ sơ project (loại code, có test, code nhạy cảm bảo mật) và việc tiếp theo trong §0:
+tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0.
 
 Router chỉ GỢI Ý. Hook không thể đổi model hay effort; người dùng tự đổi bằng /model, /effort,
 và chỉ nên đổi ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
@@ -28,6 +32,11 @@ import agentstack as A  # noqa: E402
 
 RULES_PATH = HERE.parents[1] / "rules.json"
 FAMILIES = ("fable", "opus", "sonnet", "haiku")
+# Tin nhắn chỉ bảo làm tiếp (đã bỏ dấu): định tuyến theo việc tiếp theo trong §0.
+CONTINUE_RE = re.compile(r"^(ok[a-z]*[ ,.!]*)?(tiep tuc|lam tiep|tiep di|tiep theo|lam di|buoc tiep theo|"
+                         r"lam buoc tiep theo|continue|go on|next|proceed|keep going)( di| nhe| nha| thoi| nao)?[ .!?]*$")
+# Skill có sẵn trong Claude Code, không cần cài.
+BUILTIN_SKILLS = ("verify", "code-review", "security-review")
 
 
 @lru_cache(maxsize=1)
@@ -61,6 +70,108 @@ def suggest(text: str):
             "agent": rule.get("agent"), "skills": rule.get("skills", []), "note": rule.get("note", ""), "matched": hits}
 
 
+def suggest_for(text: str, profile=None):
+    """Như suggest(), thêm skill theo loại project (ví dụ c-review khi review code C)."""
+    hit = suggest(text)
+    if hit and profile:
+        extras = []
+        for kind in profile.get("kinds", []):
+            extras += rules().get("rule_extras", {}).get(kind, {}).get(hit["rule"], [])
+        hit["skills"] = list(dict.fromkeys(hit["skills"] + extras))
+    return hit
+
+
+def available_skills() -> dict:
+    """{tên skill: trạng thái}: "có" (của agent-stack hoặc có sẵn trong Claude Code), "đã duyệt" (cài bằng
+    install.sh), "chờ duyệt" (đã kiểm duyệt, chờ người dùng duyệt)."""
+    status = {name: "có" for name in BUILTIN_SKILLS}
+    home = A.home_dir()
+    if not home:
+        return status
+    for skill_md in (home / "plugin" / "skills").glob("*/SKILL.md"):
+        status[skill_md.parent.name] = "có"
+    lock = (A.read_json(home / "vetted.lock", {}) or {}).get("entries", {})
+    for item in (A.read_json(home / "catalog.json", {}) or {}).get("items", []):
+        name = item.get("install", {}).get("name") or item.get("install", {}).get("plugin")
+        review = ((lock.get(item.get("key")) or {}).get("human_review") or {}).get("status")
+        if name and name not in status:
+            status[name] = "đã duyệt" if review == "approved" else "chờ duyệt"
+    return status
+
+
+def profile_summary(profile: dict) -> tuple:
+    """(nhãn hồ sơ, skill dùng được, skill chờ duyệt, subagent) theo mục profiles và markers của rules.json."""
+    cfg = rules()
+    labels, skills, agents = [], [], []
+    for kind in profile.get("kinds", []):
+        entry = cfg.get("profiles", {}).get(kind, {})
+        labels.append(entry.get("label", kind))
+        skills += entry.get("skills", [])
+    for marker in profile.get("markers", []):
+        entry = cfg.get("markers", {}).get(marker, {})
+        labels.append(entry.get("label", marker))
+        skills += entry.get("skills", [])
+        if entry.get("agent"):
+            agents.append(entry["agent"])
+    status = available_skills()
+    skills = list(dict.fromkeys(skills))
+    ready = [s for s in skills if status.get(s) in ("có", "đã duyệt")]
+    pending = [s for s in skills if status.get(s) == "chờ duyệt"]
+    return labels, ready, pending, list(dict.fromkeys(agents))
+
+
+def next_task(root) -> str:
+    """Việc tiếp theo đầu tiên trong §0, hoặc việc đang dở; chuỗi rỗng nếu không có."""
+    found = A.read_plan(Path(root))
+    if not found:
+        return ""
+    sec = found[2]
+    if sec.get("next"):
+        return sec["next"][0]
+    in_progress = (sec.get("fields") or {}).get("in_progress")
+    return in_progress if A.has_value(in_progress) else ""
+
+
+def describe(hit: dict) -> str:
+    bits = []
+    if hit.get("model"):
+        bits.append(f"{hit['model']} · {hit['effort']}")
+    if hit.get("agent"):
+        bits.append(f"subagent {hit['agent']}")
+    if hit.get("skills"):
+        bits.append("skill " + ", ".join(hit["skills"]))
+    return " · ".join(bits)
+
+
+def session_hint(root):
+    """Gợi ý lúc mở phiên: skill hợp với project và cách làm việc tiếp theo trong §0. None nếu không có gì."""
+    root = Path(root).resolve()
+    profile = A.project_profile(root)
+    if not profile:
+        return None
+    labels, ready, pending, agents = profile_summary(profile)
+    task = next_task(root)
+    hit = suggest_for(task, profile) if task else None
+    if not (labels or ready or hit):
+        return None
+    ctx = [f"[agent-stack] Hồ sơ project `{root.name}`: {', '.join(labels) or 'chưa rõ loại'}."]
+    if ready:
+        ctx.append("Skill hợp với project: " + ", ".join(ready) + ".")
+    if pending:
+        ctx.append("Có thể thêm (đã kiểm duyệt, chờ người dùng duyệt): " + ", ".join(pending) + ".")
+    if agents:
+        ctx.append("Subagent nên dùng: " + ", ".join(agents) + ".")
+    if hit:
+        ctx.append(f"Việc tiếp theo trong §0 («{A.clip(task, 100)}») → {describe(hit)}.")
+    ctx.append("Dùng các gợi ý này để chọn skill cho từng việc, và cho dòng ➡️ ở cuối mỗi câu trả lời.")
+    user = "🧭 " + ", ".join(labels[:3] or [root.name])
+    if ready:
+        user += " · skill: " + ", ".join(ready[:3])
+    if hit:
+        user += " · việc tiếp theo → " + describe(hit)
+    return {"context": " ".join(ctx), "user": A.clip(user, 180)}
+
+
 def family(model) -> str:
     text = (model or "").lower() if isinstance(model, str) else json.dumps(model or {}).lower()
     return next((f for f in FAMILIES if f in text), "")
@@ -81,9 +192,17 @@ def current_model(session_id: str) -> str:
 
 def hook_suggestion(prompt: str, data: dict):
     prompt = (prompt or "").strip()
-    if not prompt or prompt[0] in "/!#" or len(prompt.split()) < rules().get("min_words", 4):
+    if not prompt or prompt[0] in "/!#":
         return None
-    hit = suggest(prompt)
+    root = A.project_root(data["cwd"]) if data.get("cwd") else None
+    text, note = prompt, ""
+    if root and CONTINUE_RE.match(A.fold(prompt)):
+        task = next_task(root)
+        if task:
+            text, note = task, f", theo việc tiếp theo trong §0: «{A.clip(task, 80)}»"
+    if not note and len(prompt.split()) < rules().get("min_words", 4):
+        return None
+    hit = suggest_for(text, A.project_profile(root) if root else None)
     if not hit:
         return None
     sid = data.get("session_id", "")
@@ -107,7 +226,7 @@ def hook_suggestion(prompt: str, data: dict):
         return None  # cùng một gợi ý không nhắc lại trong một giờ
     reason = ", ".join(f"'{m}'" for m in hit["matched"][:3])
     model_note = (f"model {hit['model']} · effort {hit['effort']}" if hit["model"] else "")
-    context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
+    context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
                + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi.")
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)
     return {"context": context, "user": user, "rule": hit["rule"]}

@@ -81,3 +81,83 @@ class HookSuggestion(TempDirTestCase):
         data = json.loads(out.stdout)
         self.assertIn("🧭 router: security-review", data["systemMessage"])
         self.assertIn("[router]", data["hookSpecificOutput"]["additionalContext"])
+
+
+class ProjectAware(TempDirTestCase):
+    """Mục 4 kết hợp mục 5: chọn skill theo nội dung project và việc hiện tại, từ lúc mở phiên và mỗi tin nhắn."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")
+        self.addCleanup(os.environ.pop, "AGENT_STACK_STATE", None)
+
+    def repo(self, name, files, plan_next=None):
+        from tests._util import git
+        root = self.tmp / name
+        for rel, text in files.items():
+            self.write(f"{name}/{rel}", text)
+        if plan_next:
+            self.write(f"{name}/PLAN.md", "# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n*Cập nhật 02/10/2026.*\n"
+                                          f"- **Việc tiếp theo, theo thứ tự:**\n  1. {plan_next}\n")
+        git(root, "init", "-q")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "init")
+        return root
+
+    def python_repo(self, plan_next=None):
+        return self.repo("py", {"app/a.py": "x = 1\n", "app/b.py": "y = 2\n", "app/c.py": "z = 3\n",
+                                "tests/test_a.py": "import unittest\n", ".github/workflows/ci.yml": "on: push\n"},
+                         plan_next)
+
+    def test_profile_detects_language_tests_ci_and_security(self):
+        sys.path.insert(0, str(PLUGIN / "lib"))
+        import agentstack as A
+        prof = A.project_profile(self.python_repo(), use_cache=False)
+        self.assertEqual(prof["kinds"][0], "python")
+        self.assertEqual(set(prof["markers"]), {"tests", "ci"})
+        c = self.repo("c", {"src/main.c": "int main(){}\n", "src/auth.c": "\n", "src/crypto_util.c": "\n",
+                            "src/acl.h": "\n", "tests/fixtures/auth_fake.c": "\n"})
+        prof = A.project_profile(c, use_cache=False)
+        self.assertEqual(prof["kinds"], ["c_cpp"])
+        self.assertIn("security", prof["markers"])
+        plain = self.tmp / "plain"
+        plain.mkdir()
+        self.assertIsNone(A.project_profile(plain, use_cache=False))  # không quét thư mục thường như ~/Documents
+
+    def test_session_hint_combines_profile_and_next_task(self):
+        root = self.python_repo(plan_next="Thêm tính năng xuất CSV cho trang báo cáo")
+        hint = route.session_hint(root)
+        self.assertIn("Python", hint["context"])
+        self.assertIn("agent-stack:test-runner", hint["context"])
+        self.assertIn("→ sonnet · medium · skill reuse-best", hint["context"])
+        self.assertIn("dòng ➡️", hint["context"])
+        self.assertIn("🧭 Python", hint["user"])
+
+    def test_continue_prompt_is_routed_by_next_task_in_plan(self):
+        root = self.python_repo(plan_next="Viết test cho module thanh toán rồi chạy pytest")
+        hit = route.hook_suggestion("làm tiếp đi", {"session_id": "c1", "cwd": str(root)})
+        self.assertIn("theo việc tiếp theo trong §0", hit["context"])
+        self.assertIn("agent-stack:test-runner", hit["user"])
+        self.assertIsNone(route.hook_suggestion("ok", {"session_id": "c2", "cwd": str(root)}))
+
+    def test_project_type_adds_skills_to_a_rule(self):
+        root = self.repo("c2", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
+        hit = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", {"session_id": "c3", "cwd": str(root)})
+        self.assertIn("c-review", hit["user"])
+
+    def test_session_start_hook_speaks_for_git_repo_without_plan(self):
+        root = self.python_repo()
+        out = subprocess.run([sys.executable, str(PLUGIN / "hooks" / "session_start.py")],
+                             input=json.dumps({"session_id": "s-np", "source": "startup", "cwd": str(root)}),
+                             capture_output=True, text=True, timeout=30, env=dict(os.environ))
+        data = json.loads(out.stdout)
+        self.assertIn("Hồ sơ project", data["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("🧭 Python", data["systemMessage"])
+
+    def test_footer_rule_is_every_message_and_includes_skill(self):
+        shared = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
+        self.assertIn("Cuối mọi câu trả lời, kể cả câu trả lời ngắn", shared)
+        self.assertIn("· Skill: <tên|không>", shared)
+        claude = (REPO / "global" / "CLAUDE.global.md").read_text(encoding="utf-8")
+        self.assertIn("| Việc tiếp theo | Model · Effort | Subagent | Skill |", claude)
+        self.assertNotIn("Bỏ qua dòng này với câu hỏi nhanh", claude)

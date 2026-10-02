@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Hook SessionStart: nạp lại trạng thái project từ đĩa khi mở, resume, clear hoặc sau compact.
+"""Hook SessionStart: nạp lại trạng thái project từ đĩa khi mở, resume, clear hoặc sau compact,
+kèm gợi ý skill hợp với project và cách làm việc tiếp theo trong §0 (router).
 
-Project không có file kế hoạch (PLAN.md §0, .agent/HANDOFF.md...) thì hook im lặng.
+Thư mục không phải git repo và không có file kế hoạch (PLAN.md §0, .agent/HANDOFF.md...) thì hook im lặng.
 """
 import hashlib
 import os
@@ -38,15 +39,25 @@ def main():
         info = collect.brief(root)
     except ImportError:
         info = A.brief(root)
-    if not info:
+    hint = None
+    try:  # router: skill hợp với project và cách làm việc tiếp theo
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
+        import route  # noqa: E402
+        hint = route.session_hint(root)
+    except ImportError:
+        pass
+    if not info and not hint:
         return
-    context = info["context"]
-    if source == "compact":
+    context, user = (info["context"], info["user"]) if info else ("", "")
+    if info and source == "compact":
         context = "Vừa compact xong: trạng thái dưới đây được nạp lại từ đĩa.\n" + context
-    elif source == "resume" and info.get("after_interrupt"):
+    elif info and source == "resume" and info.get("after_interrupt"):
         steps = " | ".join(info["after_interrupt"][:6])
         context += f"\nPhiên vừa được resume. Trước khi làm tiếp, chạy các bước kiểm tra sau khi bị ngắt: {steps}"
-    A.emit("SessionStart", context, info["user"])
+    if hint:
+        context = (context + "\n" + hint["context"]).strip()
+        user = f"{user} · {hint['user']}" if user else hint["user"]
+    A.emit("SessionStart", context, user)
 
 
 if __name__ == "__main__":

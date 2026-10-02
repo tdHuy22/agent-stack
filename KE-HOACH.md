@@ -451,6 +451,17 @@ Gồm năm tầng, từ có sẵn đến tự làm:
 
 ### 7.4 Bộ định tuyến (#4 + #5), skill `task-router` ✍️
 
+**Cập nhật 02/10/2026 theo yêu cầu của bạn:**
+- **Dòng ➡️ có ở cuối mọi câu trả lời**, kể cả câu hỏi nhanh, và có thêm trường Skill: `➡️ Tiếp: <việc> · Model · Effort · Subagent · Skill`. Luật nằm trong `AGENTS.global.md`, nên áp cho cả Claude Code lẫn OpenCode; bảng chọn của Claude Code nằm trong `CLAUDE.global.md`.
+- **Router đọc nội dung project**, không chỉ đọc câu bạn gõ.
+  - Lúc mở phiên, hook dựng hồ sơ project từ danh sách file: loại code, có test, có CI, có code xác thực hay mã hóa. Hồ sơ được lưu tạm 6 giờ, và chỉ dựng cho git repo hoặc thư mục có file kế hoạch.
+  - Từ hồ sơ đó, hook gợi ý skill và subagent hợp với project, rồi định tuyến luôn việc tiếp theo trong §0.
+- **Mỗi tin nhắn:**
+  - Tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0.
+  - Loại project bổ sung skill cho luật đang khớp, ví dụ `c-review` khi review bảo mật code C.
+  - Dòng ➡️ dùng chính các gợi ý này.
+
+
 | Tầng | Cách làm | Chi phí | Khi nào dùng |
 |---|---|---|---|
 | A. Luật | Hook `UserPromptSubmit` đọc `router-rules.json`, so khớp từ khóa tiếng Việt (đã chuẩn hóa bỏ dấu) và tiếng Anh. | 0 token, dưới 50 ms | Luôn luôn |

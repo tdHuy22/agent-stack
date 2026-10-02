@@ -349,6 +349,86 @@ def git_summary(root: Path) -> dict:
             "stash": len(stash.splitlines()) if stash else 0}
 
 
+# ---------------------------------------------------------------- hồ sơ project
+
+# Nhóm file theo phần mở rộng. Dùng để chọn skill hợp với project ngay khi mở phiên.
+PROFILE_EXT = {
+    "python": {".py", ".pyi", ".ipynb"},
+    "c_cpp": {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh"},
+    "hdl": {".v", ".sv", ".svh", ".vh", ".vhd", ".vhdl"},
+    "web": {".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte", ".html", ".css"},
+    "rust": {".rs"},
+    "go": {".go"},
+    "jvm": {".java", ".kt", ".scala"},
+    "docs": {".md", ".mdx", ".rst", ".tex", ".txt"},
+}
+PROFILE_SKIP = {"node_modules", ".git", ".venv", "venv", "dist", "build", "vendor", "third_party", "__pycache__",
+                ".tmp", ".cache", "state", "backups", ".vet-cache"}
+SECURITY_NAME = re.compile(r"(auth|login|passw|crypt|secret|permission|acl|oauth|jwt|sanitiz|secur|csrf|xss)",
+                           re.IGNORECASE)
+# Code mẫu, test và dữ liệu eval không cho biết bản thân project có xử lý dữ liệu nhạy cảm hay không.
+NOT_PRODUCT_CODE = re.compile(r"(^|/)(tests?|spec|__tests__|evals?|fixtures?|examples?|samples?|docs?)/", re.IGNORECASE)
+TEST_NAME = re.compile(r"(^|/)(tests?|spec|__tests__)/|(^|/)test_[^/]+$|_test\.[a-z]+$|\.(test|spec)\.[a-z]+$")
+PROFILE_TTL = 6 * 3600
+
+
+def project_files(root: Path, limit: int = 20000) -> list:
+    """Đường dẫn tương đối của file trong project: theo git (đã theo dõi và file mới chưa bị ignore),
+    hoặc duyệt thư mục có giới hạn khi không phải git repo."""
+    out = git_out(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=5.0)
+    if out is not None:
+        return [f for f in out.split("\0") if f and not set(Path(f).parts) & PROFILE_SKIP][:limit]
+    files = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in PROFILE_SKIP and not d.startswith(".")]
+        for name in filenames:
+            files.append(os.path.relpath(os.path.join(dirpath, name), root))
+            if len(files) >= limit:
+                return files
+    return files
+
+
+def project_profile(root: Path, use_cache: bool = True):
+    """Hồ sơ ngắn của project: loại file chính và dấu hiệu (có test, CI, Docker, code nhạy cảm bảo mật).
+    Chỉ làm cho git repo hoặc thư mục có file kế hoạch, để không quét những thư mục lớn như ~/Documents.
+    None nếu không đủ điều kiện."""
+    root = Path(root)
+    is_repo = git_out(root, "rev-parse", "--show-toplevel") is not None
+    if not is_repo and not find_plans(root):
+        return None
+    cache = state_dir() / "profiles" / (hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json")
+    cached = read_json(cache) if use_cache else None
+    if cached and time.time() - float(cached.get("ts", 0)) < PROFILE_TTL:
+        return cached
+    files = project_files(root)
+    counts = {}
+    for f in files:
+        ext = os.path.splitext(f)[1].lower()
+        for kind, exts in PROFILE_EXT.items():
+            if ext in exts:
+                counts[kind] = counts.get(kind, 0) + 1
+    total = sum(counts.values()) or 1
+    kinds = [k for k, n in sorted(counts.items(), key=lambda kv: -kv[1]) if n >= 3 and n / total >= 0.15][:3]
+    markers = []
+    if any(TEST_NAME.search(f) for f in files):
+        markers.append("tests")
+    if any(f.startswith(".github/workflows/") or f in (".gitlab-ci.yml", "Jenkinsfile") for f in files):
+        markers.append("ci")
+    if any(os.path.basename(f).lower() in ("dockerfile", "docker-compose.yml", "compose.yaml") for f in files):
+        markers.append("docker")
+    code_ext = set().union(*(v for k, v in PROFILE_EXT.items() if k != "docs"))
+    if sum(1 for f in files if os.path.splitext(f)[1].lower() in code_ext and SECURITY_NAME.search(f)
+           and not NOT_PRODUCT_CODE.search(f)) >= 2:
+        markers.append("security")
+    profile = {"root": str(root), "ts": time.time(), "files": len(files), "kinds": kinds, "counts": counts,
+               "markers": markers, "has_plan": bool(find_plans(root))}
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(cache, profile)
+    except OSError:
+        pass
+    return profile
+
 # ---------------------------------------------------------------- biên nhận kiểm tra
 
 def tree_fingerprint(root: Path):

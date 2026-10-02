@@ -2,6 +2,26 @@
   "version": 1,
   "status": "giả thuyết ban đầu, chờ số liệu eval ở GĐ4 (xem routing-table.md)",
   "min_words": 4,
+  "profiles": {
+    "python": {"label": "Python", "skills": ["tdd"]},
+    "c_cpp": {"label": "C/C++", "skills": ["c-review"]},
+    "hdl": {"label": "Verilog/VHDL", "skills": []},
+    "web": {"label": "web", "skills": ["webapp-testing"]},
+    "rust": {"label": "Rust", "skills": []},
+    "go": {"label": "Go", "skills": []},
+    "jvm": {"label": "Java/Kotlin", "skills": []},
+    "docs": {"label": "tài liệu", "skills": ["giong-van"]}
+  },
+  "markers": {
+    "tests": {"label": "có test", "agent": "agent-stack:test-runner"},
+    "ci": {"label": "có CI"},
+    "docker": {"label": "có Docker"},
+    "security": {"label": "có code xác thực, mã hóa hay phân quyền", "skills": ["differential-review"], "agent": "agent-stack:reviewer"}
+  },
+  "rule_extras": {
+    "c_cpp": {"security-review": ["c-review"], "code-review": ["c-review"]},
+    "web": {"tests": ["webapp-testing"]}
+  },
   "rules": [
     {"id": "vet-third-party", "skills": ["vet-skill"], "model": "opus", "effort": "high", "match": ["cai skill", "cai plugin", "them plugin", "plugin marketplace", "marketplace", "mcp server", "npx skills", "plugin install", "co an toan khong", "an toan khong", "kiem duyet", "vet skill", "skill nay", "install skill"]},
     {"id": "security-review", "agent": "agent-stack:reviewer", "skills": ["differential-review"], "model": "opus", "effort": "high", "match": ["bao mat", "lo hong", "security", "vulnerab", "threat model", "injection", "xss", "csrf", "ssrf", "path traversal", "secret", "phan quyen", "xac thuc", "cve", "secure code", "review bao mat", "kiem tra bao mat"]},
