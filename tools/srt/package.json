@@ -1,0 +1,9 @@
+{
+  "name": "agent-stack-srt",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cài cô lập sandbox-runtime cho bước phân tích động của vet-skill. Cài bằng: npm ci --ignore-scripts (xem vet.py dynamic --setup).",
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.78"
+  }
+}

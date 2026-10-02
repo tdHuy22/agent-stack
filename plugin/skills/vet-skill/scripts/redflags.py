@@ -41,7 +41,7 @@ RULES = [
        r"base64\s+(-d|--decode|-D)\b[^\n]*\|\s*(sudo\s+)?(ba|z)?sh\b|\b(exec|eval)\s*\([^\n]{0,80}(b64decode|base64|atob|Buffer\.from|fromCharCode|codecs\.decode)",
        "Giải mã nội dung bị che giấu rồi thực thi."),
     _r("reverse-shell", "critical", "any",
-       r"/dev/tcp/|\bnc\s+(-[a-z]*e|-c)\b|\bncat\b[^\n]*\s-e\b|\bsocat\b[^\n]*exec|\bbash\s+-i\s*>&",
+       r"/dev/tcp/|\bnc\s+(-[a-z]*e|-c)\b|\bncat\b[^\n]*\s-e\b|\bsocat\b[^\n]*\b(exec|system)\s*:|\bbash\s+-i\s*>&",
        "Mở reverse shell, cho máy khác điều khiển máy này."),
     # Đánh cắp thông tin xác thực
     _r("credential-access", "high", "any",

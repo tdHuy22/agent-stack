@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Kiểm duyệt bảo mật skill, plugin hoặc MCP của bên thứ ba trước khi cài.
 
-Script chỉ đọc: tải mã nguồn về thư mục cache, KHÔNG chạy bất kỳ mã nào của đối tượng.
+Lệnh scan chỉ đọc: tải mã nguồn về thư mục cache, KHÔNG chạy bất kỳ mã nào của đối tượng.
+Chỉ lệnh `dynamic` (tùy chọn, mặc định không dùng) chạy mã, và chỉ trong sandbox-runtime: không mạng, chỉ đọc ghi trong bản chép tạm.
 
 Lệnh:
   vet.py scan <đích> [--name KHÓA] [--no-scanner] [--json]
   vet.py approve <khóa> --note "..."     ghi xác nhận của người duyệt vào vetted.lock
   vet.py reject  <khóa> --note "..."
   vet.py list
+  vet.py dynamic --setup                 cài cô lập sandbox-runtime (tùy chọn, một lần)
+  vet.py dynamic <khóa|thư mục> [--timeout GIÂY] [--allow-read ĐƯỜNG_DẪN] [--keep] [--json] -- <lệnh...>
+                                         chạy MỘT lệnh của đối tượng trong sandbox rồi báo nó cố làm gì
 
 <đích> là owner/repo[@ref][:thư/mục/con] trên GitHub, hoặc đường dẫn thư mục cục bộ.
 Mã thoát của scan: 0 = PASS, 1 = REVIEW (cần người đọc), 2 = FAIL, 3 = lỗi.
@@ -338,6 +342,10 @@ def run_redflags(files: list) -> list:
                 # Mẫu nằm trong chú thích thì không chạy: hạ một bậc và ghi chú lại.
                 sev = SEVERITIES[min(SEVERITIES.index(sev) + 1, len(SEVERITIES) - 1)]
                 why += " (trong chú thích)"
+            if f["rel"].startswith(".github/"):
+                # Workflow CI chạy trên máy chủ CI của tác giả, không chạy khi người dùng cài: hạ một bậc.
+                sev = SEVERITIES[min(SEVERITIES.index(sev) + 1, len(SEVERITIES) - 1)]
+                why += " (trong CI, không chạy khi cài)"
             findings.append({"rule": rule.id, "severity": sev, "why": why, "file": f["rel"],
                              "line": line_no, "excerpt": excerpt, "kind": kind})
         for line_no, cps, benign in hidden_chars(text):
@@ -726,7 +734,25 @@ def main(argv=None) -> int:
     n.add_argument("--recommend", required=True, choices=["cài", "có-điều-kiện", "thử-1-project", "không-cài"])
     n.add_argument("--text", required=True)
     sub.add_parser("list")
+    d = sub.add_parser("dynamic", help="chạy một lệnh của đối tượng trong sandbox (tùy chọn)")
+    d.add_argument("key", nargs="?", help="khóa trong vetted.lock hoặc thư mục cục bộ")
+    d.add_argument("--setup", action="store_true", help="cài sandbox-runtime vào .cache/srt")
+    d.add_argument("--timeout", type=int, default=60, help="giây tối đa cho lệnh (mặc định 60)")
+    d.add_argument("--allow-read", action="append", default=[], help="cho đọc thêm một đường dẫn (lặp được)")
+    d.add_argument("--allow-domain", action="append", default=[], help="cho phép một tên miền (mặc định không mạng)")
+    d.add_argument("--keep", action="store_true", help="giữ bản chép tạm để soi")
+    d.add_argument("--real-home", action="store_true",
+                   help="giữ HOME thật (bị chặn đọc) thay vì HOME giả có file mồi; chỉ còn log để phát hiện")
+    d.add_argument("--json", action="store_true")
+    # Lệnh cần chạy đứng sau `--`; tách trước để các tùy chọn đứng sau khóa vẫn được nhận.
+    argv = list(sys.argv[1:] if argv is None else argv)
+    command = []
+    if argv and argv[0] == "dynamic" and "--" in argv:
+        cut = argv.index("--")
+        argv, command = argv[:cut], argv[cut + 1:]
     args = ap.parse_args(argv)
+    if args.cmd == "dynamic":
+        args.command = command
     home = find_home()
     try:
         if args.cmd == "scan":
@@ -735,6 +761,9 @@ def main(argv=None) -> int:
             return cmd_review(args, home, "approved" if args.cmd == "approve" else "rejected")
         if args.cmd == "note":
             return cmd_note(args, home)
+        if args.cmd == "dynamic":
+            import dynamic  # chỉ nạp khi dùng, để scan không phụ thuộc Node
+            return dynamic.main_cli(args, home)
         return cmd_list(home)
     except (ValueError, subprocess.CalledProcessError, OSError) as exc:
         detail = getattr(exc, "stderr", "") or ""

@@ -234,6 +234,46 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "anthropics/claude-plugins-official:plugins/claude-security": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: độc quyền (all rights reserved)",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-10-02",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-claude-security@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-02T16:16:40Z",
+          "by": "Claude (làm việc e, 02/10/2026)",
+          "recommend": "có-điều-kiện",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Đã đọc hooks.sh, hooks.py, keep-waiting.sh: hook chỉ chạy git chỉ đọc và in JSON cho Claude Code, không có mạng; lệnh ! trong SKILL.md chỉ là date và find. Điều kiện nếu duyệt: chỉ gọi tay, cài theo project khi cần quét sâu (6 hook, trong đó PostToolUse chạy sau mọi lệnh Bash; tắt telemetry bằng DISABLE_TELEMETRY=1 và CLAUDE_SECURITY_SCAN_TIP=off); 8 agent chạy song song nên tốn hạn mức; giấy phép riêng: chỉ dùng, không chép code. Chưa cài. Mình chưa tự duyệt vì quy tắc vet-skill để người dùng quyết định."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37309,
+      "subpath": "plugins/claude-security",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-02"
+    },
     "anthropics/claude-plugins-official:plugins/hookify": {
       "archived": false,
       "human_review": {
@@ -273,6 +313,47 @@
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
+    },
+    "anthropics/claude-plugins-official:plugins/plugin-dev": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-10-02",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-plugin-dev@ab024cdcfa7c.md",
+      "reviews": [
+        {
+          "at": "2026-10-02T16:06:58Z",
+          "by": "Claude (người dùng yêu cầu làm việc b, 02/10/2026)",
+          "recommend": "không-cài",
+          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+          "text": "Đã chạy một lần ba script kiểm hook từ bản chép, không cài. validate-hook-schema.sh lỗi thời: với hooks.json đúng bố cục plugin thì dừng bằng lỗi jq; với phần .hooks thì đòi trường matcher cho PreCompact, SessionEnd, Stop, UserPromptSubmit, trong khi claude plugin validate vẫn đạt. hook-linter.sh chỉ dành cho hook bash. Thời gian chạy thật của session_end.py: 29-68 ms, nên giữ timeout 2 của SessionEnd. Không cài vì skill command-development có nhiều ví dụ dạng lệnh shell inline (git diff, npm test, gh pr view, bash scripts) mà chưa chắc không bị chạy khi gọi skill; claude plugin validate là đủ cho nhu cầu hiện tại."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 7,
+          "medium": 3
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
+      "source": "github:anthropics/claude-plugins-official",
+      "stars": 37309,
+      "subpath": "plugins/plugin-dev",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-02"
     },
     "anthropics/claude-plugins-official:plugins/pyright-lsp": {
       "archived": false,
@@ -351,6 +432,45 @@
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
+    },
+    "anthropics/sandbox-runtime": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-10-01",
+      "redflags": {
+        "high": 38,
+        "medium": 17
+      },
+      "ref": "117eb928202b53c80d3cb6527d88d1b90e4ca7a9",
+      "report": "vet-reports/anthropics__sandbox-runtime@117eb928202b.md",
+      "reviews": [
+        {
+          "at": "2026-10-02T16:16:41Z",
+          "by": "Claude (làm việc a, 02/10/2026)",
+          "recommend": "có-điều-kiện",
+          "sha": "117eb928202b53c80d3cb6527d88d1b90e4ca7a9",
+          "text": "FAIL do quét tĩnh báo nhầm: 2 dòng reverse-shell là chuỗi 'socat not executable' và đường dẫn /bin/sh trong test; rce-pipe nằm trong workflow CI, không có trong gói npm; credential-access là ví dụ denyRead ~/.ssh trong README và test. Gói npm @anthropic-ai/sandbox-runtime 0.0.78: Apache-2.0, có chứng thực nguồn gốc SLSA, người phát hành là nhân viên Anthropic; 4 phụ thuộc trực tiếp (commander, zod, node-forge, @pondwader/socks5-server) không có script cài và không kéo thêm phụ thuộc; socks5-server chỉ require net. npm audit: node-forge <=1.4.0 có GHSA-86w9-cpqp-85rv (xác minh chữ ký RSA PKCS#1 v1.5); sandbox-runtime chỉ dùng node-forge để tạo chứng chỉ MITM (mitm-ca.js, mitm-leaf.js), không gọi verify, và bước phân tích động chặn hết mạng. Điều kiện nếu duyệt: chỉ cài cục bộ (.cache/srt, npm ci --ignore-scripts theo tools/srt/package-lock.json), không cài toàn cục; chạy được thử trên script vô hại, đã kiểm chặn đọc, ghi, mạng trên macOS. Mình đã cài và dùng cục bộ trước khi bạn duyệt vì lệnh chung 'hoàn thành hết a-e'; chưa tự duyệt vì quy tắc vet-skill."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "117eb928202b53c80d3cb6527d88d1b90e4ca7a9",
+      "source": "github:anthropics/sandbox-runtime",
+      "stars": 5420,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-02"
     },
     "anthropics/skills:skills/webapp-testing": {
       "archived": false,
