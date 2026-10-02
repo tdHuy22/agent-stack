@@ -595,7 +595,8 @@ SECRET_PATTERNS = (
     r"(?<![A-Za-z0-9])[0-9A-Fa-f]{32,}(?![A-Za-z0-9])",       # chuỗi hex liền từ 32 ký tự
     r"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{16,}",              # GitLab personal access token
     r"(?<=://)[^/\s:@]+:[^@\s/]+(?=@)",                       # user:mật-khẩu trong URL (postgres://u:p@host)
-    r"(?is)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",  # cả khối khóa riêng PEM
+    # cả khối khóa riêng PEM; chỉ khi sau dòng BEGIN có thân base64 (từ 40 ký tự), để câu nhắc tới dòng header không bị nuốt
+    r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----[ \t]*\r?\n[A-Za-z0-9+/=\s]{40,}?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
     # gán giá trị cho tên trông như bí mật: password=..., api_key: ..., secret_access_key = ...
     r"(?i)(?<![A-Za-z0-9])(?:password|passwd|pwd|secret(?:[_-]?access[_-]?key)?|token|api[_-]?key|access[_-]?key|private[_-]?key)"
     r"(?![A-Za-z0-9])\s*[=:]\s*\S{6,}",

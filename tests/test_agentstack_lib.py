@@ -262,6 +262,10 @@ class LastRequest(TempDirTestCase):
         masked = A.redact_secrets(f"khóa của mình:\n{pem}\nxong")
         self.assertNotIn("MIIEowIBAAKCAQEA", masked)
         self.assertTrue(masked.startswith("khóa của mình:") and masked.endswith("xong"))
+        truncated = "-----BEGIN OPENSSH PRIVATE " + "KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW"
+        self.assertNotIn("b3BlbnNzaC1rZXk", A.redact_secrets("khóa bị cắt:\n" + truncated))
+        header_only = "Sửa hàm: grep -n '-----BEGIN RSA PRIVATE " + "KEY-----' src/*.py rồi chạy test và commit."
+        self.assertEqual(A.redact_secrets(header_only), header_only, "chỉ nhắc tới dòng header thì không được nuốt phần còn lại")
         for ordinary in ("Sửa file plugin/skills/vet-skill/scripts/dynamic.py rồi chạy test",
                          "token hết hạn thì làm mới", "đặt secret trong biến môi trường", "mật khẩu: bỏ qua",
                          "xem https://github.com/anthropics/sandbox-runtime/issues/12", "commit 792ff53 và 681260a"):

@@ -61,6 +61,7 @@ NOISE_OPS = ("sysctl-read", "system-info", "process-info", "iokit-", "ipc-posix"
 # Thư mục tạm của hệ thống: ghi vào đó là thường gặp, chỉ coi là dấu hiệu nhẹ.
 TMP_ROOTS = ("/private/tmp/", "/private/var/tmp/", "/private/var/folders/", "/tmp/", "/var/tmp/")
 
+NOISE_FLOOD = 60  # số dòng nhiễu coi là bất thường (Python khởi động chỉ khoảng 20)
 LABEL_NONE = "KHÔNG THẤY GÌ"  # cố ý không dùng "sạch": thiếu bằng chứng không phải bằng chứng của sự vắng mặt
 
 # File mồi trong HOME giả. {m} là dấu riêng của mỗi lần chạy (chuỗi ngẫu nhiên trông như token, không có chữ báo hiệu).
@@ -78,6 +79,11 @@ DECOYS = {
     "Library/Application Support/Google/Chrome/Default/Login Data": "{m}\n",
     "Library/Keychains/login.keychain-db": "{m}\n",
 }
+
+# Ký tự điều khiển, C1, vô hình và đảo chiều hiển thị: không cho đi vào báo cáo từ dữ liệu của đối tượng.
+_INVISIBLE = "\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff"
+UNSAFE_CHARS = "[\x00-\x1f\x7f-\x9f" + _INVISIBLE + "]"
+UNSAFE_CHARS_KEEP_NEWLINE = "[\x00-\x08\x0b-\x1f\x7f-\x9f" + _INVISIBLE + "]"
 
 VIOLATION_RE = re.compile(r"deny\(\d+\)\s+(?P<op>[a-z0-9*-]+)\s*(?P<target>.*)$")
 
@@ -132,6 +138,12 @@ def sync_runner(home: Path) -> None:
 
 # ---------------------------------------------------------------- cấu hình và môi trường
 
+def srt_home_write_dirs() -> list:
+    """Hai thư mục trong HOME thật mà srt mở lại quyền ghi khi allowRead phủ chúng (getDefaultWritePaths)."""
+    home = Path.home().resolve()
+    return [str(home / ".claude" / "debug"), str(home / ".npm" / "_logs")]
+
+
 def build_settings(workdir: Path, extra_read=(), allow_domains=(), deny_write=()) -> dict:
     """Cấu hình sandbox: không mạng (trừ tên miền cho phép); ghi chỉ trong `workdir`; HOME thật bị chặn đọc.
 
@@ -142,7 +154,7 @@ def build_settings(workdir: Path, extra_read=(), allow_domains=(), deny_write=()
             "denyRead": [str(Path.home().resolve()), *EXTRA_DENY_READ],
             "allowRead": [str(workdir), *map(str, extra_read)],
             "allowWrite": [str(workdir)],
-            "denyWrite": [*SRT_OWN_WRITE, *map(str, deny_write)],
+            "denyWrite": [*SRT_OWN_WRITE, *srt_home_write_dirs(), *map(str, deny_write)],
         },
     }
 
@@ -170,19 +182,21 @@ def runner_env(node: str, child_env: dict, markers=()) -> dict:
 
 
 def interpreter_reads(real: Path) -> list:
-    """Quyền đọc thêm cho trình thông dịch nằm trong HOME (nvm, pyenv...): chỉ thư mục bin và lib của nó.
+    """Quyền đọc thêm cho trình thông dịch nằm trong HOME (nvm, pyenv...): thư mục bin của nó và lib cùng cấp.
 
-    Không bao giờ cho đọc cả HOME hay một thư mục cấp một dưới HOME (như ~/.cargo, nơi có credentials): khi đó chỉ cho đọc
-    đúng file thực thi."""
+    Chỉ khi file nằm trong một thư mục tên `bin` và thư mục gốc của nó sâu ít nhất cấp hai dưới HOME. Mọi trường hợp
+    khác (script ở gốc HOME, `~/Documents/proj/run.sh`, `~/.cargo/bin/x`) chỉ cho đọc đúng file đó: cho đọc cả thư mục cha
+    sẽ để lộ `.ssh`, `.env`, và mở lại vùng ghi mà srt tự thêm (`~/.claude/debug`, `~/.npm/_logs`)."""
     home = Path.home().resolve()
     try:
         real.relative_to(home)
     except ValueError:
         return []
-    prefix = real.parent.parent
-    if prefix == home or prefix.parent == home:
-        return [real]
-    return [p for p in (real.parent, prefix / "lib") if p.exists()]
+    if real.parent.name == "bin":
+        prefix = real.parent.parent
+        if prefix != home and prefix.parent != home:
+            return [p for p in (real.parent, prefix / "lib") if p.exists()]
+    return [real]
 
 
 def resolve_command(command: list) -> tuple:
@@ -198,10 +212,13 @@ def resolve_command(command: list) -> tuple:
         if found:
             argv[0] = found
     if found:
-        parent = str(Path(found).parent)
-        if parent not in STD_PATH.split(":"):
-            extra_path.append(parent)
-        reads += interpreter_reads(Path(found).resolve())
+        parent = Path(found).parent
+        if os.sep not in first and str(parent) not in STD_PATH.split(":") and parent != Path.home().resolve():
+            extra_path.append(str(parent))
+        for candidate in (Path(found), Path(found).resolve()):  # symlink như nvm/bin/npm cần cả hai
+            for item in interpreter_reads(candidate):
+                if item not in reads:
+                    reads.append(item)
     return argv, extra_path, reads
 
 
@@ -244,11 +261,12 @@ def make_decoys(fake_home: Path, marker: str) -> list:
 
 
 def snapshot_decoys(fake_home: Path) -> dict:
-    """Chụp (inode, kích thước, mtime) của từng file mồi trước khi chạy."""
+    """Chụp (inode, kích thước, mtime, ctime, số liên kết) của từng file mồi trước khi chạy. ctime và nlink bắt được việc
+    đặt lại thời gian hay tạo hard link tới mồi (đọc không làm đổi ctime)."""
     snap = {}
     for rel in DECOYS:
         st = os.lstat(fake_home / rel)
-        snap[rel] = (st.st_ino, st.st_size, st.st_mtime_ns)
+        snap[rel] = (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_nlink)
     return snap
 
 
@@ -261,7 +279,7 @@ def decoys_tampered(fake_home: Path, snap: dict) -> list:
         except OSError:
             bad.append(rel)
             continue
-        if not stat.S_ISREG(st.st_mode) or (st.st_ino, st.st_size, st.st_mtime_ns) != base:
+        if not stat.S_ISREG(st.st_mode) or (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_nlink) != base:
             bad.append(rel)
     return bad
 
@@ -382,16 +400,29 @@ def scan_markers(root: Path, variants, skip=frozenset(), *, files_max=SCAN_FILES
 
 # ---------------------------------------------------------------- tiến trình còn sót
 
-def leftover_pids(work: Path, run=subprocess.run) -> list:
+def process_start(pid: int, run=subprocess.run):
+    """Thời điểm tiến trình bắt đầu (giây epoch) theo `ps -o lstart=`, hoặc None nếu không đọc được."""
+    try:
+        done = run(["/bin/ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+        return time.mktime(time.strptime(" ".join((done.stdout or "").split()), "%a %b %d %H:%M:%S %Y"))
+    except (OSError, ValueError, subprocess.SubprocessError, OverflowError):
+        return None
+
+
+def leftover_pids(work: Path, run=subprocess.run, since=None) -> list:
     """Tiến trình còn mở file hay thư mục trong `work` (lsof +D). Rỗng nếu không có lsof hoặc lsof lỗi. Tiến trình đã
-    setsid() không bị `kill -pgid` của runner tóm được, nên phải dò theo file."""
-    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
+    setsid() không bị `kill -pgid` của runner tóm được, nên phải dò theo file. Nếu có `since` thì chỉ nhận tiến trình
+    bắt đầu sau mốc đó (trừ 2 giây sai số); không đọc được thời điểm thì bỏ, để khỏi diệt nhầm trình theo dõi file hay
+    tác tử sao lưu của người dùng."""
+    lsof = "/usr/sbin/lsof" if os.path.exists("/usr/sbin/lsof") else (shutil.which("lsof") or "lsof")
     try:
         done = run([lsof, "-t", "+D", str(work)], capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.SubprocessError):
         return []
     pids = {int(x) for x in (done.stdout or "").split() if x.isdigit()}
     pids.discard(os.getpid())
+    if since is not None:
+        pids = {p for p in pids if (started := process_start(p, run)) is not None and started >= since - 2}
     return sorted(pids)
 
 
@@ -542,6 +573,10 @@ def judge(groups: dict, result: dict) -> tuple:
         look.append("chưa quét hết file trong bản chép tạm (quá nhiều hoặc quá lớn)")
     if result.get("timedOut"):
         look.append("quá thời gian và bị dừng")
+    if (result.get("violationsDropped") or 0) > 0:
+        look.append(f"kho vi phạm của srt chỉ giữ 100 sự kiện cuối, đã mất {result['violationsDropped']} sự kiện đầu")
+    if groups.get("noise", 0) > NOISE_FLOOD:
+        look.append(f"{groups['noise']} dòng nhiễu bất thường (thường dưới 30); có thể đang làm tràn kho vi phạm")
     code, err = result.get("exit"), str(result.get("stderr", "")).lower()
     if code in (126, 127) or (code not in (0, None) and ("command not found" in err or "no such file or directory" in err)):
         look.append(f"lệnh không chạy được (mã {code}), nên chưa quan sát được gì")
@@ -579,6 +614,8 @@ def run(home: Path, key: str, command: list, *, timeout: int = RUN_TIMEOUT_S, ex
     tree = source_tree(home, key)
     if tree_size(tree, MAX_TREE_BYTES) > MAX_TREE_BYTES:
         raise ValueError(f"Mã nguồn lớn hơn {MAX_TREE_BYTES // (1024 * 1024)} MB; hãy trỏ vào thư mục con cần chạy.")
+    started_at = time.time()
+    settings = home / ".tmp" / "chua-tao.srt.json"
     marker = uuid.uuid4().hex[:24].upper()
     variants = marker_variants(marker)
     work = home / ".tmp" / f"dynamic-{uuid.uuid4().hex[:10]}.noindex"  # .noindex: Spotlight không đọc, khỏi làm nhiễu atime
@@ -596,10 +633,11 @@ def run(home: Path, key: str, command: list, *, timeout: int = RUN_TIMEOUT_S, ex
             baseline = snapshot_decoys(work / "home")
             deny_write = decoy_write_denies(work / "home")
             decoy_monitor = atime_updates(work)
-        settings = work / "srt-settings.json"
+        settings = work.parent / f"{work.name}.srt.json"  # ngoài `work`: lệnh con không đọc được (HOME bị chặn)
         settings.write_text(json.dumps(build_settings(work, reads, allow_domains, deny_write)), encoding="utf-8")
         # srt tự đặt TMPDIR=/tmp/claude và SANDBOX_RUNTIME=1; đặt lại TMPDIR và bỏ biến báo hiệu để mã bị kiểm khó nhận ra sandbox.
         wrapped = ["/usr/bin/env", "-u", "SANDBOX_RUNTIME", f"TMPDIR={work / 'tmp'}", *argv]
+        started_at = time.time()
         try:
             done = runner([node, str(srt_dir(home) / "run.mjs"), str(settings), str(timeout), str(src), "--", *wrapped],
                           env=runner_env(node, env, [v.decode("latin1") for v in variants]), cwd=str(srt_dir(home)),
@@ -612,7 +650,7 @@ def run(home: Path, key: str, command: list, *, timeout: int = RUN_TIMEOUT_S, ex
         # Thứ tự quan trọng: lsof +D và os.walk đọc thư mục nên làm atime của thư mục nhảy lên. Phải đọc xong atime của
         # thư mục mồi TRƯỚC khi tự duyệt cây (file mồi thì không bị ảnh hưởng vì ta không mở chúng).
         groups["decoy_dirs"] = [] if real_home else decoy_dirs_listed(home_dir)
-        leftover = leftover_pids(work)
+        leftover = leftover_pids(work, since=started_at)
         kill_pids(leftover)
         groups["decoys"] = [] if real_home else decoys_read(home_dir)
         groups["tampered"] = [] if real_home else decoys_tampered(home_dir, baseline)
@@ -629,24 +667,29 @@ def run(home: Path, key: str, command: list, *, timeout: int = RUN_TIMEOUT_S, ex
         return {"key": key, "command": command, "label": label, "reasons": reasons, "exit": raw.get("exit"),
                 "signal": raw.get("signal"), "timedOut": raw.get("timedOut"), "durationMs": raw.get("durationMs"),
                 "monitorOk": raw.get("monitorOk") is True, "decoyMonitor": decoy_monitor, "realHome": real_home,
+                "violationsDropped": raw.get("violationsDropped") or 0,
                 "stdout": raw.get("stdout", ""), "stderr": raw.get("stderr", ""), "groups": groups,
                 "created_files": created[:50], "extra_read": [str(x) for x in reads], "kept": str(work) if keep else ""}
     finally:
-        kill_pids(leftover_pids(work))  # kể cả khi lỗi giữa chừng, đừng để tiến trình nền sống sau khi dọn
+        kill_pids(leftover_pids(work, since=started_at))  # kể cả khi lỗi giữa chừng, đừng để tiến trình nền sống sau khi dọn
+        try:
+            settings.unlink()
+        except (OSError, NameError):
+            pass
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
 
 
 def clean(text, limit: int = 200) -> str:
     """Đưa dữ liệu do đối tượng điều khiển (tên file, đường dẫn) vào báo cáo mà không chèn được dòng mới hay mã Markdown."""
-    text = re.sub(r"[\x00-\x1f\x7f]", "?", str(text)).replace("`", "'")
+    text = re.sub(UNSAFE_CHARS, "?", str(text)).replace("`", "'")
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
 def fence(text: str) -> str:
     """Khối code dùng hàng rào dài hơn mọi chuỗi dấu ` trong `text`, để nội dung không thoát ra khỏi khối. Ký tự điều
     khiển (trừ xuống dòng, tab) bị thay để không chèn mã thoát vào terminal."""
-    body = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "?", text)
+    body = re.sub(UNSAFE_CHARS_KEEP_NEWLINE, "?", text)
     ticks = "`" * max(3, max((len(m) for m in re.findall(r"`+", body)), default=0) + 1)
     return f"{ticks}\n{body}\n{ticks}"
 

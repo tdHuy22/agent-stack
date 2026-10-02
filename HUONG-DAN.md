@@ -258,7 +258,7 @@ python3 plugin/skills/vet-skill/scripts/vet.py dynamic --setup     # một lần
 python3 plugin/skills/vet-skill/scripts/vet.py dynamic "<khóa>" -- python3 scripts/x.py --help
 ```
 
-Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn), **CẦN ĐỌC** (1) hoặc **ĐÁNG NGỜ** (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên file mồi và dấu rò rỉ mới là bằng chứng mạnh (không tuyệt đối); mã có chủ ý né (nhận ra sandbox, chờ lâu, mã hóa dữ liệu, truy vấn keychain qua dịch vụ hệ thống mà sandbox-runtime cho phép) vẫn qua mặt được; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. `--real-home` giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).
+Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn), **CẦN ĐỌC** (1) hoặc **ĐÁNG NGỜ** (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên file mồi và dấu rò rỉ mới là bằng chứng mạnh (không tuyệt đối); mã có chủ ý né (nhận ra sandbox, chờ lâu, mã hóa dữ liệu, đọc mồi bằng clonefile `cp -c` (không làm atime nhảy), truy vấn keychain qua dịch vụ hệ thống mà sandbox-runtime cho phép) vẫn qua mặt được; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. `--real-home` giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).
 
 ### 5.5 `giong-van`: chỉnh văn đúng giọng mình
 

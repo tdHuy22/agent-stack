@@ -34,9 +34,16 @@ const command = argv.map(quote).join(' ')
 // nên giữ shell bao ngoài sống thêm một lúc rồi mới thoát, giữ nguyên mã thoát của lệnh.
 const GRACE_S = 1.5
 const guarded = `${command}; __ec=$?; sleep ${GRACE_S}; exit $__ec`
-const id = `vet-${process.pid}-${NONCE}`
+// `id` lộ cho lệnh con (srt nhúng nó vào tên người dùng của HTTP_PROXY), nên KHÔNG được chứa NONCE của chim hoàng yến;
+// nếu không, mã bị kiểm giả được vi phạm của chim qua proxy để bị lọc mất.
+const id = `vet-${process.pid}-${crypto.randomBytes(6).toString('hex')}`
 const cap = s => (s.length > MAX_OUT ? `${s.slice(0, MAX_OUT)}\n…(đã cắt ${s.length - MAX_OUT} ký tự)` : s)
 const violations = () => SandboxManager.getSandboxViolationStore().getViolations(2000)
+// Kho vi phạm của srt chỉ giữ 100 sự kiện cuối; số đã bị đẩy ra = tổng đã ghi trừ số còn giữ.
+const droppedCount = () => {
+  const store = SandboxManager.getSandboxViolationStore()
+  return Math.max(0, store.getTotalCount() - store.getCount())
+}
 const markOf = v => String(v.command || '')
 const isCanary = v => markOf(v).includes('CANARY-') && markOf(v).includes(NONCE)
 
@@ -114,6 +121,7 @@ async function main() {
     stdout: cap(out),
     stderr: cap(err),
     markerInOutput: outScan.hit || errScan.hit,
+    violationsDropped: droppedCount(),
     monitorOk: startOk && endOk,
     violations: [...new Set(lines)].slice(0, 200),
   }

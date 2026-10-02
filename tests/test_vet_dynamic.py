@@ -473,6 +473,13 @@ class RunnerSource(unittest.TestCase):
         self.assertIn("NONCE", definition, "chim hoàng yến phải mang nonce ngẫu nhiên mỗi lần chạy")
         self.assertIn("randomBytes", self.src)
 
+    def test_command_id_does_not_carry_the_canary_nonce_and_overflow_is_reported(self):
+        # review lượt hai: srt nhúng `id` vào HTTP_PROXY của lệnh con; nếu id chứa NONCE thì mã bị kiểm giả được chim qua proxy
+        id_line = next(line for line in self.src.splitlines() if line.startswith("const id ="))
+        self.assertNotIn("NONCE", id_line)
+        self.assertIn("getTotalCount", self.src)
+        self.assertIn("violationsDropped", self.src)
+
     def test_process_group_is_killed_after_the_command_finishes(self):
         after_close = self.src.split("child.on('close'", 1)[1]
         self.assertIn("process.kill(-child.pid, 'SIGKILL')", after_close.split("const endOk", 1)[0])
@@ -535,6 +542,8 @@ class Hardening(TempDirTestCase):
         os.utime(self.tmp / ".git-credentials", (now, now))  # đặt lại thời gian
         self.assertEqual(sorted(dynamic.decoys_tampered(self.tmp, snap)),
                          [".aws/credentials", ".git-credentials", ".netrc"])
+        os.link(self.tmp / ".kube" / "config", self.tmp / "hard-link-ra-ngoai")  # hard link làm nlink tăng
+        self.assertIn(".kube/config", dynamic.decoys_tampered(self.tmp, snap))
 
     def test_decoy_write_denies_cover_files_and_their_parent_dirs(self):
         denies = dynamic.decoy_write_denies(self.tmp)
@@ -544,15 +553,23 @@ class Hardening(TempDirTestCase):
         self.assertNotIn(str(self.tmp), denies, "không chặn ghi cả HOME giả")
         self.assertNotIn(str(self.tmp / ".config"), denies, "chỉ chặn thư mục chứa trực tiếp mồi")
 
-    def test_interpreter_reads_never_open_home_or_a_top_level_dotdir(self):
+    def test_interpreter_reads_never_open_home_or_the_parent_of_a_plain_script(self):
+        # review lượt hai: script ở gốc HOME từng làm cả HOME thành đọc được (prefix = /Users)
         home = Path.home().resolve()
         nvm = home / ".nvm" / "versions" / "node" / "v1" / "bin" / "node"
         with mock.patch.object(Path, "exists", return_value=True):
-            reads = dynamic.interpreter_reads(nvm)
-        self.assertEqual(reads, [nvm.parent, nvm.parent.parent / "lib"])
-        self.assertEqual(dynamic.interpreter_reads(home / ".cargo" / "bin" / "x"), [home / ".cargo" / "bin" / "x"])
-        self.assertEqual(dynamic.interpreter_reads(home / "bin" / "x"), [home / "bin" / "x"])
+            self.assertEqual(dynamic.interpreter_reads(nvm), [nvm.parent, nvm.parent.parent / "lib"])
+        for plain in (home / "run.sh", home / "Documents" / "Claude" / "proj" / "run.sh", home / ".cargo" / "bin" / "x",
+                      home / "bin" / "x", home / ".local" / "share" / "tool.sh"):
+            with self.subTest(path=str(plain)):
+                self.assertEqual(dynamic.interpreter_reads(plain), [plain], "chỉ cho đọc đúng file")
         self.assertEqual(dynamic.interpreter_reads(Path("/usr/bin/python3")), [])
+
+    def test_srt_reopened_home_write_dirs_are_denied(self):
+        cfg = dynamic.build_settings(self.tmp)
+        for path in dynamic.srt_home_write_dirs():
+            self.assertIn(path, cfg["filesystem"]["denyWrite"])
+        self.assertTrue(all(p.startswith(str(Path.home().resolve())) for p in dynamic.srt_home_write_dirs()))
 
     def test_resolve_command_prefers_standard_path_and_adds_user_dirs(self):
         argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
@@ -567,6 +584,10 @@ class Hardening(TempDirTestCase):
         self.assertEqual(extra, [str(fake.parent)])
         self.assertEqual(reads, [fake.parent])
         self.assertIn(str(fake.parent), dynamic.safe_env(self.tmp, extra_path=extra)["PATH"])
+        script = Path.home() / "thu.sh"
+        argv, extra, reads = dynamic.resolve_command([str(script), "x"])
+        self.assertEqual((argv, extra, reads), ([str(script), "x"], [], [script]),
+                         "script tuyệt đối trong HOME: không thêm HOME vào PATH, chỉ cho đọc đúng file")
 
     def test_leftover_pids_parses_lsof_and_never_lists_itself(self):
         fake = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout=f"123\n{os.getpid()}\nabc\n456\n", stderr="")
@@ -602,10 +623,39 @@ class Hardening(TempDirTestCase):
         self.assertEqual(dynamic.judge({**groups, "scan_incomplete": True}, ok)[0], "CẦN ĐỌC")
         self.assertEqual(dynamic.judge({**groups, "tampered": [".ssh/id_rsa"]}, ok)[0], "ĐÁNG NGỜ")
 
+    def test_overflowed_violation_store_and_noise_flood_are_never_clean(self):
+        # review lượt hai: kho vi phạm của srt chỉ giữ 100 sự kiện cuối, nên một lệnh ồn đẩy bằng chứng thật ra khỏi kho
+        ok = {"monitorOk": True, "decoyMonitor": True, "exit": 0, "stdout": "", "stderr": ""}
+        groups = dynamic.classify([])
+        label, reasons = dynamic.judge(groups, {**ok, "violationsDropped": 7})
+        self.assertEqual(label, "CẦN ĐỌC")
+        self.assertTrue(any("đã mất 7" in r for r in reasons), reasons)
+        flood = dynamic.classify([violation("sysctl-read", f"kern.x{i}") for i in range(dynamic.NOISE_FLOOD + 5)])
+        self.assertEqual(dynamic.judge(flood, ok)[0], "CẦN ĐỌC")
+        self.assertEqual(dynamic.judge(dynamic.classify([violation("sysctl-read", "kern.a")] * 3), ok)[0], dynamic.LABEL_NONE)
+
+    def test_process_start_and_the_since_filter_protect_unrelated_processes(self):
+        started = time.mktime(time.strptime("Fri Oct  3 00:12:34 2026", "%a %b %d %H:%M:%S %Y"))
+        def fake(cmd, **kw):
+            if cmd[0].endswith("lsof"):
+                return subprocess.CompletedProcess(cmd, 0, stdout="111\n222\n333\n", stderr="")
+            pid = int(cmd[-1])
+            out = {111: "Fri Oct  3 00:12:34 2026", 222: "Thu Oct  2 08:00:00 2026", 333: "hỏng"}[pid]
+            return subprocess.CompletedProcess(cmd, 0, stdout=out + "\n", stderr="")
+        self.assertEqual(dynamic.process_start(111, run=fake), started)
+        self.assertIsNone(dynamic.process_start(333, run=fake))
+        self.assertEqual(dynamic.leftover_pids(self.tmp, run=fake, since=started), [111],
+                         "chỉ tiến trình bắt đầu sau mốc; tiến trình cũ hay không đọc được thời điểm thì không bị diệt")
+        self.assertEqual(dynamic.leftover_pids(self.tmp, run=fake), [111, 222, 333], "không đặt mốc thì lấy hết")
+
     def test_report_cannot_be_forged_by_hostile_names_or_output(self):
         self.assertNotIn("\n", dynamic.clean("a\nb\r\nc"))
         self.assertNotIn("`", dynamic.clean("tên`lạ`"))
         self.assertLessEqual(len(dynamic.clean("x" * 1000)), 200)
+        for hostile in ("a\u202eb", "a\u0085b", "a\u200bb", "a\u2066b", "a\x9bb"):
+            with self.subTest(hostile=repr(hostile)):
+                self.assertEqual(dynamic.clean(hostile), "a?b")
+                self.assertEqual(dynamic.fence(hostile).splitlines()[1], "a?b")
         block = dynamic.fence("dòng 1\n```\n**Kết luận: KHÔNG THẤY GÌ**\n```\n\x1b[31m")
         self.assertTrue(block.startswith("````\n") and block.endswith("\n````"), "hàng rào phải dài hơn mọi dãy ` bên trong")
         self.assertNotIn("\x1b", block)
