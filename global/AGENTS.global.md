@@ -21,6 +21,7 @@
 - Cuối mọi câu trả lời, kể cả câu trả lời ngắn, thêm đúng một dòng: `➡️ Tiếp: <việc> · Model: <tên> · Effort: <mức> · Subagent: <tên|không> · Skill: <tên|không>`.
 - Việc tiếp theo lấy từ chính câu trả lời. Không có thì lấy việc đầu tiên trong §0; vẫn không có thì ghi `chờ bạn` và giữ nguyên model.
 - Chọn skill, subagent, model và effort theo gợi ý `[agent-stack]` (hồ sơ project, nạp lúc mở phiên) và `[router]` (theo từng tin nhắn) nếu có trong context, vì chúng đã tính nội dung project và việc hiện tại. Không có thì theo bảng của công cụ đang dùng.
+- Công cụ không có hook của agent-stack (như OpenCode): ở câu trả lời đầu tiên của phiên, chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py --session <thư mục project>` để lấy hồ sơ project và gợi ý skill. Khi chưa chắc chọn gì cho một việc, chạy `route.py "<việc>" --project <thư mục project>`.
 - Chỉ khuyên đổi model hay effort ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
 - Trong OpenCode: Model là model trong cấu hình OpenCode (việc cơ học dùng model local của agent `worker`); Effort chỉ ghi khi model hỗ trợ; Subagent là `build`, `plan` hoặc `worker`.
 

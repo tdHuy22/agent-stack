@@ -2,7 +2,9 @@
 """Gợi ý skill, subagent, model và effort cho một việc, bằng luật từ khóa (0 token, dưới 50 ms).
 
 Lệnh:
-  route.py "mô tả việc"                     in gợi ý dạng JSON
+  route.py "mô tả việc" [--project DIR]     in gợi ý dạng JSON; --project thêm skill theo loại project
+  route.py --session [DIR]                  in hồ sơ project và gợi ý skill, như hook SessionStart của Claude Code
+                                            (dùng trong OpenCode và công cụ không có hook)
   route.py --eval FILE.jsonl [--min 0.85]   đo độ chính xác trên bộ prompt có nhãn
 
 Dùng làm thư viện:
@@ -252,10 +254,24 @@ def main(argv=None) -> int:
     ap.add_argument("text", nargs="?")
     ap.add_argument("--eval", type=Path)
     ap.add_argument("--min", type=float, default=0.85)
+    ap.add_argument("--project", help="thư mục project: thêm skill theo loại project")
+    ap.add_argument("--session", nargs="?", const=".", metavar="DIR",
+                    help="in hồ sơ project và gợi ý skill lúc mở phiên (cho công cụ không có hook)")
     args = ap.parse_args(argv)
     if args.eval:
         return evaluate(args.eval, args.min)
-    print(json.dumps(suggest(args.text or sys.stdin.read()), ensure_ascii=False, indent=2))
+    if args.session is not None:
+        root = A.project_root(Path(args.session).expanduser().resolve())
+        hint = session_hint(root)
+        if not hint:
+            print(f"Không có gợi ý cho {root}: thư mục không phải git repo và không có file kế hoạch, "
+                  "hoặc chưa nhận ra loại project.")
+            return 0
+        print(hint["context"])
+        return 0
+    text = args.text or sys.stdin.read()
+    profile = A.project_profile(A.project_root(Path(args.project).expanduser().resolve())) if args.project else None
+    print(json.dumps(suggest_for(text, profile), ensure_ascii=False, indent=2))
     return 0
 
 

@@ -9,7 +9,7 @@
 - Chỉ làm việc trong `agent-stack/`. Không đụng các project khác. Không sửa `~/.claude` hay `~/.config/opencode` cho tới khi bạn duyệt chạy `install.sh`.
 - Claude viết v1 các skill lõi kèm test, bạn review.
 - Commit sau mỗi giai đoạn trong repo `agent-stack` (không push).
-- Đóng gói thành **plugin Claude Code** đặt ở `agent-stack/plugin/`, thử bằng `claude --plugin-dir`, không cần symlink. OpenCode dùng skill qua `~/.agents/skills/` khi cài (mục 7.1).
+- Đóng gói thành **plugin Claude Code** đặt ở `agent-stack/plugin/`, thử bằng `claude --plugin-dir`, không cần symlink. OpenCode dùng skill qua `~/.config/opencode/skills/` khi cài (mục 7.1).
 > Căn cứ: docs chính thức Claude Code (code.claude.com) và OpenCode (opencode.ai), số liệu GitHub API lấy ngày 2026-10-01, và cấu hình thực tế trên máy bạn. Nguồn ở mục 11.
 > File này nằm trên đĩa nên không mất khi phiên hết hạn mức. Đó cũng là nguyên tắc chính của yêu cầu #3.
 
@@ -30,13 +30,13 @@ Năm phát hiện quan trọng nhất:
 
 | # | Phát hiện | Hệ quả cho kế hoạch |
 |---|---|---|
-| 1 | Claude Code **đã tự chờ và tự làm tiếp** khi chạm giới hạn 5 giờ (mặc định bật từ v2.1.234). Nó **không** xử lý: giới hạn tuần, phiên `-p` hoặc background, phiên đã thoát, và crash. | Skill #3 chỉ cần lấp các khoảng trống đó, không viết lại cơ chế retry. |
+| 1 | Claude Code **có sẵn** cơ chế tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ (`autoContinueAtUsageLimit`, từ v2.1.234), nhưng khóa này **mặc định chưa đặt**, nên phải bật; `install.py` đặt `true` nếu bạn chưa tự chọn. (Bản trước của kế hoạch ghi nhầm là mặc định bật; đã sửa ngày 02/10/2026 theo [tài liệu chính thức](https://code.claude.com/docs/en/settings-reference.md).) Cơ chế này **không** xử lý: giới hạn tuần, phiên `-p` hoặc background, phiên đã thoát, và crash. | Skill #3 chỉ cần lấp các khoảng trống đó, không viết lại cơ chế retry. |
 | 2 | Kho skill công khai có rủi ro thật. Snyk quét 3.984 skill (02/2026): **13,4% có lỗi nghiêm trọng**, 76 payload độc. Chiến dịch ClawHavoc có 341 skill độc phát tán phần mềm đánh cắp dữ liệu **cho macOS**. | Dựng cổng kiểm duyệt **trước** khi cài bất cứ thứ gì. |
 | 3 | Số đo của Anthropic: **hạ effort trên model mạnh thường giữ chất lượng tốt hơn đổi sang model yếu.** Haiku 4.5 chỉ đạt 63% so với 92% của Opus ở câu hỏi kiến thức. | Quy tắc: hạ effort trước, hạ model sau, và mọi thay đổi phải qua eval. |
 | 4 | **Hook không thể đổi model hay effort** (docs chính thức), và đổi model giữa chừng làm mất prompt cache. | Router chỉ **gợi ý**, bạn tự đổi ở ranh giới việc. Không tự động đổi theo từng tin nhắn. |
 | 5 | Danh sách task có sẵn của Claude Code **không bật mặc định trên Opus 5.5 và Sonnet 5.5**, và chỉ dùng chung giữa các phiên khi đặt `CLAUDE_CODE_TASK_LIST_ID`. Trong khi đó `SCEE/PLAN.md` của bạn đã có sẵn mẫu rất tốt: mục §0 "Đang ở đâu, việc tiếp theo". | Skill #7 lấy file Markdown theo mẫu SCEE làm nguồn sự thật. Task list chỉ là công cụ phụ trong phiên. |
 
-Lộ trình: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18 buổi × 2 giờ**. GĐ4 và GĐ5 có thể tính vào giờ lab của trục AI Engineer.
+Lộ trình ban đầu: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18 buổi × 2 giờ**. GĐ4 và GĐ5 có thể tính vào giờ lab của trục AI Engineer. Sau đó có thêm GĐ6b (giong-van theo nghiên cứu), GĐ8 (reuse-best), GĐ9 (sửa sau rà soát) và GĐ10 (chọn skill theo project, gợi ý sau mỗi câu trả lời). Tiến độ thật nằm ở mục §0 của `PLAN.md`.
 
 ---
 
@@ -269,7 +269,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 
 | Tên | Loại | ★ / cập nhật | CC/OC | Đề xuất | Ghi chú |
 |---|---|---|---|---|---|
-| Tự chờ và làm tiếp ở giới hạn 5 giờ | có sẵn (≥2.1.234) | — | CC | **Giữ bật** | Không áp dụng cho: hạn mức tuần, `-p`, background, phiên đã thoát. |
+| Tự chờ và làm tiếp ở giới hạn 5 giờ | có sẵn (≥2.1.234) | — | CC | **Bật** (mặc định chưa đặt; `install.py` đặt `autoContinueAtUsageLimit: true`) | Không áp dụng cho: hạn mức tuần, `-p`, background, phiên đã thoát. |
 | `--continue`, `--resume <tên>`, `-n`, `/rename`, `/branch`, `/rewind`, resume-from-summary, auto-memory | có sẵn | — | CC | **Dùng** | |
 | planning-with-files | skill + hooks | 27.2k / 09-27 | CC, OC (cả hai có hook) | 📦 **Thử 1 tuần làm nền** | Ba file kế hoạch, có hook SessionStart/PreCompact/Stop. Tác giả đo phục hồi trong 5 lượt, so với 13,3 khi không dùng. |
 | handoff (mattpocock) | skill | — | CC, OC | Cài | Nén hội thoại để agent khác làm tiếp. |
@@ -352,7 +352,7 @@ Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc pl
 └── state/ · backups/ · .venv/ · .tmp/   # không đưa vào git
 ```
 
-OpenCode không đọc plugin Claude Code. Khi cài, `install.sh` symlink từng skill vào `~/.agents/skills/`. OpenCode đọc thư mục này, còn Claude Code thì không, nên không bị nạp trùng.
+OpenCode không đọc plugin Claude Code. Khi cài, `install.sh` symlink từng skill vào `~/.config/opencode/skills/` (OpenCode v2 theo dõi thư mục này và đi theo symlink). Claude Code không đọc thư mục này, nên không bị nạp trùng.
 
 ### 7.2 Đội agent (#2)
 

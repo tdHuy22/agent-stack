@@ -5,7 +5,7 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 02/10/2026.*
 
-- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, sửa 5 chỗ thiếu của lần rà soát, và router chọn skill theo nội dung project cùng dòng ➡️ sau mỗi câu trả lời (02/10/2026). Plugin `agent-stack` 0.3.0 gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 149 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
+- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, sửa 5 chỗ thiếu của lần rà soát, và router chọn skill theo nội dung project cùng dòng ➡️ sau mỗi câu trả lời (02/10/2026). Plugin `agent-stack` 0.3.0 gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 154 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
 - **Đang dở:** không có.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   1. Đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` cho những mục đồng ý (danh sách: `vet.py list`).
@@ -16,7 +16,7 @@
   6. Cài các CLI bạn muốn dùng (mình không tự cài gì toàn cục): `brew install gitleaks osv-scanner`, và `brew install pyright` nếu duyệt plugin pyright-lsp. `python3 tools/maintain.py` sẽ nhắc nếu còn thiếu.
   7. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
 - **Quyết định còn treo:** 4 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi). Câu "(luôn kiểm tra" đã rõ: thuộc reuse-best.
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 149 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
+- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 154 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
 
 ## 1. Giai đoạn
@@ -111,3 +111,9 @@
 - [x] Hồ sơ project (`agentstack.project_profile`): loại code, có test, có CI, có Docker, có code nhạy cảm bảo mật. Chỉ dựng cho git repo hoặc thư mục có file kế hoạch; lưu tạm 6 giờ.
 - [x] Hook mở phiên gợi ý skill hợp với project (phân biệt skill đã có và skill chờ bạn duyệt), subagent nên dùng, và cách làm việc tiếp theo trong §0. Git repo chưa có file kế hoạch cũng nhận gợi ý.
 - [x] Mỗi tin nhắn: "làm tiếp" được định tuyến theo §0; loại project bổ sung skill cho luật đang khớp. 6 test mới.
+- [x] Sửa sau lần rà soát thứ ba:
+  - `KE-HOACH.md` từng ghi sai rằng tự làm tiếp ở giới hạn 5 giờ được bật mặc định; thực tế khóa này mặc định chưa đặt.
+  - Tài liệu từng ghi skill OpenCode được link vào `~/.agents/skills/`, trong khi `install.py` link vào `~/.config/opencode/skills/`.
+  - Lộ trình trong mục tóm tắt và README đã cập nhật.
+  - OpenCode không có hook, nên luật chung dặn chạy `route.py --session` ở câu trả lời đầu tiên của phiên.
+  - Có test chặn tài liệu nói khác code ở hai điểm trên. 5 test mới.

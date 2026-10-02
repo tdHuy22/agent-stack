@@ -32,3 +32,21 @@ class RepoHygiene(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DocsMatchCode(unittest.TestCase):
+    """Tài liệu kế hoạch không được nói khác với code (hai lỗi đã gặp ngày 02/10/2026)."""
+
+    def test_opencode_skill_dir_in_docs_matches_install(self):
+        install = (REPO / "tools" / "install.py").read_text(encoding="utf-8")
+        target = re.search(r"symlink skill \(agent-stack \+ vendor\) vào (\S+?/skills)/", install).group(1)
+        plan = (REPO / "KE-HOACH.md").read_text(encoding="utf-8")
+        # chỉ các câu nói về nơi install.sh đặt skill cho OpenCode (câu kể lịch sử bản đầu không tính)
+        claimed = re.findall(r"(?:`install\.sh` symlink từng skill vào|OpenCode dùng skill qua) `([^`]+?)/?`", plan)
+        self.assertTrue(claimed)
+        self.assertEqual(set(claimed), {target})
+
+    def test_auto_continue_is_not_claimed_on_by_default(self):
+        plan = (REPO / "KE-HOACH.md").read_text(encoding="utf-8")
+        self.assertNotIn("mặc định bật từ v2.1.234", plan)
+        self.assertIn("mặc định chưa đặt", plan)

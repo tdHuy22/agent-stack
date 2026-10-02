@@ -83,8 +83,8 @@ class HookSuggestion(TempDirTestCase):
         self.assertIn("[router]", data["hookSpecificOutput"]["additionalContext"])
 
 
-class ProjectAware(TempDirTestCase):
-    """Mục 4 kết hợp mục 5: chọn skill theo nội dung project và việc hiện tại, từ lúc mở phiên và mỗi tin nhắn."""
+class ProjectFixtures(TempDirTestCase):
+    """Dựng project mẫu (git) cho các test chọn skill theo project. Không chứa test."""
 
     def setUp(self):
         super().setUp()
@@ -108,6 +108,11 @@ class ProjectAware(TempDirTestCase):
         return self.repo("py", {"app/a.py": "x = 1\n", "app/b.py": "y = 2\n", "app/c.py": "z = 3\n",
                                 "tests/test_a.py": "import unittest\n", ".github/workflows/ci.yml": "on: push\n"},
                          plan_next)
+
+
+
+class ProjectAware(ProjectFixtures):
+    """Mục 4 kết hợp mục 5: chọn skill theo nội dung project và việc hiện tại, từ lúc mở phiên và mỗi tin nhắn."""
 
     def test_profile_detects_language_tests_ci_and_security(self):
         sys.path.insert(0, str(PLUGIN / "lib"))
@@ -161,3 +166,30 @@ class ProjectAware(TempDirTestCase):
         claude = (REPO / "global" / "CLAUDE.global.md").read_text(encoding="utf-8")
         self.assertIn("| Việc tiếp theo | Model · Effort | Subagent | Skill |", claude)
         self.assertNotIn("Bỏ qua dòng này với câu hỏi nhanh", claude)
+
+
+class SessionCliForToolsWithoutHooks(ProjectFixtures):
+    """OpenCode không chèn được ngữ cảnh lúc mở phiên, nên luật chung dặn chạy route.py --session."""
+
+    def run_cli(self, *args):
+        return subprocess.run([sys.executable, str(ROUTE), *args], capture_output=True, text=True, timeout=30,
+                              env=dict(os.environ))
+
+    def test_session_cli_prints_profile_hint(self):
+        root = self.python_repo(plan_next="Thêm tính năng xuất CSV cho trang báo cáo")
+        out = self.run_cli("--session", str(root))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("[agent-stack] Hồ sơ project", out.stdout)
+        self.assertIn("skill reuse-best", out.stdout)
+        plain = self.tmp / "plain-dir"
+        plain.mkdir()
+        self.assertIn("Không có gợi ý", self.run_cli("--session", str(plain)).stdout)
+
+    def test_project_flag_adds_skills_by_project_type(self):
+        root = self.repo("c3", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
+        data = json.loads(self.run_cli("review bảo mật hàm đăng nhập", "--project", str(root)).stdout)
+        self.assertIn("c-review", data["skills"])
+
+    def test_shared_rules_tell_tools_without_hooks_to_run_it(self):
+        shared = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
+        self.assertIn("route.py --session <thư mục project>", shared)
