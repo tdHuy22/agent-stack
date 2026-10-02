@@ -251,14 +251,14 @@ Claude không tự duyệt. PASS chỉ có nghĩa là không thấy dấu hiệu
 
 Báo cáo đầy đủ nằm trong `vet-reports/`. Sau khi duyệt, chạy `./install.sh --apply` để cài các mục mới (mục 8).
 
-**Phân tích động (tùy chọn).** `scan` không chạy mã của đích. Khi một script đáng ngờ mà đọc tay chưa kết luận được, `vet.py dynamic` chạy MỘT lệnh bạn chọn trong sandbox-runtime của Anthropic: không mạng, chỉ đọc và ghi trong bản chép tạm, môi trường sạch (không token), HOME thật bị chặn. HOME của lệnh là một HOME giả rải sẵn 12 file mồi (khóa SSH, token AWS, GitHub, npm... giả): file nào bị đọc lộ ra qua atime, và nội dung mồi bị chép ra file hay đầu ra cũng bị phát hiện.
+**Phân tích động (tùy chọn).** `scan` không chạy mã của đích. Khi một script đáng ngờ mà đọc tay chưa kết luận được, `vet.py dynamic` chạy MỘT lệnh bạn chọn trong sandbox-runtime của Anthropic: không mạng, ghi chỉ trong bản chép tạm, đọc được phần lớn hệ thống trừ HOME thật, `/Volumes` và keychain, môi trường sạch (không token). HOME của lệnh là một HOME giả rải sẵn 12 file mồi (khóa SSH, token AWS, GitHub, npm... giả) và chặn ghi vào chúng: file nào bị đọc lộ ra qua atime, mồi bị xóa hay thay lộ qua bản chụp trước/sau, nội dung mồi bị chép ra file hay đầu ra cũng bị phát hiện. Tiến trình nền còn sót bị dò và diệt.
 
 ```bash
 python3 plugin/skills/vet-skill/scripts/vet.py dynamic --setup     # một lần; cần Node; cài vào .cache/srt, bản ghim, --ignore-scripts
 python3 plugin/skills/vet-skill/scripts/vet.py dynamic "<khóa>" -- python3 scripts/x.py --help
 ```
 
-Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn), **CẦN ĐỌC** (1) hoặc **ĐÁNG NGỜ** (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên chỉ file mồi và dấu rò rỉ là bằng chứng chắc chắn; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. `--real-home` giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).
+Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn), **CẦN ĐỌC** (1) hoặc **ĐÁNG NGỜ** (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên file mồi và dấu rò rỉ mới là bằng chứng mạnh (không tuyệt đối); mã có chủ ý né (nhận ra sandbox, chờ lâu, mã hóa dữ liệu, truy vấn keychain qua dịch vụ hệ thống mà sandbox-runtime cho phép) vẫn qua mặt được; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. `--real-home` giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).
 
 ### 5.5 `giong-van`: chỉnh văn đúng giọng mình
 

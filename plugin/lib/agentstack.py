@@ -593,6 +593,12 @@ SECRET_PATTERNS = (
     r"(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}",          # token Slack
     r"(?<![A-Za-z0-9])(?i:bearer)\s+[A-Za-z0-9._~+/=-]{8,}",  # Authorization: Bearer <token>
     r"(?<![A-Za-z0-9])[0-9A-Fa-f]{32,}(?![A-Za-z0-9])",       # chuỗi hex liền từ 32 ký tự
+    r"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{16,}",              # GitLab personal access token
+    r"(?<=://)[^/\s:@]+:[^@\s/]+(?=@)",                       # user:mật-khẩu trong URL (postgres://u:p@host)
+    r"(?is)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",  # cả khối khóa riêng PEM
+    # gán giá trị cho tên trông như bí mật: password=..., api_key: ..., secret_access_key = ...
+    r"(?i)(?<![A-Za-z0-9])(?:password|passwd|pwd|secret(?:[_-]?access[_-]?key)?|token|api[_-]?key|access[_-]?key|private[_-]?key)"
+    r"(?![A-Za-z0-9])\s*[=:]\s*\S{6,}",
 )
 LONG_RUN_RE = re.compile(r"[A-Za-z0-9+/_-]{32,}={0,2}")
 
@@ -615,7 +621,8 @@ def _mask_long_run(match) -> str:
     run = match.group(0)
     random_like = (any(c.isupper() for c in run) and any(c.islower() for c in run)
                    and (any(c.isdigit() for c in run) or run.endswith("=")))
-    return REDACTED if random_like and run.count("/") <= 2 else run
+    # Khóa bí mật AWS dài 40 ký tự base64 và hay chứa vài dấu '/', nên được nới số dấu '/' cho độ dài gần đó.
+    return REDACTED if random_like and run.count("/") <= (3 if 40 <= len(run) <= 44 else 2) else run
 
 
 def redact_secrets(text: str) -> str:

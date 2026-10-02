@@ -1,7 +1,10 @@
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -26,6 +29,13 @@ class Settings(TempDirTestCase):
         self.assertEqual(cfg["filesystem"]["allowWrite"], [str(self.tmp)])
         self.assertEqual(cfg["filesystem"]["allowRead"], [str(self.tmp)])
 
+    def test_srt_own_write_dirs_are_denied_explicitly(self):
+        # srt tự thêm /tmp/claude vào vùng được ghi; ghi vào đó không sinh vi phạm và không bị quét, nên phải chặn
+        cfg = dynamic.build_settings(self.tmp, deny_write=[str(self.tmp / "home" / ".ssh")])
+        for path in ("/tmp/claude", "/private/tmp/claude", str(self.tmp / "home" / ".ssh")):
+            self.assertIn(path, cfg["filesystem"]["denyWrite"])
+        self.assertEqual(cfg["filesystem"]["allowWrite"], [str(self.tmp)])
+
     def test_extra_read_and_domains_are_added_explicitly(self):
         cfg = dynamic.build_settings(self.tmp, extra_read=["/opt/x"], allow_domains=["example.com"])
         self.assertIn("/opt/x", cfg["filesystem"]["allowRead"])
@@ -46,7 +56,8 @@ class Settings(TempDirTestCase):
     def test_runner_keeps_real_home_so_srt_expands_tilde_correctly(self):
         # nếu runner nhận HOME giả thì `~` trong cấu hình sẽ chặn nhầm HOME giả và bỏ ngỏ HOME thật
         child = dynamic.safe_env(self.tmp)
-        env = dynamic.runner_env("/opt/node/bin/node", child)
+        env = dynamic.runner_env("/opt/node/bin/node", child, ["AB12", "21BA"])
+        self.assertEqual(json.loads(env["VET_MARKERS"]), ["AB12", "21BA"])
         self.assertEqual(env["HOME"], str(Path.home()))
         self.assertEqual(json.loads(env["VET_CHILD_ENV"]), child)
         self.assertIn("/opt/node/bin", env["PATH"])
@@ -85,7 +96,7 @@ class Classification(unittest.TestCase):
 
     def test_verdicts(self):
         empty = dynamic.classify([])
-        ok = {"monitorOk": True}
+        ok = {"monitorOk": True, "exit": 0}
         self.assertEqual(dynamic.judge(empty, ok)[0], dynamic.LABEL_NONE)
         self.assertEqual(dynamic.judge(empty, {**ok, "timedOut": True})[0], "CẦN ĐỌC")
         cases = {
@@ -210,15 +221,19 @@ class RunWithFakeRunner(TempDirTestCase):
                        "monitorOk": True, "violations": [violation("file-read-data", "/Users/x/.ssh/id_rsa")]}
             return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(payload) + "\n", stderr="")
 
-        with mock.patch.object(dynamic.shutil, "which", side_effect=lambda c: "/usr/bin/node" if c == "node" else None):
+        real_which = shutil.which
+        with mock.patch.object(dynamic.shutil, "which",
+                               side_effect=lambda c, path=None: "/usr/bin/node" if c == "node" else real_which(c, path=path)):
             res = dynamic.run(home, str(tree), ["python3", "a.py"], runner=fake_runner)
         self.assertEqual(res["label"], "ĐÁNG NGỜ")
         self.assertEqual(res["command"], ["python3", "a.py"], "báo cáo giữ lệnh gốc của người dùng")
         sep = seen["cmd"].index("--")
-        self.assertEqual(seen["cmd"][sep + 1], "/usr/bin/env")
-        self.assertTrue(seen["cmd"][sep + 2].startswith("TMPDIR="), "TMPDIR phải được đặt lại vì srt tự đặt /tmp/claude")
-        self.assertEqual(seen["cmd"][sep + 3:], ["python3", "a.py"])
+        self.assertEqual(seen["cmd"][sep + 1:sep + 4], ["/usr/bin/env", "-u", "SANDBOX_RUNTIME"],
+                         "bỏ biến báo hiệu sandbox để mã bị kiểm khó nhận ra")
+        self.assertTrue(seen["cmd"][sep + 4].startswith("TMPDIR="), "TMPDIR phải được đặt lại vì srt tự đặt /tmp/claude")
+        self.assertEqual(seen["cmd"][sep + 5:], ["/usr/bin/python3", "a.py"], "lệnh được đổi thành đường dẫn tuyệt đối")
         self.assertNotIn("ANTHROPIC_API_KEY", seen["env"])
+        self.assertIn("VET_MARKERS", seen["env"])
         self.assertEqual(list((home / ".tmp").iterdir()), [], "bản chép tạm phải bị xóa")
 
     def test_run_refuses_without_setup_or_command(self):
@@ -305,6 +320,85 @@ class RealSandbox(TempDirTestCase):
         self.assertIn("chặn ghi", res["stdout"])
         self.assertFalse(Path("/Library/agent-stack-probe.txt").exists())
 
+    def test_srt_own_tmp_dir_is_not_writable(self):
+        # review 02/10/2026: srt tự cho ghi /tmp/claude, nơi không ai quét; phải bị chặn tường minh
+        res = self.run_probe(
+            "import pathlib\n"
+            "try:\n"
+            "    pathlib.Path('/tmp/claude').mkdir(exist_ok=True)\n"
+            "    open('/tmp/claude/vet-test-probe.txt', 'w').write('x')\n"
+            "    print('GHI ĐƯỢC')\n"
+            "except OSError as e:\n"
+            "    print('chặn', type(e).__name__)\n")
+        self.addCleanup(lambda: Path("/tmp/claude/vet-test-probe.txt").unlink() if Path("/tmp/claude/vet-test-probe.txt").exists() else None)
+        if "chặn" not in res["stdout"] and "GHI ĐƯỢC" not in res["stdout"]:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertIn("chặn", res["stdout"])
+        self.assertFalse(Path("/tmp/claude/vet-test-probe.txt").exists())
+
+    def test_decoys_cannot_be_reset_deleted_or_replaced(self):
+        res = self.run_probe(
+            "import os, time\n"
+            "home = os.path.expanduser('~')\n"
+            "for name, fn in (('utime', lambda: os.utime(home + '/.ssh/id_rsa', (time.time() - 90, time.time() - 60))),\n"
+            "                 ('unlink', lambda: os.unlink(home + '/.netrc')),\n"
+            "                 ('tạo trong .ssh', lambda: open(home + '/.ssh/khac', 'w').write('x'))):\n"
+            "    try:\n"
+            "        fn(); print(name, 'ĐƯỢC')\n"
+            "    except OSError:\n"
+            "        print(name, 'chặn')\n"
+            "open(home + '/.ssh/id_rsa').read()\n")
+        if res["decoyMonitor"] is False:
+            self.skipTest("hệ thống file không cập nhật atime")
+        if "chặn" not in res["stdout"]:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertNotIn("ĐƯỢC", res["stdout"], res["stdout"])
+        self.assertIn(".ssh/id_rsa", res["groups"]["decoys"], "đọc xong mà không đặt lại được atime thì phải bị lộ")
+        self.assertEqual(res["groups"]["tampered"], [])
+
+    def test_sandbox_marker_env_is_hidden_from_the_command(self):
+        res = self.run_probe("import os\nprint('SANDBOX_RUNTIME=' + str(os.environ.get('SANDBOX_RUNTIME')))\n")
+        if res["exit"] != 0:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertIn("SANDBOX_RUNTIME=None", res["stdout"])
+
+    def test_fifo_does_not_hang_the_scan(self):
+        started = time.time()
+        res = self.run_probe("import os\nos.mkfifo('pipe')\nprint('đã tạo fifo')\n")
+        if "đã tạo fifo" not in res["stdout"]:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertLess(time.time() - started, 60)
+        self.assertIn("pipe", res["created_files"])
+
+    def test_command_that_cannot_run_is_not_reported_as_nothing_found(self):
+        tree = self.tmp / "tree2"
+        tree.mkdir()
+        try:
+            res = dynamic.run(REPO, str(tree), ["lenh-khong-ton-tai-xyz"], timeout=40)
+        except (ValueError, subprocess.SubprocessError) as exc:
+            self.skipTest(f"không chạy được sandbox ở đây: {exc}")
+        self.assertNotEqual(res["label"], dynamic.LABEL_NONE)
+        self.assertTrue(any("không chạy được" in r for r in res["reasons"]), res["reasons"])
+
+    def test_background_process_is_found_and_killed(self):
+        res = self.run_probe(
+            "import os, sys, time\n"
+            "if os.fork() == 0:\n"
+            "    os.setsid()          # thoát khỏi nhóm tiến trình, kill -pgid của runner không tóm được\n"
+            "    os.close(1); os.close(2)\n"
+            "    time.sleep(120)\n"
+            "    os._exit(0)\n"
+            "print('đã tách tiến trình nền')\n")
+        if "đã tách" not in res["stdout"]:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        left = res["groups"]["leftover"]
+        self.assertTrue(left, "phải dò ra tiến trình nền còn mở thư mục làm việc")
+        time.sleep(0.5)
+        for pid in left:
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)  # đã bị diệt
+        self.assertEqual(res["label"] == dynamic.LABEL_NONE, False)
+
     def test_real_home_mode_skips_decoys(self):
         res = self.run_probe("print(1)\n", real_home=True)
         self.assertTrue(res["realHome"])
@@ -349,7 +443,9 @@ class Decoys(TempDirTestCase):
         outside = self.tmp / "outside.txt"
         outside.write_text("CANARYZ", encoding="utf-8")
         os.symlink(outside, root / "link.txt")
-        self.assertEqual([os.path.basename(x) for x in dynamic.find_marker([root], "CANARYZ")], ["copy.txt"])
+        found, incomplete = dynamic.scan_markers(root, [b"CANARYZ"])
+        self.assertEqual([os.path.basename(x) for x in found], ["copy.txt"])
+        self.assertFalse(incomplete)
 
     def test_judge_flags_decoy_reads_and_leaks_as_suspicious(self):
         ok = {"monitorOk": True, "decoyMonitor": True}
@@ -359,6 +455,165 @@ class Decoys(TempDirTestCase):
         self.assertEqual(dynamic.judge({**groups, "decoy_dirs": [".ssh"]}, ok)[0], "CẦN ĐỌC")
         self.assertEqual(dynamic.judge(groups, {"monitorOk": True, "decoyMonitor": False})[0], "CẦN ĐỌC",
                          "không đo được atime thì không được khẳng định là không thấy gì")
+
+
+class RunnerSource(unittest.TestCase):
+    """Giữ nguyên các điểm đã vá trong run.mjs (không chạy Node ở đây): chống lỗi cũ quay lại."""
+
+    def setUp(self):
+        self.src = (REPO / "tools" / "srt" / "run.mjs").read_text(encoding="utf-8")
+
+    def test_canary_is_recognised_only_by_command_never_by_process_name(self):
+        # review 02/10/2026: `line` chứa tên tiến trình do mã bị kiểm đặt; lọc theo đó giấu được vi phạm của chính nó
+        mark_of = next(line for line in self.src.splitlines() if line.startswith("const markOf"))
+        definition = next(line for line in self.src.splitlines() if line.startswith("const isCanary"))
+        self.assertIn("v.command", mark_of)
+        self.assertNotIn(".line", mark_of + definition)
+        self.assertIn("markOf(v)", definition)
+        self.assertIn("NONCE", definition, "chim hoàng yến phải mang nonce ngẫu nhiên mỗi lần chạy")
+        self.assertIn("randomBytes", self.src)
+
+    def test_process_group_is_killed_after_the_command_finishes(self):
+        after_close = self.src.split("child.on('close'", 1)[1]
+        self.assertIn("process.kill(-child.pid, 'SIGKILL')", after_close.split("const endOk", 1)[0])
+
+    def test_marker_is_scanned_over_the_whole_stream_not_the_truncated_text(self):
+        self.assertIn("makeScanner", self.src)
+        self.assertIn("outScan.feed(d)", self.src)
+        self.assertIn("markerInOutput", self.src)
+
+
+class Hardening(TempDirTestCase):
+    """Các điểm được review độc lập chỉ ra (02/10/2026): mỗi test giữ một lỗ hổng đã vá."""
+
+    def test_marker_variants_cover_common_encodings(self):
+        marker = "A1B2C3D4E5F60718293A4B5C"
+        variants = dynamic.marker_variants(marker)
+        import base64
+        import binascii
+        samples = [marker, marker.lower(), marker[::-1], binascii.hexlify(marker.encode()).decode(),
+                   base64.b64encode(marker.encode()).decode(), base64.b64encode(b"x" + marker.encode() + b"yz").decode(),
+                   base64.b64encode(b"xy" + marker.encode() + b"z").decode()]
+        for sample in samples:
+            with self.subTest(sample=sample[:24]):
+                self.assertTrue(dynamic.contains_marker(f"đầu ra {sample} hết", variants), sample)
+        self.assertFalse(dynamic.contains_marker("không có gì đáng ngờ ở đây", variants))
+
+    def test_scan_finds_marker_across_chunks_and_in_large_files(self):
+        (self.tmp / "big.bin").write_bytes(b"x" * ((1 << 20) - 5) + b"MARKER123456" + b"y" * 100)  # nằm giữa hai khối 1 MB
+        found, incomplete = dynamic.scan_markers(self.tmp, [b"MARKER123456"])
+        self.assertEqual([os.path.basename(x) for x in found], ["big.bin"])
+        self.assertFalse(incomplete)
+
+    def test_scan_does_not_hang_on_fifo_and_ignores_symlinks_and_skipped_files(self):
+        os.mkfifo(self.tmp / "pipe")  # mã bị kiểm tạo được; mở FIFO bằng open() thường sẽ treo vĩnh viễn
+        (self.tmp / "keep.txt").write_text("MARKER123456", encoding="utf-8")
+        (self.tmp / "decoy.txt").write_text("MARKER123456", encoding="utf-8")
+        os.symlink(self.tmp / "keep.txt", self.tmp / "link.txt")
+        started = time.time()
+        found, _ = dynamic.scan_markers(self.tmp, [b"MARKER123456"], skip=frozenset([str(self.tmp / "decoy.txt")]))
+        self.assertLess(time.time() - started, 5)
+        self.assertEqual([os.path.basename(x) for x in found], ["keep.txt"])
+
+    def test_scan_reports_when_it_could_not_finish(self):
+        (self.tmp / "a.bin").write_bytes(b"x" * 4096)
+        self.assertTrue(dynamic.scan_markers(self.tmp, [b"M"], file_max=1024)[1], "chạm trần cỡ file")
+        for i in range(5):
+            (self.tmp / f"f{i}.txt").write_text("x", encoding="utf-8")
+        self.assertTrue(dynamic.scan_markers(self.tmp, [b"M"], files_max=3)[1], "chạm trần số file")
+
+    def test_tampering_with_decoys_is_detected(self):
+        dynamic.make_decoys(self.tmp, "M1")
+        snap = dynamic.snapshot_decoys(self.tmp)
+        self.assertEqual(dynamic.decoys_tampered(self.tmp, snap), [])
+        (self.tmp / ".ssh" / "id_rsa").read_text(encoding="utf-8")  # chỉ đọc thì không phải sửa
+        self.assertEqual(dynamic.decoys_tampered(self.tmp, snap), [])
+        os.unlink(self.tmp / ".aws" / "credentials")  # xóa
+        os.unlink(self.tmp / ".netrc")  # xóa rồi thay bằng symlink
+        os.symlink(self.tmp / ".npmrc", self.tmp / ".netrc")
+        now = time.time()
+        os.utime(self.tmp / ".git-credentials", (now, now))  # đặt lại thời gian
+        self.assertEqual(sorted(dynamic.decoys_tampered(self.tmp, snap)),
+                         [".aws/credentials", ".git-credentials", ".netrc"])
+
+    def test_decoy_write_denies_cover_files_and_their_parent_dirs(self):
+        denies = dynamic.decoy_write_denies(self.tmp)
+        for rel in (".ssh/id_rsa", ".ssh", ".aws", ".netrc", "Library/Keychains",
+                    "Library/Application Support/Google/Chrome/Default"):
+            self.assertIn(str(self.tmp / rel), denies)
+        self.assertNotIn(str(self.tmp), denies, "không chặn ghi cả HOME giả")
+        self.assertNotIn(str(self.tmp / ".config"), denies, "chỉ chặn thư mục chứa trực tiếp mồi")
+
+    def test_interpreter_reads_never_open_home_or_a_top_level_dotdir(self):
+        home = Path.home().resolve()
+        nvm = home / ".nvm" / "versions" / "node" / "v1" / "bin" / "node"
+        with mock.patch.object(Path, "exists", return_value=True):
+            reads = dynamic.interpreter_reads(nvm)
+        self.assertEqual(reads, [nvm.parent, nvm.parent.parent / "lib"])
+        self.assertEqual(dynamic.interpreter_reads(home / ".cargo" / "bin" / "x"), [home / ".cargo" / "bin" / "x"])
+        self.assertEqual(dynamic.interpreter_reads(home / "bin" / "x"), [home / "bin" / "x"])
+        self.assertEqual(dynamic.interpreter_reads(Path("/usr/bin/python3")), [])
+
+    def test_resolve_command_prefers_standard_path_and_adds_user_dirs(self):
+        argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
+        self.assertEqual((argv, extra, reads), (["/usr/bin/python3", "a.py"], [], []), "không dùng shim của pyenv")
+        self.assertEqual(dynamic.resolve_command(["./run.sh"])[0], ["./run.sh"], "script tương đối giữ nguyên")
+        self.assertEqual(dynamic.resolve_command(["lenh-khong-ton-tai-xyz"])[0], ["lenh-khong-ton-tai-xyz"])
+        fake = Path.home() / ".nvm" / "versions" / "node" / "v9" / "bin" / "node"
+        with mock.patch.object(dynamic.shutil, "which", side_effect=lambda c, path=None: None if path else str(fake)), \
+                mock.patch.object(dynamic, "interpreter_reads", return_value=[fake.parent]):
+            argv, extra, reads = dynamic.resolve_command(["node", "a.js"])
+        self.assertEqual(argv, [str(fake), "a.js"])
+        self.assertEqual(extra, [str(fake.parent)])
+        self.assertEqual(reads, [fake.parent])
+        self.assertIn(str(fake.parent), dynamic.safe_env(self.tmp, extra_path=extra)["PATH"])
+
+    def test_leftover_pids_parses_lsof_and_never_lists_itself(self):
+        fake = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout=f"123\n{os.getpid()}\nabc\n456\n", stderr="")
+        self.assertEqual(dynamic.leftover_pids(self.tmp, run=fake), [123, 456])
+        def boom(cmd, **kw):
+            raise OSError("không có lsof")
+        self.assertEqual(dynamic.leftover_pids(self.tmp, run=boom), [])
+
+    def test_runner_timeout_kills_the_whole_group(self):
+        marker = self.tmp / "alive"
+        script = f"(sleep 20; touch {marker}) & sleep 20"
+        started = time.time()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            dynamic._run_runner(["/bin/sh", "-c", script], env={"PATH": "/usr/bin:/bin"}, cwd=str(self.tmp), timeout=1)
+        self.assertLess(time.time() - started, 10)
+        time.sleep(0.3)
+        self.assertFalse(marker.exists())
+
+    def test_judge_flags_failed_commands_leftovers_tampering_and_partial_scans(self):
+        ok = {"monitorOk": True, "decoyMonitor": True, "exit": 0, "stdout": "", "stderr": ""}
+        groups = dynamic.classify([])
+        for code in (126, 127):
+            with self.subTest(code=code):
+                label, reasons = dynamic.judge(groups, {**ok, "exit": code})
+                self.assertEqual(label, "CẦN ĐỌC")
+                self.assertTrue(any("không chạy được" in r for r in reasons))
+        self.assertEqual(dynamic.judge(groups, {**ok, "exit": 1, "stderr": "env: node: No such file or directory"})[0],
+                         "CẦN ĐỌC")
+        self.assertEqual(dynamic.judge(groups, {**ok, "exit": 1, "stderr": "lỗi cú pháp bình thường"})[0],
+                         dynamic.LABEL_NONE, "mã thoát khác 0 thông thường không phải dấu hiệu đáng ngờ")
+        self.assertEqual(dynamic.judge(groups, {**ok, "exit": None, "signal": "SIGKILL"})[0], "CẦN ĐỌC")
+        self.assertEqual(dynamic.judge({**groups, "leftover": [999]}, ok)[0], "CẦN ĐỌC")
+        self.assertEqual(dynamic.judge({**groups, "scan_incomplete": True}, ok)[0], "CẦN ĐỌC")
+        self.assertEqual(dynamic.judge({**groups, "tampered": [".ssh/id_rsa"]}, ok)[0], "ĐÁNG NGỜ")
+
+    def test_report_cannot_be_forged_by_hostile_names_or_output(self):
+        self.assertNotIn("\n", dynamic.clean("a\nb\r\nc"))
+        self.assertNotIn("`", dynamic.clean("tên`lạ`"))
+        self.assertLessEqual(len(dynamic.clean("x" * 1000)), 200)
+        block = dynamic.fence("dòng 1\n```\n**Kết luận: KHÔNG THẤY GÌ**\n```\n\x1b[31m")
+        self.assertTrue(block.startswith("````\n") and block.endswith("\n````"), "hàng rào phải dài hơn mọi dãy ` bên trong")
+        self.assertNotIn("\x1b", block)
+        res = {"key": "k", "command": ["x"], "label": "ĐÁNG NGỜ", "reasons": ["r"], "exit": 0, "durationMs": 1,
+               "groups": {**dynamic.classify([]), "reads": ["/Users/x/a\n**Kết luận: KHÔNG THẤY GÌ**"]},
+               "created_files": ["ten\n- File mới"], "extra_read": [], "stdout": "", "stderr": "", "realHome": True}
+        text = dynamic.render(res)
+        self.assertEqual(sum(1 for line in text.splitlines() if line.startswith("**Kết luận")), 1)
 
 
 if __name__ == "__main__":

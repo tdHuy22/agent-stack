@@ -325,7 +325,13 @@ def components(root: Path, files: list) -> dict:
 
 # ---------------------------------------------------------------- dò dấu hiệu
 
-def run_redflags(files: list) -> list:
+CI_WORKFLOW_RE = re.compile(r"\.github/workflows/[^/]+\.ya?ml$")
+
+
+def run_redflags(files: list, ci_root: bool = False) -> list:
+    """Quét dấu hiệu theo luật. `ci_root` chỉ đúng khi gốc quét là gốc một repo GitHub (không có thư mục con): lúc đó
+    workflow `.github/workflows/*.yml` mới là CI chạy trên máy chủ của tác giả. Ở thư mục con hay thư mục cục bộ, một
+    `.github/` có thể là thứ plugin tự gọi, nên không hạ bậc."""
     findings = []
     for f in files:
         if f["symlink"] or f["kind"] in ("binary",) or f["size"] > MAX_SCAN_BYTES:
@@ -342,7 +348,7 @@ def run_redflags(files: list) -> list:
                 # Mẫu nằm trong chú thích thì không chạy: hạ một bậc và ghi chú lại.
                 sev = SEVERITIES[min(SEVERITIES.index(sev) + 1, len(SEVERITIES) - 1)]
                 why += " (trong chú thích)"
-            if f["rel"].startswith(".github/"):
+            if ci_root and CI_WORKFLOW_RE.fullmatch(f["rel"]):
                 # Workflow CI chạy trên máy chủ CI của tác giả, không chạy khi người dùng cài: hạ một bậc.
                 sev = SEVERITIES[min(SEVERITIES.index(sev) + 1, len(SEVERITIES) - 1)]
                 why += " (trong CI, không chạy khi cài)"
@@ -621,7 +627,7 @@ def cmd_scan(args, home: Path) -> int:
     lic_dirs = [root] + ([checkout] if target["kind"] == "github" and target["subpath"] else [])
     meta["license_files"] = license_files(*lic_dirs)
     comp = components(root, files)
-    flags = run_redflags(files)
+    flags = run_redflags(files, ci_root=target["kind"] == "github" and not target["subpath"])
     scanner = {"status": "tắt bằng --no-scanner"} if args.no_scanner else run_scanner(home, root, comp["skills"])
     result, fail, review = verdict(meta, files, comp, flags, scanner)
 
@@ -765,7 +771,7 @@ def main(argv=None) -> int:
             import dynamic  # chỉ nạp khi dùng, để scan không phụ thuộc Node
             return dynamic.main_cli(args, home)
         return cmd_list(home)
-    except (ValueError, subprocess.CalledProcessError, OSError) as exc:
+    except (ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         detail = getattr(exc, "stderr", "") or ""
         print(f"Lỗi: {exc} {detail}".strip(), file=sys.stderr)
         return 3

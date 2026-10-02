@@ -242,6 +242,32 @@ class LastRequest(TempDirTestCase):
         self.assertEqual(data["prompt"], "ok")
         self.assertNotIn("earlier", data)
 
+    def test_more_secret_shapes_are_masked_and_ordinary_text_is_not(self):
+        # review 02/10/2026: những dạng sau từng lọt qua
+        cases = {
+            "gitlab": "glpat-" + "abcdEFGH1234567890xyz",
+            "url có mật khẩu": "postgres://admin:S3cret" + "Pass!@db.example.com:5432/app",
+            "password=": "password=" + "hunter2hunter2",
+            "api_key:": "api_key: " + "abcd1234efgh5678",
+            "aws secret nhiều /": "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfi" + "/CYEXAMPLEKEY",
+            "aws 40 ký tự trần": "wJalrXUtnFEMI/K7MDENG/bPxRfi" + "/CYEXAMPLEKEY",
+        }
+        for name, secret in cases.items():
+            with self.subTest(name=name):
+                masked = A.redact_secrets(f"dùng {secret} giúp mình")
+                self.assertIn(A.REDACTED, masked)
+                for piece in ("abcdEFGH1234567890xyz", "S3cretPass", "hunter2hunter2", "abcd1234efgh5678", "CYEXAMPLEKEY"):
+                    self.assertNotIn(piece, masked)
+        pem = "-----BEGIN RSA PRIVATE " + "KEY-----\nMIIEowIBAAKCAQEA1234/abc+def/ghi\nxyz/987654321/abcdef\n-----END RSA PRIVATE " + "KEY-----"
+        masked = A.redact_secrets(f"khóa của mình:\n{pem}\nxong")
+        self.assertNotIn("MIIEowIBAAKCAQEA", masked)
+        self.assertTrue(masked.startswith("khóa của mình:") and masked.endswith("xong"))
+        for ordinary in ("Sửa file plugin/skills/vet-skill/scripts/dynamic.py rồi chạy test",
+                         "token hết hạn thì làm mới", "đặt secret trong biến môi trường", "mật khẩu: bỏ qua",
+                         "xem https://github.com/anthropics/sandbox-runtime/issues/12", "commit 792ff53 và 681260a"):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(A.redact_secrets(ordinary), ordinary)
+
     def test_new_request_replaces_only_the_same_sessions_old_one(self):
         A.save_last_request("a", "/x", "việc một")
         A.save_last_request("b", "/x", "việc của phiên khác")
