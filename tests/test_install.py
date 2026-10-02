@@ -50,8 +50,11 @@ elif code == 0 and args[:3] == ["plugin", "marketplace", "add"]:
         print(f"Marketplace '{name}' already on disk")
     else:
         k = load(known); k[name] = {"source": args[3]}; save(known, k)
+        # như claude thật: marketplace thư mục cục bộ được khai báo trong settings.json
+        d = load(settings); d.setdefault("extraKnownMarketplaces", {})[name] = {"source": {"source": "directory", "path": args[3]}}; save(settings, d)
 elif code == 0 and args[:3] == ["plugin", "marketplace", "remove"]:
     k = load(known); k.pop(args[3], None); save(known, k)
+    d = load(settings); d.get("extraKnownMarketplaces", {}).pop(args[3], None); save(settings, d)
 sys.exit(code)
 """
 

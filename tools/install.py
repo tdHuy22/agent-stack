@@ -503,7 +503,8 @@ def write_manifest() -> Path:
           "- gỡ các symlink;",
           "- khôi phục file từ bản sao lưu;",
           "- xóa thư mục do lần cài tạo ra, kể cả `vendor/`;",
-          "- dọn `enabledPlugins` trong `~/.claude/settings.json`;",
+          "- dọn `enabledPlugins` và `extraKnownMarketplaces` trong `~/.claude/settings.json`;",
+          "- dọn cache và dữ liệu của đúng các plugin đã cài trong `~/.claude/plugins/`;",
           "- so với bản chụp trước lần cài đầu tiên và báo những gì còn khác.", "",
           "Muốn gỡ riêng một lần cài: `./install.sh --rollback state/install-logs/<tên>.json --apply`.", "",
           "## Không thuộc lần cài (lần gỡ không đụng tới)", "",
@@ -590,21 +591,27 @@ def installed_marketplaces(actions: list) -> list:
 
 
 def cleanup_enabled_plugins(data: dict, apply: bool) -> None:
-    """Bỏ khỏi enabledPlugins các plugin mà lần cài này đã thêm (claude plugin uninstall có thể để lại {})."""
+    """Bỏ khỏi settings.json những gì lệnh claude plugin của lần cài này đã thêm: enabledPlugins (install)
+    và extraKnownMarketplaces (marketplace add với thư mục cục bộ). Lệnh gỡ của claude có thể để lại {}."""
     settings = Path.home() / ".claude" / "settings.json"
     snap = (data.get("pristine") or {}).get("settings.json")
-    before = read_json_file(Path(snap)) if snap else {}
+    before = (read_json_file(Path(snap)) if snap else None) or {}
     current = read_json_file(settings) if settings.exists() else None
-    if not isinstance(current, dict) or not isinstance(current.get("enabledPlugins"), dict):
+    if not isinstance(current, dict):
         return
-    enabled, changed = current["enabledPlugins"], False
-    for pid in installed_plugin_ids(data["actions"]):
-        if pid in enabled and pid not in ((before or {}).get("enabledPlugins") or {}):
-            enabled.pop(pid)
+    changed = False
+    for key, names in (("enabledPlugins", installed_plugin_ids(data["actions"])),
+                       ("extraKnownMarketplaces", installed_marketplaces(data["actions"]))):
+        entries = current.get(key)
+        if not isinstance(entries, dict):
+            continue
+        for name in names:
+            if name in entries and name not in (before.get(key) or {}):
+                entries.pop(name)
+                changed = True
+        if not entries and key not in before:
+            current.pop(key)
             changed = True
-    if not enabled and "enabledPlugins" not in (before or {}):
-        current.pop("enabledPlugins")
-        changed = True
     if changed and apply:
         keep = HOME_STACK / "backups" / f"rollback-{time.strftime('%Y%m%d-%H%M%S')}"
         keep.mkdir(parents=True, exist_ok=True)

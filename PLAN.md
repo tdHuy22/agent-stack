@@ -5,18 +5,20 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 02/10/2026.*
 
-- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, sửa 5 chỗ thiếu của lần rà soát, và router chọn skill theo nội dung project cùng dòng ➡️ sau mỗi câu trả lời (02/10/2026). Plugin `agent-stack` 0.3.0 gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 154 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
+- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, skill `reuse-best`, sửa 5 chỗ thiếu của lần rà soát, và router chọn skill theo nội dung project cùng dòng ➡️ sau mỗi câu trả lời (02/10/2026). Plugin `agent-stack` 0.3.0 gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 159 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
 - **Đang dở:** không có.
+- **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat: 11 mục duyệt, 2 từ chối, 8 còn chờ. Mọi thay đổi và cách gỡ từng mục nằm trong `INSTALLED.md`. Gỡ toàn bộ: `./install.sh --rollback --apply`.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` cho những mục đồng ý (danh sách: `vet.py list`).
-  2. Xem trước bằng `./install.sh`, rồi `./install.sh --apply` (thêm `--restore-workflow-warning` để bật lại cảnh báo usage của workflow).
-  3. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
-  4. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
-  5. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/` để tạo style card và bật phần so với bài mẫu của `tells.py`.
-  6. Cài các CLI bạn muốn dùng (mình không tự cài gì toàn cục): `brew install gitleaks osv-scanner`, và `brew install pyright` nếu duyệt plugin pyright-lsp. `python3 tools/maintain.py` sẽ nhắc nếu còn thiếu.
-  7. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
+  1. Chạy `claude /login` trong terminal, vì CLI đang hết phiên đăng nhập.
+  2. Khởi động lại desktop app hoặc mở phiên mới để nạp plugin, hook và luật chung. Kiểm tra lúc mở phiên có dòng 🧭 hồ sơ project, và cảnh báo hạn mức có hiện không.
+  3. `brew install pyright` để plugin pyright-lsp chạy được. Nếu muốn: `brew install gitleaks osv-scanner`.
+  4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
+  5. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
+  6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
+  7. Khi cần, duyệt riêng 8 mục còn chờ (`vet.py list`), rồi chạy lại `./install.sh --apply`.
+  8. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
 - **Quyết định còn treo:** 4 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi). Câu "(luôn kiểm tra" đã rõ: thuộc reuse-best.
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 154 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
+- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 159 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
 
 ## 1. Giai đoạn
@@ -117,3 +119,26 @@
   - Lộ trình trong mục tóm tắt và README đã cập nhật.
   - OpenCode không có hook, nên luật chung dặn chạy `route.py --session` ở câu trả lời đầu tiên của phiên.
   - Có test chặn tài liệu nói khác code ở hai điểm trên. 5 test mới.
+
+### GĐ11: Cài toàn cục (02/10/2026)
+- [x] Trước khi cài:
+  - Kiểm tra bản marketplace chính thức trên máy: commit khác bản đã kiểm duyệt, nhưng file của 5 plugin sắp cài giống hệt từng byte.
+  - Kiểm tra các file và thư mục sắp bị sửa.
+- [x] Sửa `install.py` để ghi lại và gỡ được sạch:
+  - `INSTALLED.md` ghi mọi lần cài;
+  - `--rollback` gỡ mọi lần cài, mới nhất trước;
+  - `vendor/` có marketplace riêng và không đưa vào git;
+  - mỗi lần gỡ xóa đúng các thư mục do lần cài tạo;
+  - chụp cấu hình trước khi cài, rồi dọn `enabledPlugins`, `extraKnownMarketplaces`, cache và dữ liệu plugin khi gỡ.
+- [x] Lỗi lộ ra khi làm, đã sửa và có test:
+  - hai lần chạy cùng một giây ghi đè bản chụp;
+  - lệnh gỡ chọn nhầm nhật ký cũ vì sắp theo tên file;
+  - lần cài sau xóa bản ghi lần trước;
+  - lệnh "đã có" bị ghi như một thay đổi.
+- [x] Ghi quyết định của bạn vào `vetted.lock` (bạn đồng ý trong chat, mình gõ lệnh), rồi chạy `./install.sh --apply`: 28 thay đổi, 0 lỗi.
+- [x] Kiểm chứng sau khi cài:
+  - cả 7 plugin đều bật;
+  - file của plugin đã cài khớp bản đã kiểm duyệt (chỉ thêm file `.in_use` do Claude Code tạo);
+  - phiên `claude -p` cho thấy CLI nạp plugin tại chỗ;
+  - desktop app chạy bản chép trong cache, nên thêm file `plugin/.agent-stack-home` để bản chép tìm về repo, và bước `plugin update`.
+- [x] Có một phiên SCEE được resume lúc 15:24, trước khi có file trỏ. Hook của phiên đó ghi trạng thái vào `~/.claude/plugins/data/agent-stack-inline`. Hook chỉ đọc SCEE, không sửa gì; thư mục đó sẽ được dọn khi gỡ.
