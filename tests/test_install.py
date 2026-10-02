@@ -9,10 +9,36 @@ from tests._util import REPO, TempDirTestCase
 
 INSTALL = REPO / "tools" / "install.py"
 FAKE_CLAUDE = """#!/usr/bin/env python3
-import sys, os
+import json, os, sys
+args = sys.argv[1:]
 with open(os.environ["FAKE_CLAUDE_LOG"], "a") as fh:
-    fh.write(" ".join(sys.argv[1:]) + "\\n")
-sys.exit(int(os.environ.get("FAKE_CLAUDE_EXIT", "0")))
+    fh.write(" ".join(args) + "\\n")
+code = int(os.environ.get("FAKE_CLAUDE_EXIT", "0"))
+# Giả lập phần claude thật ghi vào cấu hình: enabledPlugins và danh sách marketplace.
+home = os.path.join(os.environ["HOME"], ".claude")
+settings = os.path.join(home, "settings.json")
+known = os.path.join(home, "plugins", "known_marketplaces.json")
+def load(path):
+    try:
+        return json.load(open(path))
+    except Exception:
+        return {}
+def save(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json.dump(data, open(path, "w"))
+if code == 0 and args[:2] == ["plugin", "install"]:
+    d = load(settings); d.setdefault("enabledPlugins", {})[args[2]] = True; save(settings, d)
+elif code == 0 and args[:2] == ["plugin", "uninstall"]:
+    d = load(settings); d.get("enabledPlugins", {}).pop(args[2], None); save(settings, d)
+elif code == 0 and args[:3] == ["plugin", "marketplace", "add"]:
+    try:
+        name = json.load(open(os.path.join(args[3], ".claude-plugin", "marketplace.json")))["name"]
+    except Exception:
+        name = args[3]
+    k = load(known); k[name] = {"source": args[3]}; save(known, k)
+elif code == 0 and args[:3] == ["plugin", "marketplace", "remove"]:
+    k = load(known); k.pop(args[3], None); save(known, k)
+sys.exit(code)
 """
 
 
@@ -125,9 +151,12 @@ class InstallTests(TempDirTestCase):
         self.assertFalse((self.stack / "vendor" / "skills" / "demo" / ".claude-plugin").exists())
         self.assertTrue((self.home / ".config" / "opencode" / "skills" / "demo").is_symlink())
         mp = json.loads((self.stack / ".claude-plugin" / "marketplace.json").read_text())
-        self.assertIn("agent-stack-vendor", [p["name"] for p in mp["plugins"]])
+        self.assertNotIn("agent-stack-vendor", [p["name"] for p in mp["plugins"]])  # file trong git không bị sửa
+        vendor_mp = json.loads((self.stack / "vendor" / ".claude-plugin" / "marketplace.json").read_text())
+        self.assertEqual(vendor_mp["name"], "agent-stack-vendor-local")
         made = self.calls_made()
-        self.assertIn("plugin install agent-stack-vendor@agent-stack-local --scope user", made)
+        self.assertIn(f"plugin marketplace add {self.stack / 'vendor'}", made)
+        self.assertIn("plugin install agent-stack-vendor@agent-stack-vendor-local --scope user", made)
         self.assertFalse(any("y@m" in c or "q@m" in c for c in made))
 
     def test_failed_command_is_reported_and_exits_1(self):
@@ -150,3 +179,58 @@ class InstallTests(TempDirTestCase):
         settings.write_text("{hỏng")
         self.run_install("--apply", "--only", "statusline,autocontinue", expect=1)
         self.assertEqual(settings.read_text(), "{hỏng")
+
+
+    def test_full_install_is_recorded_and_rollback_leaves_no_trace(self):
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        settings.write_text(json.dumps({"model": "sonnet"}))
+        cache = self.stack / ".vet-cache" / "o__r@abcdefabcdef"
+        (cache / "skill").mkdir(parents=True)
+        (cache / "skill" / "SKILL.md").write_text("---\nname: demo\n---\n")
+        self.lock["entries"] = {"o/r:skill": {"verdict": "PASS", "sha": "abcdefabcdef1234", "subpath": "skill",
+                                              "report": "vet-reports/o__r@abcdefabcdef.md",
+                                              "human_review": {"status": "approved"}}}
+        self.catalog["items"] = [{"key": "o/r:skill", "kind": "vendor-skill", "scope": "user", "install": {"name": "demo"}}]
+        self.save()
+        before_home = sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*"))
+        out = self.run_install("--apply")
+        manifest = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        for needle in ("# Đã cài gì", "| symlink | ~/.claude/CLAUDE.md", "| thư mục mới |", "| sửa file | ~/.claude/settings.json",
+                       "`claude plugin install agent-stack@agent-stack-local --scope user`",
+                       "`claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user`",
+                       "./install.sh --rollback --apply", "Không thuộc lần cài"):
+            self.assertIn(needle, manifest)
+        self.assertIn("Đã ghi lại:", out)
+        self.assertTrue(json.loads(settings.read_text())["enabledPlugins"])
+        out = self.run_install("--rollback", "--apply")
+        self.assertEqual(json.loads(settings.read_text()), {"model": "sonnet"})
+        after_home = sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*"))
+        self.assertEqual([p for p in after_home if p not in before_home and "known_marketplaces" not in p
+                          and p != ".claude/plugins"], [])
+        self.assertFalse((self.stack / "vendor").exists())
+        self.assertFalse((self.home / ".config").exists())
+        note = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        self.assertTrue(note.startswith("# Hiện không có gì được cài"), note[:200])
+        self.assertIn("kết quả: sạch", note)
+        self.assertTrue(list((self.stack / "state" / "install-logs").glob("*.rolled-back.json")))
+
+    def test_two_installs_are_both_recorded_and_rollback_undoes_both(self):
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        settings.write_text(json.dumps({"model": "sonnet"}))
+        self.run_install("--apply", "--only", "rules")
+        self.run_install("--apply", "--only", "plugin,statusline")
+        manifest = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        self.assertEqual(manifest.count("## Lần cài "), 2)  # lần cài sau không xóa bản ghi lần trước
+        self.assertIn("| symlink | ~/.claude/CLAUDE.md", manifest)
+        self.assertIn("`claude plugin install agent-stack@agent-stack-local --scope user`", manifest)
+        preview = self.run_install("--rollback")
+        self.assertNotIn("còn khác", preview)
+        self.assertLess(preview.index("plugin uninstall"), preview.index("gỡ symlink ~/.claude/CLAUDE.md"))
+        self.run_install("--rollback", "--apply")
+        self.assertEqual(json.loads(settings.read_text()), {"model": "sonnet"})
+        self.assertFalse((self.home / ".claude" / "CLAUDE.md").exists())
+        self.assertFalse((self.home / ".config").exists())
+        self.assertTrue((self.stack / "INSTALLED.md").read_text(encoding="utf-8").startswith("# Hiện không có gì được cài"))
+        self.assertIn("không có gì để gỡ", self.run_install("--rollback", "--apply"))

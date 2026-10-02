@@ -17,6 +17,11 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
 Mã thoát: 0 = cài đủ; 1 = có bước lỗi; 2 = không lỗi nhưng có mục bị bỏ qua (cài chưa đủ).
 Cài một phần không phải là thành công: phần tổng kết cuối luôn liệt kê mục bị bỏ qua và mục lỗi.
 
+Ghi lại và gỡ sạch: mỗi lần --apply ghi INSTALLED.md (bảng từng thay đổi, nơi sao lưu, lệnh gỡ riêng
+từng mục) cùng nhật ký máy đọc trong state/install-logs/. --rollback --apply chạy ngược từng bước,
+khôi phục bản sao lưu, xóa thư mục do lần cài tạo ra (kể cả vendor/), dọn enabledPlugins trong
+settings.json, rồi so với bản chụp trước khi cài và báo những gì còn khác.
+
 Ví dụ:
   python3 tools/install.py                 # xem trước
   python3 tools/install.py --apply         # thực hiện
@@ -36,6 +41,8 @@ from pathlib import Path
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
 STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "opencode")
 MARKETPLACE = "agent-stack-local"
+VENDOR_MARKETPLACE = "agent-stack-vendor-local"
+VENDOR_PLUGIN = "agent-stack-vendor"
 SKIP_IN_VENDOR = {".git", ".vet-complete", ".claude-plugin", ".cursor-plugin", ".codex-plugin"}
 
 
@@ -48,13 +55,21 @@ class Installer:
         self.claude_dir = self.home / ".claude"
         self.oc_dir = self.home / ".config" / "opencode"
         self.claude_bin = os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude")
-        stamp = time.strftime("%Y%m%d-%H%M%S")
+        base, n = time.strftime("%Y%m%d-%H%M%S"), 1
+        stamp = base
+        # hai lần chạy trong cùng một giây không được dùng chung thư mục sao lưu (bản chụp sẽ bị ghi đè)
+        while (HOME_STACK / "backups" / f"install-{stamp}").exists() or \
+                list((HOME_STACK / "state" / "install-logs").glob(f"{stamp}.*json")):
+            n += 1
+            stamp = f"{base}-{n}"
         self.backup_dir = HOME_STACK / "backups" / f"install-{stamp}"
         self.log_path = HOME_STACK / "state" / "install-logs" / f"{stamp}.json"
         self.actions = []
         self.lines = []
         self.skipped = []
         self.failures = []
+        self.stamp = stamp
+        self.pristine = {}
 
     # ------------------------------------------------------------ tiện ích
 
@@ -64,6 +79,31 @@ class Installer:
 
     def record(self, **action) -> None:
         self.actions.append(action)
+
+    def ensure_dir(self, path: Path) -> None:
+        """Tạo thư mục (cả các cấp cha) và ghi lại từng thư mục mới, để lần gỡ xóa đúng những thư mục đó."""
+        missing = []
+        for candidate in [path, *path.parents]:
+            if candidate.exists():
+                break
+            missing.append(candidate)
+        for directory in reversed(missing):
+            directory.mkdir()
+            self.record(type="mkdir", path=str(directory))
+
+    def snapshot_pristine(self) -> None:
+        """Chụp các file cấu hình mà plugin CLI có thể sửa, trước khi cài, để lần gỡ so lại."""
+        targets = {"settings.json": self.claude_dir / "settings.json",
+                   "known_marketplaces.json": self.claude_dir / "plugins" / "known_marketplaces.json",
+                   "installed_plugins.json": self.claude_dir / "plugins" / "installed_plugins.json"}
+        folder = self.backup_dir / "pristine"
+        for name, path in targets.items():
+            if path.exists():
+                folder.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, folder / name)
+                self.pristine[name] = str(folder / name)
+            else:
+                self.pristine[name] = None
 
     def backup_target(self, path: Path, suffix: str = "") -> Path:
         """Đường dẫn bản sao lưu chưa dùng. Cùng một file được sao lưu nhiều lần trong một lần cài
@@ -101,11 +141,12 @@ class Installer:
             self.say(f"  ! bỏ qua: {dest} đã tồn tại và không phải của agent-stack (thêm --replace-existing để thay, có sao lưu)")
             self.skipped.append(f"{dest}: đã có file không phải của agent-stack")
             return
-        self.say(f"  + symlink: {dest} -> {src}")
+        new_dir = "" if dest.parent.exists() else f" (tạo thư mục {dest.parent})"
+        self.say(f"  + symlink: {dest} -> {src}{new_dir}")
         if not self.apply:
             return
         previous = self.backup(dest)  # thư mục thật thì được chuyển hẳn vào bản sao lưu
-        dest.parent.mkdir(parents=True, exist_ok=True)
+        self.ensure_dir(dest.parent)
         if dest.is_symlink() or dest.is_file():
             dest.unlink()
         dest.symlink_to(src)
@@ -138,18 +179,19 @@ class Installer:
                 self.say(f"  ! không đọc được {path}: {exc}. Không sửa file này.")
                 self.failures.append(f"{path}: JSON không hợp lệ")
                 return
-        before = json.dumps(data, sort_keys=True)
+        before = json.loads(json.dumps(data))
         mutate(data)
-        if json.dumps(data, sort_keys=True) == before:
+        if json.dumps(data, sort_keys=True) == json.dumps(before, sort_keys=True):
             return
         if not self.apply:
             return
+        keys = sorted(k for k in set(before) | set(data) if before.get(k) != data.get(k))
         previous = self.backup(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        self.ensure_dir(path.parent)
         tmp = path.with_suffix(".agent-stack.tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         tmp.replace(path)
-        self.record(type="file", path=str(path), backup=previous)
+        self.record(type="file", path=str(path), backup=previous, keys=keys)
 
     # ------------------------------------------------------------ các bước
 
@@ -229,14 +271,15 @@ class Installer:
             self.vendor(vendored)
 
     def vendor(self, vendored: list) -> None:
-        """Chép đúng commit đã kiểm của các skill chỉ-có-chỉ-dẫn vào vendor/skills, thành plugin agent-stack-vendor."""
+        """Chép đúng commit đã kiểm của các skill chỉ-có-chỉ-dẫn vào vendor/skills. vendor/ vừa là plugin
+        agent-stack-vendor vừa là marketplace riêng, nên gỡ thì xóa được cả thư mục mà không đụng file nào trong git."""
         vendor_root = HOME_STACK / "vendor"
         record = {}
+        planned = []
         for item, entry in vendored:
             name = item["install"]["name"]
             cache = HOME_STACK / ".vet-cache" / Path(entry["report"]).stem
             src = cache / entry["subpath"] if entry.get("subpath") else cache
-            dest = vendor_root / "skills" / name
             if item["scope"] != "user":
                 self.say(f"  · {item['scope']}: {name} không chép mặc định; khi cần, đổi scope trong catalog.json thành user rồi chạy lại")
                 continue
@@ -246,27 +289,41 @@ class Installer:
                 continue
             self.say(f"  + vendor: {name} @ {entry['sha'][:12]} -> vendor/skills/{name}")
             record[name] = {"key": item["key"], "sha": entry["sha"]}
-            if self.apply:
-                if dest.exists():
-                    shutil.rmtree(dest)
-                shutil.copytree(src, dest, ignore=lambda d, names: [n for n in names if n in SKIP_IN_VENDOR])
+            planned.append((name, src))
         if not record:
             return
         if self.apply:
-            (vendor_root / ".claude-plugin").mkdir(parents=True, exist_ok=True)
-            (vendor_root / ".claude-plugin" / "plugin.json").write_text(json.dumps({
-                "name": "agent-stack-vendor", "version": time.strftime("%Y.%m.%d"),
+            existed = vendor_root.exists()
+            if existed and not (vendor_root / "VENDORED.json").exists():
+                self.say(f"  ! {vendor_root} đã có và không phải do agent-stack tạo; không ghi đè")
+                self.failures.append(f"{vendor_root}: thư mục lạ")
+                return
+            if not existed:
+                vendor_root.mkdir()
+                self.record(type="vendor-dir", path=str(vendor_root))
+            for name, src in planned:
+                dest = vendor_root / "skills" / name
+                if dest.exists():
+                    shutil.rmtree(dest)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(src, dest, ignore=lambda d, names: [n for n in names if n in SKIP_IN_VENDOR])
+            meta = vendor_root / ".claude-plugin"
+            meta.mkdir(exist_ok=True)
+            (meta / "plugin.json").write_text(json.dumps({
+                "name": VENDOR_PLUGIN, "version": time.strftime("%Y.%m.%d"),
                 "description": "Skill của bên thứ ba, chép đúng commit đã kiểm duyệt bằng vet-skill.",
                 "author": {"name": "tdHuy22"}}, ensure_ascii=False, indent=2) + "\n")
+            (meta / "marketplace.json").write_text(json.dumps({
+                "name": VENDOR_MARKETPLACE, "owner": {"name": "tdHuy22"},
+                "description": "Marketplace cục bộ cho skill bên thứ ba đã kiểm duyệt (do install.py tạo).",
+                "plugins": [{"name": VENDOR_PLUGIN, "source": "./",
+                             "description": "Skill của bên thứ ba đã kiểm duyệt, ghim commit."}]},
+                ensure_ascii=False, indent=2) + "\n")
             (vendor_root / "VENDORED.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-            mp_path = HOME_STACK / ".claude-plugin" / "marketplace.json"
-            mp = json.loads(mp_path.read_text(encoding="utf-8"))
-            if not any(p["name"] == "agent-stack-vendor" for p in mp["plugins"]):
-                mp["plugins"].append({"name": "agent-stack-vendor", "source": "./vendor",
-                                      "description": "Skill của bên thứ ba đã kiểm duyệt, ghim commit."})
-                mp_path.write_text(json.dumps(mp, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        self.run([self.claude_bin, "plugin", "install", f"agent-stack-vendor@{MARKETPLACE}", "--scope", "user"],
-                 undo=[self.claude_bin, "plugin", "uninstall", f"agent-stack-vendor@{MARKETPLACE}", "--scope", "user"],
+        self.run([self.claude_bin, "plugin", "marketplace", "add", str(vendor_root)],
+                 undo=[self.claude_bin, "plugin", "marketplace", "remove", VENDOR_MARKETPLACE], ok_if="already")
+        self.run([self.claude_bin, "plugin", "install", f"{VENDOR_PLUGIN}@{VENDOR_MARKETPLACE}", "--scope", "user"],
+                 undo=[self.claude_bin, "plugin", "uninstall", f"{VENDOR_PLUGIN}@{VENDOR_MARKETPLACE}", "--scope", "user"],
                  ok_if="already")
 
     def step_opencode(self) -> None:
@@ -285,14 +342,24 @@ class Installer:
     def run_steps(self, steps) -> int:
         mode = "THỰC HIỆN" if self.apply else "XEM TRƯỚC (chưa sửa gì; thêm --apply để thực hiện)"
         self.say(f"agent-stack install · {mode}")
+        if self.apply:
+            self.snapshot_pristine()
         for step in steps:
             getattr(self, f"step_{step}")()
+        code = self.summary()
+        if self.apply and not self.actions and self.backup_dir.exists():
+            shutil.rmtree(self.backup_dir)  # không thay đổi gì: không để lại bản chụp thừa
         if self.apply and self.actions:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
-            self.log_path.write_text(json.dumps({"backup_dir": str(self.backup_dir), "actions": self.actions},
+            self.log_path.write_text(json.dumps({"created": time.time(), "backup_dir": str(self.backup_dir),
+                                                 "pristine": self.pristine,
+                                                 "steps": list(steps), "actions": self.actions,
+                                                 "skipped": self.skipped, "failures": self.failures},
                                                 ensure_ascii=False, indent=2) + "\n")
-            self.say(f"Đã ghi nhật ký: {self.log_path}. Hoàn tác: python3 tools/install.py --rollback")
-        return self.summary()
+            manifest = write_manifest()
+            self.say(f"Đã ghi lại: {manifest} (dễ đọc) và {self.log_path} (máy đọc).")
+            self.say("Gỡ toàn bộ: ./install.sh --rollback --apply (xem trước: ./install.sh --rollback)")
+        return code
 
     def summary(self) -> int:
         """In tổng kết. Cài một phần không được trông như thành công."""
@@ -312,22 +379,194 @@ class Installer:
         return 0
 
 
-def rollback(log_arg: str, apply: bool) -> int:
-    logs = sorted((HOME_STACK / "state" / "install-logs").glob("*.json"))
-    if log_arg:
-        log = Path(log_arg)
-    elif logs:
-        log = logs[-1]
-    else:
-        print("Không có nhật ký cài đặt nào để hoàn tác.")
-        return 1
-    data = json.loads(log.read_text(encoding="utf-8"))
-    print(f"Hoàn tác theo {log} ({'THỰC HIỆN' if apply else 'XEM TRƯỚC'})")
+# ------------------------------------------------------------ ghi lại và gỡ
+
+def short(path: str) -> str:
+    home = str(Path.home())
+    return "~" + path[len(home):] if path.startswith(home) else path
+
+
+def describe_action(action: dict) -> tuple:
+    """(loại, ở đâu, chi tiết, cách gỡ riêng mục này) cho một dòng trong INSTALLED.md."""
+    kind = action["type"]
+    if kind == "symlink":
+        undo = f"`rm {short(action['path'])}`" + (f", rồi khôi phục `{short(action['backup'])}`" if action.get("backup") else "")
+        return "symlink", short(action["path"]), f"→ `{short(action['src'])}`", undo
+    if kind == "file":
+        keys = ", ".join(f"`{k}`" for k in action.get("keys") or []) or "?"
+        undo = (f"chép lại từ `{short(action['backup'])}`" if action.get("backup")
+                else f"`rm {short(action['path'])}` (trước khi cài chưa có file này)")
+        return "sửa file", short(action["path"]), f"khóa {keys}", undo
+    if kind == "mkdir":
+        return "thư mục mới", short(action["path"]), "", f"`rmdir {short(action['path'])}` (khi đã trống)"
+    if kind == "vendor-dir":
+        return "thư mục mới", short(action["path"]), "skill bên thứ ba, ghim commit (xem `VENDORED.json`)", \
+            f"`rm -rf {short(action['path'])}`"
+    if kind == "cmd":
+        undo = f"`claude {' '.join(action['undo'][1:])}`" if action.get("undo") else "—"
+        return "lệnh claude", f"`claude {' '.join(action['cmd'][1:])}`", "", undo
+    return kind, short(action.get("path", "")), "", "—"
+
+
+def git_head() -> str:
+    try:
+        out = subprocess.run(["git", "--no-optional-locks", "-C", str(HOME_STACK), "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=10)
+        return out.stdout.strip() or "?"
+    except (OSError, subprocess.TimeoutExpired):
+        return "?"
+
+
+LOG_DIR = HOME_STACK / "state" / "install-logs"
+
+
+def load_log(path: Path) -> dict:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.setdefault("created", path.stat().st_mtime)
+    return data
+
+
+def active_logs() -> list:
+    """Các lần cài còn hiệu lực (chưa gỡ), cũ nhất trước. Sắp theo thời điểm ghi trong nhật ký,
+    không theo tên file, vì `…-2.json` đứng trước `….json` khi so tên."""
+    logs = [p for p in LOG_DIR.glob("*.json") if not p.name.endswith(".rolled-back.json") and p.name != "last-rollback.json"]
+    return sorted(logs, key=lambda p: (load_log(p)["created"], p.name))
+
+
+def when(ts: float) -> str:
+    return time.strftime("%H:%M %d/%m/%Y", time.localtime(ts))
+
+
+def write_manifest() -> Path:
+    """INSTALLED.md: bản ghi dễ đọc của mọi lần cài còn hiệu lực, cách gỡ từng mục và gỡ toàn bộ,
+    cộng kết quả lần gỡ gần nhất. Dựng lại từ nhật ký mỗi lần cài hoặc gỡ."""
+    logs = active_logs()
+    last = read_last_rollback()
+    path = HOME_STACK / "INSTALLED.md"
+    if not logs:
+        L = ["# Hiện không có gì được cài", "", "*File này do `tools/install.py` tạo; đừng sửa tay.*", ""]
+        if last:
+            L += [f"Lần gỡ gần nhất: {when(last['ts'])}, kết quả: {last['result']}."]
+            L += [f"- Lỗi: {e}" for e in last.get("errors") or []] + [f"- Còn khác: {n}" for n in last.get("notes") or []]
+            L += ["", "Các lần cài đã gỡ: " + ", ".join(f"`{x}`" for x in last.get("logs") or []) + "."]
+        path.write_text("\n".join(L) + "\n", encoding="utf-8")
+        return path
+    L = ["# Đã cài gì", "",
+         f"*Cập nhật {time.strftime('%H:%M %d/%m/%Y')} từ commit `{git_head()}` của agent-stack. "
+         "File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*", ""]
+    if last:
+        L += [f"*Lần gỡ gần nhất: {when(last['ts'])}, kết quả: {last['result']}.*", ""]
+    for log in logs:
+        data = load_log(log)
+        rows = [describe_action(a) for a in data["actions"]]
+        L += [f"## Lần cài {when(data['created'])}", "",
+              f"- Nhật ký máy đọc: `state/install-logs/{log.name}`",
+              f"- Sao lưu: `{short(data['backup_dir'])}`, gồm bản chụp `pristine/` của cấu hình trước khi cài",
+              f"- Bước đã chạy: {', '.join(data.get('steps') or [])}",
+              f"- Kết quả: {len(rows)} thay đổi, {len(data.get('skipped') or [])} mục bị bỏ qua, "
+              f"{len(data.get('failures') or [])} lỗi", "",
+              "| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |", "|---:|---|---|---|---|"]
+        L += [f"| {i} | {k} | {w} | {d} | {u} |" for i, (k, w, d, u) in enumerate(rows, 1)]
+        if data.get("skipped") or data.get("failures"):
+            L += ["", "Chưa cài được:"] + [f"- Bỏ qua: {x}" for x in data.get("skipped") or []] \
+                + [f"- Lỗi: {x}" for x in data.get("failures") or []]
+        L.append("")
+    L += ["## Gỡ toàn bộ", "", "```bash", "./install.sh --rollback          # xem trước, không sửa gì",
+          "./install.sh --rollback --apply  # gỡ thật mọi lần cài ở trên, mới nhất trước", "```", "",
+          "Lệnh gỡ chạy ngược từng bảng ở trên:",
+          "- gỡ plugin và marketplace bằng `claude plugin`;",
+          "- gỡ các symlink;",
+          "- khôi phục file từ bản sao lưu;",
+          "- xóa thư mục do lần cài tạo ra, kể cả `vendor/`;",
+          "- dọn `enabledPlugins` trong `~/.claude/settings.json`;",
+          "- so với bản chụp trước lần cài đầu tiên và báo những gì còn khác.", "",
+          "Muốn gỡ riêng một lần cài: `./install.sh --rollback state/install-logs/<tên>.json --apply`.", "",
+          "## Không thuộc lần cài (lần gỡ không đụng tới)", "",
+          "- Quyết định duyệt trong `vetted.lock` và báo cáo trong `vet-reports/`: đây là hồ sơ kiểm duyệt.",
+          "- `state/`, `.vet-cache/` và các thư mục `backups/install-*`: xóa tay khi không cần nữa.",
+          "- Công cụ bạn tự cài bằng brew (gitleaks, osv-scanner, pyright…): gỡ bằng `brew uninstall <tên>`.",
+          "- Cấu hình bạn tự sửa sau khi cài."]
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
+
+
+def read_last_rollback():
+    return read_json_file(LOG_DIR / "last-rollback.json")
+
+
+def read_json_file(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def installed_plugin_ids(actions: list) -> list:
+    return [a["cmd"][3] for a in actions if a["type"] == "cmd" and a["cmd"][1:3] == ["plugin", "install"]]
+
+
+def installed_marketplaces(actions: list) -> list:
+    return [a["undo"][-1] for a in actions
+            if a["type"] == "cmd" and a["cmd"][1:4] == ["plugin", "marketplace", "add"] and a.get("undo")]
+
+
+def cleanup_enabled_plugins(data: dict, apply: bool) -> None:
+    """Bỏ khỏi enabledPlugins các plugin mà lần cài này đã thêm (claude plugin uninstall có thể để lại {})."""
+    settings = Path.home() / ".claude" / "settings.json"
+    snap = (data.get("pristine") or {}).get("settings.json")
+    before = read_json_file(Path(snap)) if snap else {}
+    current = read_json_file(settings) if settings.exists() else None
+    if not isinstance(current, dict) or not isinstance(current.get("enabledPlugins"), dict):
+        return
+    enabled, changed = current["enabledPlugins"], False
+    for pid in installed_plugin_ids(data["actions"]):
+        if pid in enabled and pid not in ((before or {}).get("enabledPlugins") or {}):
+            enabled.pop(pid)
+            changed = True
+    if not enabled and "enabledPlugins" not in (before or {}):
+        current.pop("enabledPlugins")
+        changed = True
+    if changed and apply:
+        keep = HOME_STACK / "backups" / f"rollback-{time.strftime('%Y%m%d-%H%M%S')}"
+        keep.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(settings, keep / f"settings-{int(time.time() * 1000)}.json")
+        settings.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def compare_with_pristine(pristine: dict, marketplaces: list, apply: bool) -> list:
+    """So cấu hình hiện tại với bản chụp trước lần cài đầu tiên. Trả về các khác biệt còn lại."""
+    notes = []
+    home = Path.home() / ".claude"
+    settings, snap = home / "settings.json", (pristine or {}).get("settings.json")
+    current = read_json_file(settings) if settings.exists() else None
+    if current is not None:
+        if not snap and current == {}:
+            if apply:
+                settings.unlink()  # trước khi cài chưa có file này, giờ cũng trống: xóa cho sạch
+        elif snap:
+            before = read_json_file(Path(snap)) or {}
+            diff = sorted(k for k in set(current) | set(before) if current.get(k) != before.get(k))
+            if diff:
+                notes.append("~/.claude/settings.json còn khác bản trước khi cài ở khóa: " + ", ".join(diff))
+    known = read_json_file(home / "plugins" / "known_marketplaces.json")
+    if isinstance(known, dict):
+        left = sorted(set(marketplaces) & set(known))
+        if left:
+            notes.append("marketplace vẫn còn đăng ký: " + ", ".join(left))
+    return notes
+
+
+def undo_actions(data: dict, apply: bool) -> tuple:
+    """Chạy ngược các thao tác của một lần cài. Trả về (lỗi, ghi chú)."""
+    errors, notes = [], []
     for action in reversed(data["actions"]):
-        if action["type"] == "symlink":
+        kind = action["type"]
+        if kind == "symlink":
             path = Path(action["path"])
-            print(f"  - gỡ symlink {path}" + (f", khôi phục {action['backup']}" if action.get("backup") else ""))
-            if apply and path.is_symlink():
+            print(f"  - gỡ symlink {short(str(path))}" + (f", khôi phục {short(action['backup'])}" if action.get("backup") else ""))
+            if not apply:
+                continue
+            if path.is_symlink() and os.readlink(path) == action["src"]:
                 path.unlink()
                 backup = action.get("backup")
                 if backup and backup.endswith(".symlink"):
@@ -336,20 +575,79 @@ def rollback(log_arg: str, apply: bool) -> int:
                     shutil.move(backup, str(path))
                 elif backup:
                     shutil.copy2(backup, path)
-        elif action["type"] == "file":
-            print(f"  - khôi phục {action['path']}" + ("" if action.get("backup") else " (xóa vì trước đó chưa có)"))
+            elif path.exists() or path.is_symlink():
+                errors.append(f"{short(str(path))} đã bị thay sau khi cài; không đụng tới")
+        elif kind == "file":
+            print(f"  - khôi phục {short(action['path'])}" + ("" if action.get("backup") else " (xóa vì trước đó chưa có)"))
             if apply:
                 if action.get("backup"):
                     shutil.copy2(action["backup"], action["path"])
                 else:
                     Path(action["path"]).unlink(missing_ok=True)
-        elif action["type"] == "cmd" and action.get("undo"):
-            print(f"  $ {' '.join(action['undo'])}")
+        elif kind == "cmd" and action.get("undo"):
+            print(f"  $ claude {' '.join(action['undo'][1:])}")
             if apply:
-                subprocess.run(action["undo"], capture_output=True, text=True)
+                try:
+                    out = subprocess.run(action["undo"], capture_output=True, text=True)
+                    text = (out.stdout + out.stderr).lower()
+                    if out.returncode != 0 and not any(w in text for w in ("not found", "not installed", "no such")):
+                        errors.append(f"claude {' '.join(action['undo'][1:])}: mã {out.returncode}: {text.strip()[:160]}")
+                except OSError as exc:
+                    errors.append(f"claude {' '.join(action['undo'][1:])}: {exc}")
+        elif kind == "vendor-dir":
+            path = Path(action["path"])
+            print(f"  - xóa {short(str(path))}")
+            if apply and path.exists():
+                if path.resolve() == (HOME_STACK / "vendor").resolve():
+                    shutil.rmtree(path)
+                else:
+                    errors.append(f"{path}: không phải thư mục vendor của agent-stack; không xóa")
+        elif kind == "mkdir":
+            path = Path(action["path"])
+            print(f"  - xóa thư mục {short(str(path))} nếu đã trống")
+            if apply and path.is_dir():
+                try:
+                    path.rmdir()
+                except OSError:
+                    notes.append(f"{short(str(path))} còn file khác (không do lần cài tạo) nên được giữ lại")
+    return errors, notes
+
+
+def rollback(log_arg: str, apply: bool) -> int:
+    """Gỡ một lần cài (khi đưa nhật ký) hoặc mọi lần cài còn hiệu lực, mới nhất trước.
+    Mã thoát: 0 = sạch; 1 = có bước gỡ lỗi; 2 = gỡ xong nhưng còn khác bản chụp trước khi cài."""
+    targets = [Path(log_arg)] if log_arg else list(reversed(active_logs()))
+    if not targets:
+        print("Không có lần cài nào đang hiệu lực, không có gì để gỡ.")
+        return 0
+    errors, notes, marketplaces, pristine = [], [], [], None
+    for log in targets:
+        data = load_log(log)
+        print(f"Hoàn tác lần cài {when(data['created'])} theo {log.name} ({'THỰC HIỆN' if apply else 'XEM TRƯỚC'})")
+        errs, kept = undo_actions(data, apply)
+        errors += errs
+        notes += kept
+        cleanup_enabled_plugins(data, apply)
+        marketplaces += installed_marketplaces(data["actions"])
+        pristine = data.get("pristine")  # vòng cuối là lần cài cũ nhất: bản chụp gốc
+        if apply:
+            log.rename(log.with_suffix(".rolled-back.json"))
+    if apply:  # xem trước thì cấu hình vẫn đang ở trạng thái đã cài: chưa so được
+        notes += compare_with_pristine(pristine, marketplaces, apply)
+    for note in notes:
+        print(f"  ! {note}")
+    for err in errors:
+        print(f"  ✗ {err}")
     if apply:
-        log.rename(log.with_suffix(".rolled-back.json"))
-    return 0
+        result = "sạch" if not errors and not notes else ("có lỗi" if errors else "xong, còn khác bản chụp trước khi cài")
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        (LOG_DIR / "last-rollback.json").write_text(json.dumps({
+            "ts": time.time(), "result": result, "errors": errors, "notes": notes,
+            "logs": [t.name for t in targets]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"Đã ghi kết quả gỡ vào {write_manifest()}.")
+    if errors:
+        return 1
+    return 2 if notes else 0
 
 
 def main(argv=None) -> int:
