@@ -48,9 +48,9 @@
     "anthropics/claude-plugins-official:external_plugins/context7": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:27Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: 1 MCP http tới mcp.context7.com (gửi truy vấn tra docs ra ngoài), không hook.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -84,9 +84,9 @@
     "anthropics/claude-plugins-official:external_plugins/playwright": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:27Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: MCP chạy npx @playwright/mcp@latest (không ghim phiên bản npm), không hook.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -237,9 +237,9 @@
     "anthropics/claude-plugins-official:plugins/hookify": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: 4 hook (Pre/PostToolUse, Stop, UserPromptSubmit) là cơ chế chính của plugin, chạy python cục bộ.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -355,9 +355,9 @@
     "anthropics/skills:skills/webapp-testing": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: scanner báo shell=True trong scripts/with_server.py, là mẫu quen thuộc của script chạy server thử.",
+        "status": "approved"
       },
       "license": "none",
       "license_files": [
@@ -591,9 +591,9 @@
     "obra/superpowers": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: 1 hook SessionStart; cờ permission-bypass nằm trong test và tài liệu; nguồn plugin ngoài chỉ trỏ ./ (chính repo).",
+        "status": "approved"
       },
       "license": "MIT",
       "license_files": [
@@ -718,9 +718,9 @@
     "trailofbits/skills:plugins/c-review": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: allowed-tools cấp Bash không giới hạn, đúng với việc review C/C++.",
+        "status": "approved"
       },
       "license": "CC-BY-SA-4.0",
       "license_files": [
@@ -757,9 +757,9 @@
     "trailofbits/skills:plugins/differential-review": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: allowed-tools cấp Bash không giới hạn; dùng cho review trước commit.",
+        "status": "approved"
       },
       "license": "CC-BY-SA-4.0",
       "license_files": [
@@ -796,9 +796,9 @@
     "trailofbits/skills:plugins/static-analysis": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-02T15:09:28Z",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: cờ scanner nằm trong file test (pytest tmp_path.glob, eval trong test_shell_blocks), đã đối chiếu là báo nhầm; Bash không giới hạn.",
+        "status": "approved"
       },
       "license": "CC-BY-SA-4.0",
       "license_files": [

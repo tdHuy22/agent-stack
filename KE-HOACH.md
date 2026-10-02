@@ -3,6 +3,7 @@
 > Lập ngày 2026-10-01. Trạng thái: **bản kế hoạch, chưa triển khai gì**.
 > Bổ sung cùng ngày: yêu cầu **#7**, theo dõi tiến độ project, việc cần làm tiếp và việc dang dở (mục 7.8, GĐ2b).
 > Cập nhật lần 2 (2026-10-01): bỏ Jev; bắt đầu triển khai. Tiến độ thực hiện theo dõi ở [`PLAN.md`](PLAN.md).
+> Cập nhật lần 3 (2026-10-02): rà soát nguồn chính thức của Anthropic, quyết định dùng lại hay tự làm ở mục 6.13.
 
 **Quyết định đã chốt (2026-10-01):**
 - Bỏ Jev khỏi kế hoạch. Router chỉ còn tầng A (luật từ khóa) và tầng B (model local).
@@ -320,6 +321,74 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | SuperClaude, BMAD | Khung nặng, trùng vai superpowers. Quá tải cho người học một mình. |
 | Skill từ ClawHub | Nơi xảy ra chiến dịch ClawHavoc (341 skill độc nhắm macOS). |
 | Dùng tài khoản Claude Pro/Max trong công cụ bên thứ ba | Rủi ro điều khoản dịch vụ (mục 9). |
+
+### 6.13 Rà soát nguồn chính thức của Anthropic (02/10/2026)
+
+**Cách làm.** Năm lượt đọc song song, chỉ đọc, theo ba bước: (1) bốn plugin sát repo này nhất; (2) `anthropics/skills`, `anthropics/claude-code` và 13 plugin chính thức chưa xét; (3) kho mẫu, SDK, plugin công việc tri thức, rồi nhóm bảo mật, sandbox và marketplace cộng đồng. Nguồn là bản chép marketplace trên máy (commit `ab024cdcfa7c`, đúng bản trong `vetted.lock`) và GitHub API ngày 02/10/2026. Các dữ kiện quyết định (giấy phép, hook, số liệu, câu trích) đã được kiểm lại trực tiếp; phần chưa kiểm ghi ở 6.13.4. Chưa cài gì và chưa sửa code nào.
+
+**Kết luận**
+- Không mục nào đáng "dùng lại nguyên bản" ngoài `claude-security`, và chỉ để gọi tay khi cần quét sâu. Phần lớn thứ Anthropic có đã nằm sẵn trong Claude Code (`/code-review`, `/simplify`, `/security-review`, `/goal`, `/loop`, skill `claude-api`) hoặc trùng bản tự viết.
+- Một mục đáng đưa vào lộ trình: **sandbox-runtime**, để `vet-skill` có phân tích động. Đây là lỗ hổng thật duy nhất tìm thấy, vì `vet.py` hiện chỉ phân tích tĩnh.
+- Các ý nên lấy để nâng cấp bản tự viết, không chép code: `reviewer` (bước verifier phản biện, bảng lọc dương tính giả, mô tả "hình dạng" lỗi thay vì liệt kê loại lỗi, soi nuốt lỗi và test thiếu), `tien-do` (báo phần thay đổi), `session-keeper` (kiểm bằng agent không có ngữ cảnh), `vet-skill` (danh sách kiểm MCP), grader (rubric từng tiêu chí).
+- Nên tránh: Stop hook tự lặp (`ralph-loop`) và `security-guidance` (SessionStart tự `pip install`, Stop gọi LLM mỗi lượt có sửa file).
+
+**Giấy phép quyết định được chép hay chỉ học ý** (đọc từ file LICENSE; API trả `null` cho `claude-code` và `skills` vì giấy phép nằm ở từng thư mục)
+- **Chỉ học ý:** `anthropics/claude-code` (kể cả `examples/` và `plugins/ralph-wiggum`; "All rights reserved", theo Commercial Terms); plugin `claude-security` (LICENSE riêng, đóng); skill `docx`, `pdf`, `pptx`, `xlsx` (source-available); `doc-coauthoring` (không có LICENSE.txt, coi là chưa xác định); `claude-agent-sdk-typescript` và `claude-agent-sdk-demos` (API báo không có giấy phép).
+- **Chép được, giữ thông báo bản quyền và ghi nguồn:** Apache-2.0 gồm 16 trong 17 plugin đã xét ở bước 1 và 2b (trừ `claude-security`), `sandbox-runtime`, `knowledge-work-plugins`, `claude-plugins-community`, `defending-code-reference-harness`, và các skill của `anthropics/skills` đã đọc LICENSE (mcp-builder, discernment-nudge, internal-comms, claude-api, academy-guide); MIT gồm `claude-cookbooks`, `claude-quickstarts`, `claude-agent-sdk-python`, `claude-code-security-review`, `claude-code-action`.
+
+**6.13.1 Việc nên làm (dùng lại hoặc điều chỉnh).** Thứ tự trong bảng là thứ tự đề xuất làm. Mục nào cài hay chạy đồ bên thứ ba thì phải qua `vet-skill` và được bạn duyệt trước.
+
+| Mục | Quyết định | Áp vào | Việc cần làm | Bằng chứng · giấy phép |
+|---|---|---|---|---|
+| [sandbox-runtime](https://github.com/anthropics/sandbox-runtime) (`srt`) | **ĐIỀU CHỈNH, ưu tiên 1** | `vet-skill` | Vet gói npm `@anthropic-ai/sandbox-runtime`, cài cô lập (`npm install --prefix .cache/srt`, không `-g`), thử trên một script vô hại, rồi thêm bước "phân tích động" tùy chọn vào `vet.py`: không mạng, chỉ ghi vào thư mục tạm, `denyRead` cho `~/.ssh`, `~/.aws`, `~/.config`. Ràng buộc phải do sandbox thực thi, không dựa vào lời dặn model. | ★5,4k · 10-01 · Apache-2.0 · npm 0.0.78, 4 phụ thuộc trực tiếp. macOS dùng Seatbelt (`/usr/bin/sandbox-exec` và Node 24 đã có trên máy). Nhãn "Beta Research Preview", 262 issue mở. |
+| [plugin-dev](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/plugin-dev) | **ĐIỀU CHỈNH** | kiểm tra `plugin/` | Vet `plugins/plugin-dev`, chạy một lần ba script `validate-hook-schema.sh`, `hook-linter.sh`, `test-hook.sh` từ bản chép (không cài), so với `claude plugin validate`. Đã biết trước một cảnh báo: `SessionEnd` có `timeout: 2`, mà script coi dưới 5 giây là "rất thấp" (`validate-hook-schema.sh` dòng 139). Không cài toàn cục (660 KB; lệnh `/create-plugin` có Bash, Write, Task). | Apache-2.0 · 7 skill, 3 agent, 10 script `.sh` |
+| `reviewer` ← [defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) | **ĐIỀU CHỈNH** (ý, không cài) | `plugin/agents/reviewer.md` | Theo `docs/prompting.md` và `docs/best-practices.md` của harness: (a) mô tả "hình dạng" lỗ hổng thay vì liệt kê loại lỗi, vì liệt kê làm giảm recall (`reviewer.md` dòng 14 đang liệt kê); (b) mỗi phát hiện qua một bước verifier đối kháng ("tìm lý do nó sai") rồi mới báo. Pipeline tự động (Docker, ASAN, gVisor) quá nặng, không dùng. | ★7,5k · 08-06 · Apache-2.0 · README ghi "not maintained" |
+| `reviewer` ← [claude-code-security-review](https://github.com/anthropics/claude-code-security-review) | **ĐIỀU CHỈNH** | `reviewer.md` | Lấy danh sách loại trừ cứng (HARD EXCLUSIONS), tiền lệ (PRECEDENTS) và ngưỡng tin cậy làm bảng lọc dương tính giả; diễn đạt lại bằng tiếng Việt, ghi nguồn, giữ thông báo MIT. Chỉ áp cho `reviewer`, không áp cho `vet-skill` (vài loại trừ như DoS và rò secret trên đĩa không hợp khi soi đồ lạ). | ★6,3k · 02-11 (8 tháng chưa cập nhật) · MIT |
+| `reviewer` ← `pr-review-toolkit`, `code-review` | **BỎ QUA cài, lấy ý** | `reviewer.md` | Thêm hai mục kiểm từ `agents/silent-failure-hunter.md` (nuốt lỗi, fallback sai) và `agents/pr-test-analyzer.md` (thiếu test ở nhánh lỗi), hợp với C/C++ firmware; thêm quy tắc "chấm tin cậy 0 đến 100, bỏ dưới 80" từ `code-review/commands/code-review.md`. | Apache-2.0 |
+| `tien-do` ← `project-artifact` | **BỎ QUA cài, lấy ý** | `tien-do` | Lưu một snapshot nhỏ trong `state/` rồi báo "đã đổi gì từ lần trước" thay vì kể lại đầy đủ (mục "Refreshing an artifact (deltas, not re-narratives)", `SKILL.md` dòng 131). Phần Artifact và claude.ai không cần. | Apache-2.0 |
+| [claude-security](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-security) | **DÙNG LẠI**, gọi tay | quét sâu repo hoặc diff | Vet trước. Chỉ chạy khi cần; có hỏi xác nhận chi phí trước mỗi lần quét. Hook chỉ in banner, đếm usage qua telemetry của Claude Code và nhắc quét sau `git push`; tắt bằng `DISABLE_TELEMETRY=1` và `CLAUDE_SECURITY_SCAN_TIP=off`. | 46 file, ~8,3k dòng; 8 agent chạy song song nên tốn hạn mức. LICENSE riêng (đóng): chỉ dùng, không chép. |
+| `session-keeper` ← [doc-coauthoring](https://github.com/anthropics/skills/tree/main/skills/doc-coauthoring) | **ĐIỀU CHỈNH** (ý) | `session-keeper` | Thêm bước "kiểm người đọc": đưa `PLAN.md` §0 hoặc `HANDOFF.md` cho một subagent không có ngữ cảnh, hỏi "làm gì tiếp?" rồi xem chỗ nào bị hiểu sai. Viết lại bằng lời mình, không chép. | Không có LICENSE.txt: coi là chưa xác định |
+| `vet-skill` ← `mcp-server-dev`, [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder) | **ĐIỀU CHỈNH** (lấy ý) | `vet-skill` (soi MCP) | Lấy ba danh sách kiểm: `build-mcpb/references/local-security.md` (path traversal, command injection, mặc định chỉ đọc), `build-mcp-server/references/tool-design.md` (annotation `readOnlyHint`, `destructiveHint`; mô tả tool không được ra lệnh cho Claude, coi là prompt injection), `auth.md` (audience của token, nơi lưu token). Khi tự viết MCP server: cài `mcp-server-dev` và đọc `mcp-builder/reference/evaluation.md` để dựng bộ câu hỏi chấm; không chạy `evaluation.py` (gọi API Anthropic bằng khóa). | Apache-2.0 cả hai |
+| `evals/`, `session-keeper` ← [claude-cookbooks](https://github.com/anthropics/claude-cookbooks), [knowledge-work-plugins/productivity](https://github.com/anthropics/knowledge-work-plugins/tree/main/productivity) | **ĐIỀU CHỈNH** (ý) | `plugin/evals/*/graders`, `session-keeper` | (a) Viết grader theo rubric từng tiêu chí kiểm được, như `managed_agents/CMA_verify_with_outcome_grader.ipynb`. (b) Giữ §0 ngắn, đẩy chi tiết sang file riêng (mẫu bộ nhớ nóng và kho sâu). (c) Ý "dựng sẵn bản tóm tắt từ ngưỡng mềm" trong `misc/session_memory_compaction.ipynb`: để sau, vì hook không được gọi model. | MIT · Apache-2.0 |
+| [claude-code/examples](https://github.com/anthropics/claude-code/tree/main/examples) | **TỰ LÀM theo ý**, chưa gấp | hook mới, `install.py` | Mẫu hook `PreToolUse` chặn lệnh nguy hiểm bằng thoát mã 2 kèm stderr. Nếu làm thì tự viết `plugin/hooks/pretooluse_guard.py` (Python 3.9, thoát 0 khi không chắc; mẫu gốc thoát 1 khi JSON lỗi nên không theo). `settings-bash-sandbox.json`: thêm làm tùy chọn trong `install.py`, mặc định tắt. | All rights reserved: chỉ học ý |
+
+**6.13.2 Giữ bản tự viết** (đã so với bản chính thức tương ứng)
+
+| Thành phần của mình | So với | Lý do giữ |
+|---|---|---|
+| `reviewer` | feature-dev, pr-review-toolkit, code-review, code-simplifier, `/code-review`, `/security-review` | Bản chính thức trùng lệnh có sẵn hoặc quá nặng (nhiều agent chạy song song); không bản nào thay được. Nâng cấp bằng các ý ở 6.13.1. |
+| `tien-do` | project-artifact | Artifact cần đăng nhập claude.ai và công cụ `Artifact`; `tien-do` chạy cục bộ. |
+| `evals/run_eval.py` | claude-agent-sdk-python, agent-sdk-dev | SDK cần Python 3.10 trở lên cùng `anyio`, `mcp`, trái ràng buộc stdlib và Python 3.9. SDK chỉ bọc CLI `claude` bằng subprocess, đúng thứ script đang làm, và script đã lấy `total_cost_usd`, `num_turns`, `permission_denials` từ `--output-format json` (dòng 168 đến 197). |
+| `vet-skill` | claude-plugins-community | Kho này (2.283 plugin, 2.274 có `sha` ghim) nói đã "quét bảo mật tự động" nhưng không công bố tiêu chí hay kết quả. Chỉ dùng làm danh mục để tra; không add marketplace; vẫn phải vet từng mục. |
+| `task-router` | cookbooks `patterns/agents` | Không có thứ tương đương trực tiếp; các notebook là khung khái niệm. Mục `cost_optimization/` chưa mở. |
+| `giong-van` | brand-review, internal-comms, doc-coauthoring | Các mục kia cần style guide công ty hoặc là quy trình viết tài liệu; `giong-van` chỉnh giọng cá nhân. |
+| §0 và `session-keeper` | claude-quickstarts `autonomous-coding` | Cùng ý (file tiến độ giữa các phiên), mình đã có. |
+
+**6.13.3 Bỏ qua** (ghi lý do để phiên sau không phải xét lại)
+
+| Mục | Lý do |
+|---|---|
+| `ralph-loop` (marketplace), `ralph-wiggum` (claude-code) | Stop hook chặn thoát phiên và nạp lại cùng prompt; `--max-iterations` mặc định là vô hạn (`setup-ralph-loop.sh` dòng 10 và 27); điều kiện dừng dựa vào chuỗi `<promise>` do model tự khai. Trùng `/goal`, `/loop`, và ngược ràng buộc "hook không làm kẹt phiên". |
+| `security-guidance` | SessionStart chạy `ensure_agent_sdk.py` (timeout 180 giây), tự tạo venv ở `~/.claude/security/agent-sdk-venv` rồi `pip install` SDK, nằm ngoài `vet-skill`. Stop và SubagentStop gửi diff tới LLM mỗi lượt có sửa file. Hook `asyncRewake` có thể đánh thức model sau câu trả lời và làm lệch dòng ➡️ (suy luận từ cấu hình, chưa chạy thử). Chỉ lấy ý: một file luật bảo mật riêng nạp vào bước review (plugin dùng `~/.claude/claude-security-guidance.md`), áp cho `reviewer`. Nếu sau này vẫn muốn cài: vet, đặt `ENABLE_STOP_REVIEW=0`. |
+| discernment-nudge | Ý hay (nhắc giả định, số liệu cần kiểm) nhưng `SKILL.md` dòng 208 bắt "không thêm gì sau phần nudge", mâu thuẫn dòng ➡️ phải ở cuối mọi câu trả lời. Lấy ý cho `researcher`, không cài. |
+| academy-guide | Gợi ý khóa học sau mỗi câu trả lời về cách dùng Claude; nhiễu với người đã thạo. |
+| code-modernization | 107 file; hook ở 5 sự kiện (SessionStart, UserPromptSubmit, Stop, PostToolUseFailure, StopFailure), chủ yếu telemetry; dành cho di trú hệ thống legacy lớn. |
+| feature-dev, code-simplifier, commit-commands | Trùng quy trình có sẵn (Explore, Plan, `reviewer`), `/simplify` và `git`, `gh`. `/commit-push-pr` ngược luật "không push"; chỉ `/clean_gone` tiện, tự viết được trong vài dòng. |
+| explanatory-output-style, learning-output-style | Hook SessionStart làm mọi câu trả lời dài hơn hoặc đổi hành vi agent; ngược mục tiêu ngắn gọn và dòng ➡️. |
+| receipts | Trùng tên `receipt.py` nhưng khác chức năng: báo cáo mức dùng để giải trình với quản lý. Không cần. |
+| agent-sdk-dev, frontend-design (cả bản plugin và bản skill), playground, mcp-tunnels, cwc-makers, math-olympiad, math-proof | Không liên quan hướng của bạn. Ba mục sau cùng chỉ xét qua mô tả. |
+| 10 plugin LSP ngôn ngữ khác (csharp, gopls, jdtls, kotlin, lua, php, ruby, rust-analyzer, swift, typescript) | Không dùng ngôn ngữ đó; chưa đọc. Cài khi cần, theo cách đã làm với pyright-lsp. |
+| claude-code-action | `git remote -v` của `agent-stack` rỗng (không có remote GitHub, không push) nên Action vô dụng lúc này. Xem lại khi repo có CI. |
+| claude-quickstarts, claude-agent-sdk-demos, claude-agent-sdk-typescript, cookbooks `patterns/agents`, `tool_evaluation`, `building_evals` | Demo hoặc khung khái niệm, mình đã có tương đương. SDK TypeScript và demos không rõ giấy phép. |
+| `anthropics/skills`: docx, pdf, pptx, xlsx, claude-api, internal-comms, algorithmic-art, canvas-design, slack-gif-creator, theme-factory, brand-guidelines, web-artifacts-builder | docx, pdf, pptx, xlsx đã có qua claude.ai (source-available, không chép); `claude-api` trùng skill built-in cùng tên; các mục còn lại không liên quan. |
+| claude-opus-4-5-migration (`claude-code/plugins`) | Đã lỗi thời (hiện là Opus 5.5); skill `claude-api` có sẵn lo phần này. |
+| `knowledge-work-plugins`: sales, legal, finance, HR, marketing, cowork-plugin-management… | Vai trò doanh nghiệp, nặng connector `.mcp.json` gọi mạng ngoài; không có hook. `cowork-plugin-management` đã có qua claude.ai. |
+
+**6.13.4 Giới hạn của đợt rà này**
+- **Chưa chạy thử:** `srt` trên macOS (Darwin 27.0.0), ba script kiểm hook của plugin-dev, và mọi hook của plugin bên thứ ba. Nhận định về hành vi đến từ đọc mã và tài liệu.
+- **Chưa đọc:** `scan.js` và các agent của `claude-security` (nên chưa biết chi phí mỗi mức effort); ngưỡng bỏ qua Stop review của `security-guidance`; `cost_optimization/` và `claude_agent_sdk/` trong cookbooks; `commands/` và `dashboard.html` của productivity; các skill `/threat-model`, `/patch`, `/verify` của harness; mã `connections.py` và `evaluation.py` của mcp-builder; 262 issue mở của sandbox-runtime (có thể có lỗi thoát sandbox).
+- **Chưa kiểm với docs chính thức:** dạng `command` kèm `args` của hook trong `plugin/hooks/hooks.json` và trường `disallowed-tools` ở skill. Hook vẫn chạy (đầu ra SessionStart xuất hiện trong phiên) và `claude plugin validate` đạt.
+- **Ngoài phạm vi ba bước, chưa rà:** "Anthropic Directory" trên claude.ai; các repo Anthropic khác trong danh sách theo sao như financial-services, claude-for-legal, commerce-agents, prompt-eng-interactive-tutorial, anthropic-sdk-*.
 
 ---
 
@@ -767,9 +836,9 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 
 Đã trả lời: ai viết skill (Claude viết v1), commit (có, sau mỗi giai đoạn), Jev (bỏ), phạm vi (chỉ `agent-stack/`), câu "(luôn kiểm tra" (thuộc reuse-best: trước khi build luôn tìm thứ có sẵn tốt nhất, xem 7.9).
 
-1. Bạn dùng gói Claude nào: Pro, Max 5x hay Max 20x? Có bật usage credits không? (Tùy gói, Fable có thể bị tính vào usage credits.)
-2. Worker OpenCode: chỉ dùng model local và miễn phí, hay chấp nhận provider trả phí qua API key? Bạn có muốn tuyệt đối không gửi code ra ngoài không?
-3. Viết luận: dùng cho việc gì (blog, CV, hồ sơ học bổng, bài tập)? Tiếng Việt, tiếng Anh hay cả hai?
+1. ~~Gói Claude~~ **Đã trả lời (02/10/2026):** Max, nhưng có thể quay lại Pro nếu khối lượng công việc giảm. Usage credits: tắt (`get_usage` ngày 02/10: extra usage tắt, trần 100 USD/tháng, đã dùng 0). Nếu hạ xuống Pro, đo lại bằng `tools/usage_snapshot.py` và xem lại bảng định tuyến (dùng Opus ít hơn).
+2. ~~Worker OpenCode~~ **Đã trả lời một phần (02/10/2026):** OpenCode đang dùng OpenRouter và model free của OpenCode, không phải model local, nên code gửi ra dịch vụ ngoài khi giao cho worker. Còn mở: có việc hay thư mục nào tuyệt đối không được gửi ra ngoài không. Cần rà: mô tả `oc-worker` và `AGENTS.global.md` đang ghi "model local".
+3. ~~Viết luận~~ **Đã trả lời một phần (02/10/2026):** dùng đa dạng, nhiều mục đích. Chưa nói ngôn ngữ (Việt, Anh hay cả hai). Vì đa dạng, style card nên theo từng thể loại, và 5 bài mẫu nên khác loại.
 4. Theo dõi tiến độ: khi kích hoạt toàn cục, những project nào cần theo dõi (mặc định là mọi thư mục trong `~/Documents/Claude/`)? Có muốn nhận bản tổng hợp mỗi tuần không? (Việc `git init` ba thư mục học để sau, vì hiện chỉ làm trong `agent-stack/`.)
 
 ---
@@ -789,3 +858,5 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 **Điều khoản dịch vụ:** [WinBuzzer 02/2026](https://winbuzzer.com/2026/02/19/anthropic-bans-claude-subscription-oauth-in-third-party-apps-xcxwbn/) · [AlternativeTo](https://alternativeto.net/news/2026/2/anthropic-officially-bans-using-subscription-authentication-for-third-party-claude-use) · [BetterClaw: lệnh cấm và điều chỉnh](https://www.betterclaw.io/blog/openclaw-anthropic-subscription-ban)
 
 **Repo và kho skill:** [anthropics/skills](https://github.com/anthropics/skills) · [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) · [skills.sh](https://skills.sh) · [superpowers](https://github.com/obra/superpowers) · [mattpocock/skills](https://github.com/mattpocock/skills) · [planning-with-files](https://github.com/OthmanAdi/planning-with-files) · [claude-mem](https://github.com/thedotmack/claude-mem) · [trailofbits/skills](https://github.com/trailofbits/skills) · [humanizer](https://github.com/blader/humanizer) · [claude-code-router](https://github.com/musistudio/claude-code-router) · [OpenCode](https://github.com/anomalyco/opencode) · [jcode](https://github.com/1jehuang/jcode). Số sao lấy qua GitHub API ngày 2026-10-01.
+
+**Rà soát nguồn chính thức của Anthropic (6.13), số liệu GitHub API ngày 2026-10-02:** [sandbox-runtime](https://github.com/anthropics/sandbox-runtime) · [defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) · [claude-code-security-review](https://github.com/anthropics/claude-code-security-review) · [claude-code-action](https://github.com/anthropics/claude-code-action) · [claude-plugins-community](https://github.com/anthropics/claude-plugins-community) · [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) · [claude-cookbooks](https://github.com/anthropics/claude-cookbooks) · [claude-quickstarts](https://github.com/anthropics/claude-quickstarts) · [claude-agent-sdk-python](https://github.com/anthropics/claude-agent-sdk-python) · [claude-code](https://github.com/anthropics/claude-code) · [anthropics/skills](https://github.com/anthropics/skills) · [claude-plugins-official/plugins](https://github.com/anthropics/claude-plugins-official/tree/main/plugins)

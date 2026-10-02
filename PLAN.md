@@ -15,23 +15,36 @@
     - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
     - CLI nạp plugin tại chỗ, đã thấy `plugin_root` trong `state/sessions.jsonl`;
     - desktop app chạy bản chép trong cache, tìm về repo nhờ `plugin/.agent-stack-home`.
-- **Đang dở:** không có việc đang sửa dở.
+  - **Rà soát nguồn chính thức của Anthropic** (02/10/2026): 14 repo, gồm marketplace `claude-plugins-official`, `anthropics/skills`, `claude-code`, cookbooks, SDK, nhóm bảo mật và sandbox. Quyết định dùng lại hay tự làm nằm ở `KE-HOACH.md` §6.13; chưa cài gì, chưa sửa code.
+    - Không mục nào đáng dùng nguyên bản, trừ `claude-security` (gọi tay khi cần quét sâu).
+    - Đáng đưa vào lộ trình: `sandbox-runtime`, để `vet-skill` có phân tích động. Nhiều ý để nâng `reviewer`, `tien-do`, `session-keeper`.
+    - Chỉ học ý, không chép code: `anthropics/claude-code`, `claude-security`, docx/pdf/pptx/xlsx, doc-coauthoring.
+    - Dữ kiện then chốt (giấy phép, hook, số liệu, câu trích) đã tự kiểm lại; phần chưa chạy thử và chưa đọc ghi ở §6.13.4.
+- **Đang dở:** không có việc đang sửa dở. `KE-HOACH.md` (mục 6.13 mới) và `PLAN.md` đã sửa, chưa commit, trên nhánh `trien-khai-v1`; chờ bạn nói có commit không (đợt rà này không thuộc giai đoạn nào).
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`. Không cần kiểm tra cảnh báo hạn mức trong desktop app: desktop không chạy statusline, nên `state/limits.json` không được ghi và hook không cảnh báo (đã xác nhận 02/10/2026). Muốn kiểm tra cảnh báo thì mở `claude` trong terminal, thấy thanh `model · effort · ctx · 5h · 7d` và có file `state/limits.json` là đạt.
-  2. Chạy `claude /login` trong terminal, vì CLI đang hết phiên đăng nhập (`claude -p` báo "OAuth session expired").
-  3. Chạy `brew install pyright` để plugin pyright-lsp chạy được. Nếu muốn: `brew install gitleaks osv-scanner`.
+  2. ~~Chạy `claude /login`~~ Xong 02/10/2026: `claude -p` đã chạy được.
+  3. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy; thiếu thì mất nhảy-tới-định-nghĩa bằng LSP), `brew install gitleaks osv-scanner` (không code nào gọi; chỉ để bạn tự quét secret và lỗ hổng thư viện).
   4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
   5. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
   6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
-  7. Khi cần, duyệt riêng 8 mục còn chờ (`vet.py list`), rồi chạy lại `./install.sh --apply`.
-  8. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
+  7. ~~Duyệt riêng 8 mục còn chờ~~ Xong 02/10/2026 (19 duyệt, 2 từ chối, 0 chờ). Theo bản xem trước `./install.sh`, trong 8 mục chỉ `context7` (MCP gửi truy vấn tra docs tới mcp.context7.com) cài ở phạm vi user; 7 mục còn lại cài theo từng project khi cần. Muốn cài `context7`: `./install.sh --apply` (toàn cục, cần bạn đồng ý).
+  8. Chọn việc từ rà soát nguồn chính thức (`KE-HOACH.md` §6.13.1, thứ tự trong bảng là thứ tự đề xuất). Việc nào thêm đồ bên thứ ba thì cần bạn duyệt:
+     - (a) Vet `sandbox-runtime`: `python3 plugin/skills/vet-skill/scripts/vet.py scan anthropics/sandbox-runtime`; rồi thử phân tích động cho `vet-skill`.
+     - (b) Vet `plugin-dev`: `vet.py scan anthropics/claude-plugins-official:plugins/plugin-dev`; chạy 3 script kiểm hook một lần, rồi quyết định có nâng `timeout: 2` của SessionEnd không.
+     - (c) Nâng `plugin/agents/reviewer.md`: bước verifier phản biện, bảng lọc dương tính giả, mô tả hình dạng lỗi thay vì liệt kê loại lỗi.
+     - (d) `tien-do` báo phần thay đổi so với lần báo trước.
+     - (e) Nếu muốn quét sâu theo yêu cầu: vet `claude-security` (`vet.py scan anthropics/claude-plugins-official:plugins/claude-security`).
+  9. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
 - **Quyết định còn treo:**
+  - Có thêm bước phân tích động cho `vet-skill` bằng `sandbox-runtime` không. Đây là đồ bên thứ ba dạng npm, nhãn Beta Research Preview, nếu làm thì cài cô lập trong `.cache/srt` sau khi vet và thử trên script vô hại. Chi tiết ở `KE-HOACH.md` §6.13.1.
   - Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
     - quyết định có nạp 10 USD không (mức 1.000 request mỗi ngày, so với 50 khi chưa nạp);
     - chọn 2–3 model free có gọi tool, hoặc để `reuse-best` chọn theo benchmark.
     - Phần mình làm: thêm cấu hình `opencode run -m openrouter/<model>:free`, cách ly khỏi cấu hình toàn cục của OpenCode, giới hạn dưới 20 request mỗi phút, và `--resume`.
-  - 4 câu hỏi ở mục 10 của `KE-HOACH.md`: gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi.
+    - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa.
+  - Mục 10 của `KE-HOACH.md`: đã trả lời gói (Max, có thể về Pro), provider OpenCode (OpenRouter + OpenCode free), mục đích viết (đa dạng). Còn mở: project cần theo dõi và bản tổng hợp tuần; ngôn ngữ viết; có tuyệt đối không gửi code ra ngoài không. Cần rà: mô tả `oc-worker` và `AGENTS.global.md` đang ghi "model local", trong khi worker thực tế chạy qua OpenRouter/OpenCode free.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
   - `/usr/bin/python3 -m unittest discover -s tests -t .` → `Ran 159 tests … OK`
   - `claude plugin validate plugin` → `Validation passed`
@@ -48,7 +61,7 @@
 - [x] `tools/usage_snapshot.py` kèm test; viết `BASELINE.md`.
 - [x] Bỏ Jev khỏi kế hoạch; ghi các quyết định đã chốt vào đầu `KE-HOACH.md`.
 - [x] Claude Code CLI đã tự nâng lên 2.1.285 trong lúc triển khai (≥ 2.1.277, đọc được `AGENTS.md`). OpenCode 2.0.21.
-- [ ] **Bạn làm:** điền số liệu `/usage` và `/insights` vào `BASELINE.md`.
+- [x] **Bạn làm:** điền số liệu `/usage` và `/insights` vào `BASELINE.md`. Xong 02/10/2026: số liệu ở `BASELINE.md` (phần `/usage` đọc lại bằng `get_usage`, chưa có phân tích theo skill/subagent/MCP).
 
 ### GĐ1: Cổng kiểm duyệt
 - [x] Cài `cisco-ai-skill-scanner==2.1.0` vào `.venv` (Apache-2.0; kéo theo nhiều thư viện nặng như litellm, openai, fastapi, nên cài cô lập).
@@ -57,7 +70,7 @@
   - humanizer: REVIEW → Claude đọc tay, khuyến nghị cài.
   - webapp-testing: REVIEW → Claude đọc tay, khuyến nghị cài khi cần.
   - planning-with-files: REVIEW → không cài cả repo (507 file, 17 hook), dùng `session-keeper` tự viết thay thế.
-- [ ] **Bạn làm:** đọc báo cáo, rồi chạy `vet.py approve <khóa> --note "..."` cho mục bạn đồng ý.
+- [x] **Bạn làm:** đọc báo cáo, rồi chạy `vet.py approve <khóa> --note "..."` cho mục bạn đồng ý. Xong 02/10/2026: 21 mục đã có quyết định (19 duyệt, 2 từ chối, 0 chờ).
 
 ### GĐ2: Bền bỉ phiên (#3)
 - [x] Plugin `plugin/` + `.claude-plugin/plugin.json`; `claude plugin validate plugin` → passed.
@@ -67,7 +80,7 @@
 - [x] Skill `session-keeper` + `scripts/state.py` (show / init / handoff).
 - [x] Test hook bằng dữ liệu giả, trên Python 3.9 và 3.11.
 - [x] Chạy thử 1 phiên `claude -p --plugin-dir`: hook chạy đúng và context chèn vào đúng. Bước gọi model bị lỗi vì **CLI ở terminal hết phiên đăng nhập**.
-- [ ] **Bạn làm:** chạy `claude /login` ở terminal, rồi thử `claude --plugin-dir ~/Documents/Claude/agent-stack/plugin` trong một thư mục có PLAN.md.
+- [x] **Bạn làm:** chạy `claude /login` ở terminal, rồi thử `claude --plugin-dir ~/Documents/Claude/agent-stack/plugin` trong một thư mục có PLAN.md. Xong 02/10/2026: `claude -p` đáp bình thường; plugin đã cài toàn cục, `plugin_root` đã ghi trong `state/sessions.jsonl`.
 
 ### GĐ2b: Theo dõi tiến độ (#7)
 - [x] Skill `tien-do` + `scripts/collect.py` + test. Xếp hạng 5 bậc; chế độ `--all` cho mọi project; tùy chọn `--gh` lấy PR/CI.
@@ -80,8 +93,8 @@
 - [x] Tinh chỉnh luật sau khi chạy thật: mẫu trong chú thích hạ một bậc; U+200B trước code fence là lành; bắt `allowed-tools` tự duyệt sẵn lệnh tải-rồi-chạy; nhận xét đọc tay giữ được qua các lần quét lại.
 - [x] Sửa lỗi của chính repo: mã nguồn từng chứa ký tự vô hình thật (do escape bị giải mã khi ghi file). Có test vệ sinh chặn lỗi này.
 - [x] `catalog.json` + `tools/install.py` (`install.sh`): mặc định chỉ xem trước; chỉ cài mục bạn đã `approve`; skill chỉ có chỉ dẫn được chép đúng commit đã kiểm vào `vendor/`; có `--rollback`. Test chạy trên HOME giả.
-- [ ] **Bạn làm:** đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve <khóa> --note "..."` cho mục đồng ý.
-- [ ] **Bạn làm:** xem trước bằng `./install.sh`, rồi `./install.sh --apply` khi đồng ý (thêm `--restore-workflow-warning` để bật lại cảnh báo usage).
+- [x] **Bạn làm:** đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve <khóa> --note "..."` cho mục đồng ý. Xong 02/10/2026: 8 mục còn lại đã duyệt (xem dòng trên).
+- [x] **Bạn làm:** xem trước bằng `./install.sh`, rồi `./install.sh --apply` khi đồng ý (thêm `--restore-workflow-warning` để bật lại cảnh báo usage). Xong lượt đầu 02/10/2026 (cờ `--restore-workflow-warning` chưa dùng, `skipWorkflowUsageWarning` vẫn `true`). 8 mục duyệt sau đó: chỉ `context7` chưa cài ở phạm vi user (xem mục 7 ở trên).
 
 ### GĐ4: Đội agent và eval
 - [x] Agent Claude Code (trong plugin, tên có tiền tố `agent-stack:`): reviewer (opus·high, chỉ đọc), researcher (sonnet·medium), test-runner (haiku), explore-lite (haiku, không ghi đè Explore có sẵn), oc-worker (haiku, điều phối OpenCode).

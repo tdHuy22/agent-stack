@@ -55,7 +55,23 @@
 3. **96% token đầu vào đọc từ cache.** Caching đang hiệu quả. Đổi model hay effort giữa chừng sẽ kéo tỉ lệ này xuống, nên router chỉ gợi ý đổi ở ranh giới việc.
 4. **SCEE chiếm 89% (7 ngày).** Bộ việc để eval ở GĐ4 nên mô phỏng kiểu việc của SCEE (đọc tài liệu dài, viết, review), nhưng dùng dữ liệu giả nằm trong `agent-stack/evals/`, không đụng vào SCEE.
 
-## Bạn cần tự điền (lệnh tương tác, mình không chạy được)
+## Hạn mức và điểm ma sát (02/10/2026)
 
-- [ ] `/usage`: % hạn mức 5 giờ = …, % hạn mức tuần = …, phân bổ theo skill/subagent/MCP = …
-- [ ] `/insights`: các điểm ma sát chính = …
+### `/usage`
+
+Đọc lại bằng công cụ `get_usage` của app tối 02/10/2026, không phải bản chép từ màn hình `/usage` (mình không thấy lần bạn chạy `/usage` trong transcript).
+
+- Gói: **Max**. Usage credits (extra usage): tắt, trần 100 USD/tháng, đã dùng 0.
+- Hạn mức 5 giờ: 12% (đặt lại sau 4 giờ 21 phút). Hạn mức tuần, mọi model: 22% (đặt lại 08/10). Hạn mức tuần riêng Fable: 0%.
+- Cửa sổ ngữ cảnh của phiên đo: 11% của 1M token. Gồm Messages 4%, System tools 3%, MCP tools 2% (khoảng 19,8k), Skills 1% (khoảng 7,1k), System prompt và Memory files dưới 1%.
+- **Chưa có:** phân bổ theo skill/subagent/MCP của màn hình `/usage`. Bạn dán số đó vào đây nếu cần.
+
+### `/insights`
+
+- Phạm vi: 30 phiên (22 phiên được phân tích), 144 tin nhắn, 97 giờ, 15 commit, từ 12/09 đến 02/10/2026. Tính trên mọi project của máy này, không riêng `agent-stack`. Báo cáo đầy đủ: `~/.claude/usage-data/report-2026-10-02-220350.html`.
+- Điểm ma sát chính:
+  1. Sửa lần đầu chỉ làm một phần việc rồi báo xong (script dọn phiên chỉ xóa `.jsonl`; tính năng mới không khớp `Component.capability`; một lần `git checkout` làm mất test vừa viết).
+  2. Khuyên chắc chắn khi chưa kiểm môi trường của bạn (hướng dẫn kiểm statusline trong khi desktop app không chạy statusline; nói pyright, gitleaks, osv-scanner là cần thiết trong khi chỉ là tùy chọn).
+  3. Đổi hệ thống hoặc nội dung công khai trước khi nêu rủi ro và cách hoàn tác (thiết lập headless gây lỗi khởi động lại; README lộ thông tin cá nhân), và một lần làm việc khác thay vì trả lời câu hỏi có/không.
+- Điểm mạnh được ghi nhận: file kế hoạch làm bộ nhớ giữa các phiên; nghiên cứu song song kèm agent kiểm chứng độc lập; đo thay vì đoán.
+- Báo cáo gợi ý (chưa làm): skill `/checkpoint` (gần với `session-keeper`), hook chặn `git checkout`, `git restore`, `git reset --hard` khi có việc chưa commit, và luật "trả lời câu hỏi có/không trước khi làm" trong CLAUDE.md.
