@@ -53,13 +53,13 @@ tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl
 
 Lệnh đầu phải có `agent-stack@agent-stack-local` ở trạng thái bật. Lệnh sau cho biết hook có chạy không và plugin được nạp từ đâu (`plugin_root`). Thư mục không phải git repo và không có file kế hoạch thì hook im lặng; đó là hành vi đúng.
 
-Trong terminal, thanh trạng thái ở dưới cùng phải có dạng:
+**Chỉ khi chạy `claude` trong terminal**, thanh trạng thái ở dưới cùng phải có dạng:
 
 ```
 Opus 5.5 · high · ctx 23% · 5h 41% · 7d 12%
 ```
 
-Màu chuyển vàng rồi đỏ khi gần ngưỡng (ctx: 60/80%, 5h: 70/90%, 7d: 70/85%).
+Màu chuyển vàng rồi đỏ khi gần ngưỡng (ctx: 60/80%, 5h: 70/90%, 7d: 70/85%). Desktop app không chạy statusline, nên ở đó không có thanh này; xem mức dùng bằng `/usage`. Cách kiểm tra statusline đã chạy: file `state/limits.json` được tạo hoặc vừa cập nhật.
 
 ---
 

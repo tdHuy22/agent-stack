@@ -17,7 +17,7 @@
     - desktop app chạy bản chép trong cache, tìm về repo nhờ `plugin/.agent-stack-home`.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project, và có hiện cảnh báo hạn mức khi gần ngưỡng không. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`.
+  1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`. Không cần kiểm tra cảnh báo hạn mức trong desktop app: desktop không chạy statusline, nên `state/limits.json` không được ghi và hook không cảnh báo (đã xác nhận 02/10/2026). Muốn kiểm tra cảnh báo thì mở `claude` trong terminal, thấy thanh `model · effort · ctx · 5h · 7d` và có file `state/limits.json` là đạt.
   2. Chạy `claude /login` trong terminal, vì CLI đang hết phiên đăng nhập (`claude -p` báo "OAuth session expired").
   3. Chạy `brew install pyright` để plugin pyright-lsp chạy được. Nếu muốn: `brew install gitleaks osv-scanner`.
   4. Duyệt ngân sách eval (khoảng 15 USD theo giá niêm yết), rồi `python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes`. Dùng số liệu để cập nhật `routing-table.md` và `rules.json`.
