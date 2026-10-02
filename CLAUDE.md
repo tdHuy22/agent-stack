@@ -15,7 +15,9 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 - Python chỉ dùng thư viện chuẩn, và phải chạy được trên Python 3.9 (`/usr/bin/python3` của macOS). Hook có thể được gọi bằng Python này.
 - Hook phải nhanh và không bao giờ làm kẹt phiên: bắt mọi lỗi, thoát mã 0, không in gì khi không có việc cần báo.
 - File tạm nằm trong `.tmp/`. Trạng thái chạy nằm trong `state/`. Cả hai không đưa vào git.
-- Ngoại lệ duy nhất: khi người dùng chạy eval thật (`run_eval.py --yes`), thư mục làm việc của model nằm trong thư mục tạm của hệ điều hành, để model không đọc được `CLAUDE.md`, grader hay lời giải. Script tự xóa thư mục đó sau khi chấm.
+- Ngoại lệ:
+  - Khi người dùng chạy eval thật (`run_eval.py --yes`), thư mục làm việc của model nằm trong thư mục tạm của hệ điều hành, để model không đọc được `CLAUDE.md`, grader hay lời giải. Script tự xóa thư mục đó sau khi chấm.
+  - Test mô phỏng bản chép plugin nằm ngoài repo (như `~/.claude/plugins/cache`) dùng thư mục tạm của hệ điều hành và tự xóa.
 - Docstring và chú thích viết tiếng Việt, ngắn. Tên biến và hàm viết tiếng Anh.
 
 ## Skill

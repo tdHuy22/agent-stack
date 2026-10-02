@@ -15,3 +15,4 @@ evals/results/
 plugin/skills/giong-van/samples/*
 !plugin/skills/giong-van/samples/README.md
 vendor/
+plugin/.agent-stack-home

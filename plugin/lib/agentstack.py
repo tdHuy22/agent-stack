@@ -22,14 +22,21 @@ LIB_DIR = Path(__file__).resolve().parent
 # ---------------------------------------------------------------- vị trí
 
 def home_dir():
-    """Thư mục gốc agent-stack (có file .agent-stack-root), nếu tìm được."""
+    """Thư mục gốc agent-stack (có file .agent-stack-root), nếu tìm được.
+    Claude Code chép plugin vào ~/.claude/plugins/cache/ khi cài, nên bản chép không nằm trong repo;
+    install.py ghi đường dẫn repo vào plugin/.agent-stack-home (được chép theo) để bản chép tìm về."""
     env = os.environ.get("AGENT_STACK_HOME")
     if env:
         return Path(env).expanduser()
     for parent in LIB_DIR.parents:
         if (parent / ".agent-stack-root").exists():
             return parent
-    return None
+    pointer = LIB_DIR.parent / ".agent-stack-home"
+    try:
+        target = Path(pointer.read_text(encoding="utf-8").strip()).expanduser()
+    except OSError:
+        return None
+    return target if (target / ".agent-stack-root").exists() else None
 
 
 def state_dir() -> Path:

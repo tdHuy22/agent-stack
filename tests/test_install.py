@@ -26,10 +26,17 @@ def load(path):
 def save(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump(data, open(path, "w"))
+installed = os.path.join(home, "plugins", "installed_plugins.json")
 if code == 0 and args[:2] == ["plugin", "install"]:
     d = load(settings); d.setdefault("enabledPlugins", {})[args[2]] = True; save(settings, d)
+    i = load(installed); i.setdefault("version", 2); i.setdefault("plugins", {})[args[2]] = [{}]; save(installed, i)
+    name, _, mp = args[2].partition("@")
+    os.makedirs(os.path.join(home, "plugins", "cache", mp, name, "1.0.0"), exist_ok=True)
+    os.makedirs(os.path.join(home, "plugins", "data", args[2].replace("@", "-")), exist_ok=True)
 elif code == 0 and args[:2] == ["plugin", "uninstall"]:
+    # như claude thật có thể làm: bỏ khỏi danh sách nhưng để lại {} , cache và data
     d = load(settings); d.get("enabledPlugins", {}).pop(args[2], None); save(settings, d)
+    i = load(installed); i.get("plugins", {}).pop(args[2], None); save(installed, i)
 elif code == 0 and args[:3] == ["plugin", "marketplace", "add"]:
     try:
         name = json.load(open(os.path.join(args[3], ".claude-plugin", "marketplace.json")))["name"]
@@ -161,9 +168,11 @@ class InstallTests(TempDirTestCase):
 
     def test_failed_command_is_reported_and_exits_1(self):
         out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})
-        self.assertIn("0 mục bị bỏ qua, 2 lỗi", out)  # marketplace add và plugin install đều lỗi
+        self.assertIn("0 mục bị bỏ qua, 3 lỗi", out)  # marketplace add, plugin install và plugin update đều lỗi
         self.assertIn("- lỗi:", out)
-        self.assertFalse((self.stack / "state" / "install-logs").exists())  # không ghi bước lỗi vào nhật ký hoàn tác
+        # bước lỗi không được ghi là đã làm; chỉ file trỏ (đã ghi thật) nằm trong nhật ký để gỡ được
+        log = json.loads(next((self.stack / "state" / "install-logs").glob("*.json")).read_text())
+        self.assertEqual([a["type"] for a in log["actions"]], ["file"])
 
     def test_existing_autocontinue_choice_is_kept(self):
         settings = self.home / ".claude" / "settings.json"
@@ -206,8 +215,7 @@ class InstallTests(TempDirTestCase):
         out = self.run_install("--rollback", "--apply")
         self.assertEqual(json.loads(settings.read_text()), {"model": "sonnet"})
         after_home = sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*"))
-        self.assertEqual([p for p in after_home if p not in before_home and "known_marketplaces" not in p
-                          and p != ".claude/plugins"], [])
+        self.assertEqual(after_home, before_home)  # kể cả ~/.claude/plugins: không còn cache, data hay file mới
         self.assertFalse((self.stack / "vendor").exists())
         self.assertFalse((self.home / ".config").exists())
         note = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
@@ -234,3 +242,12 @@ class InstallTests(TempDirTestCase):
         self.assertFalse((self.home / ".config").exists())
         self.assertTrue((self.stack / "INSTALLED.md").read_text(encoding="utf-8").startswith("# Hiện không có gì được cài"))
         self.assertIn("không có gì để gỡ", self.run_install("--rollback", "--apply"))
+
+    def test_plugin_step_writes_repo_pointer_and_updates_the_cached_copy(self):
+        self.run_install("--apply", "--only", "plugin")
+        pointer = self.stack / "plugin" / ".agent-stack-home"
+        self.assertEqual(pointer.read_text(encoding="utf-8").strip(), str(self.stack))
+        self.assertIn("plugin update agent-stack@agent-stack-local --scope user", self.calls_made())
+        self.assertIn("đường dẫn repo", (self.stack / "INSTALLED.md").read_text(encoding="utf-8"))
+        self.run_install("--rollback", "--apply")
+        self.assertFalse(pointer.exists())

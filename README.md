@@ -34,6 +34,16 @@ claude --plugin-dir ~/Documents/Claude/agent-stack/plugin
 ./install.sh --rollback --apply
 ```
 
+## Sau khi sửa code plugin
+
+Claude Code chép plugin vào `~/.claude/plugins/cache/` lúc cài, nên sửa trong repo chưa có hiệu lực ngay. Tăng `version` trong `plugin/.claude-plugin/plugin.json`, rồi:
+
+```bash
+./install.sh --apply --only plugin   # chạy cả claude plugin update; mở phiên mới để nạp lại
+```
+
+Mọi thứ đã cài được ghi trong `INSTALLED.md` (kèm lệnh gỡ từng mục). Gỡ toàn bộ: `./install.sh --rollback --apply`.
+
 ## Kiểm tra
 
 ```bash

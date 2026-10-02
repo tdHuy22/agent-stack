@@ -104,6 +104,7 @@ class Installer:
                 self.pristine[name] = str(folder / name)
             else:
                 self.pristine[name] = None
+        self.pristine["plugins_listing"] = plugins_listing()
 
     def backup_target(self, path: Path, suffix: str = "") -> Path:
         """Đường dẫn bản sao lưu chưa dùng. Cùng một file được sao lưu nhiều lần trong một lần cài
@@ -130,6 +131,13 @@ class Installer:
             dest.write_text(os.readlink(path))
             return str(dest)
         dest = self.backup_target(path)
+        shutil.copy2(path, dest)
+        return str(dest)
+
+    def backup_inside_stack(self, path: Path) -> str:
+        """Sao lưu một file nằm trong agent-stack (không nằm dưới HOME như các file khác)."""
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.backup_dir / ("stack__" + str(path.relative_to(HOME_STACK)).replace("/", "__"))
         shutil.copy2(path, dest)
         return str(dest)
 
@@ -202,11 +210,24 @@ class Installer:
 
     def step_plugin(self) -> None:
         self.say("[plugin] marketplace cục bộ và plugin agent-stack")
+        # Claude Code chép plugin vào cache khi cài; file trỏ này đi theo bản chép để hook tìm về repo
+        # (state/, vetted.lock, catalog.json). Không đưa vào git.
+        pointer = HOME_STACK / "plugin" / ".agent-stack-home"
+        if not (pointer.exists() and pointer.read_text(encoding="utf-8").strip() == str(HOME_STACK)):
+            self.say(f"  + {short(str(pointer))} = {short(str(HOME_STACK))}")
+            if self.apply:
+                existed = pointer.exists()
+                previous = self.backup_inside_stack(pointer) if existed else None
+                pointer.write_text(str(HOME_STACK) + "\n", encoding="utf-8")
+                self.record(type="file", path=str(pointer), backup=previous, keys=["đường dẫn repo"])
         self.run([self.claude_bin, "plugin", "marketplace", "add", str(HOME_STACK)],
                  undo=[self.claude_bin, "plugin", "marketplace", "remove", MARKETPLACE], ok_if="already")
         self.run([self.claude_bin, "plugin", "install", f"agent-stack@{MARKETPLACE}", "--scope", "user"],
                  undo=[self.claude_bin, "plugin", "uninstall", f"agent-stack@{MARKETPLACE}", "--scope", "user"],
                  ok_if="already")
+        # đã cài từ trước thì install không chép lại: cập nhật để bản chép khớp với code trong repo
+        self.run([self.claude_bin, "plugin", "update", f"agent-stack@{MARKETPLACE}", "--scope", "user"],
+                 ok_if="latest")
 
     def step_statusline(self) -> None:
         self.say("[statusline] model · effort · ctx · 5h · 7d")
@@ -501,6 +522,59 @@ def read_json_file(path: Path):
         return None
 
 
+def plugins_listing() -> list:
+    """Những gì đang có trong ~/.claude/plugins: mục cấp đầu, cộng các mục trong cache/ và data/."""
+    root = Path.home() / ".claude" / "plugins"
+    if not root.exists():
+        return []
+    out = [p.name for p in root.iterdir()]
+    for sub in ("cache", "data"):
+        if (root / sub).is_dir():
+            out += [f"{sub}/{p.name}" for p in (root / sub).iterdir()]
+    return sorted(out)
+
+
+def plugin_data_dir(pid: str) -> str:
+    """Tên thư mục dữ liệu của plugin: mọi ký tự không phải chữ, số, _ hay - đổi thành - (theo docs)."""
+    return "".join(c if c.isalnum() or c in "_-" else "-" for c in pid)
+
+
+def clean_plugin_leftovers(ids: list, marketplaces: list, listing, apply: bool) -> list:
+    """Sau khi claude plugin uninstall và marketplace remove: dọn phần Claude Code để lại, nhưng chỉ
+    phần ứng với đúng plugin và marketplace mà lần cài đã thêm; rồi báo những gì còn mới so với trước khi cài.
+    listing = danh sách plugins_listing() chụp trước khi cài (None nếu không có bản chụp)."""
+    root = Path.home() / ".claude" / "plugins"
+    if not root.exists():
+        return []
+    ours = []
+    for mp in marketplaces:
+        ours.append(root / "cache" / mp)
+    for pid in ids:
+        name, _, mp = pid.partition("@")
+        ours += [root / "cache" / mp / name, root / "data" / plugin_data_dir(pid)]
+    if apply:
+        for path in ours:
+            if path.is_dir() and root in path.resolve().parents:
+                shutil.rmtree(path)
+        for name in ("installed_plugins.json", "known_marketplaces.json"):
+            path = root / name
+            data = read_json_file(path) if path.exists() else None
+            empty = data in ({}, []) or (isinstance(data, dict) and set(data) <= {"version", "plugins"}
+                                         and not data.get("plugins"))
+            if listing is not None and name not in listing and empty:
+                path.unlink()  # trước khi cài chưa có, giờ cũng không còn gì: xóa cho sạch
+        for sub in ("cache/claude-plugins-official", "cache", "data"):
+            path = root / sub
+            if listing is not None and path.is_dir() and not any(path.iterdir()) and sub not in listing:
+                path.rmdir()
+        if listing is not None and not listing and root.is_dir() and not any(root.iterdir()):
+            root.rmdir()
+    if listing is None:
+        return []
+    left = sorted(set(plugins_listing()) - set(listing))
+    return ["~/.claude/plugins còn mục mới so với trước khi cài: " + ", ".join(left)] if left else []
+
+
 def installed_plugin_ids(actions: list) -> list:
     return [a["cmd"][3] for a in actions if a["type"] == "cmd" and a["cmd"][1:3] == ["plugin", "install"]]
 
@@ -620,7 +694,7 @@ def rollback(log_arg: str, apply: bool) -> int:
     if not targets:
         print("Không có lần cài nào đang hiệu lực, không có gì để gỡ.")
         return 0
-    errors, notes, marketplaces, pristine = [], [], [], None
+    errors, notes, marketplaces, pristine, ids = [], [], [], None, []
     for log in targets:
         data = load_log(log)
         print(f"Hoàn tác lần cài {when(data['created'])} theo {log.name} ({'THỰC HIỆN' if apply else 'XEM TRƯỚC'})")
@@ -629,11 +703,13 @@ def rollback(log_arg: str, apply: bool) -> int:
         notes += kept
         cleanup_enabled_plugins(data, apply)
         marketplaces += installed_marketplaces(data["actions"])
+        ids += installed_plugin_ids(data["actions"])
         pristine = data.get("pristine")  # vòng cuối là lần cài cũ nhất: bản chụp gốc
         if apply:
             log.rename(log.with_suffix(".rolled-back.json"))
     if apply:  # xem trước thì cấu hình vẫn đang ở trạng thái đã cài: chưa so được
         notes += compare_with_pristine(pristine, marketplaces, apply)
+        notes += clean_plugin_leftovers(ids, marketplaces, (pristine or {}).get("plugins_listing"), apply)
     for note in notes:
         print(f"  ! {note}")
     for err in errors:

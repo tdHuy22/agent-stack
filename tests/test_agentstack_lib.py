@@ -3,7 +3,9 @@ import sys
 import time
 import unittest
 
-from tests._util import PLUGIN, TempDirTestCase, git
+from pathlib import Path
+
+from tests._util import PLUGIN, REPO, TempDirTestCase, git
 
 sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402
@@ -115,3 +117,28 @@ class PlanFilesAndGit(TempDirTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CachedPluginCopy(TempDirTestCase):
+    """Claude Code chép plugin vào ~/.claude/plugins/cache/: bản chép phải tìm về repo qua plugin/.agent-stack-home."""
+
+    def test_home_dir_follows_pointer_file(self):
+        import shutil
+        import subprocess
+        import sys
+        import tempfile
+        # bản chép phải nằm NGOÀI repo (như ~/.claude/plugins/cache), nếu không code tìm thấy repo theo thư mục cha
+        outside = Path(tempfile.mkdtemp(prefix="agent-stack-cachetest-"))
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        copy = outside / "cache" / "agent-stack" / "0.3.1"
+        (copy / "lib").mkdir(parents=True)
+        shutil.copy(PLUGIN / "lib" / "agentstack.py", copy / "lib" / "agentstack.py")
+        code = "import sys; sys.path.insert(0, sys.argv[1]); import agentstack as A; print(A.home_dir())"
+        env = {k: v for k, v in __import__("os").environ.items() if k not in ("AGENT_STACK_HOME", "AGENT_STACK_STATE")}
+        run = lambda: subprocess.run([sys.executable, "-c", code, str(copy / "lib")], capture_output=True, text=True,
+                                     env=env, timeout=30).stdout.strip()
+        self.assertEqual(run(), "None")  # chưa có file trỏ: không tìm được repo
+        (copy / ".agent-stack-home").write_text(str(REPO) + "\n", encoding="utf-8")
+        self.assertEqual(run(), str(REPO))
+        (copy / ".agent-stack-home").write_text(str(outside) + "\n", encoding="utf-8")
+        self.assertEqual(run(), "None")  # trỏ tới thư mục không phải agent-stack thì bỏ qua
