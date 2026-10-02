@@ -3,50 +3,48 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 02/10/2026.*
+*Cập nhật tối 02/10/2026.*
 
 - **Xong:**
-  - GĐ0 đến GĐ11 trên nhánh `trien-khai-v1`, chưa push; commit gần nhất `dafba1f`.
-  - Plugin `agent-stack` 0.3.2: 6 skill, 5 agent, 5 hook. Router chọn skill theo nội dung project và việc tiếp theo trong §0; dòng ➡️ có Skill, ở cuối mọi câu trả lời.
-  - 21 mục bên thứ ba đã kiểm duyệt: 11 duyệt, 2 từ chối, 8 chờ.
+  - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên nhánh `trien-khai-v1`, đã gộp vào `main`; chưa push.
+  - Plugin `agent-stack` 0.4.0: 6 skill, 5 agent, 6 hook (thêm SubagentStart). **Bản trong cache của app vẫn là 0.3.2** cho tới khi cập nhật (việc tiếp theo 1).
+  - Bên thứ ba: 24 mục đã kiểm duyệt, 19 duyệt, 2 từ chối, 3 chờ bạn quyết (`sandbox-runtime`, `claude-security`, `plugin-dev`).
   - Bộ eval 12 việc đã chạy thật ngày 02/10/2026 (72 lượt, khoảng 7,5 USD giá niêm yết, tính vào hạn mức gói): sonnet·medium, opus·medium và opus·low đều đạt 24/24; sonnet rẻ nhất (0,063 USD/việc, so với 0,128 và 0,121). Bộ việc chưa phân biệt được các cấu hình (xem `routing-table.md`). Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. 159 test đạt trên Python 3.9 và 3.11.
+  - Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch.
+  - Bảng định tuyến đã đối chiếu với khuyến nghị chính thức của Anthropic (Claude Code, bài chọn model và effort, trang chi phí): `routing-table.md`. Chỉ một dòng đổi: debug khó bắt đầu ở opus·medium rồi nâng lên high nếu chưa ra; các dòng opus·high còn lại giữ vì không có kiểm tra tự động.
   - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`, `20261002-221518.json` (context7). Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
   - Kiểm chứng sau khi cài:
     - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
     - CLI nạp plugin tại chỗ, đã thấy `plugin_root` trong `state/sessions.jsonl`;
     - desktop app chạy bản chép trong cache, tìm về repo nhờ `plugin/.agent-stack-home`.
-  - **Rà soát nguồn chính thức của Anthropic** (02/10/2026): 14 repo, gồm marketplace `claude-plugins-official`, `anthropics/skills`, `claude-code`, cookbooks, SDK, nhóm bảo mật và sandbox. Quyết định dùng lại hay tự làm nằm ở `KE-HOACH.md` §6.13; chưa cài gì, chưa sửa code.
-    - Không mục nào đáng dùng nguyên bản, trừ `claude-security` (gọi tay khi cần quét sâu).
-    - Đáng đưa vào lộ trình: `sandbox-runtime`, để `vet-skill` có phân tích động. Nhiều ý để nâng `reviewer`, `tien-do`, `session-keeper`.
-    - Chỉ học ý, không chép code: `anthropics/claude-code`, `claude-security`, docx/pdf/pptx/xlsx, doc-coauthoring.
-    - Dữ kiện then chốt (giấy phép, hook, số liệu, câu trích) đã tự kiểm lại; phần chưa chạy thử và chưa đọc ghi ở §6.13.4.
-- **Đang dở:** không có việc đang sửa dở. `KE-HOACH.md` (mục 6.13 mới) và `PLAN.md` đã sửa, chưa commit, trên nhánh `trien-khai-v1`; chờ bạn nói có commit không (đợt rà này không thuộc giai đoạn nào).
+  - **Rà soát nguồn chính thức của Anthropic và việc a đến e** (02/10/2026; chi tiết ở `KE-HOACH.md` §6.13):
+    - (a) `vet.py dynamic`: chạy MỘT lệnh của đối tượng trong sandbox-runtime (cài cô lập `.cache/srt`, `--ignore-scripts`, theo `tools/srt/package-lock.json`): không mạng, chỉ đọc ghi trong bản chép tạm, HOME thật bị chặn. Phát hiện chắc chắn bằng HOME giả rải 12 file mồi (đọc qua atime, rò rỉ qua dấu riêng); log vi phạm của macOS chỉ là phần thêm vì đo được nó mất khoảng một nửa sự kiện khi tiến trình thoát nhanh. Sửa hai luật quét báo nhầm (socat, CI). Mới kiểm trên macOS.
+    - (b) `plugin-dev`: script kiểm hook của nó lỗi thời (đòi `matcher` mà `claude plugin validate` không đòi); `session_end.py` chạy 29 đến 68 ms nên giữ `timeout: 2`. Không cài.
+    - (c) `reviewer.md`: hình dạng lỗi, verifier phản biện, ngưỡng tin cậy 80, bảng lọc dương tính giả; `plugin/NOTICES.md` ghi nguồn MIT và Apache-2.0.
+    - (d) `tien-do`: mục "Đổi từ lần trước" qua snapshot trong `state/tien-do/`.
+    - (e) `claude-security`: đã vet, khuyến nghị có điều kiện, chưa cài.
+  - **Skill và agent chạy context riêng không thấy hội thoại** (bạn nêu 02/10): hook SubagentStart đưa yêu cầu gần nhất của bạn (che khóa, tối đa 1200 ký tự) và 1 đến 2 việc đầu §0 vào đầu context của chúng; mọi agent và skill fork ghi rõ cần gì và thiếu thì nói rõ; luật chung dặn giao việc bằng prompt tự đủ. **Chưa chạy thật trong phiên Claude Code**: cần xác nhận session_id của SubagentStart khớp UserPromptSubmit.
+  - **Quyền riêng tư OpenCode**: model mặc định `opencode/muse-spark-1.3-contributor-free` dùng prompt và kết quả để huấn luyện model của Meta (trang OpenCode Zen). Luật chung và `oc-worker` ghi: không tự rơi về model từ xa, không giao secret hay mã riêng tư.
+- **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Mở phiên mới, sau khi khởi động lại desktop app. Kiểm tra lúc mở phiên có dòng 📍 trạng thái và 🧭 hồ sơ project. Nếu không có gì hiện, chạy `claude plugin list` rồi xem `tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl`. Không cần kiểm tra cảnh báo hạn mức trong desktop app: desktop không chạy statusline, nên `state/limits.json` không được ghi và hook không cảnh báo (đã xác nhận 02/10/2026). Muốn kiểm tra cảnh báo thì mở `claude` trong terminal, thấy thanh `model · effort · ctx · 5h · 7d` và có file `state/limits.json` là đạt.
-  2. ~~Chạy `claude /login`~~ Xong 02/10/2026: `claude -p` đã chạy được.
-  3. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy; thiếu thì mất nhảy-tới-định-nghĩa bằng LSP), `brew install gitleaks osv-scanner` (không code nào gọi; chỉ để bạn tự quét secret và lỗ hổng thư viện).
-  4. ~~Eval A, C, D~~ Xong 02/10/2026; đã cập nhật `routing-table.md` và chuỗi trạng thái trong `rules.json`. Nếu muốn phân biệt được các cấu hình: thêm vài việc khó hơn vào `evals/tasks/`, và chạy thêm H (haiku, khoảng 0,5 USD).
-  5. ~~Đo kích hoạt skill~~ Xong 02/10/2026 (xem mục Xong ở trên). Chạy hai lượt vì trần 3 USD chỉ đủ 11/13 ca.
+  1. Cập nhật plugin lên 0.4.0 để hook SubagentStart và các sửa đổi có hiệu lực: `./install.sh --only plugin --apply` (cài toàn cục, nên mình chờ bạn nói). Rồi mở phiên mới, gọi một subagent và xem `state/events.jsonl` có dòng `subagent-start` với `"request": true`.
+  2. Cấp quyền cho MCP `context7` qua `/mcp` trong terminal `claude` tương tác (mình không bắt đầu được luồng này).
+  3. Duyệt hoặc từ chối ba mục chờ, mỗi mục kèm nhận xét và khuyến nghị đã ghi trong `vetted.lock`: `sandbox-runtime` (có điều kiện: chỉ cục bộ), `claude-security` (có điều kiện: chỉ gọi tay, theo project), `plugin-dev` (khuyến nghị không cài). Lệnh: `python3 plugin/skills/vet-skill/scripts/vet.py approve|reject "<khóa>" --note "..."`.
+  4. Quyết định về model mặc định của OpenCode (huấn luyện model của Meta bằng prompt của bạn): đổi trong `~/.config/opencode/opencode.jsonc` nếu không muốn; repo này không tự sửa file đó.
+  5. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy), `brew install gitleaks osv-scanner` (không code nào gọi).
   6. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
-  7. ~~Duyệt riêng 8 mục còn chờ~~ Xong 02/10/2026 (19 duyệt, 2 từ chối, 0 chờ). Đã cài `context7` (MCP gửi truy vấn tra docs tới mcp.context7.com) ở phạm vi user lúc 22:15 ngày 02/10/2026, theo đồng ý của bạn; gỡ: `claude plugin uninstall context7@claude-plugins-official --scope user`. 7 mục còn lại cài theo từng project khi cần. MCP chỉ nạp ở phiên mới.
-  8. Chọn việc từ rà soát nguồn chính thức (`KE-HOACH.md` §6.13.1, thứ tự trong bảng là thứ tự đề xuất). Việc nào thêm đồ bên thứ ba thì cần bạn duyệt:
-     - (a) Vet `sandbox-runtime`: `python3 plugin/skills/vet-skill/scripts/vet.py scan anthropics/sandbox-runtime`; rồi thử phân tích động cho `vet-skill`.
-     - (b) Vet `plugin-dev`: `vet.py scan anthropics/claude-plugins-official:plugins/plugin-dev`; chạy 3 script kiểm hook một lần, rồi quyết định có nâng `timeout: 2` của SessionEnd không.
-     - (c) Nâng `plugin/agents/reviewer.md`: bước verifier phản biện, bảng lọc dương tính giả, mô tả hình dạng lỗi thay vì liệt kê loại lỗi.
-     - (d) `tien-do` báo phần thay đổi so với lần báo trước.
-     - (e) Nếu muốn quét sâu theo yêu cầu: vet `claude-security` (`vet.py scan anthropics/claude-plugins-official:plugins/claude-security`).
-  9. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
+  7. Nếu muốn phân biệt được các cấu hình model: thêm 3 đến 4 việc khó hơn vào `evals/tasks/` (debug nhiều file, race, review diff thật) rồi chạy lại A, C, D (ước khoảng 6 đến 8 USD giá niêm yết), và chạy thêm H (haiku, khoảng 0,5 USD).
+  8. Trả lời nốt `KE-HOACH.md` mục 10: project cần theo dõi và bản tổng hợp tuần; ngôn ngữ viết; việc hay thư mục tuyệt đối không được gửi ra ngoài.
+  9. Push khi bạn muốn: `git push` (mình không tự push).
 - **Quyết định còn treo:**
-  - Có thêm bước phân tích động cho `vet-skill` bằng `sandbox-runtime` không. Đây là đồ bên thứ ba dạng npm, nhãn Beta Research Preview, nếu làm thì cài cô lập trong `.cache/srt` sau khi vet và thử trên script vô hại. Chi tiết ở `KE-HOACH.md` §6.13.1.
   - Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
     - quyết định có nạp 10 USD không (mức 1.000 request mỗi ngày, so với 50 khi chưa nạp);
     - chọn 2–3 model free có gọi tool, hoặc để `reuse-best` chọn theo benchmark.
     - Phần mình làm: thêm cấu hình `opencode run -m openrouter/<model>:free`, cách ly khỏi cấu hình toàn cục của OpenCode, giới hạn dưới 20 request mỗi phút, và `--resume`.
-    - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa.
-  - Mục 10 của `KE-HOACH.md`: đã trả lời gói (Max, có thể về Pro), provider OpenCode (OpenRouter + OpenCode free), mục đích viết (đa dạng). Còn mở: project cần theo dõi và bản tổng hợp tuần; ngôn ngữ viết; có tuyệt đối không gửi code ra ngoài không. Cần rà: mô tả `oc-worker` và `AGENTS.global.md` đang ghi "model local", trong khi worker thực tế chạy qua OpenRouter/OpenCode free.
+    - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa. Lưu ý quyền riêng tư ở trên: model free có thể dùng dữ liệu để huấn luyện.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
-  - `/usr/bin/python3 -m unittest discover -s tests -t .` → `Ran 159 tests … OK`
+  - `/usr/bin/python3 -m unittest discover -s tests -t .` và với `python3` → `Ran 286 tests … OK`
   - `claude plugin validate plugin` → `Validation passed`
   - `python3 evals/run_eval.py --self-test` → 12 dấu ✓
   - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 53/53
@@ -86,7 +84,7 @@
 - [x] Skill `tien-do` + `scripts/collect.py` + test. Xếp hạng 5 bậc; chế độ `--all` cho mọi project; tùy chọn `--gh` lấy PR/CI.
 - [x] Gộp bản tóm tắt vào hook SessionStart (thêm dòng "Chặn đường" và các cảnh báo nhanh, không gọi mạng).
 - [x] Chạy thử trên chính agent-stack. Đã sửa hai lỗi lộ ra: TODO trong tài liệu và TODO nằm trong chuỗi ký tự bị tính nhầm.
-- [ ] **Bạn làm (tùy chọn):** `python3 plugin/skills/tien-do/scripts/collect.py --all --md` để xem tổng quan mọi project. Lệnh chỉ đọc; mình không tự chạy vì bạn dặn không đụng vào project khác.
+- [ ] **Bạn làm (tùy chọn):** `python3 plugin/skills/tien-do/scripts/collect.py --all --md` để xem tổng quan mọi project. Lệnh chỉ đọc project (chỉ ghi snapshot vào `state/` của agent-stack; thêm `--no-snapshot` để không ghi); mình không tự chạy vì bạn dặn không đụng vào project khác.
 
 ### GĐ3: Danh mục v1
 - [x] Kiểm duyệt 18 mục mới (ghim đúng commit mà marketplace chính thức dùng) + 3 mục cũ. Claude đã đọc tay và ghi nhận xét vào `vetted.lock`: 11 cài, 7 có điều kiện hoặc chỉ dùng trong project, 1 thử trong 1 project, 2 không cài (semgrep plugin, planning-with-files).

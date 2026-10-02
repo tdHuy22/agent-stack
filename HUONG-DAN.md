@@ -108,7 +108,8 @@ Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo s�
 | Thành phần | Khi nào | Làm gì |
 |---|---|---|
 | Hook SessionStart | Mở phiên, resume, `/clear`, sau compact | Nạp §0 và hồ sơ project vào context; in dòng 📍 và 🧭 |
-| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp); cảnh báo hạn mức khi vượt ngưỡng |
+| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart |
+| Hook SubagentStart | Mỗi khi sinh subagent hoặc chạy skill `context: fork` | Đưa vào đầu context của chúng yêu cầu gần nhất của bạn và 1 đến 2 việc đầu trong §0 (tối đa khoảng 1500 ký tự), vì chúng không thấy hội thoại |
 | Hook PreCompact | Trước khi compact | Ghi sự kiện; nhắc nếu §0 đã lâu chưa cập nhật. Không chặn compact |
 | Hook Stop | Cuối mỗi lượt trả lời | Nhắc cập nhật §0 khi đã có từ 3 file đổi sau lần cập nhật §0 gần nhất; nhắc tối đa 30 phút một lần |
 | Hook SessionEnd | Đóng phiên | Ghi một dòng vào `state/sessions.jsonl`, để `tien-do` gợi ý `claude --resume` |
@@ -141,7 +142,7 @@ Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng `/agen
 
 **Kết quả:** một dòng trạng thái, tối đa 3 việc nên làm, cảnh báo (§0 cũ, file chưa commit lâu, nhánh chưa merge, kiểm tra trượt hoặc đã cũ), và câu `/goal` gợi ý. Việc được xếp theo 5 bậc: chặn đường → dang dở → giai đoạn hiện tại → nợ TODO → bị bỏ quên.
 
-**Chạy tay** (chỉ đọc, không sửa gì):
+**Chạy tay** (chỉ đọc project, không sửa gì trong project; chỉ ghi một snapshot nhỏ vào `state/` của agent-stack để lần sau báo "Đổi từ lần trước"):
 
 ```bash
 python3 plugin/skills/tien-do/scripts/collect.py --md
@@ -151,7 +152,7 @@ python3 plugin/skills/tien-do/scripts/collect.py --md
 python3 plugin/skills/tien-do/scripts/collect.py --all --md
 ```
 
-Thêm `--gh` để lấy cả PR và CI trên GitHub (cần mạng, cần `gh` đã đăng nhập). `--brief` in bản rút gọn, `--json` cho máy đọc.
+Thêm `--gh` để lấy cả PR và CI trên GitHub (cần mạng, cần `gh` đã đăng nhập). `--brief` in bản rút gọn, `--json` cho máy đọc. Thêm `--no-snapshot` nếu chỉ xem thử và không muốn dời mốc "lần trước" (`--brief` và hook không so, không ghi). Từ lần báo thứ hai cho cùng một project, kết quả có mục "Đổi từ lần trước": commit mới, việc mới xong, việc mới phát sinh, việc biến mất; không có gì đổi thì đúng một dòng.
 
 ### 5.2 `session-keeper`: lưu, làm tiếp, bàn giao
 
@@ -250,6 +251,15 @@ Claude không tự duyệt. PASS chỉ có nghĩa là không thấy dấu hiệu
 
 Báo cáo đầy đủ nằm trong `vet-reports/`. Sau khi duyệt, chạy `./install.sh --apply` để cài các mục mới (mục 8).
 
+**Phân tích động (tùy chọn).** `scan` không chạy mã của đích. Khi một script đáng ngờ mà đọc tay chưa kết luận được, `vet.py dynamic` chạy MỘT lệnh bạn chọn trong sandbox-runtime của Anthropic: không mạng, chỉ đọc và ghi trong bản chép tạm, môi trường sạch (không token), HOME thật bị chặn. HOME của lệnh là một HOME giả rải sẵn 12 file mồi (khóa SSH, token AWS, GitHub, npm... giả): file nào bị đọc lộ ra qua atime, và nội dung mồi bị chép ra file hay đầu ra cũng bị phát hiện.
+
+```bash
+python3 plugin/skills/vet-skill/scripts/vet.py dynamic --setup     # một lần; cần Node; cài vào .cache/srt, bản ghim, --ignore-scripts
+python3 plugin/skills/vet-skill/scripts/vet.py dynamic "<khóa>" -- python3 scripts/x.py --help
+```
+
+Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn), **CẦN ĐỌC** (1) hoặc **ĐÁNG NGỜ** (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên chỉ file mồi và dấu rò rỉ là bằng chứng chắc chắn; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. `--real-home` giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).
+
 ### 5.5 `giong-van`: chỉnh văn đúng giọng mình
 
 **Khi nào:** "sửa lại đoạn này cho tự nhiên", "đọc như AI viết", "viết lại email này đúng giọng mình", bài luận, blog, cover letter.
@@ -320,9 +330,14 @@ Subagent chạy trong context riêng và chỉ trả về kết quả gọn, nê
 | `agent-stack:researcher` | sonnet · medium | Không sửa file | Tra docs, so sánh công cụ, kiểm chứng một nhận định; trả về có dẫn nguồn |
 | `agent-stack:test-runner` | haiku | Chỉ đọc, chạy lệnh | Chạy test, lint, build và chỉ trả về phần lỗi |
 | `agent-stack:explore-lite` | haiku | Chỉ đọc | Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn `Explore` nhưng không suy luận sâu |
-| `agent-stack:oc-worker` | haiku | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local miễn phí (mục 7) |
+| `agent-stack:oc-worker` | haiku | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local `tuf/*` trong mạng nhà (mục 7); không tự rơi về model từ xa |
 
 Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí đến từ subagent và workflow, nên đừng chia nhỏ việc mà một model làm liền mạch tốt hơn.
+
+**Subagent không thấy hội thoại.** Subagent và skill chạy `context: fork` (`vet-skill`, `reuse-best`, `tien-do`) có context riêng: không thấy yêu cầu của bạn, các tin nhắn trước hay task của phiên, chỉ thấy prompt mà Claude giao cho chúng. Hai lớp bù lại:
+
+- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục.
+- **Prompt giao việc phải tự đủ.** Luật chung dặn Claude ghi rõ yêu cầu gốc, mục tiêu, ràng buộc, file liên quan, tiêu chí xong và định dạng trả về. Mỗi agent và skill đều ghi nó cần gì; thiếu thì nó nói rõ phần thiếu ở dòng đầu báo cáo thay vì đoán.
 
 ---
 
@@ -353,6 +368,10 @@ opencode run --agent worker -m tuf/coder-fast --format json --auto "<việc + ti
 ```
 
 Thêm `--standalone` nếu báo lỗi không kết nối được service.
+
+### Quyền riêng tư với model từ xa
+
+Model chạy qua OpenRouter hay model miễn phí của OpenCode nhận toàn bộ prompt và nội dung file. Riêng `opencode/muse-spark-1.3-contributor-free` (đang là model mặc định trong `~/.config/opencode/opencode.jsonc` của máy này) đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của Meta, theo trang OpenCode Zen (02/10/2026). Vì vậy luật chung và `oc-worker` quy định: không giao file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa; nếu model local `tuf` không dùng được (ngoài mạng nhà), dừng và hỏi bạn thay vì tự rơi về model từ xa. Muốn đổi model mặc định của OpenCode thì sửa `opencode.jsonc` (repo này không tự sửa).
 
 ### Làm tiếp việc của Claude trong OpenCode
 
@@ -470,11 +489,15 @@ Không có `--yes` thì chỉ in kế hoạch và chi phí ước tính. Thêm `
 
 Có số liệu rồi thì cập nhật `routing-table.md` và `rules.json`.
 
+**Kết quả lần chạy ngày 02/10/2026** (72 lượt, khoảng 7,5 USD giá niêm yết): A, C và D đều đạt 24/24; A rẻ nhất (0,063 USD mỗi việc, so với 0,128 và 0,121). Vì cả ba đều đạt hết, bộ việc này chưa phân biệt được các cấu hình: nó chỉ cho thấy sonnet · medium đủ cho việc nhỏ có tín hiệu kiểm tra rõ. Muốn đo debug khó hay review diff thật, cần thêm việc khó hơn vào `evals/tasks/`. Chi tiết và khuyến nghị chính thức của Anthropic nằm ở `routing-table.md`.
+
 Đo xem skill có kích hoạt đúng lúc không:
 
 ```bash
 claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish
 ```
+
+Trần 3 USD chỉ đủ khoảng 11 trên 13 ca; chạy nốt phần còn lại bằng `--case <tên>`. Lần ngày 02/10/2026: 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. Cột Δ chỉ cho biết skill chạy khi có plugin, chưa đo chất lượng việc skill làm.
 
 ---
 

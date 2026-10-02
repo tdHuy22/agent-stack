@@ -13,7 +13,7 @@ Luật của dòng ➡️ nằm ở phần chung phía trên: thêm sau mọi c�
 | Nghiên cứu web, tài liệu | sonnet · medium | researcher | không |
 | Trước khi build: tìm công cụ, thư viện, bài nghiên cứu SOTA có sẵn | sonnet · medium | không | reuse-best |
 | Viết tính năng thông thường | sonnet · medium | không | reuse-best nếu việc không tầm thường |
-| Debug khó, nhiều bước | opus · high | không | diagnosing-bugs nếu đã cài |
+| Debug khó, nhiều bước | opus · medium, nâng lên high nếu lần đầu chưa ra | không | diagnosing-bugs nếu đã cài |
 | Lập kế hoạch, thiết kế kiến trúc | opus · high (hoặc opusplan) | Plan | reuse-best |
 | Review code hoặc bảo mật trước commit | opus · high | reviewer | differential-review nếu đã cài |
 | Chạy test, tóm tắt lỗi | giữ nguyên | test-runner | không (kết quả ghi bằng `receipt.py`) |
