@@ -15,6 +15,7 @@ Bỏ qua dòng này với câu hỏi nhanh. Chọn theo bảng dưới. Chỉ kh
 | Hỏi nhanh, xem tiến độ | sonnet · low | không |
 | Tìm và đọc nhiều file | giữ nguyên | Explore (hoặc explore-lite để rẻ hơn) |
 | Nghiên cứu web, tài liệu | sonnet · medium | researcher |
+| Trước khi build: tìm công cụ, thư viện, bài nghiên cứu SOTA có sẵn | sonnet · medium | không (skill reuse-best) |
 | Viết tính năng thông thường | sonnet · medium | không |
 | Debug khó, nhiều bước | opus · high | không |
 | Lập kế hoạch, thiết kế kiến trúc | opus · high (hoặc opusplan) | Plan |

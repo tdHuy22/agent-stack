@@ -11,6 +11,7 @@ Bộ công cụ cá nhân cho Claude Code và OpenCode. Thiết kế ở `KE-HOA
 | `tien-do` | `plugin/skills/tien-do` | Tiến độ, việc dang dở, việc nên làm tiếp (5 bậc ưu tiên); `--all` cho mọi project |
 | `task-router` | `plugin/skills/task-router` | Gợi ý model, effort, subagent, skill cho một việc |
 | `giong-van` | `plugin/skills/giong-van` | Chỉnh văn theo giọng người viết, bỏ dấu hiệu văn AI (`tells.py`) |
+| `reuse-best` | `plugin/skills/reuse-best` | Trước khi build: tìm thứ có sẵn tốt nhất trên GitHub và trong nghiên cứu SOTA (`scout.py`), rồi quyết định dùng lại hay tự làm |
 | Hook | `plugin/hooks` | SessionStart nạp §0; UserPromptSubmit cảnh báo hạn mức và gợi ý router; PreCompact; Stop; SessionEnd |
 | Agent | `plugin/agents` | reviewer, researcher, test-runner, explore-lite, oc-worker (tên có tiền tố `agent-stack:`) |
 | Agent OpenCode | `opencode/agents/worker.md` | Worker chạy model local, chỉ được chạy lệnh kiểm tra |

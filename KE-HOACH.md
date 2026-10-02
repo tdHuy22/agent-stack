@@ -64,7 +64,7 @@ Lộ trình: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18
 
 | # | Yêu cầu | Điểm tốt | Vấn đề, khoảng trống | Hướng xử lý |
 |---|---|---|---|---|
-| 1 | Nghiên cứu skills/MCP/plugins cho coding, research, build-ship-production, benchmark, QA, security, reuse-best | Phạm vi đúng, có ý thức "luôn kiểm tra" | (a) Câu "(luôn kiểm tra" bị cắt, nên chưa có tiêu chí. (b) **Cài nhiều là phản tác dụng**: phần mô tả skill chỉ được khoảng 1% context window, vượt ngân sách thì mô tả bị cắt và skill kích hoạt kém. Mỗi MCP thêm nhiễu. (c) 13% skill công khai có lỗi nghiêm trọng. | Thang quyết định "dùng lại" (N3), cổng kiểm duyệt (7.6), giới hạn khoảng 20 skill bật toàn cục. |
+| 1 | Nghiên cứu skills/MCP/plugins cho coding, research, build-ship-production, benchmark, QA, security, reuse-best | Phạm vi đúng, có ý thức "luôn kiểm tra" | (a) Câu "(luôn kiểm tra" bị cắt; ngày 02/10 bạn làm rõ: nó thuộc reuse-best, nghĩa là trước khi build hay làm gì đều tìm thứ có sẵn tốt nhất (công cụ trên GitHub, bài nghiên cứu SOTA). (b) **Cài nhiều là phản tác dụng**: phần mô tả skill chỉ được khoảng 1% context window, vượt ngân sách thì mô tả bị cắt và skill kích hoạt kém. Mỗi MCP thêm nhiễu. (c) 13% skill công khai có lỗi nghiêm trọng. | Thang quyết định "dùng lại" (N3), cổng kiểm duyệt (7.6), giới hạn khoảng 20 skill bật toàn cục. |
 | 2 | Subagent Sonnet/Haiku/OpenCode, giữ hiệu suất, rẻ hơn càng tốt | Đúng hướng: chia việc theo độ khó | "Giữ nguyên hiệu suất" chưa có cách đo. Haiku không thay được model lớn ở việc khó. Model local 4B–20B yếu hơn nhiều. **Subagent vẫn ăn chung hạn mức.** | Bộ eval nhỏ (7.7), và mọi output từ tầng rẻ phải qua cổng chất lượng (test, lint, review). |
 | 3 | Skill chống mất dữ liệu khi hết limit hoặc qua phiên mới | Đúng nỗi đau thật | Retry ở giới hạn 5 giờ đã có sẵn. Khoảng trống thật là: giới hạn tuần, crash, `-p`/background, đổi công cụ, và compaction làm rơi chi tiết. | Trạng thái trên đĩa, git checkpoint, bàn giao sang OpenCode (7.3). |
 | 4 | Luôn dùng skill, có skill chọn skill | Đúng tinh thần tái sử dụng | "Luôn" dễ biến thành ép skill vào việc vặt (tốn token, lệch hướng). | Gộp vào router (7.4). |
@@ -149,12 +149,12 @@ prompt ─┼─► [Lớp 2: Định tuyến]  hook UserPromptSubmit + router-r
 - **Mô hình "điều phối viên + worker rẻ"** chỉ có lời khi có nhiều phần việc độc lập. Với một chuỗi việc phụ thuộc nhau, một model mạnh ở effort thấp hơn thường thắng.
 - **Cache gắn với từng model.** Đổi model hoặc effort giữa chừng làm mất cache, nên chỉ đổi ở ranh giới việc (sau `/clear` hoặc khi sang việc mới).
 
-**N3. Thang quyết định "dùng lại tốt nhất" (reuse-best).** Với mỗi nhu cầu, dừng ở bậc đầu tiên đáp ứng được:
+**N3. Thang quyết định "dùng lại tốt nhất" (reuse-best).** Đây là ý của chữ "luôn kiểm tra" trong yêu cầu #1: trước khi build hay làm gì không tầm thường, tìm thứ có sẵn tốt nhất, kể cả công cụ trên GitHub và bài nghiên cứu SOTA. Skill `reuse-best` (mục 7.9) làm việc này cho mọi việc build. Với skill, plugin và MCP, dừng ở bậc đầu tiên đáp ứng được:
 tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → plugin chính chủ của hãng (Microsoft Playwright, Semgrep…) → repo cộng đồng (≥1k★, có cập nhật trong 3 tháng, giấy phép rõ, qua cổng kiểm duyệt) → ✍️ tự viết.
 
 **N4. Ngân sách ngữ cảnh.** Tối đa khoảng 20 skill bật toàn cục; phần còn lại để theo project hoặc đặt `skillOverrides: "name-only"`. Tối đa 4 MCP. Ưu tiên CLI hơn MCP: docs khuyên dùng `gh` thay GitHub MCP vì tiết kiệm context hơn. Mỗi tháng chạy `/skill-doctor`, `/context`, `/usage`.
 
-**N5. Cổng kiểm duyệt chuỗi cung ứng**, cụ thể hóa chữ "luôn kiểm tra" (7.6).
+**N5. Cổng kiểm duyệt chuỗi cung ứng** (7.6): thứ tìm được ở N3 phải qua cổng này trước khi cài.
 
 **N6. Một repo git `agent-stack` làm nguồn sự thật**, symlink vào `~/.claude/` và `~/.config/opencode/`. Có lịch sử thay đổi, dễ sao lưu và chuyển máy.
 
@@ -636,6 +636,19 @@ tien-do/
 
 ---
 
+### 7.9 Dùng lại tốt nhất (#1, reuse-best), skill `reuse-best` ✍️
+
+**Nhu cầu** (bạn làm rõ ngày 02/10/2026): trước khi build hay làm gì, luôn tìm thứ có sẵn tốt nhất, như công cụ trên GitHub hoặc bài nghiên cứu SOTA.
+
+- **Thang tìm:** tính năng sẵn có của công cụ đang dùng → code trong project → skill đã duyệt (`vetted.lock`) → công cụ và thư viện trên GitHub → bài nghiên cứu SOTA. Dừng ở bậc đầu tiên đáp ứng được; công sức tìm tỉ lệ với cỡ việc.
+- **Script `scout.py`** (chỉ đọc, chỉ dùng thư viện chuẩn):
+  - GitHub qua `gh`, có dự phòng bằng API công khai. Tìm hai lần (khớp nhất và nhiều sao nhất) rồi gộp, vì chạy thử thật cho thấy xếp theo độ khớp bỏ sót công cụ nổi tiếng.
+  - Bài báo qua OpenAlex, dự phòng bằng Semantic Scholar rồi arXiv. Chạy thử thật cho thấy Semantic Scholar hay trả 429 khi không có khóa, còn arXiv hay chậm.
+  - Đánh dấu chỗ cần xem: repo đã lưu trữ, không có giấy phép, copyleft, lâu không cập nhật, ít sao; bài preprint, không rõ nơi đăng.
+- **Luôn được nhắc:** luật chung trong `AGENTS.global.md`, và router gợi ý skill này cho mọi việc thuộc nhóm "tính năng" và "kiến trúc", kèm lưu ý bỏ qua việc vặt. Có thêm luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA".
+- **Kết quả:** tối đa 5 ứng viên có bằng chứng, rồi quyết định dùng lại, điều chỉnh hay tự làm, ghi vào mục quyết định của file kế hoạch kèm nguồn.
+- **An toàn:** thứ tìm được phải qua `vet-skill` trước khi cài; chỉ chép code khi giấy phép cho phép; câu tìm kiếm không chứa code hay thông tin riêng.
+
 ## 8. Lộ trình triển khai
 
 Mỗi giai đoạn ghi kèm model và effort nên dùng để làm chính giai đoạn đó (tự áp dụng yêu cầu #5).
@@ -739,13 +752,12 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 
 ## 10. Câu hỏi còn mở
 
-Đã trả lời: ai viết skill (Claude viết v1), commit (có, sau mỗi giai đoạn), Jev (bỏ), phạm vi (chỉ `agent-stack/`).
+Đã trả lời: ai viết skill (Claude viết v1), commit (có, sau mỗi giai đoạn), Jev (bỏ), phạm vi (chỉ `agent-stack/`), câu "(luôn kiểm tra" (thuộc reuse-best: trước khi build luôn tìm thứ có sẵn tốt nhất, xem 7.9).
 
 1. Bạn dùng gói Claude nào: Pro, Max 5x hay Max 20x? Có bật usage credits không? (Tùy gói, Fable có thể bị tính vào usage credits.)
-2. Câu "(luôn kiểm tra …" bị cắt. Bạn định viết gì?
-3. Worker OpenCode: chỉ dùng model local và miễn phí, hay chấp nhận provider trả phí qua API key? Bạn có muốn tuyệt đối không gửi code ra ngoài không?
-4. Viết luận: dùng cho việc gì (blog, CV, hồ sơ học bổng, bài tập)? Tiếng Việt, tiếng Anh hay cả hai?
-5. Theo dõi tiến độ: khi kích hoạt toàn cục, những project nào cần theo dõi (mặc định là mọi thư mục trong `~/Documents/Claude/`)? Có muốn nhận bản tổng hợp mỗi tuần không? (Việc `git init` ba thư mục học để sau, vì hiện chỉ làm trong `agent-stack/`.)
+2. Worker OpenCode: chỉ dùng model local và miễn phí, hay chấp nhận provider trả phí qua API key? Bạn có muốn tuyệt đối không gửi code ra ngoài không?
+3. Viết luận: dùng cho việc gì (blog, CV, hồ sơ học bổng, bài tập)? Tiếng Việt, tiếng Anh hay cả hai?
+4. Theo dõi tiến độ: khi kích hoạt toàn cục, những project nào cần theo dõi (mặc định là mọi thư mục trong `~/Documents/Claude/`)? Có muốn nhận bản tổng hợp mỗi tuần không? (Việc `git init` ba thư mục học để sau, vì hiện chỉ làm trong `agent-stack/`.)
 
 ---
 

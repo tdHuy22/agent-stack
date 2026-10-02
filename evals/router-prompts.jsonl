@@ -45,3 +45,9 @@
 {"prompt": "Refactor module thanh toán này cho dễ đọc hơn", "expect": "refactor"}
 {"prompt": "tach ham xu ly don hang thanh cac ham nho, bo trung lap", "expect": "refactor"}
 {"prompt": "clean up this module without changing behavior", "expect": "refactor"}
+{"prompt": "Có tool nào trên GitHub quét secret trong repo chưa, hay mình phải tự viết?", "expect": "reuse-best"}
+{"prompt": "Thuật toán nào đang là SOTA cho phát hiện bất thường trong log hệ thống?", "expect": "reuse-best"}
+{"prompt": "is there an existing library for parsing SARIF files in python", "expect": "reuse-best"}
+{"prompt": "trước khi tự viết công cụ benchmark, xem có cái gì làm sẵn tốt nhất chưa", "expect": "reuse-best"}
+{"prompt": "Tìm paper mới nhất về speculative decoding rồi mình cài đặt lại", "expect": "reuse-best"}
+{"prompt": "dừng lại một chút, giải thích ngắn race condition là gì", "expect": "quick-question"}

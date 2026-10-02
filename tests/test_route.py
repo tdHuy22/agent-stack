@@ -60,7 +60,18 @@ class HookSuggestion(TempDirTestCase):
         sessions.mkdir(parents=True)
         import hashlib
         (sessions / (hashlib.sha1(b"s2").hexdigest()[:16] + ".json")).write_text(json.dumps({"model": "claude-sonnet-5-5"}))
-        self.assertIsNone(route.hook_suggestion("Thêm tính năng xuất CSV cho trang báo cáo", data))
+        self.assertIsNone(route.hook_suggestion("Refactor module thanh toán này cho dễ đọc hơn", data))
+
+    def test_building_something_suggests_reuse_best_first(self):
+        data = {"session_id": "s3", "effort": {"level": "medium"}}
+        sessions = self.tmp / "state" / "sessions"
+        sessions.mkdir(parents=True)
+        import hashlib
+        (sessions / (hashlib.sha1(b"s3").hexdigest()[:16] + ".json")).write_text(json.dumps({"model": "claude-sonnet-5-5"}))
+        hit = route.hook_suggestion("Thêm tính năng xuất CSV cho trang báo cáo", data)
+        self.assertIn("skill reuse-best", hit["user"])
+        self.assertIn("không tầm thường", hit["context"])
+        self.assertEqual(route.suggest("Có tool nào trên GitHub quét secret trong repo chưa?")["rule"], "reuse-best")
 
     def test_prompt_submit_hook_end_to_end(self):
         payload = {"session_id": "e2e", "prompt": "Review bảo mật hàm đăng nhập này giúp mình",

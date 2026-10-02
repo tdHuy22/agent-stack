@@ -5,8 +5,8 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 02/10/2026.*
 
-- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, và nâng cấp `giong-van` theo nghiên cứu về văn AI (02/10/2026). Plugin `agent-stack` gồm 5 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 106 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
-- **Đang dở:** không có.
+- **Xong:** GĐ0 đến GĐ7 trên nhánh `trien-khai-v1`, nâng cấp `giong-van` theo nghiên cứu về văn AI, và skill `reuse-best` (02/10/2026). Plugin `agent-stack` gồm 6 skill, 5 agent, 5 hook; 21 mục bên thứ ba đã kiểm duyệt; bộ eval 12 việc; 118 test đạt trên Python 3.9 và 3.11. **Chưa kích hoạt gì ở `~/.claude` hay `~/.config/opencode`.**
+- **Đang dở:** không có. Lần rà soát ngày 02/10 còn 5 chỗ thiếu chờ bạn đồng ý sửa: skill `verify` chưa có nên tín hiệu "test lệch mốc" của `tien-do` không hoạt động; eval chạy trong repo nên model thấy `CLAUDE.md`, grader và lời giải; `install.py` lỗi vẫn thoát mã 0; CLI `gitleaks`, `osv-scanner` chưa được theo dõi; `autoContinueAtUsageLimit` chưa bật.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   1. Đọc các báo cáo trong `vet-reports/`, rồi `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` cho những mục đồng ý (danh sách: `vet.py list`).
   2. Xem trước bằng `./install.sh`, rồi `./install.sh --apply` (thêm `--restore-workflow-warning` để bật lại cảnh báo usage của workflow).
@@ -14,8 +14,8 @@
   4. Đo kích hoạt skill: `claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish`.
   5. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/` để tạo style card và bật phần so với bài mẫu của `tells.py`.
   6. Gộp vào `main` khi hài lòng: `git -C ~/Documents/Claude/agent-stack switch main && git -C ~/Documents/Claude/agent-stack merge --ff-only trien-khai-v1`.
-- **Quyết định còn treo:** 5 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, câu "(luôn kiểm tra" bị cắt, provider cho worker OpenCode, mục đích viết, project cần theo dõi).
-- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 106 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
+- **Quyết định còn treo:** 4 câu hỏi ở mục 10 của `KE-HOACH.md` (gói Claude, provider cho worker OpenCode, mục đích viết, project cần theo dõi). Câu "(luôn kiểm tra" đã rõ: thuộc reuse-best.
+- **Mốc kiểm tra:** `python3 -m unittest discover -s tests -t .` → `Ran 118 tests … OK`; `claude plugin validate plugin` → `Validation passed`; `python3 evals/run_eval.py --self-test` → 12 dấu ✓.
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status` và `git log --oneline -5`, chạy mốc kiểm tra, rồi đọc lại mục này.
 
 ## 1. Giai đoạn
@@ -88,3 +88,10 @@
 
 ### GĐ7: Vận hành
 - [x] `tools/maintain.py`: phiên bản, đồ bên thứ ba có commit mới (so với commit đã kiểm), test và validate, ngân sách mô tả skill, mức dùng 7 ngày so với nền, dọn cache. Chạy mỗi tháng: `python3 tools/maintain.py`.
+
+### GĐ8: Dùng lại tốt nhất (#1, reuse-best)
+- [x] Ghi rõ ý của câu "(luôn kiểm tra" theo lời bạn (02/10/2026): trước khi build hay làm gì, luôn tìm thứ có sẵn tốt nhất như công cụ trên GitHub hoặc bài nghiên cứu SOTA. Cập nhật `KE-HOACH.md` (N3, mục 7.9, mục 10).
+- [x] Skill `reuse-best` (sonnet · medium, chạy trong context riêng) và `scripts/scout.py`: GitHub qua `gh` (tìm theo độ khớp và theo sao rồi gộp), bài báo qua OpenAlex rồi Semantic Scholar rồi arXiv; đánh dấu repo đã lưu trữ, không giấy phép, copyleft, lâu không cập nhật, và bài preprint. Đã chạy thử thật với GitHub và OpenAlex.
+- [x] Luôn được nhắc: luật trong `AGENTS.global.md`, dòng mới trong bảng chọn model của `CLAUDE.global.md`, router gợi ý cho mọi việc "tính năng" và "kiến trúc" kèm lưu ý bỏ qua việc vặt, cộng luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA". Bộ prompt có nhãn: 53/53.
+- [x] 2 case đo kích hoạt mới trong `plugin/evals/` và 1 grader chặn kích hoạt nhầm với việc vặt. 12 test mới.
+- [ ] **Bạn làm (tốn một ít hạn mức):** chạy `claude plugin eval` (xem GĐ5) để đo skill có tự kích hoạt đúng lúc không.

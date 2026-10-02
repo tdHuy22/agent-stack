@@ -58,7 +58,7 @@ def suggest(text: str):
     if not rule:
         return None
     return {"rule": rule["id"], "model": rule.get("model"), "effort": rule.get("effort"),
-            "agent": rule.get("agent"), "skills": rule.get("skills", []), "matched": hits}
+            "agent": rule.get("agent"), "skills": rule.get("skills", []), "note": rule.get("note", ""), "matched": hits}
 
 
 def family(model) -> str:
@@ -99,7 +99,8 @@ def hook_suggestion(prompt: str, data: dict):
         parts_ctx.append(f"giao cho subagent {hit['agent']}")
     if hit["skills"]:
         parts_user.append("skill " + ", ".join(hit["skills"]))
-        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]) + " nếu có")
+        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]) + " nếu có"
+                         + (f" ({hit['note']})" if hit.get("note") else ""))
     if not parts_user:
         return None  # model, effort đã khớp và không có skill/agent để gợi ý
     if not A.once(f"route-{sid}-{hit['rule']}", 3600):
