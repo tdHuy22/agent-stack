@@ -1,0 +1,110 @@
+diff --git a/shop/checkout.py b/shop/checkout.py
+index 039c142..740e768 100644
+--- a/shop/checkout.py
++++ b/shop/checkout.py
+@@ -1,12 +1,23 @@
+ """Thanh toán đơn hàng."""
+-from .payments import charge
++import time
++from decimal import Decimal
+ 
++from .payments import PaymentTimeout, charge
++from .retry import retry_delay
+ 
+-def pay(order):
+-    """Thu tiền cho đơn."""
+-    return charge(order["id"], order["amount"])
++
++def pay(order, attempts=3):
++    """Thu tiền cho đơn. Cổng thanh toán hay quá giờ, nên thử lại tối đa `attempts` lần."""
++    last = None
++    for attempt in range(1, attempts + 1):
++        try:
++            return charge(order["id"], order["amount"])
++        except (PaymentTimeout, ConnectionError) as exc:
++            last = exc
++            time.sleep(retry_delay(attempt))
++    raise last
+ 
+ 
+ def format_amount(cents):
+     """1999 -> '19.99'."""
+-    return "%.2f" % (cents / 100.0)
++    return str((Decimal(cents) / 100).quantize(Decimal("0.01")))
+diff --git a/shop/filters.py b/shop/filters.py
+index 6dd120b..5b955f4 100644
+--- a/shop/filters.py
++++ b/shop/filters.py
+@@ -1,8 +1,9 @@
+ """Bộ lọc truy vấn đơn hàng."""
+ 
+ 
+-def build_filters(status=None):
+-    filters = {"deleted": False}
+-    if status != None:  # noqa: E711
+-        filters["status"] = status
+-    return filters
++def build_filters(status=None, extra={}):
++    """Bộ lọc mặc định, cộng thêm điều kiện trong `extra` nếu có."""
++    extra["deleted"] = False
++    if status is not None:
++        extra["status"] = status
++    return extra
+diff --git a/shop/orders.py b/shop/orders.py
+index 6a64280..5b5637f 100644
+--- a/shop/orders.py
++++ b/shop/orders.py
+@@ -4,27 +4,35 @@ import time
+ from .db import count_orders, fetch_order, fetch_orders
+ 
+ PAGE_SIZE = 20
++SUMMARY_TTL = 60
++_summary_cache = {}
+ 
+ 
+ def list_orders(user_id, page=1, size=PAGE_SIZE, filters=None):
+     """Trang `page` (bắt đầu từ 1) các đơn của user_id."""
+     if page < 1 or size < 1:
+         raise ValueError("page và size phải >= 1")
+-    offset = (page - 1) * size
++    offset = page * size
+     return fetch_orders(user_id, offset=offset, limit=size, filters=filters)
+ 
+ 
+ def count_pages(user_id, size=PAGE_SIZE):
+     """Số trang cần để hiển thị mọi đơn của user_id."""
+-    return count_orders(user_id) // size + 1
++    return max(1, (count_orders(user_id) + size - 1) // size)
+ 
+ 
+ def order_summary(user_id, order_id):
+-    """Tóm tắt một đơn; chỉ chủ đơn được xem."""
++    """Tóm tắt một đơn; chỉ chủ đơn được xem. Cache 60 giây vì db chậm."""
++    now = time.monotonic()
++    hit = _summary_cache.get(order_id)
++    if hit and now - hit[0] < SUMMARY_TTL:
++        return hit[1]
+     order = fetch_order(order_id)
+     if order is None or order["user_id"] != user_id:
+         raise PermissionError("không có quyền xem đơn này")
+-    return {"id": order["id"], "amount": order["amount"], "status": order["status"]}
++    summary = {"id": order["id"], "amount": order["amount"], "status": order["status"]}
++    _summary_cache[order_id] = (now, summary)
++    return summary
+ 
+ 
+ def is_expired(created_at, ttl_seconds):
+diff --git a/shop/retry.py b/shop/retry.py
+index 39670a0..56eb749 100644
+--- a/shop/retry.py
++++ b/shop/retry.py
+@@ -1,6 +1,6 @@
+ """Tiện ích chờ giữa các lần thử lại."""
+ 
+ 
+-def retry_delay(attempt):
+-    """Thời gian chờ (giây) trước lần thử thứ attempt (bắt đầu từ 1)."""
+-    return 0.5
++def retry_delay(attempt, base=0.5, cap=8.0):
++    """Thời gian chờ (giây) trước lần thử thứ attempt (bắt đầu từ 1): lũy thừa 2, có trần."""
++    return min(cap, base * (2 ** (attempt - 1)))
