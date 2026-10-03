@@ -9,6 +9,8 @@ Lệnh:
   vet.py approve <khóa> --note "..."     ghi xác nhận của người duyệt vào vetted.lock
   vet.py reject  <khóa> --note "..."
   vet.py list
+  vet.py drift [--plugins-dir DIR] [--quiet] [--json]
+                                         so plugin đã cài với bản đã kiểm trong .vet-cache (0 = ổn, 1 = có lệch)
   vet.py dynamic --setup                 cài cô lập sandbox-runtime (tùy chọn, một lần)
   vet.py dynamic <khóa|thư mục> [--timeout GIÂY] [--allow-read ĐƯỜNG_DẪN] [--keep] [--json] -- <lệnh...>
                                          chạy MỘT lệnh của đối tượng trong sandbox rồi báo nó cố làm gì
@@ -740,6 +742,10 @@ def main(argv=None) -> int:
     n.add_argument("--recommend", required=True, choices=["cài", "có-điều-kiện", "thử-1-project", "không-cài"])
     n.add_argument("--text", required=True)
     sub.add_parser("list")
+    dr = sub.add_parser("drift", help="so plugin đã cài với bản đã kiểm duyệt")
+    dr.add_argument("--plugins-dir", help="thư mục plugin của Claude Code (mặc định ~/.claude/plugins)")
+    dr.add_argument("--quiet", action="store_true", help="không in gì khi mọi plugin đều khớp")
+    dr.add_argument("--json", action="store_true")
     d = sub.add_parser("dynamic", help="chạy một lệnh của đối tượng trong sandbox (tùy chọn)")
     d.add_argument("key", nargs="?", help="khóa trong vetted.lock hoặc thư mục cục bộ")
     d.add_argument("--setup", action="store_true", help="cài sandbox-runtime vào .cache/srt")
@@ -767,6 +773,9 @@ def main(argv=None) -> int:
             return cmd_review(args, home, "approved" if args.cmd == "approve" else "rejected")
         if args.cmd == "note":
             return cmd_note(args, home)
+        if args.cmd == "drift":
+            import drift
+            return drift.main_cli(args, home)
         if args.cmd == "dynamic":
             import dynamic  # chỉ nạp khi dùng, để scan không phụ thuộc Node
             return dynamic.main_cli(args, home)

@@ -33,8 +33,11 @@ class HookTests(TempDirTestCase):
         self.project = self.tmp / "proj"
         self.project.mkdir()
 
-    def run_hook(self, name, payload, python="python3", cwd=None):
-        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+    def run_hook(self, name, payload, python="python3", cwd=None, env_extra=None):
+        # Thư mục plugin giả (không tồn tại) để test không phụ thuộc plugin đang cài trên máy.
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state),
+                   AGENT_STACK_PLUGINS_DIR=str(self.tmp / "no-plugins"))
+        env.update(env_extra or {})
         start = time.time()
         out = subprocess.run([python, str(HOOKS / name)], input=json.dumps(payload), capture_output=True,
                              text=True, env=env, timeout=30, cwd=cwd)
@@ -62,6 +65,35 @@ class HookTests(TempDirTestCase):
 
     def test_session_start_silent_without_plan(self):
         self.assertIsNone(self.run_hook("session_start.py", {"session_id": "s", "cwd": str(self.project)}))
+
+    def drift_env(self, drifted):
+        from tests.test_vet_drift import make_fixture
+        home, plugins, installed = make_fixture(self.tmp)
+        if drifted:
+            (installed / "hooks.json").write_text("{}")
+        return {"AGENT_STACK_HOME": str(home), "AGENT_STACK_PLUGINS_DIR": str(plugins)}
+
+    def test_session_start_warns_when_installed_plugin_drifts(self):
+        env = self.drift_env(drifted=True)
+        for i, py in enumerate(PYTHONS):
+            out = self.run_hook("session_start.py", {"session_id": f"d{i}", "source": "startup",
+                                                     "cwd": str(self.project)}, python=py, env_extra=env)
+            ctx = out["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("demo@mk", ctx)
+            self.assertIn("hooks.json", ctx)
+            self.assertIn("demo@mk", out["systemMessage"])
+
+    def test_session_start_drift_check_silent_when_matching_or_not_startup(self):
+        self.assertIsNone(self.run_hook("session_start.py", {"session_id": "m", "source": "startup",
+                                                             "cwd": str(self.project)},
+                                        env_extra=self.drift_env(drifted=False)))
+        import shutil
+        shutil.rmtree(self.tmp / "stack")
+        shutil.rmtree(self.tmp / "plugins")
+        env = self.drift_env(drifted=True)
+        for source in ("compact", "resume", "clear"):
+            self.assertIsNone(self.run_hook("session_start.py", {"session_id": "x" + source, "source": source,
+                                                                 "cwd": str(self.project)}, env_extra=env))
 
     def test_session_start_dedupes_double_registration(self):
         self.with_plan()
