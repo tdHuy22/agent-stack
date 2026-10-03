@@ -237,9 +237,9 @@
     "anthropics/claude-plugins-official:plugins/claude-security": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-03T08:19:56Z",
+        "note": "Người dùng duyệt ngày 03/10/2026 theo khuyến nghị có-điều-kiện. Điều kiện: chỉ gọi tay, chỉ cài theo project khi cần quét sâu (6 hook, trong đó PostToolUse chạy theo từng lần sửa file); chưa cài, duyệt không tự cài.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -317,9 +317,9 @@
     "anthropics/claude-plugins-official:plugins/plugin-dev": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-03T08:19:57Z",
+        "note": "Người dùng từ chối ngày 03/10/2026 theo khuyến nghị không-cài: script kiểm hook của nó lỗi thời (đòi matcher mà claude plugin validate không đòi) và agent-stack đã có kiểm chứng riêng.",
+        "status": "rejected"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -436,9 +436,9 @@
     "anthropics/sandbox-runtime": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-03T08:19:56Z",
+        "note": "Người dùng duyệt ngày 03/10/2026 theo khuyến nghị có-điều-kiện. Điều kiện: chỉ dùng cục bộ, cài cô lập trong .cache/srt (npm ci --ignore-scripts, theo tools/srt/package-lock.json) để chạy vet.py dynamic; không cài toàn cục.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
