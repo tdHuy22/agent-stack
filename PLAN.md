@@ -3,11 +3,11 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật chiều 03/10/2026.*
+*Cập nhật tối 03/10/2026.*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên nhánh `trien-khai-v1`, đã gộp vào `main`; chưa push.
-  - Plugin `agent-stack` 0.4.1: 6 skill, 5 agent, 6 hook (thêm SubagentStart). **Đã cập nhật toàn cục** lúc 10:11 ngày 03/10/2026 theo lệnh của bạn (trước đó 0.4.0 lúc 09:25): `claude plugin list` báo 0.4.1, bản cache khớp nguồn từng file, có bản sửa lỗi báo cáo subagent bị lưu nhầm thành yêu cầu của bạn và bị router gợi ý nhầm. Chuỗi yêu cầu, subagent, báo cáo quay về, subagent thứ hai chạy thử trên file đã cài (Python 3.9 và 3.11): đạt. Các phiên desktop mở trước 10:11 vẫn chạy 0.4.0.
+  - Plugin `agent-stack` 0.4.2: 6 skill, 5 agent, 6 hook. **Đã cập nhật toàn cục lên 0.4.2** lúc 21:07 ngày 03/10/2026 theo lệnh của bạn (nhật ký `state/install-logs/20261003-210751.json`): `claude plugin list` báo 0.4.2, bản cache giống hệt `plugin/` (diff rỗng), `vet.py drift` chạy từ bản cache báo 3 plugin chính thức khớp; hook SessionStart của bản cache, thử với bản chép `context7` bị sửa trong `.tmp/`, hiện cảnh báo lệch trên Python 3.9 và 3.11. Phiên mở trước 21:07 vẫn chạy 0.4.1. Trước đó, 0.4.1 lúc 10:11 (0.4.0 lúc 09:25): `claude plugin list` báo 0.4.1, bản cache khớp nguồn từng file, có bản sửa lỗi báo cáo subagent bị lưu nhầm thành yêu cầu của bạn và bị router gợi ý nhầm. Chuỗi yêu cầu, subagent, báo cáo quay về, subagent thứ hai chạy thử trên file đã cài (Python 3.9 và 3.11): đạt. Các phiên desktop mở trước 10:11 vẫn chạy 0.4.0.
   - Bên thứ ba: 24 mục đã kiểm duyệt: 21 duyệt, 3 từ chối, không còn mục chờ. Ngày 03/10/2026 bạn quyết ba mục cuối theo khuyến nghị: `sandbox-runtime` duyệt có điều kiện (chỉ dùng cục bộ trong `.cache/srt`), `claude-security` duyệt có điều kiện (chỉ gọi tay, cài theo project khi cần; chưa cài), `plugin-dev` từ chối. Duyệt không có nghĩa là đã cài.
   - Bộ eval 12 việc đã chạy thật ngày 02/10/2026 (72 lượt, khoảng 7,5 USD giá niêm yết, tính vào hạn mức gói): sonnet·medium, opus·medium và opus·low đều đạt 24/24; sonnet rẻ nhất (0,063 USD/việc, so với 0,128 và 0,121). Bộ việc chưa phân biệt được các cấu hình (xem `routing-table.md`). Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. 317 test đạt trên Python 3.9 và 3.11.
   - Bảng định tuyến đã đối chiếu với khuyến nghị chính thức của Anthropic (Claude Code, bài chọn model và effort, trang chi phí): `routing-table.md`. Chỉ một dòng đổi: debug khó bắt đầu ở opus·medium rồi nâng lên high nếu chưa ra; các dòng opus·high còn lại giữ vì không có kiểm tra tự động.
@@ -27,13 +27,12 @@
   - **Kiểm lệch plugin so với bản đã vet** (03/10/2026, plugin 0.4.2 trong repo): marketplace chính thức tự cập nhật (lúc 10:00 03/10 `context7`, `session-report` đổi nhãn từ `ab024cd` sang `d182ca4`; file vẫn giống hệt bản đã kiểm). Lệnh mới `vet.py drift` (chỉ đọc) so sha256 từng file plugin đã cài với `.vet-cache` qua `catalog.json` và `vetted.lock`; hook SessionStart chạy nó khi mở phiên mới và chỉ báo khi lệch. Chạy thật trên máy: 3 plugin chính thức khớp, 0,14 giây. 327 test đạt trên Python 3.9 và 3.11, `claude plugin validate plugin` đạt (có biên nhận). Giới hạn: cấu hình của plugin `strict: false` nằm trong `marketplace.json` nên không được so.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Cập nhật plugin `agent-stack` đã cài lên 0.4.2 để hook kiểm lệch chạy thật (cần bạn đồng ý): `./install.sh --only plugin --apply`. Phiên mở trước đó vẫn chạy 0.4.1.
-  2. Cấp quyền cho MCP `context7` qua `/mcp` trong terminal `claude` tương tác (mình không bắt đầu được luồng này). Phiên desktop lúc 15:03 ngày 03/10 đã thấy công cụ của `context7` kết nối, nhưng chưa gọi thử; phiên `/doctor` chiều 03/10 cũng thấy nó kết nối được, nên có lẽ việc này không còn cần.
-  3. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy; plugin này đang tắt), `brew install gitleaks osv-scanner` (không code nào gọi).
-  4. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
-  5. Nếu muốn phân biệt được các cấu hình model: thêm 3 đến 4 việc khó hơn vào `evals/tasks/` (debug nhiều file, race, review diff thật) rồi chạy lại A, C, D (ước khoảng 6 đến 8 USD giá niêm yết), và chạy thêm H (haiku, khoảng 0,5 USD).
-  6. Trả lời nốt `KE-HOACH.md` mục 10: project cần theo dõi và bản tổng hợp tuần; ngôn ngữ viết; việc hay thư mục tuyệt đối không được gửi ra ngoài.
-  7. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
+  1. Cấp quyền cho MCP `context7` qua `/mcp` trong terminal `claude` tương tác (mình không bắt đầu được luồng này). Phiên desktop lúc 15:03 ngày 03/10 đã thấy công cụ của `context7` kết nối, nhưng chưa gọi thử; phiên `/doctor` chiều 03/10 cũng thấy nó kết nối được, nên có lẽ việc này không còn cần.
+  2. Tùy chọn, không cài cũng không hỏng gì: `brew install pyright` (chỉ để plugin pyright-lsp chạy; plugin này đang tắt), `brew install gitleaks osv-scanner` (không code nào gọi).
+  3. Đặt 5 bài tự viết, càng khác loại càng tốt, vào `plugin/skills/giong-van/samples/`.
+  4. Nếu muốn phân biệt được các cấu hình model: thêm 3 đến 4 việc khó hơn vào `evals/tasks/` (debug nhiều file, race, review diff thật) rồi chạy lại A, C, D (ước khoảng 6 đến 8 USD giá niêm yết), và chạy thêm H (haiku, khoảng 0,5 USD).
+  5. Trả lời nốt `KE-HOACH.md` mục 10: project cần theo dõi và bản tổng hợp tuần; ngôn ngữ viết; việc hay thư mục tuyệt đối không được gửi ra ngoài.
+  6. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Quyết định còn treo:**
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
