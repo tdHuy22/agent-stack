@@ -32,4 +32,4 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 
 ## Git
 
-- Làm trên nhánh `trien-khai-v1`. Commit sau mỗi giai đoạn, với thông điệp nói rõ giai đoạn. Không push.
+- Làm trên nhánh `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026). Commit sau mỗi giai đoạn, với thông điệp nói rõ giai đoạn. Không push.
