@@ -12,8 +12,9 @@ __pycache__/
 evals/results/
 plugin/evals/results/
 
-# Mẫu bài viết riêng tư của người dùng
+# Mẫu bài viết riêng tư của người dùng; văn mẫu kinh điển (phạm vi công cộng) thì đưa vào git
 plugin/skills/giong-van/samples/*
 !plugin/skills/giong-van/samples/README.md
+!plugin/skills/giong-van/samples/kinh-dien/
 vendor/
 plugin/.agent-stack-home

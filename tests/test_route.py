@@ -120,6 +120,78 @@ class ProjectFixtures(TempDirTestCase):
 
 
 
+class LspSuggestion(ProjectFixtures):
+    """Đề xuất LSP (pyright-lsp, clangd-lsp) riêng cho project cần nó, không cài toàn cục."""
+
+    def setUp(self):
+        super().setUp()
+        from unittest import mock
+        self.config = self.tmp / "claude-config"
+        (self.config / "plugins").mkdir(parents=True)
+        (self.config / "plugins" / "installed_plugins.json").write_text(json.dumps(
+            {"version": 2, "plugins": {"pyright-lsp@claude-plugins-official": [{"scope": "user"}]}}), encoding="utf-8")
+        for key, value in (("CLAUDE_CONFIG_DIR", str(self.config)), ("AGENT_STACK_PLUGINS_DIR", str(self.config / "plugins"))):
+            old = os.environ.get(key)
+            os.environ[key] = value
+            self.addCleanup(lambda k=key, o=old: os.environ.pop(k, None) if o is None else os.environ.__setitem__(k, o))
+        self.which = mock.patch.object(route.shutil, "which", return_value="/usr/local/bin/x")
+        self.which.start()
+        self.addCleanup(self.which.stop)
+
+    def big_python(self, name="bigpy", extra=None):
+        files = {f"pkg/m{i}.py": f"v{i} = {i}\n" for i in range(150)}
+        files.update(extra or {})
+        return self.repo(name, files)
+
+    def test_large_python_project_gets_a_local_pyright_suggestion(self):
+        hint = route.session_hint(self.big_python())
+        self.assertIn("pyright-lsp", hint["context"])
+        self.assertIn("claude plugin enable pyright-lsp@claude-plugins-official --scope local", hint["context"])
+        self.assertNotIn("brew install pyright", hint["context"])
+        self.assertIn("nên bật pyright-lsp", hint["user"])
+
+    def test_small_python_project_gets_none(self):
+        hint = route.session_hint(self.python_repo())
+        self.assertNotIn("pyright-lsp", hint["context"])
+        self.assertNotIn("pyright", hint["user"])
+
+    def test_type_checker_config_is_enough(self):
+        root = self.repo("typed", {"a.py": "x: int = 1\n", "b.py": "\n", "c.py": "\n",
+                                   "pyproject.toml": "[project]\nname = 'x'\n\n[tool.mypy]\nstrict = true\n"})
+        self.assertIn("[tool.mypy]", route.session_hint(root)["context"])
+
+    def test_nothing_when_already_enabled_for_the_project_or_globally(self):
+        root = self.big_python(extra={".claude/settings.local.json": json.dumps(
+            {"enabledPlugins": {"pyright-lsp@claude-plugins-official": True}})})
+        self.assertNotIn("pyright-lsp", route.session_hint(root)["context"])
+        (self.config / "settings.json").write_text(json.dumps(
+            {"enabledPlugins": {"pyright-lsp@claude-plugins-official": True}}), encoding="utf-8")
+        self.assertNotIn("pyright-lsp", route.session_hint(self.big_python("bigpy2"))["context"])
+
+    def test_disabled_locally_wins_over_user_scope(self):
+        (self.config / "settings.json").write_text(json.dumps(
+            {"enabledPlugins": {"pyright-lsp@claude-plugins-official": True}}), encoding="utf-8")
+        root = self.big_python(extra={".claude/settings.local.json": json.dumps(
+            {"enabledPlugins": {"pyright-lsp@claude-plugins-official": False}})})
+        self.assertIn("pyright-lsp", route.session_hint(root)["context"])
+
+    def test_missing_binary_and_plugin_change_the_steps(self):
+        (self.config / "plugins" / "installed_plugins.json").write_text('{"version": 2, "plugins": {}}', encoding="utf-8")
+        self.which.stop()
+        from unittest import mock
+        with mock.patch.object(route.shutil, "which", return_value=None):
+            ctx = route.session_hint(self.big_python())["context"]
+        self.which.start()
+        self.assertIn("`brew install pyright`", ctx)
+        self.assertIn("claude plugin install pyright-lsp@claude-plugins-official --scope local", ctx)
+
+    def test_c_project_with_cmake_gets_clangd(self):
+        root = self.repo("cproj", {"src/a.c": "\n", "src/b.c": "\n", "src/c.h": "\n", "CMakeLists.txt": "project(x)\n"})
+        hint = route.session_hint(root)
+        self.assertIn("clangd-lsp", hint["context"])
+        self.assertIn("CMakeLists.txt", hint["context"])
+
+
 class ProjectAware(ProjectFixtures):
     """Mục 4 kết hợp mục 5: chọn skill theo nội dung project và việc hiện tại, từ lúc mở phiên và mỗi tin nhắn."""
 

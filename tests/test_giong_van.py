@@ -148,3 +148,119 @@ class SamplesComparison(TempDirTestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("Chưa so với bài mẫu", out.stdout)
         self.assertIn("5 bài", out.stdout)
+
+
+EN_SAMPLE = "I wrote this after a long week fighting the build. It finally works, and I am glad of it. " * 40
+CLASSIC_KEYS = ("title", "author", "year", "genre", "source", "license")
+
+
+def frontmatter_doc(body, **meta):
+    head = "".join(f"{k}: {v}\n" for k, v in meta.items())
+    return f"---\n{head}---\n{body}"
+
+
+class SampleSelection(TempDirTestCase):
+    """Chọn bộ bài mẫu: bài của project, rồi bài riêng trong samples/ của skill, rồi văn mẫu kinh điển cùng ngôn ngữ."""
+
+    def setUp(self):
+        super().setUp()
+        self.skill = self.tmp / "skill-samples"
+        (self.skill / "kinh-dien" / "vi").mkdir(parents=True)
+        (self.skill / "kinh-dien" / "en").mkdir(parents=True)
+        (self.skill / "README.md").write_text("Không phải bài mẫu. " * 300, encoding="utf-8")
+        (self.skill / "kinh-dien" / "vi" / "a.md").write_text(
+            frontmatter_doc(SAMPLE, title="Bài A", source="https://vi.wikisource.org/x"), encoding="utf-8")
+        (self.skill / "kinh-dien" / "en" / "b.md").write_text(
+            frontmatter_doc(EN_SAMPLE, title="Essay B", source="https://en.wikisource.org/y"), encoding="utf-8")
+        self.project = self.tmp / "proj"
+        self.project.mkdir()
+
+    def pick(self, draft, **kw):
+        return tells.pick_samples(draft, project_start=self.project, skill_samples=self.skill, **kw)
+
+    def test_frontmatter_is_stripped(self):
+        text, n = tells.load_samples(self.skill / "kinh-dien" / "vi")
+        self.assertEqual(n, 1)
+        self.assertNotIn("wikisource", text)
+        self.assertTrue(text.startswith(SAMPLE[:20]))
+
+    def test_directory_samples_follow_the_draft_language(self):
+        mixed = self.tmp / "mixed"
+        mixed.mkdir()
+        (mixed / "vi.md").write_text(SAMPLE, encoding="utf-8")
+        (mixed / "en.md").write_text(EN_SAMPLE, encoding="utf-8")
+        vi_text, vi_n = tells.load_samples(mixed, vietnamese=True)
+        en_text, en_n = tells.load_samples(mixed, vietnamese=False)
+        self.assertEqual((vi_n, en_n), (1, 1))
+        self.assertNotIn("fighting the build", vi_text)
+        self.assertNotIn("Mình", en_text)
+
+    def test_falls_back_to_classics_of_the_same_language(self):
+        vi = self.pick(DRAFT)
+        self.assertEqual((vi["kind"], vi["files"]), ("classic", 1))
+        self.assertEqual(vi["where"].name, "vi")
+        en = self.pick("We shipped the robust fix. The robust tests passed. " * 3)
+        self.assertEqual((en["kind"], en["where"].name), ("classic", "en"))
+
+    def test_project_samples_win(self):
+        own = self.project / ".agent" / "giong-van" / "samples"
+        own.mkdir(parents=True)
+        (own / "p.md").write_text(SAMPLE, encoding="utf-8")
+        nested = self.project / "chuong-1"
+        nested.mkdir()
+        got = tells.pick_samples(DRAFT, project_start=nested, skill_samples=self.skill)
+        self.assertEqual((got["kind"], got["files"]), ("project", 1))
+
+    def test_own_samples_in_skill_dir_beat_classics_without_mixing(self):
+        (self.skill / "cua-toi.md").write_text(SAMPLE, encoding="utf-8")
+        got = self.pick(DRAFT)
+        self.assertEqual((got["kind"], got["files"]), ("own", 1))
+
+    def test_too_few_project_words_falls_back_with_a_note(self):
+        own = self.project / ".agent" / "giong-van" / "samples"
+        own.mkdir(parents=True)
+        (own / "p.md").write_text("Mình viết ngắn thôi.", encoding="utf-8")
+        got = self.pick(DRAFT)
+        self.assertEqual(got["kind"], "classic")
+        self.assertIn("project", got["note"])
+
+    def test_classics_do_not_judge_pronouns(self):
+        res = tells.analyze(DRAFT, SAMPLE, kind="classic")
+        codes = {h["code"] for h in res["hits"]}
+        self.assertNotIn("xung-ho", codes)
+        flagged = [h for h in res["hits"] if h["code"] == "khac-bai-mau"]
+        self.assertTrue(flagged)
+        self.assertIn("kinh điển", flagged[0]["fix"])
+
+    def test_cli_reports_which_samples_were_used(self):
+        draft = self.write("draft.md", DRAFT)
+        data = json.loads(run_script(TELLS, "--json", "--project", str(self.project),
+                                     "--samples-root", str(self.skill), str(draft)).stdout)
+        self.assertEqual((data["samples"]["kind"], data["samples"]["files"]), ("classic", 1))
+        out = run_script(TELLS, "--project", str(self.project), "--samples-root", str(self.skill), str(draft))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("văn mẫu kinh điển", out.stdout)
+        self.assertIn(".agent/giong-van/samples", out.stdout)
+
+
+class CommittedClassics(TempDirTestCase):
+    """5 bài văn học kinh điển cho mỗi ngôn ngữ, thuộc phạm vi công cộng, có nguồn."""
+
+    def test_five_public_domain_classics_per_language(self):
+        root = TELLS.parents[1] / "samples" / "kinh-dien"
+        for lang, vietnamese in (("vi", True), ("en", False)):
+            files = sorted(p for p in (root / lang).glob("*.md"))
+            self.assertEqual(len(files), 5, lang)
+            total = 0
+            for f in files:
+                raw = f.read_text(encoding="utf-8")
+                self.assertTrue(raw.startswith("---\n"), f.name)
+                head = raw.split("\n---\n", 1)[0]
+                for key in CLASSIC_KEYS:
+                    self.assertRegex(head, rf"(?m)^{key}: \S", f"{f.name} thiếu {key}")
+                self.assertRegex(head, r"(?m)^source: https://(vi|en)\.wikisource\.org/", f.name)
+                body = tells.strip_frontmatter(raw)
+                self.assertEqual(tells.is_vietnamese(body), vietnamese, f.name)
+                self.assertGreaterEqual(tells.words(body), 400, f.name)
+                total += tells.words(body)
+            self.assertGreaterEqual(total, 10000, lang)

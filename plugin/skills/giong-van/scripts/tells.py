@@ -5,16 +5,23 @@ Mục đích là sửa văn cho hay hơn và đúng giọng người viết, kh�
 phát hiện AI. Các công cụ đó không đáng tin; một số dấu hiệu dưới đây người thật cũng dùng.
 Điểm số chỉ để so trước và sau khi sửa trên cùng một đoạn, với cùng một bộ bài mẫu.
 
-Khi có bài mẫu của người viết (mặc định: thư mục samples/ của skill), script so từ vựng của
-bản nháp với bài mẫu, theo cách đo "từ dùng nhiều bất thường" của Kobak và cộng sự (2025):
-  - từ hay gặp ở văn AI mà người viết hiếm khi dùng (tính điểm)
-  - xưng hô khác bài mẫu (tính điểm)
+Script so từ vựng của bản nháp với bài mẫu cùng ngôn ngữ, theo cách đo "từ dùng nhiều bất thường"
+của Kobak và cộng sự (2025):
+  - từ hay gặp ở văn AI mà bài mẫu hiếm khi dùng (tính điểm)
+  - xưng hô khác bài mẫu (tính điểm; chỉ khi bài mẫu là của người viết)
   - cụm lặp lại mà bài mẫu không có (không tính điểm, vì có thể chỉ là từ của chủ đề)
+
+Bộ bài mẫu mặc định, theo thứ tự ưu tiên:
+  1. .agent/giong-van/samples/ của project (tìm từ thư mục hiện tại đi lên, dừng ở gốc git)
+  2. bài riêng của người viết trong samples/ của skill (không tính samples/kinh-dien/)
+  3. samples/kinh-dien/vi hoặc en: 5 bài văn học kinh điển thuộc phạm vi công cộng, cùng ngôn ngữ với bản nháp
+Văn kinh điển không phải giọng của người viết, nên với bộ này script không so cách xưng hô.
 
 Lệnh:
   tells.py FILE.md                  in danh sách dấu hiệu theo dòng và điểm trên 1.000 từ
   tells.py --json FILE.md
   tells.py --samples DIR FILE.md    so với bài mẫu ở DIR (thư mục hoặc một file)
+  tells.py --project DIR FILE.md    tìm bài mẫu của project từ DIR thay vì thư mục hiện tại
   tells.py --no-samples FILE.md     không so với bài mẫu
   echo "..." | tells.py -
 """
@@ -30,8 +37,13 @@ from collections import Counter
 from pathlib import Path
 
 DEFAULT_SAMPLES = Path(__file__).resolve().parents[1] / "samples"
+CLASSICS_DIR = "kinh-dien"
+PROJECT_SAMPLES = Path(".agent") / "giong-van" / "samples"
 SAMPLE_EXT = {".md", ".txt"}
 MIN_SAMPLE_WORDS = 500
+FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+KIND_LABEL = {"project": "bài mẫu của project", "own": "bài mẫu của bạn", "classic": "bài văn mẫu kinh điển",
+              "path": "bài mẫu"}
 CHATBOT_FIX = "Xóa: đây là lời chatbot nói với người dùng, bị dán sót vào văn bản."
 
 # (mã, nhóm, trọng số, regex, gợi ý sửa). Regex chạy trên văn bản đã chuẩn hóa NFC, không phân biệt hoa thường.
@@ -222,7 +234,8 @@ def unfamiliar_phrases(text: str, samples: str, limit: int = 8) -> list:
     return [{"phrase": g, "count": cands[g]} for g in kept[:limit]]
 
 
-def compare_samples(text: str, samples: str) -> dict:
+def compare_samples(text: str, samples: str, kind: str = "own") -> dict:
+    """kind = classic: bài mẫu là văn kinh điển, không phải giọng người viết, nên không so cách xưng hô."""
     n_samples = words(samples)
     if n_samples < MIN_SAMPLE_WORDS:
         return {"used": False, "words": n_samples, "unfamiliar": [], "hits": [],
@@ -238,12 +251,14 @@ def compare_samples(text: str, samples: str) -> dict:
         rate_draft = len(found) * 1000 / n_draft
         smoothed = (in_samples + 0.5) * 1000 / n_samples
         if rate_samples < RARE_PER_1000 and rate_draft >= OVERUSE_RATIO * smoothed:
+            fix = ("Văn mẫu kinh điển gần như không dùng từ này: nói cụ thể hơn, hoặc giữ nếu là thuật ngữ của chủ đề."
+                   if kind == "classic" else "Thay bằng cách nói bạn hay dùng, hoặc bỏ.")
             hits.append({"code": "khac-bai-mau", "group": "không giống bài mẫu", "weight": 1,
                          "line": line_of(text, found[0].start()),
                          "match": f"“{term}” ×{len(found)} (bài mẫu: {in_samples} lần trong {n_samples} từ)",
-                         "fix": "Thay bằng cách nói bạn hay dùng, hoặc bỏ."})
+                         "fix": fix})
     sample_fp = {k: len(rx.findall(samples)) for k, rx in FIRST_PERSON.items()}
-    if sum(sample_fp.values()) >= 5:
+    if kind != "classic" and sum(sample_fp.values()) >= 5:
         for usual, other in (("mình", "tôi"), ("tôi", "mình")):
             if sample_fp[usual] < 4 * sample_fp[other]:
                 continue
@@ -257,31 +272,83 @@ def compare_samples(text: str, samples: str) -> dict:
     return {"used": True, "words": n_samples, "unfamiliar": unfamiliar_phrases(text, samples), "hits": hits}
 
 
-def load_samples(path: Path, exclude: Path = None) -> tuple:
-    """(văn bản gộp, số bài). Bỏ README và chính file đang được chấm."""
+def strip_frontmatter(text: str) -> str:
+    """Bỏ khối YAML đầu file (tên bài, nguồn, giấy phép), để siêu dữ liệu không lẫn vào từ vựng bài mẫu."""
+    return FRONTMATTER.sub("", text, count=1)
+
+
+def load_samples(path: Path, exclude: Path = None, vietnamese: bool = None, skip: Path = None) -> tuple:
+    """(văn bản gộp, số bài). Bỏ README, chính file đang được chấm và cây thư mục `skip`.
+    Với thư mục, `vietnamese` (True/False) chỉ giữ bài cùng ngôn ngữ với bản nháp; None là giữ hết."""
     if path.is_file():
-        files = [path]
+        files, by_lang = [path], False
     elif path.is_dir():
         files = sorted(p for p in path.rglob("*") if p.is_file() and p.suffix.lower() in SAMPLE_EXT
                        and p.name.lower() != "readme.md")
+        by_lang = vietnamese is not None
     else:
-        files = []
+        files, by_lang = [], False
     if exclude is not None:
         files = [p for p in files if p.resolve() != exclude.resolve()]
+    if skip is not None:
+        files = [p for p in files if skip.resolve() not in p.resolve().parents]
     texts = []
     for p in files:
         try:
-            if p.stat().st_size <= 1_000_000:
-                texts.append(p.read_text(encoding="utf-8", errors="replace"))
+            if p.stat().st_size > 1_000_000:
+                continue
+            body = strip_frontmatter(unicodedata.normalize("NFC", p.read_text(encoding="utf-8", errors="replace")))
         except OSError:
             continue
+        if by_lang and is_vietnamese(body) != vietnamese:
+            continue
+        texts.append(body)
     return "\n\n".join(texts), len(texts)
+
+
+def find_project_samples(start: Path):
+    """Thư mục .agent/giong-van/samples/ gần nhất từ `start` đi lên; dừng ở gốc git hoặc thư mục nhà."""
+    start = Path(start).resolve()
+    home = Path.home().resolve()
+    for d in (start, *start.parents):
+        if (d / PROJECT_SAMPLES).is_dir():
+            return d / PROJECT_SAMPLES
+        if (d / ".git").exists() or d == home:
+            break
+    return None
+
+
+def pick_samples(text: str, draft_path: Path = None, project_start: Path = None,
+                 skill_samples: Path = DEFAULT_SAMPLES):
+    """Chọn bộ bài mẫu cùng ngôn ngữ với bản nháp: bài của project, rồi bài riêng trong samples/ của skill,
+    rồi văn mẫu kinh điển. Trả về {kind, where, text, files, words, note} hoặc None nếu không có gì."""
+    vietnamese = is_vietnamese(unicodedata.normalize("NFC", text))
+    classics = skill_samples / CLASSICS_DIR
+    candidates = []
+    project = find_project_samples(project_start or Path.cwd())
+    if project is None and draft_path is not None:
+        project = find_project_samples(Path(draft_path).resolve().parent)
+    if project is not None:
+        candidates.append(("project", project, None))
+    candidates.append(("own", skill_samples, classics))
+    candidates.append(("classic", classics / ("vi" if vietnamese else "en"), None))
+    notes = []
+    for kind, where, skip in candidates:
+        combined, n = load_samples(where, draft_path, vietnamese=vietnamese, skip=skip)
+        n_words = words(combined) if n else 0
+        if n and n_words >= MIN_SAMPLE_WORDS:
+            return {"kind": kind, "where": where, "text": combined, "files": n, "words": n_words,
+                    "note": "; ".join(notes)}
+        if n and kind == "project":
+            notes.append(f"bài mẫu của project mới có {n_words} từ, cần ít nhất {MIN_SAMPLE_WORDS}")
+    return None
 
 
 # ---------------------------------------------------------------- phân tích
 
-def analyze(text: str, samples: str = None) -> dict:
-    """samples: văn bản gộp của bài mẫu. None nghĩa là không so (kết quả chỉ phụ thuộc vào text)."""
+def analyze(text: str, samples: str = None, kind: str = "own") -> dict:
+    """samples: văn bản gộp của bài mẫu. None nghĩa là không so (kết quả chỉ phụ thuộc vào text).
+    kind: project, own, path hoặc classic (văn kinh điển: không so cách xưng hô)."""
     text = unicodedata.normalize("NFC", text)
     hits = []
     for code, group, weight, rx, fix in COMPILED:
@@ -318,7 +385,7 @@ def analyze(text: str, samples: str = None) -> dict:
     hits += extra
     compared = None
     if samples is not None:
-        compared = compare_samples(text, unicodedata.normalize("NFC", samples))
+        compared = compare_samples(text, unicodedata.normalize("NFC", samples), kind)
         hits += compared.pop("hits")
     score = sum(h["weight"] for h in hits) * 1000 / n_words
     result = {"words": n_words, "score_per_1000_words": round(score, 1), "hits": hits,
@@ -332,7 +399,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Dò dấu hiệu văn AI (chỉ đọc).")
     ap.add_argument("path", help="file văn bản, hoặc - để đọc từ stdin")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--samples", help="thư mục hoặc file bài mẫu của bạn (mặc định: samples/ của skill)")
+    ap.add_argument("--samples", help="thư mục hoặc file bài mẫu (mặc định: tự chọn, xem đầu file)")
+    ap.add_argument("--project", help="tìm .agent/giong-van/samples/ từ thư mục này (mặc định: thư mục hiện tại)")
+    ap.add_argument("--samples-root", help=argparse.SUPPRESS)  # thư mục samples/ của skill; dùng trong test
     ap.add_argument("--no-samples", action="store_true", help="không so với bài mẫu")
     args = ap.parse_args(argv)
     text = sys.stdin.read() if args.path == "-" else Path(args.path).read_text(encoding="utf-8")
@@ -340,11 +409,22 @@ def main(argv=None) -> int:
     if args.no_samples:
         result = analyze(text)
     else:
-        where = Path(args.samples).expanduser() if args.samples else DEFAULT_SAMPLES
-        samples, n_files = load_samples(where, None if args.path == "-" else Path(args.path))
-        if n_files:
-            result = analyze(text, samples)
-            result["samples"]["files"] = n_files
+        draft = None if args.path == "-" else Path(args.path)
+        vietnamese = is_vietnamese(unicodedata.normalize("NFC", text))
+        if args.samples:
+            where = Path(args.samples).expanduser()
+            samples, n_files = load_samples(where, draft, vietnamese=vietnamese)
+            picked = {"kind": "path", "where": where, "text": samples, "files": n_files, "note": ""} if n_files else None
+        else:
+            root = Path(args.samples_root).expanduser() if args.samples_root else DEFAULT_SAMPLES
+            project = Path(args.project).expanduser() if args.project else None
+            picked = pick_samples(text, draft, project, root)
+            where = PROJECT_SAMPLES
+        if picked:
+            result = analyze(text, picked["text"], picked["kind"])
+            result["samples"].update({"files": picked["files"], "kind": picked["kind"],
+                                      "where": str(picked["where"]), "note": picked["note"],
+                                      "language": "vi" if vietnamese else "en"})
         else:
             result = analyze(text)
             result["samples"] = {"used": False, "files": 0, "words": 0, "unfamiliar": [],
@@ -361,7 +441,16 @@ def main(argv=None) -> int:
         if not samples_info["used"]:
             print(f"Chưa so với bài mẫu: {samples_info['reason']}.")
         else:
-            print(f"Đã so với {samples_info['files']} bài mẫu ({samples_info['words']} từ).")
+            kind = samples_info.get("kind", "path")
+            label = KIND_LABEL.get(kind, "bài mẫu")
+            if kind == "classic":
+                label += " tiếng Việt" if samples_info.get("language") == "vi" else " tiếng Anh"
+            print(f"Đã so với {samples_info['files']} {label} ({samples_info['words']} từ).")
+            if samples_info.get("note"):
+                print(f"Ghi chú: {samples_info['note']}.")
+            if kind == "classic":
+                print(f"Chưa có bài của bạn cho project này: thêm vào {PROJECT_SAMPLES.as_posix()}/ của project "
+                      "để so với giọng của bạn (văn kinh điển không so cách xưng hô).")
             if samples_info["unfamiliar"]:
                 print("Cụm lặp lại mà bài mẫu không có (không tính điểm; có thể chỉ là từ của chủ đề): "
                       + ", ".join(f"“{u['phrase']}” ×{u['count']}" for u in samples_info["unfamiliar"]))

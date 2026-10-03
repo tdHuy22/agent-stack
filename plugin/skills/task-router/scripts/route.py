@@ -13,7 +13,8 @@ Dùng làm thư viện:
   session_hint(root)             -> dict {context, user} hoặc None (hook SessionStart dùng)
 
 Gợi ý tính cả hồ sơ project (loại code, có test, code nhạy cảm bảo mật) và việc tiếp theo trong §0:
-tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0.
+tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0. Lúc mở phiên, project lớn (hoặc có
+cấu hình kiểm kiểu, biên dịch) mà chưa bật LSP thì được đề xuất bật LSP riêng cho project đó (scope local).
 
 Router chỉ GỢI Ý. Hook không thể đổi model hay effort; người dùng tự đổi bằng /model, /effort,
 và chỉ nên đổi ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
@@ -23,7 +24,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -122,6 +125,67 @@ def profile_summary(profile: dict) -> tuple:
     return labels, ready, pending, list(dict.fromkeys(agents))
 
 
+def claude_config_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser()
+
+
+def plugin_enabled(root: Path, plugin: str) -> bool:
+    """Plugin đang bật cho project này: local đè project, project đè user (như thứ tự settings của Claude Code)."""
+    state = False
+    for path in (claude_config_dir() / "settings.json", root / ".claude" / "settings.json",
+                 root / ".claude" / "settings.local.json"):
+        value = ((A.read_json(path, {}) or {}).get("enabledPlugins") or {}).get(plugin)
+        if isinstance(value, bool):
+            state = value
+    return state
+
+
+def plugin_installed(plugin: str) -> bool:
+    plugins_dir = Path(os.environ.get("AGENT_STACK_PLUGINS_DIR") or claude_config_dir() / "plugins").expanduser()
+    return plugin in ((A.read_json(plugins_dir / "installed_plugins.json", {}) or {}).get("plugins") or {})
+
+
+def lsp_signal(root: Path, lsp: dict):
+    """File cho thấy project cần LSP (cấu hình kiểm kiểu hay biên dịch), hoặc None."""
+    for name in lsp.get("signals", []):
+        if (root / name).exists():
+            return name
+    if lsp.get("pyproject_tools"):
+        try:
+            text = (root / "pyproject.toml").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        for tool in lsp["pyproject_tools"]:
+            if f"[tool.{tool}]" in text:
+                return f"pyproject.toml [tool.{tool}]"
+    return None
+
+
+def lsp_suggestions(root: Path, profile: dict) -> list:
+    """LSP nên bật riêng cho project này: project đủ lớn hoặc có cấu hình, và plugin chưa bật.
+    Mỗi mục: {plugin, reason, steps}. Không cài gì, chỉ gợi ý lệnh."""
+    out = []
+    for kind in profile.get("kinds", []):
+        entry = rules().get("profiles", {}).get(kind, {})
+        lsp = entry.get("lsp")
+        if not lsp:
+            continue
+        count = (profile.get("counts") or {}).get(kind, 0)
+        signal = lsp_signal(root, lsp)
+        if count < lsp.get("min_files", 10 ** 9) and not signal:
+            continue
+        if plugin_enabled(root, lsp["plugin"]):
+            continue
+        steps = []
+        if lsp.get("binary") and not shutil.which(lsp["binary"]):
+            steps.append(lsp["binary_install"])
+        verb = "enable" if plugin_installed(lsp["plugin"]) else "install"
+        steps.append(f"claude plugin {verb} {lsp['plugin']} --scope local")
+        reason = f"{count} file {entry.get('label', kind)}" + (f", có {signal}" if signal else "")
+        out.append({"plugin": lsp["plugin"].split("@")[0], "reason": reason, "steps": steps})
+    return out
+
+
 def next_task(root) -> str:
     """Việc tiếp theo đầu tiên trong §0, hoặc việc đang dở; chuỗi rỗng nếu không có."""
     found = A.read_plan(Path(root))
@@ -163,12 +227,19 @@ def session_hint(root):
         ctx.append("Có thể thêm (đã kiểm duyệt, chờ người dùng duyệt): " + ", ".join(pending) + ".")
     if agents:
         ctx.append("Subagent nên dùng: " + ", ".join(agents) + ".")
+    lsps = lsp_suggestions(root, profile)
+    for s in lsps:
+        ctx.append(f"Nên bật LSP {s['plugin']} riêng cho project này ({s['reason']}): nhảy tới định nghĩa, tìm chỗ dùng, "
+                   "báo lỗi ngay sau khi sửa. Chưa bật. Đề xuất với người dùng khi việc cần đọc hay sửa nhiều code, "
+                   "đừng tự cài: " + " rồi ".join(f"`{x}`" for x in s["steps"]) + ".")
     if hit:
         ctx.append(f"Việc tiếp theo trong §0 («{A.clip(task, 100)}») → {describe(hit)}.")
     ctx.append("Dùng các gợi ý này để chọn skill cho từng việc, và cho dòng ➡️ ở cuối mỗi câu trả lời.")
     user = "🧭 " + ", ".join(labels[:3] or [root.name])
     if ready:
         user += " · skill: " + ", ".join(ready[:3])
+    if lsps:
+        user += " · nên bật " + ", ".join(s["plugin"] for s in lsps)
     if hit:
         user += " · việc tiếp theo → " + describe(hit)
     return {"context": " ".join(ctx), "user": A.clip(user, 180)}

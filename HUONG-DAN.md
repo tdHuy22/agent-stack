@@ -138,7 +138,7 @@ Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng `/agen
 **Gọi:**
 
 - `/agent-stack:tien-do` cho project hiện tại.
-- `/agent-stack:tien-do all` cho mọi project trong `~/Documents/Claude/`.
+- `/agent-stack:tien-do all` cho mọi project trong `~/Documents/Claude/`. Chỉ chạy khi bạn hỏi: không có tác vụ định kỳ hay bản tổng hợp tuần, mỗi project tự theo dõi qua §0 của nó (bạn quyết 03/10/2026).
 
 **Kết quả:** một dòng trạng thái, tối đa 3 việc nên làm, cảnh báo (§0 cũ, file chưa commit lâu, nhánh chưa merge, kiểm tra trượt hoặc đã cũ), và câu `/goal` gợi ý. Việc được xếp theo 5 bậc: chặn đường → dang dở → giai đoạn hiện tại → nợ TODO → bị bỏ quên.
 
@@ -274,13 +274,19 @@ Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn
 
 Văn tiếng Anh dùng thêm skill `humanizer` (đã cài từ vendor).
 
-**Để skill bắt giọng tốt hơn**, đặt khoảng 5 bài tự viết, càng khác loại càng tốt (blog, email, ghi chú, bài luận), vào `plugin/skills/giong-van/samples/`, rồi nói:
+**Bài mẫu.** `tells.py` so bản nháp với bài mẫu cùng ngôn ngữ, chọn theo thứ tự:
+
+1. Mẫu riêng của project viết luận: `.agent/giong-van/samples/` trong project đó.
+2. Bài bạn tự viết, dùng chung: đặt thẳng vào `plugin/skills/giong-van/samples/` (không đưa vào git).
+3. Văn mẫu kinh điển: `plugin/skills/giong-van/samples/kinh-dien/`, 5 bài tiếng Việt và 5 bài tiếng Anh thuộc phạm vi công cộng (danh sách và nguồn trong `README.md` ở đó). Bộ này không phải giọng của bạn, nên script không so cách xưng hô.
+
+**Mỗi project viết luận**, đặt 3–5 bài cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nói trong project đó:
 
 ```
 /agent-stack:giong-van tao-style-card
 ```
 
-Claude điền `style-card.md` với ví dụ trích nguyên văn và hỏi bạn duyệt từng mục. Hiện thư mục `samples/` còn trống, nên skill chỉ dựa vào danh sách dấu hiệu chung.
+Claude điền style card riêng của project (`.agent/giong-van/style-card.md`) với ví dụ trích nguyên văn và hỏi bạn duyệt từng mục. Project chưa có mẫu thì skill so với văn kinh điển và nhắc chỗ đặt mẫu.
 
 **Chạy tay:**
 
@@ -508,7 +514,7 @@ Trần 3 USD chỉ đủ khoảng 11 trên 13 ca; chạy nốt phần còn lại
 | Ngưỡng cảnh báo hạn mức | Biến môi trường `AGENT_STACK_WARN_5H` (mặc định 90) và `AGENT_STACK_WARN_7D` (mặc định 80) |
 | Luật chung cho mọi project | `global/AGENTS.global.md` (dùng chung) và `global/CLAUDE.global.md` (riêng Claude Code, có bảng chọn cho dòng ➡️) |
 | Luật router | `plugin/skills/task-router/rules.json`, rồi chạy lại `route.py --eval evals/router-prompts.jsonl` |
-| Giọng văn | `plugin/skills/giong-van/style-card.md` và `samples/` |
+| Giọng văn | `plugin/skills/giong-van/style-card.md` và `samples/` (chung); `.agent/giong-van/` trong từng project viết luận |
 | Danh sách dấu hiệu văn AI tiếng Việt | `plugin/skills/giong-van/vi-ai-tells.md` |
 | Model của worker OpenCode | `opencode/agents/worker.md` |
 | Mẫu PLAN và HANDOFF | `plugin/skills/session-keeper/templates/` |
@@ -529,7 +535,8 @@ Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch
 | Desktop app chạy code plugin cũ | Bản chép trong cache chưa cập nhật | Tăng `version`, `./install.sh --apply --only plugin`, mở phiên mới |
 | Không có cảnh báo hạn mức | Statusline chỉ chạy trong terminal; số liệu quá 30 phút bị bỏ | Mở `claude` trong terminal, hoặc tự theo dõi `/usage` |
 | `claude -p` báo "OAuth session expired" | CLI hết phiên đăng nhập | `claude /login` trong terminal |
-| Plugin pyright-lsp không chạy | Chưa có `pyright` | `brew install pyright` |
+| Plugin pyright-lsp không chạy trong project đã bật | Chưa có `pyright` | `brew install pyright` |
+| Muốn bật LSP cho một project | LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn | Trong project đó: `claude plugin enable pyright-lsp@claude-plugins-official --scope local` (C/C++: `clangd-lsp`) |
 | `oc-worker` báo không kết nối được | Model local chỉ chạy ở mạng nhà, hoặc service OpenCode chưa chạy | Thêm `--standalone`, hoặc để phiên chính tự làm |
 | `vet.py scan` thoát mã 3 | Lỗi mạng hoặc đích không tồn tại | Kiểm tra lại `owner/repo@ref`, thử `--no-scanner` |
 | §0 lệch với thực tế | Quên lưu trước khi dừng | `/agent-stack:session-keeper tiep-tuc` để so và báo chỗ lệch |

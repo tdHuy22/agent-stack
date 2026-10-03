@@ -30,6 +30,11 @@ class Maintain(unittest.TestCase):
         text = "\n".join(lines)
         self.assertIn("`gitleaks` (quét secret trước khi commit): có", text)
         self.assertIn("`osv-scanner` (quét lỗ hổng đã biết trong thư viện): chưa cài, bạn tự chạy `brew install osv-scanner`", text)
+        # LSP chỉ cần trong project được router đề xuất (03/10/2026), không nhắc cài toàn cục
+        self.assertNotIn("brew install pyright", text)
+        self.assertNotIn("brew install llvm", text)
+        self.assertIn("pyright", text)
+        self.assertIn("theo project", text)
 
     def test_offline_run_completes(self):
         out = subprocess.run([sys.executable, str(REPO / "tools" / "maintain.py"), "--offline", "--skip-tests"],

@@ -33,9 +33,10 @@ MIN_CLAUDE = (2, 1, 277)
 RECOMMENDED_CLI = (
     ("gitleaks", "brew install gitleaks", "quét secret trước khi commit"),
     ("osv-scanner", "brew install osv-scanner", "quét lỗ hổng đã biết trong thư viện"),
-    ("pyright", "brew install pyright", "cần cho plugin pyright-lsp"),
-    ("clangd", "brew install llvm", "cần cho plugin clangd-lsp"),
 )
+# pyright và clangd chỉ cần trong project bật LSP riêng; router đề xuất lúc mở phiên ở project đủ lớn.
+LSP_NOTE = ("- `pyright`, `clangd`: chỉ cần khi bật LSP theo project (pyright-lsp, clangd-lsp); "
+            "hồ sơ project lúc mở phiên sẽ đề xuất ở project cần, kèm lệnh cài.")
 
 
 def sh(*args, cwd=None, timeout=300):
@@ -163,6 +164,7 @@ def check_cli(lines: list, which=shutil.which) -> None:
     lines.append("## 7. Công cụ dòng lệnh khuyến nghị")
     for name, install, why in RECOMMENDED_CLI:
         lines.append(f"- `{name}` ({why}): " + ("có" if which(name) else f"chưa cài, bạn tự chạy `{install}` nếu cần"))
+    lines.append(LSP_NOTE)
 
 
 def main(argv=None) -> int:

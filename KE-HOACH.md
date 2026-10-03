@@ -192,7 +192,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | superpowers (obra) | plugin skills | 294k / 09-27 | CC (chính thức), OC | **Thử ở 1 project trước** | Quy trình bắt buộc: brainstorm → plan → subagent → TDD → verify. Có cơ chế "kiểm tra skill trước mọi việc", liên quan #4. Nặng, có chủ kiến riêng, trùng vai với bộ của Matt Pocock. |
 | mattpocock/skills | skills | 273k / 09-29 | CC, OC | **Cài lẻ**: grill-me, tdd, diagnosing-bugs, handoff | `handoff` phục vụ trực tiếp #3. `ask-matt` là router cho bộ skill của ông. |
 | feature-dev, code-review, pr-review-toolkit, code-simplifier, commit-commands | plugin chính thức | — | CC | Chọn 2–3 theo nhu cầu | Của Anthropic. |
-| pyright-lsp, clangd-lsp (+ typescript/rust nếu cần) | plugin chính thức | — | CC | **Cài** Python và C/C++ | Nhảy tới định nghĩa thay vì grep, giảm đọc file thừa. clangd hợp hướng bán dẫn và firmware. |
+| pyright-lsp, clangd-lsp (+ typescript/rust nếu cần) | plugin chính thức | — | CC | **Cài** Python và C/C++ | Nhảy tới định nghĩa thay vì grep, giảm đọc file thừa. clangd hợp hướng bán dẫn và firmware. Đổi ngày 03/10/2026: chỉ bật riêng từng project khi router đề xuất (project lớn hoặc có cấu hình kiểm kiểu, biên dịch). |
 | context7 | MCP | 62.6k / 10-01 | CC, OC | **Cài** | Tra docs thư viện bản mới nhất. |
 | serena | MCP | 29.9k / 09-30 | CC, OC | Thử khi repo lớn | Trùng một phần với plugin LSP. |
 | wshobson/agents | plugin | 40.1k / 09-29 | CC, OC | Tham khảo, lấy lẻ | Hỗ trợ nhiều harness. |
@@ -594,7 +594,8 @@ Bảng định tuyến khởi điểm (giả thuyết, GĐ4 sẽ chỉnh bằng 
   ```
   giong-van/
   ├── SKILL.md          # quy trình + checklist
-  ├── samples/          # 5 bài bạn tự viết, nhiều loại (không commit nếu riêng tư)
+  ├── samples/          # bài bạn tự viết (không commit) và kinh-dien/: 5 bài văn học kinh điển mỗi ngôn ngữ (có commit);
+  │                     # mẫu riêng từng project viết luận nằm ở .agent/giong-van/samples/ của project
   ├── style-card.md     # đặc điểm giọng văn, Claude rút ra, bạn duyệt
   └── vi-ai-tells.md    # dấu hiệu văn AI tiếng Việt, bạn bổ sung dần
   ```
@@ -691,7 +692,7 @@ Cảnh báo: mốc test 274 passed / 37 xfailed chưa được chạy lại kể
 |---|---|---|
 | Hook `SessionStart` (startup, resume) chạy script ở chế độ `--brief` | 0 token LLM, khoảng 150 token context | Mỗi lần mở phiên trong project có file kế hoạch. Hiện 3–6 dòng "đang dở / tiếp theo" cho bạn (`systemMessage`) và cho Claude (`additionalContext`). Gộp chung với hook của 7.3 để chỉ chèn một khối. |
 | Gõ `/tien-do` hoặc hỏi "làm gì tiếp?" | Khoảng 1–3k token (`sonnet · low`, chạy với `context: fork`) | Khi cần xếp hạng và giải thích. |
-| Tác vụ định kỳ của desktop app, ví dụ sáng thứ Hai | 1 lượt mỗi tuần | Chạy `/tien-do all`, ghi ra `~/Documents/Claude/TIEN-DO.md` và gửi thông báo. |
+| Tác vụ định kỳ của desktop app, ví dụ sáng thứ Hai | 1 lượt mỗi tuần | Chạy `/tien-do all`, ghi ra `~/Documents/Claude/TIEN-DO.md` và gửi thông báo. **Bỏ ngày 03/10/2026:** mỗi project tự theo dõi. |
 
 **Cấu trúc skill:**
 
@@ -773,7 +774,7 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 - [ ] ⚙️ Gộp `collect.py --brief` vào hook `SessionStart` của GĐ2, để mỗi lần mở phiên chỉ chèn một khối.
 - [ ] (Tùy chọn) `git init` cho ba thư mục học, để có lịch sử tiến độ và để các tín hiệu git hoạt động.
 - [ ] (Tùy chọn) Bật task list trên model 5.5: `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` và `CLAUDE_CODE_TASK_LIST_ID=<project>`. Đây chỉ là công cụ phụ trong phiên; nguồn sự thật vẫn là §0.
-- [ ] (Tùy chọn) Tác vụ định kỳ chạy `/tien-do all` mỗi sáng thứ Hai.
+- [x] ~~(Tùy chọn) Tác vụ định kỳ chạy `/tien-do all` mỗi sáng thứ Hai.~~ Bỏ (03/10/2026): mỗi project tự theo dõi qua §0 của nó.
 - [ ] (Tùy chọn) Thử plugin `project-artifact` cho SCEE.
 
 **Nghiệm thu:** theo các tiêu chí ở cuối mục 7.8.
@@ -839,9 +840,9 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 Đã trả lời: ai viết skill (Claude viết v1), commit (có, sau mỗi giai đoạn), Jev (bỏ), phạm vi (chỉ `agent-stack/`), câu "(luôn kiểm tra" (thuộc reuse-best: trước khi build luôn tìm thứ có sẵn tốt nhất, xem 7.9).
 
 1. ~~Gói Claude~~ **Đã trả lời (02/10/2026):** Max, nhưng có thể quay lại Pro nếu khối lượng công việc giảm. Usage credits: tắt (`get_usage` ngày 02/10: extra usage tắt, trần 100 USD/tháng, đã dùng 0). Nếu hạ xuống Pro, đo lại bằng `tools/usage_snapshot.py` và xem lại bảng định tuyến (dùng Opus ít hơn).
-2. ~~Worker OpenCode~~ **Đã trả lời một phần (02/10/2026):** OpenCode đang dùng OpenRouter và model miễn phí của OpenCode. Cấu hình thật ở `~/.config/opencode/opencode.jsonc`: model mặc định `opencode/muse-spark-1.3-contributor-free`, kèm provider local `tuf` (192.168.1.13, chỉ trong mạng nhà). Theo trang OpenCode Zen, model contributor-free đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của Meta. Đã làm: `oc-worker` và `AGENTS.global.md` ghi rõ không tự rơi về model từ xa, không giao file chứa secret hay mã riêng tư. Còn mở: danh sách việc hay thư mục tuyệt đối không được gửi ra ngoài; có đổi model mặc định của OpenCode không (repo không tự sửa file đó).
-3. ~~Viết luận~~ **Đã trả lời một phần (02/10/2026):** dùng đa dạng, nhiều mục đích. Chưa nói ngôn ngữ (Việt, Anh hay cả hai). Vì đa dạng, style card nên theo từng thể loại, và 5 bài mẫu nên khác loại.
-4. Theo dõi tiến độ: khi kích hoạt toàn cục, những project nào cần theo dõi (mặc định là mọi thư mục trong `~/Documents/Claude/`)? Có muốn nhận bản tổng hợp mỗi tuần không? (Việc `git init` ba thư mục học để sau, vì hiện chỉ làm trong `agent-stack/`.)
+2. ~~Worker OpenCode~~ **Đã trả lời một phần (02/10/2026):** OpenCode đang dùng OpenRouter và model miễn phí của OpenCode. Cấu hình thật ở `~/.config/opencode/opencode.jsonc`: model mặc định `opencode/muse-spark-1.3-contributor-free`, kèm provider local `tuf` (192.168.1.13, chỉ trong mạng nhà). Theo trang OpenCode Zen, model contributor-free đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của Meta. Đã làm: `oc-worker` và `AGENTS.global.md` ghi rõ không tự rơi về model từ xa, không giao file chứa secret hay mã riêng tư. Còn mở: danh sách việc hay thư mục tuyệt đối không được gửi ra ngoài; có đổi model mặc định của OpenCode không (repo không tự sửa file đó). **Gác lại (03/10/2026):** bạn đã tự setup OpenCode riêng; chỉ làm khi bạn nhắc.
+3. ~~Viết luận~~ **Đã trả lời (03/10/2026):** dùng đa dạng, nhiều mục đích, viết cả tiếng Việt và tiếng Anh. Mẫu mặc định là 5 bài văn học kinh điển mỗi ngôn ngữ, khác loại nhau (`plugin/skills/giong-van/samples/kinh-dien/`). Mỗi project viết luận có mẫu riêng trong `.agent/giong-van/samples/` và style card riêng, đúng ý style card theo từng thể loại.
+4. ~~Theo dõi tiến độ~~ **Đã trả lời (03/10/2026):** không kích hoạt theo dõi toàn cục, không bản tổng hợp tuần; mỗi project tự theo dõi qua §0 của nó (hook SessionStart và `tien-do` trong project đó). `/tien-do all` chỉ chạy khi bạn hỏi. (Việc `git init` ba thư mục học vẫn để sau.)
 
 ---
 
