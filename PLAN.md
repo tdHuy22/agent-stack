@@ -3,16 +3,15 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật tối 02/10/2026.*
+*Cập nhật sáng 03/10/2026.*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên nhánh `trien-khai-v1`, đã gộp vào `main`; chưa push.
-  - Plugin `agent-stack` 0.4.0: 6 skill, 5 agent, 6 hook (thêm SubagentStart). **Bản trong cache của app vẫn là 0.3.2** cho tới khi cập nhật (việc tiếp theo 1).
+  - Plugin `agent-stack` 0.4.0: 6 skill, 5 agent, 6 hook (thêm SubagentStart). **Đã cập nhật toàn cục** lúc 09:25 ngày 03/10/2026, theo lệnh của bạn trong chat (`./install.sh --only plugin --apply`): `claude plugin list` báo 0.4.0, bản trong cache khớp nguồn từng file (`diff -r` không khác biệt), có đủ 6 loại hook.
   - Bên thứ ba: 24 mục đã kiểm duyệt, 19 duyệt, 2 từ chối, 3 chờ bạn quyết (`sandbox-runtime`, `claude-security`, `plugin-dev`).
-  - Bộ eval 12 việc đã chạy thật ngày 02/10/2026 (72 lượt, khoảng 7,5 USD giá niêm yết, tính vào hạn mức gói): sonnet·medium, opus·medium và opus·low đều đạt 24/24; sonnet rẻ nhất (0,063 USD/việc, so với 0,128 và 0,121). Bộ việc chưa phân biệt được các cấu hình (xem `routing-table.md`). Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. 159 test đạt trên Python 3.9 và 3.11.
-  - Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch.
+  - Bộ eval 12 việc đã chạy thật ngày 02/10/2026 (72 lượt, khoảng 7,5 USD giá niêm yết, tính vào hạn mức gói): sonnet·medium, opus·medium và opus·low đều đạt 24/24; sonnet rẻ nhất (0,063 USD/việc, so với 0,128 và 0,121). Bộ việc chưa phân biệt được các cấu hình (xem `routing-table.md`). Đo kích hoạt skill bằng `claude plugin eval` (13 ca, 3,67 USD): 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. 315 test đạt trên Python 3.9 và 3.11.
   - Bảng định tuyến đã đối chiếu với khuyến nghị chính thức của Anthropic (Claude Code, bài chọn model và effort, trang chi phí): `routing-table.md`. Chỉ một dòng đổi: debug khó bắt đầu ở opus·medium rồi nâng lên high nếu chưa ra; các dòng opus·high còn lại giữ vì không có kiểm tra tự động.
-  - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`, `20261002-221518.json` (context7). Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
+  - **Đã cài toàn cục** lúc 15:19 ngày 02/10/2026, theo đồng ý của bạn trong chat. Nhật ký: `state/install-logs/20261002-151930.json`, `…152532.json`, `…153032.json`, `20261002-221518.json` (context7), `20261003-092531.json` (cập nhật plugin 0.4.0). Mọi thay đổi và lệnh gỡ từng mục nằm trong `INSTALLED.md`; gỡ toàn bộ: `./install.sh --rollback --apply`.
   - Kiểm chứng sau khi cài:
     - 7 plugin đều bật, file khớp bản đã kiểm duyệt;
     - CLI nạp plugin tại chỗ, đã thấy `plugin_root` trong `state/sessions.jsonl`;
@@ -23,11 +22,11 @@
     - (c) `reviewer.md`: hình dạng lỗi, verifier phản biện, ngưỡng tin cậy 80, bảng lọc dương tính giả; `plugin/NOTICES.md` ghi nguồn MIT và Apache-2.0.
     - (d) `tien-do`: mục "Đổi từ lần trước" qua snapshot trong `state/tien-do/`.
     - (e) `claude-security`: đã vet, khuyến nghị có điều kiện, chưa cài.
-  - **Skill và agent chạy context riêng không thấy hội thoại** (bạn nêu 02/10): hook SubagentStart đưa yêu cầu gần nhất của bạn (che khóa, tối đa 1200 ký tự) và 1 đến 2 việc đầu §0 vào đầu context của chúng; mọi agent và skill fork ghi rõ cần gì và thiếu thì nói rõ; luật chung dặn giao việc bằng prompt tự đủ. **Chưa chạy thật trong phiên Claude Code**: cần xác nhận session_id của SubagentStart khớp UserPromptSubmit.
+  - **Skill và agent chạy context riêng không thấy hội thoại** (bạn nêu 02/10): hook SubagentStart đưa yêu cầu gần nhất của bạn (che khóa, tối đa 1200 ký tự) và 1 đến 2 việc đầu §0 vào đầu context của chúng; mọi agent và skill fork ghi rõ cần gì và thiếu thì nói rõ; luật chung dặn giao việc bằng prompt tự đủ. **Đã chạy thử bản đã cài ngoài phiên** (file trong cache, thư mục trạng thái tạm, Python 3.9 và 3.11): thoát 0, không in lỗi, khóa giả bị che, ngữ cảnh 747 ký tự (trần 1500), sự kiện `subagent-start` có `"request": true`. **Chưa chạy trong phiên Claude Code thật**: hook chỉ nạp lúc mở phiên, và cần xác nhận session_id của SubagentStart khớp UserPromptSubmit (việc tiếp theo 1).
   - **Quyền riêng tư OpenCode**: model mặc định `opencode/muse-spark-1.3-contributor-free` dùng prompt và kết quả để huấn luyện model của Meta (trang OpenCode Zen). Luật chung và `oc-worker` ghi: không tự rơi về model từ xa, không giao secret hay mã riêng tư.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Cập nhật plugin lên 0.4.0 để hook SubagentStart và các sửa đổi có hiệu lực: `./install.sh --only plugin --apply` (cài toàn cục, nên mình chờ bạn nói). Rồi mở phiên mới, gọi một subagent và xem `state/events.jsonl` có dòng `subagent-start` với `"request": true`.
+  1. Mở một phiên Claude Code mới (hook của 0.4.0 chỉ nạp lúc mở phiên), gửi một yêu cầu rồi gọi một subagent (ví dụ `agent-stack:explore-lite`), sau đó xem `state/events.jsonl` (hiện chưa có file, nên dòng đầu tiên chính là bằng chứng) có dòng `subagent-start` với `"request": true`. Nếu là `"request": false` thì session_id của hai hook không khớp: báo mình để sửa.
   2. Cấp quyền cho MCP `context7` qua `/mcp` trong terminal `claude` tương tác (mình không bắt đầu được luồng này).
   3. Duyệt hoặc từ chối ba mục chờ, mỗi mục kèm nhận xét và khuyến nghị đã ghi trong `vetted.lock`: `sandbox-runtime` (có điều kiện: chỉ cục bộ), `claude-security` (có điều kiện: chỉ gọi tay, theo project), `plugin-dev` (khuyến nghị không cài). Lệnh: `python3 plugin/skills/vet-skill/scripts/vet.py approve|reject "<khóa>" --note "..."`.
   4. Quyết định về model mặc định của OpenCode (huấn luyện model của Meta bằng prompt của bạn): đổi trong `~/.config/opencode/opencode.jsonc` nếu không muốn; repo này không tự sửa file đó.
