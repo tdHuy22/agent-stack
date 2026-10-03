@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 
-from tests._util import PLUGIN, REPO, TempDirTestCase
+from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase
 
 ROUTE = PLUGIN / "skills" / "task-router" / "scripts" / "route.py"
 sys.path.insert(0, str(ROUTE.parent))
@@ -45,6 +45,15 @@ class HookSuggestion(TempDirTestCase):
     def test_skips_commands_and_short_prompts(self):
         self.assertIsNone(route.hook_suggestion("/compact", {"session_id": "s"}))
         self.assertIsNone(route.hook_suggestion("ok cảm ơn", {"session_id": "s"}))
+
+    def test_skips_messages_written_by_the_system(self):
+        # Báo cáo của subagent quay về như một tin của người dùng; thân báo cáo nhắc "việc tiếp theo" nhưng đó không
+        # phải việc cần định tuyến (từng làm router gợi ý nhầm skill tien-do sau mỗi lần subagent trả lời).
+        texts = (SUBAGENT_HANDBACK,
+                 "<task-notification>\n<task-id>b1</task-id>\nviệc tiếp theo đã xong rồi nhé\n</task-notification>")
+        for i, text in enumerate(texts):
+            with self.subTest(text=text[:30]):  # mỗi tin một session, để cơ chế chống lặp không che mất lỗi
+                self.assertIsNone(route.hook_suggestion(text, {"session_id": f"sys{i}"}))
 
     def test_suggests_switch_once_per_session(self):
         data = {"session_id": "s1", "effort": {"level": "medium"}}

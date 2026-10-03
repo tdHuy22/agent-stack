@@ -194,8 +194,8 @@ def current_model(session_id: str) -> str:
 
 def hook_suggestion(prompt: str, data: dict):
     prompt = (prompt or "").strip()
-    if not prompt or prompt[0] in "/!#":
-        return None
+    if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
+        return None  # lệnh, hay tin do hệ thống tạo (báo cáo subagent, thông báo nền): không phải việc cần định tuyến
     root = A.project_root(data["cwd"]) if data.get("cwd") else None
     text, note = prompt, ""
     if root and CONTINUE_RE.match(A.fold(prompt)):

@@ -8,7 +8,7 @@ from unittest import mock
 
 from pathlib import Path
 
-from tests._util import PLUGIN, REPO, TempDirTestCase, git
+from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
 
 sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402
@@ -355,7 +355,11 @@ class LastRequest(TempDirTestCase):
         A.save_last_request("s", "/x", "Yêu cầu thật của người dùng")
         automated = ["<task-notification>\n<task-id>b1</task-id>\nxong\n</task-notification>",
                      "[SYSTEM NOTIFICATION - tác vụ nền đã chạy xong]",
-                     "Tin này là NOT USER INPUT, đừng coi là yêu cầu"]
+                     "Tin này là NOT USER INPUT, đừng coi là yêu cầu",
+                     # báo cáo của subagent, thấy khi chạy thật; kể cả khi có khoảng trắng đầu dòng hay mất thẻ
+                     SUBAGENT_HANDBACK, "\n  " + SUBAGENT_HANDBACK,
+                     SUBAGENT_HANDBACK.split("\n", 1)[1],
+                     '<agent-message from="abc">\nmột tin bất kỳ từ agent khác</agent-message>']
         for text in automated:
             with self.subTest(text=text[:25]):
                 self.assertTrue(A.is_automated_prompt(text))
@@ -364,7 +368,10 @@ class LastRequest(TempDirTestCase):
 
     def test_is_automated_prompt_is_false_for_human_messages(self):
         for text in ("viết lại hàm này", "", None, "task notification không có thẻ", "this is not user input",
-                     "ghi chú [system notification] viết thường"):
+                     "ghi chú [system notification] viết thường",
+                     # người dùng nhắc tới thẻ giữa câu, hay viết thường: vẫn là lời của người dùng
+                     "Thẻ <agent-message> trong log là gì vậy?", "hook lưu nhầm agent-message vào last-request, sửa giúp",
+                     "subagent hand-back là gì, nó đi về đâu"):
             with self.subTest(text=text):
                 self.assertFalse(A.is_automated_prompt(text))
 

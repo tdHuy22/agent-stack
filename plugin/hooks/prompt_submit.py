@@ -5,7 +5,8 @@ Số liệu hạn mức lấy từ state/limits.json do statusline ghi (chỉ c�
 Mỗi ngưỡng chỉ nhắc một lần cho mỗi phiên và mỗi chu kỳ reset.
 
 Hook cũng lưu yêu cầu gần nhất của người dùng theo từng phiên (state/last-request/), để hook SubagentStart
-đưa cho subagent chạy context riêng. Tin do hệ thống tạo không được ghi đè yêu cầu thật; khóa và token được che.
+đưa cho subagent chạy context riêng. Tin do hệ thống tạo (thông báo nền, báo cáo của subagent quay về phiên chính)
+không được ghi đè yêu cầu thật và không được router gợi ý; khóa và token được che.
 """
 import hashlib
 import os

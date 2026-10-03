@@ -5,7 +5,7 @@ import subprocess
 import time
 import unittest
 
-from tests._util import PLUGIN, REPO, TempDirTestCase, git
+from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
 from tests.test_agentstack_lib import PLAN, secret_samples
 
 HOOKS = PLUGIN / "hooks"
@@ -175,6 +175,20 @@ class HookTests(TempDirTestCase):
         # effort sai kiểu làm router văng lỗi sau khi đã khớp luật; yêu cầu vẫn phải được lưu
         self.submit("ps4", "Review bảo mật hàm đăng nhập này giúp mình", effort="high")
         self.assertEqual(self.last_request("ps4")["prompt"], "Review bảo mật hàm đăng nhập này giúp mình")
+
+    def test_subagent_hand_back_neither_replaces_the_request_nor_triggers_the_router(self):
+        # Lỗi thấy khi chạy thật (03/10/2026): báo cáo của subagent quay về phiên chính như một tin của người dùng.
+        # Nó từng bị lưu thành "yêu cầu gần nhất" (subagent thứ hai nhận nhầm báo cáo của subagent trước) và còn được
+        # router gợi ý skill nhờ chữ "việc tiếp theo" trong thân báo cáo.
+        request = "Thêm tính năng xuất CSV cho trang báo cáo"
+        self.submit("hb", request)
+        self.assertIn(request, self.start_subagent("hb"))
+        self.assertIsNone(self.submit("hb", SUBAGENT_HANDBACK))  # không gợi ý router, không cảnh báo nào
+        self.assertEqual(self.last_request("hb")["prompt"], request)
+        second = self.start_subagent("hb")  # subagent thứ hai của cùng phiên
+        self.assertIn(request, second)
+        for leak in ("agent-message", "hand-back", "a5de6b714c1b1d7c1", "subagent_start.py"):
+            self.assertNotIn(leak, second)
 
     # ---------------------------------------------------------------- SubagentStart
 

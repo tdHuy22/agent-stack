@@ -582,8 +582,13 @@ LAST_REQUEST_SCAN = 20000   # chỉ rà khóa trong phần đầu này của pro
 LAST_REQUEST_FULL = 60      # tin ngắn hơn mức này ("ok", "tiếp tục") chưa đủ để làm bối cảnh một mình
 REDACTED = "[đã che]"
 SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
-# Tin do hệ thống tạo (thông báo tác vụ nền...), không phải lời người dùng: không được ghi đè yêu cầu thật.
-AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER INPUT")
+# Tin do hệ thống hay agent khác tạo, không phải lời người dùng: không được ghi đè yêu cầu thật, không đưa cho router.
+# Gồm thông báo tác vụ nền, và báo cáo của subagent: Claude Code đưa nó về phiên chính như một tin của người dùng,
+# mở bằng thẻ <agent-message from="...">, kèm dòng "[Subagent hand-back] ... NOT a message from the user" (thấy khi
+# chạy thật ngày 03/10/2026).
+AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER INPUT", "[Subagent hand-back]")
+# Chỉ tính khi đứng đầu tin: người dùng nhắc tới thẻ này giữa câu vẫn là lời của họ.
+AUTOMATED_PREFIXES = ("<agent-message",)
 # Khóa và token có dấu hiệu nhận biết. (?<![A-Za-z0-9]) để không bắt giữa một từ khác (như "task-" hay "risk-").
 SECRET_PATTERNS = (
     r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}",                  # sk-ant-..., sk-proj-..., sk-...
@@ -611,8 +616,11 @@ def is_command_prompt(prompt) -> bool:
 
 
 def is_automated_prompt(prompt) -> bool:
-    """True với tin do hệ thống tạo (thông báo tác vụ nền...), không phải lời của người dùng."""
-    return isinstance(prompt, str) and any(marker in prompt for marker in AUTOMATED_MARKERS)
+    """True với tin do hệ thống hay agent khác tạo (thông báo tác vụ nền, báo cáo của subagent), không phải lời của
+    người dùng."""
+    if not isinstance(prompt, str):
+        return False
+    return prompt.lstrip().startswith(AUTOMATED_PREFIXES) or any(marker in prompt for marker in AUTOMATED_MARKERS)
 
 
 def _mask_long_run(match) -> str:

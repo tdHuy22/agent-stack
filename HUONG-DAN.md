@@ -108,7 +108,7 @@ Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo s�
 | Thành phần | Khi nào | Làm gì |
 |---|---|---|
 | Hook SessionStart | Mở phiên, resume, `/clear`, sau compact | Nạp §0 và hồ sơ project vào context; in dòng 📍 và 🧭 |
-| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart |
+| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp; không gợi ý cho tin do hệ thống tạo như báo cáo của subagent); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo, kể cả báo cáo của subagent quay về phiên chính; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart |
 | Hook SubagentStart | Mỗi khi sinh subagent hoặc chạy skill `context: fork` | Đưa vào đầu context của chúng yêu cầu gần nhất của bạn và 1 đến 2 việc đầu trong §0 (tối đa khoảng 1500 ký tự), vì chúng không thấy hội thoại |
 | Hook PreCompact | Trước khi compact | Ghi sự kiện; nhắc nếu §0 đã lâu chưa cập nhật. Không chặn compact |
 | Hook Stop | Cuối mỗi lượt trả lời | Nhắc cập nhật §0 khi đã có từ 3 file đổi sau lần cập nhật §0 gần nhất; nhắc tối đa 30 phút một lần |
@@ -336,7 +336,7 @@ Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí
 
 **Subagent không thấy hội thoại.** Subagent và skill chạy `context: fork` (`vet-skill`, `reuse-best`, `tien-do`) có context riêng: không thấy yêu cầu của bạn, các tin nhắn trước hay task của phiên, chỉ thấy prompt mà Claude giao cho chúng. Hai lớp bù lại:
 
-- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục.
+- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng `claude -p`: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng `grep subagent-start state/events.jsonl | tail -3` (dòng đạt có `"request": true`).
 - **Prompt giao việc phải tự đủ.** Luật chung dặn Claude ghi rõ yêu cầu gốc, mục tiêu, ràng buộc, file liên quan, tiêu chí xong và định dạng trả về. Mỗi agent và skill đều ghi nó cần gì; thiếu thì nó nói rõ phần thiếu ở dòng đầu báo cáo thay vì đoán.
 
 ---
