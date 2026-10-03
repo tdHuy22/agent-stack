@@ -60,8 +60,20 @@
 - **Khớp với Anthropic:** việc thường lệ thì model nhỏ làm đủ với nửa chi phí; việc khó mới cần model lớn.
 - **Giới hạn của số liệu:** vì cả ba đều đạt 100%, bộ việc này không phân biệt được các cấu hình, nên nó không nói gì về debug khó, kiến trúc hay review diff thật. Các dòng `opus · high` ở trên là phán đoán kết hợp khuyến nghị của Anthropic, không phải số đo của bạn. Muốn phân biệt, cần thêm vài việc khó hơn vào `evals/tasks/`.
 
+## Việc khó hơn (03/10/2026)
+
+6 việc mới trong `evals/tasks/`: `debug-multifile`, `debug-race`, `review-diff`, `code-cron-next` (khó), `code-async-pool`, `code-unified-diff` (rất khó). Mỗi việc chấm bằng test ẩn hoặc kịch bản chạy thật; các lời giải sai điển hình đều bị chấm trượt.
+
+| Cấu hình | Đạt | USD/việc (TB) | Giây/việc |
+|---|---:|---:|---:|
+| A: sonnet · medium | 12/12 | 0,116 | 32 |
+| H: haiku · medium | 4/12 | 0,191 | 127 |
+
+- Sonnet · medium đạt hết, kể cả hai việc "rất khó" (pool asyncio an toàn khi hủy tác vụ, diff tối thiểu khớp `diff -u`). Bộ việc này vẫn chưa phân biệt được sonnet với opus; chưa chạy C, D trên chúng.
+- Haiku trượt cron (nhận dạng bị cấm, chậm), review diff (bỏ sót lỗi thu tiền hai lần, 2/2 lượt), pool asyncio và diff (0/4); chỉ đạt hai việc debug. Và **đắt hơn** sonnet vì mò nhiều vòng (0,191 so với 0,116 USD; ở hai việc rất khó là 0,33 so với 0,18). Khớp khuyến nghị của Anthropic: model nhỏ làm việc nhiều bước khó không rẻ hơn. Haiku chỉ hợp việc cơ học có kiểm tra tự động.
+
 ## Còn chưa quyết định bằng số liệu
 
 - Đặt `Explore` sang haiku (`explore-lite`) có làm giảm chất lượng các việc coding không? Cần so cấu hình E với A.
-- Haiku (cấu hình H) có làm được việc cơ học không? Chưa chạy; khoảng 0,5 USD.
+- Haiku (cấu hình H) trên việc cơ học: chưa đo. Trên việc khó: 4/12 và đắt hơn sonnet (mục trên).
 - Bảng `BASELINE.md` cho thấy 70% chi phí đến từ subagent và workflow. Đây là chỗ đáng đo tiếp.

@@ -1,0 +1,52 @@
+{
+  "skill_name": "paper-anatomy",
+  "note": "Bài báo lấy từ thư viện Zotero của người dùng (chỉ đọc, chép vào thư mục tạm khi chạy). Mỗi việc nhắm một kiểu khó khác nhau.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "struq-full-anatomy",
+      "difficulty": "vừa",
+      "tests": "giải phẫu đầy đủ một bài phương pháp hai cột, có hình kiến trúc và ablation",
+      "pdf": "~/Zotero/storage/J4UUD8TJ/Chen et al. - 2024 - StruQ Defending Against Prompt Injection with Structured Queries.pdf",
+      "file": "struq.pdf",
+      "prompt": "Mình đang làm luận văn về phòng chống prompt injection. Giải phẫu giúp mình bài StruQ (file struq.pdf): mình cần hiểu thật sự cơ chế của nó, vì sao nó chạy, giả định nền là gì. Không cần tóm tắt."
+    },
+    {
+      "id": 2,
+      "name": "pra-rag-theorem-narrow",
+      "difficulty": "khó",
+      "tests": "câu hỏi hẹp về định lý; nhãn trang kỷ yếu (36002…) khác số trang PDF; công thức bị vỡ khi trích",
+      "pdf": "~/Zotero/storage/2M63FTDW/Tan et al. - PRA-RAG Provably Robust Aggregation in Retrieval-Augmented Generation against Retrieval Corruption.pdf",
+      "file": "pra-rag.pdf",
+      "prompt": "Trong bài PRA-RAG (pra-rag.pdf), Định lý 1 và Định lý 2 thật sự đảm bảo điều gì, dưới giả định nào, và vì sao cách tổng hợp của họ lại chứng minh được là bền? Trả lời tập trung vào chỗ đó thôi, neo trang để mình mở PDF kiểm lại."
+    },
+    {
+      "id": 3,
+      "name": "attacker-second-critique",
+      "difficulty": "khó",
+      "tests": "phản biện: nối tuyên bố với bằng chứng, chỉ ra chỗ tuyên bố vượt bằng chứng",
+      "pdf": "~/Zotero/storage/3HE5BM7M/Nasr et al. - 2025 - The Attacker Moves Second Stronger Adaptive Attacks Bypass Defenses Against Llm Jailbreaks and Prom.pdf",
+      "file": "attacker-moves-second.pdf",
+      "prompt": "Bài 'The Attacker Moves Second' (attacker-moves-second.pdf) tuyên bố các phòng thủ jailbreak và prompt injection hiện nay đều bị phá bởi tấn công thích nghi. Mình muốn biết bằng chứng của họ có thật sự đủ chống đỡ tuyên bố đó không, chỗ nào tuyên bố vượt quá bằng chứng, và nếu là reviewer thì mình nên hỏi tác giả gì."
+    },
+    {
+      "id": 4,
+      "name": "camel-long-architecture",
+      "difficulty": "khó",
+      "tests": "bài 125 trang (thân bài 25 trang, phụ lục 95 trang); kiến trúc phải dựng từ hình; giới hạn nằm rải rác",
+      "pdf": "~/Zotero/storage/T8UBK6GF/Debenedetti et al. - 2025 - Defeating Prompt Injections by Design.pdf",
+      "file": "camel.pdf",
+      "prompt": "Bài CaMeL này dài hơn 100 trang (camel.pdf). Mình cần hiểu kiến trúc của CaMeL: các thành phần, luồng dữ liệu, chính sách bảo mật và capability hoạt động ra sao, đảm bảo bảo mật của nó tới đâu và chỗ nào nó vẫn hở. Giải phẫu giúp mình.",
+      "body_end": 30
+    },
+    {
+      "id": 5,
+      "name": "biba-scanned",
+      "difficulty": "rất khó",
+      "tests": "PDF scan 68 trang không có lớp chữ, không có OCR trên máy",
+      "pdf": "~/Zotero/storage/P2NY5S7B/[320] Biba - 1975 - Integrity Considerations for Secure Computer Systems.pdf",
+      "file": "biba-1975.pdf",
+      "prompt": "Đây là báo cáo kỹ thuật của Biba năm 1975 (biba-1975.pdf), bản scan. Mình muốn nắm cốt lõi mô hình toàn vẹn (integrity) của ông ấy: có những chính sách nào, quy tắc cụ thể của từng chính sách, triết lý đằng sau, kèm số trang để mình tra lại."
+    }
+  ]
+}
