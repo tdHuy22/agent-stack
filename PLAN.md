@@ -32,12 +32,14 @@
     - Không kích hoạt theo dõi tiến độ toàn cục, không bản tổng hợp tuần: mỗi project tự theo dõi qua §0 của nó (hook SessionStart và `tien-do` trong project đó). `tien-do all` vẫn chạy được khi bạn hỏi.
   - **Skill `paper-anatomy` nâng cấp** (03/10/2026, theo yêu cầu của bạn; nguồn ở `claude-ai-skills/paper-anatomy/`, không nằm trong plugin vì claude.ai đồng bộ nó thành `anthropic-skills:paper-anatomy`). Tìm skill có sẵn trước (deer-flow `academic-paper-review`, nanochat `read-arxiv-paper`, AI-SKILLS `reading-papers`, K-Dense): không cái nào thay được, chỉ lấy ý tưởng. Thêm `verify_anchors.py` (kiểm từng neo: trang, mục, Hình/Bảng/Eq, trích nguyên văn), viết lại `extract_paper.py` (nhãn trang khai báo trong PDF, outline, `--pages`, `--find`, `--render`), chế độ hỏi hẹp/giải phẫu/phản biện, `references/critical-appraisal.md`, `references/hard-pdfs.md`, bước tự rà con số và câu "bài không nói". PyMuPDF và pypdf cài vào `.venv` (không cài toàn cục). **Bench bằng sonnet trên 5 bài trong Zotero của bạn, chấm mù bằng opus** (`claude-ai-skills/paper-anatomy-bench/RESULTS.md`): bản mới thắng 10/12 lần so cặp qua ba vòng (đều sát nút trừ bài scan Biba); điểm kiểm chứng 5,0 so với 4,0–4,2; neo sai do máy kiểm 0/318 so với 17/167 (10,2%); dễ đọc kém hơn (4,0–4,2 so với 4,5–4,8); đắt hơn khoảng 45% (0,72–0,78 so với 0,51 USD/bài). Tổng chi phí bench khoảng 11,6 USD giá niêm yết cho lượt làm bài, cộng người chấm opus.
   - **Eval thêm 6 việc khó** (commit `7f01c16`): `debug-multifile`, `debug-race`, `review-diff`, `code-cron-next`, `code-async-pool`, `code-unified-diff`; self-test 18/18. Chạy thật (04/10/2026 có thêm C, D): sonnet·medium 12/12 (0,116 USD/việc), opus·medium 12/12 (0,254), opus·low 12/12 (0,215), haiku 4/12 và đắt hơn sonnet (0,191). Script chọn A. Ghi ở `routing-table.md`. Tổng khoảng 9 USD giá niêm yết.
+  - **Bảng định tuyến mịn hơn, effort từ low tới max** (04/10/2026, theo yêu cầu của bạn; plugin 0.4.4 trong repo, chưa cập nhật bản cài). Đối chiếu tài liệu chính thức đọc lại 04/10/2026 (trang effort, model-config, chi phí, bảng giá): `xhigh` cho việc agent trên 30 phút (+1,4 điểm, 2,5 lần chi phí so với `high`), `max` cho bài khó tự làm tới cùng như săn lỗ hổng (lợi ích giảm dần), Haiku không có effort, `ultrathink` cho một lượt. `routing-table.md` viết lại: thang effort, thang leo thang 10 bậc, 47 dòng việc trong 8 nhóm, mỗi dòng có cấu hình bắt đầu, bậc tiếp theo và căn cứ (E/A/P). `rules.json` từ 15 lên 32 luật, có luật tinh chỉnh (`refines`, `only_refine`) để "thanh toán" một mình không bị đẩy lên review bảo mật `xhigh`; router đúng 88/88 câu có nhãn (thêm 35 câu, có ca dễ nhầm). Bảng ➡️ trong `global/CLAUDE.global.md` (symlink sang `~/.claude/CLAUDE.md`, có hiệu lực ngay) thay bằng 22 dòng.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
   2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
-  3. Cập nhật skill `paper-anatomy` trên claude.ai: tải `.tmp/dist/paper-anatomy.skill` (tạo lại bằng `python3 claude-ai-skills/package.py paper-anatomy`) lên Settings → Capabilities → Skills, thay bản cũ cùng tên. Claude Code nhận bản mới ở lần đồng bộ sau.
-  4. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
+  3. Cập nhật plugin lên 0.4.4 để hook router dùng luật mới: `./install.sh` xem trước rồi `./install.sh --apply` (cần bạn duyệt). Trước khi cập nhật, phiên desktop vẫn dùng luật 0.4.3.
+  4. Cập nhật skill `paper-anatomy` trên claude.ai: tải `.tmp/dist/paper-anatomy.skill` (tạo lại bằng `python3 claude-ai-skills/package.py paper-anatomy`) lên Settings → Capabilities → Skills, thay bản cũ cùng tên. Claude Code nhận bản mới ở lần đồng bộ sau.
+  5. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Quyết định còn treo:**
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
@@ -47,10 +49,10 @@
     - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa. Lưu ý quyền riêng tư ở trên: model free có thể dùng dữ liệu để huấn luyện.
     - Câu còn mở ở `KE-HOACH.md` mục 10 (việc hay thư mục tuyệt đối không gửi cho model từ xa) chỉ cần khi dùng model từ xa qua OpenCode, nên gác lại cùng mục này.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
-  - `/usr/bin/python3 -m unittest discover -s tests -t .` và với `python3` → `Ran 358 tests … OK (skipped=1)`; test bị bỏ qua cần PyMuPDF, chạy bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`
+  - `/usr/bin/python3 -m unittest discover -s tests -t .` và với `python3` → `Ran 360 tests … OK (skipped=1)`; test bị bỏ qua cần PyMuPDF, chạy bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`
   - `claude plugin validate plugin` → `Validation passed`
   - `python3 evals/run_eval.py --self-test` → 18 dấu ✓
-  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 53/53
+  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 88/88
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status`, `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
 
 ## 1. Giai đoạn
@@ -107,7 +109,7 @@
 - Ghi chú: OpenCode v2 báo các thiết lập `reasoning` và `temperature` kiểu cũ của provider `tuf` trong `opencode.jsonc` đang bị bỏ qua. Bạn có thể dọn khi tiện; mình không sửa file của bạn.
 
 ### GĐ5: Router (#4, #5)
-- [x] Skill `task-router`: `rules.json` (14 luật), `route.py`. Đã nối vào hook UserPromptSubmit: chỉ gợi ý khi có việc nên làm (đổi model/effort, skill, subagent), mỗi luật nhắc tối đa một lần mỗi giờ trong một phiên, bỏ qua lệnh `/` và câu ngắn. Đã nối vào `tien-do`.
+- [x] Skill `task-router`: `rules.json` (14 luật lúc đầu; 32 luật từ 04/10/2026, effort từ low tới max), `route.py`. Đã nối vào hook UserPromptSubmit: chỉ gợi ý khi có việc nên làm (đổi model/effort, skill, subagent), mỗi luật nhắc tối đa một lần mỗi giờ trong một phiên, bỏ qua lệnh `/` và câu ngắn. Đã nối vào `tien-do`.
 - [x] Bộ 47 prompt có nhãn (`evals/router-prompts.jsonl`): đúng 47/47. **Lưu ý thiên lệch:** Claude viết cả luật lẫn prompt, nên hãy thêm prompt thật của bạn.
 - [x] `routing-table.md` (giả thuyết, chờ số liệu eval).
 - [x] `plugin/evals/`: 10 case đo kích hoạt skill (7 nên kích hoạt, 3 không nên).

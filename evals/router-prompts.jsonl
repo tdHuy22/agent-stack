@@ -3,13 +3,13 @@
 {"prompt": "is this MCP server safe to install? github.com/x/mcp-foo", "expect": "vet-third-party"}
 {"prompt": "Review bảo mật hàm đăng nhập này, có lỗ hổng gì không?", "expect": "security-review"}
 {"prompt": "kiem tra lo hong sql injection trong file repo.py", "expect": "security-review"}
-{"prompt": "Làm threat model cho dịch vụ thanh toán mới", "expect": "security-review"}
+{"prompt": "Làm threat model cho dịch vụ thanh toán mới", "expect": "security-critical"}
 {"prompt": "check this endpoint for SSRF and path traversal issues", "expect": "security-review"}
 {"prompt": "Review code trong PR này giúp mình trước khi merge", "expect": "code-review"}
-{"prompt": "xem lai code module parser truoc khi commit nhe", "expect": "code-review"}
+{"prompt": "xem lai code module parser truoc khi commit nhe", "expect": "code-review-small"}
 {"prompt": "Test cứ lúc pass lúc fail, hình như race condition, debug giúp", "expect": "debug-hard"}
 {"prompt": "chương trình bị segfault khi chạy với file lớn, không hiểu sao", "expect": "debug-hard"}
-{"prompt": "Here is the traceback, the worker crashes on startup", "expect": "debug-hard"}
+{"prompt": "Here is the traceback, the worker crashes on startup", "expect": "debug-simple"}
 {"prompt": "Thiết kế kiến trúc cho hệ thống ingest log, cân nhắc trade-off", "expect": "architecture"}
 {"prompt": "lap ke hoach migration tu monolith sang service rieng", "expect": "architecture"}
 {"prompt": "Write a design doc for the new caching layer", "expect": "architecture"}
@@ -51,3 +51,38 @@
 {"prompt": "trước khi tự viết công cụ benchmark, xem có cái gì làm sẵn tốt nhất chưa", "expect": "reuse-best"}
 {"prompt": "Tìm paper mới nhất về speculative decoding rồi mình cài đặt lại", "expect": "reuse-best"}
 {"prompt": "dừng lại một chút, giải thích ngắn race condition là gì", "expect": "quick-question"}
+{"prompt": "Sửa lỗi chính tả trong thông báo lỗi ở file cli.py", "expect": "small-fix"}
+{"prompt": "fix typo in the README install section", "expect": "small-fix"}
+{"prompt": "sua mot dong trong config cho dung port 8080", "expect": "small-fix"}
+{"prompt": "Cú pháp của argparse để thêm nhóm tham số loại trừ nhau là gì?", "expect": "docs-lookup"}
+{"prompt": "how to use the --resume flag in claude cli, function signature please", "expect": "docs-lookup"}
+{"prompt": "Nghiên cứu sâu nhiều nguồn về các cách đánh giá agent an toàn, viết báo cáo nghiên cứu", "expect": "deep-research"}
+{"prompt": "do a literature review on prompt injection defenses since 2024", "expect": "deep-research"}
+{"prompt": "Giải phẫu giúp mình bài báo StruQ này, không cần tóm tắt", "expect": "paper-reading"}
+{"prompt": "doc paper arxiv nay roi giai thich phuong phap cho minh", "expect": "paper-reading"}
+{"prompt": "Bài báo này claim phòng thủ phá được mọi tấn công, phản biện giúp mình bằng chứng có đủ không", "expect": "paper-critique"}
+{"prompt": "act as a reviewer and critique this paper's evaluation", "expect": "paper-critique"}
+{"prompt": "Script bị TypeError khi đọc file, đây là traceback", "expect": "debug-simple"}
+{"prompt": "test đỏ ở test_parse, báo lỗi KeyError 'id'", "expect": "debug-simple"}
+{"prompt": "Service bị memory leak trên production, không tái hiện được ở máy mình, debug giúp", "expect": "debug-production"}
+{"prompt": "debug performance regression: API chậm dần sau mỗi lần deploy", "expect": "debug-production"}
+{"prompt": "Debug cái race condition này mình thử nhiều lần vẫn chưa ra, bế tắc rồi", "expect": "debug-stuck"}
+{"prompt": "still failing after three debug attempts, we're stuck on this deadlock", "expect": "debug-stuck"}
+{"prompt": "Review diff nhỏ này giúp mình trước khi commit", "expect": "code-review-small"}
+{"prompt": "Review bảo mật phần mã hóa token và chữ ký số trong module auth", "expect": "security-critical"}
+{"prompt": "security review the JWT and OAuth handling in this service", "expect": "security-critical"}
+{"prompt": "Audit bảo mật toàn bộ codebase trước khi phát hành, săn lỗ hổng", "expect": "security-audit"}
+{"prompt": "run a full security audit / pentest of the whole codebase", "expect": "security-audit"}
+{"prompt": "Thiết kế kiến trúc schema cơ sở dữ liệu thật, quyết định khó đảo ngược", "expect": "architecture-critical"}
+{"prompt": "design the wire protocol architecture, this is irreversible once clients ship", "expect": "architecture-critical"}
+{"prompt": "Cho agent tự chạy qua đêm sửa hết các test đang hỏng, không cần hỏi lại", "expect": "long-agent"}
+{"prompt": "set up a long-running autonomous job to migrate the codebase", "expect": "long-agent"}
+{"prompt": "Bài toán mở này opus không giải được, cần chứng minh toán học cho thuật toán mới", "expect": "frontier"}
+{"prompt": "Nghĩ thật kỹ, kỹ nhất có thể, không quan tâm chi phí: chọn phương án nào?", "expect": "max-explicit"}
+{"prompt": "Viết email ngắn báo sếp mai mình nghỉ", "expect": "write-short"}
+{"prompt": "soan tin nhan slack nhac team hop luc 3h", "expect": "write-short"}
+{"prompt": "Viết lại chương 2 luận văn cho mạch lạc, giữ giọng của mình", "expect": "write-long"}
+{"prompt": "Thêm tính năng đăng nhập OAuth cho trang admin", "expect": "feature"}
+{"prompt": "Thêm cột created_at vào schema bảng users", "expect": "feature"}
+{"prompt": "deploy bản mới lên production giúp mình", "expect": "none"}
+{"prompt": "chạy test trước khi commit nhé", "expect": "tests"}

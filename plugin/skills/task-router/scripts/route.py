@@ -49,21 +49,40 @@ def rules() -> dict:
     data = json.loads(RULES_PATH.read_text(encoding="utf-8"))
     for order, rule in enumerate(data["rules"]):
         rule["_order"] = order
+        refines = rule.get("refines") or []
+        rule["_refines"] = [refines] if isinstance(refines, str) else list(refines)
         rule["_patterns"] = [(phrase, re.compile(r"(?<![a-z0-9])" + re.escape(A.fold(phrase)) + r"(?![a-z0-9])"))
                              for phrase in rule["match"]]
     return data
 
 
 def score(text: str):
-    """Trả về (luật tốt nhất, các cụm khớp) hoặc (None, [])."""
+    """Trả về (luật tốt nhất, các cụm khớp) hoặc (None, []).
+
+    Luật có "refines": <id hoặc danh sách id> là bản nặng hơn của luật gốc (ví dụ review bảo mật phần mã hóa so với
+    review bảo mật). Khi luật gốc thắng mà luật tinh chỉnh cũng khớp ít nhất một cụm, luật tinh chỉnh được chọn.
+    Luật có "only_refine": true không tự thắng được, chỉ áp qua luật gốc."""
     folded = A.fold(text)
     best, best_hits, best_score = None, [], 0
+    found = {}
     for rule in rules()["rules"]:
         hits = [phrase for phrase, pattern in rule["_patterns"] if pattern.search(folded)]
         # Cụm nhiều chữ đặc hiệu hơn, nên nặng ký hơn.
         total = sum(1 + phrase.count(" ") for phrase in hits)
+        if hits:
+            found[rule["id"]] = (rule, hits, total)
+        if rule.get("only_refine"):
+            continue  # chỉ áp khi luật gốc thắng (vd "thanh toán" một mình không phải việc bảo mật)
         if total > best_score:
             best, best_hits, best_score = rule, hits, total
+    seen = set()
+    while best is not None and best["id"] not in seen:
+        seen.add(best["id"])
+        finer = [v for v in found.values() if best["id"] in v[0]["_refines"]]
+        if not finer:
+            break
+        rule, hits, _ = max(finer, key=lambda v: v[2])
+        best, best_hits = rule, best_hits + [h for h in hits if h not in best_hits]
     return best, best_hits
 
 
@@ -198,10 +217,15 @@ def next_task(root) -> str:
     return in_progress if A.has_value(in_progress) else ""
 
 
+def model_effort(hit: dict) -> str:
+    """"opus · xhigh"; model không có effort (haiku) thì chỉ tên model."""
+    return f"{hit['model']} · {hit['effort']}" if hit.get("effort") else str(hit.get("model") or "")
+
+
 def describe(hit: dict) -> str:
     bits = []
     if hit.get("model"):
-        bits.append(f"{hit['model']} · {hit['effort']}")
+        bits.append(model_effort(hit))
     if hit.get("agent"):
         bits.append(f"subagent {hit['agent']}")
     if hit.get("skills"):
@@ -291,14 +315,15 @@ def hook_suggestion(prompt: str, data: dict):
         parts_ctx.append(f"giao cho subagent {hit['agent']}")
     if hit["skills"]:
         parts_user.append("skill " + ", ".join(hit["skills"]))
-        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]) + " nếu có"
-                         + (f" ({hit['note']})" if hit.get("note") else ""))
+        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]) + " nếu có")
+    if hit.get("note"):
+        parts_ctx.append(hit["note"])
     if not parts_user:
         return None  # model, effort đã khớp và không có skill/agent để gợi ý
     if not A.once(f"route-{sid}-{hit['rule']}", 3600):
         return None  # cùng một gợi ý không nhắc lại trong một giờ
     reason = ", ".join(f"'{m}'" for m in hit["matched"][:3])
-    model_note = (f"model {hit['model']} · effort {hit['effort']}" if hit["model"] else "")
+    model_note = (f"model {model_effort(hit)}" if hit["model"] else "")
     context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
                + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi.")
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)

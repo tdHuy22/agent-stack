@@ -1,48 +1,778 @@
 {
-  "version": 1,
-  "status": "giả thuyết cho việc khó; có số liệu eval 02/10/2026 cho việc nhỏ: sonnet medium đủ (xem routing-table.md)",
+  "version": 2,
+  "status": "đối chiếu tài liệu chính thức 04/10/2026 (effort, model-config, chi phí); số liệu eval 02–04/10/2026; dòng không có số đo là phán đoán, xem routing-table.md",
   "min_words": 4,
   "profiles": {
-    "python": {"label": "Python", "skills": ["tdd"],
-               "lsp": {"plugin": "pyright-lsp@claude-plugins-official", "binary": "pyright-langserver",
-                       "binary_install": "brew install pyright", "min_files": 150,
-                       "signals": ["pyrightconfig.json", "mypy.ini", ".mypy.ini"], "pyproject_tools": ["pyright", "mypy"]}},
-    "c_cpp": {"label": "C/C++", "skills": ["c-review"],
-              "lsp": {"plugin": "clangd-lsp@claude-plugins-official", "binary": "clangd",
-                      "binary_install": "xcode-select --install", "min_files": 30,
-                      "signals": ["compile_commands.json", "CMakeLists.txt", "meson.build"]}},
-    "hdl": {"label": "Verilog/VHDL", "skills": []},
-    "web": {"label": "web", "skills": ["webapp-testing"]},
-    "rust": {"label": "Rust", "skills": []},
-    "go": {"label": "Go", "skills": []},
-    "jvm": {"label": "Java/Kotlin", "skills": []},
-    "docs": {"label": "tài liệu", "skills": ["giong-van"]}
+    "python": {
+      "label": "Python",
+      "skills": [
+        "tdd"
+      ],
+      "lsp": {
+        "plugin": "pyright-lsp@claude-plugins-official",
+        "binary": "pyright-langserver",
+        "binary_install": "brew install pyright",
+        "min_files": 150,
+        "signals": [
+          "pyrightconfig.json",
+          "mypy.ini",
+          ".mypy.ini"
+        ],
+        "pyproject_tools": [
+          "pyright",
+          "mypy"
+        ]
+      }
+    },
+    "c_cpp": {
+      "label": "C/C++",
+      "skills": [
+        "c-review"
+      ],
+      "lsp": {
+        "plugin": "clangd-lsp@claude-plugins-official",
+        "binary": "clangd",
+        "binary_install": "xcode-select --install",
+        "min_files": 30,
+        "signals": [
+          "compile_commands.json",
+          "CMakeLists.txt",
+          "meson.build"
+        ]
+      }
+    },
+    "hdl": {
+      "label": "Verilog/VHDL",
+      "skills": []
+    },
+    "web": {
+      "label": "web",
+      "skills": [
+        "webapp-testing"
+      ]
+    },
+    "rust": {
+      "label": "Rust",
+      "skills": []
+    },
+    "go": {
+      "label": "Go",
+      "skills": []
+    },
+    "jvm": {
+      "label": "Java/Kotlin",
+      "skills": []
+    },
+    "docs": {
+      "label": "tài liệu",
+      "skills": [
+        "giong-van"
+      ]
+    }
   },
   "markers": {
-    "tests": {"label": "có test", "agent": "agent-stack:test-runner"},
-    "ci": {"label": "có CI"},
-    "docker": {"label": "có Docker"},
-    "security": {"label": "có code xác thực, mã hóa hay phân quyền", "skills": ["differential-review"], "agent": "agent-stack:reviewer"}
+    "tests": {
+      "label": "có test",
+      "agent": "agent-stack:test-runner"
+    },
+    "ci": {
+      "label": "có CI"
+    },
+    "docker": {
+      "label": "có Docker"
+    },
+    "security": {
+      "label": "có code xác thực, mã hóa hay phân quyền",
+      "skills": [
+        "differential-review"
+      ],
+      "agent": "agent-stack:reviewer"
+    }
   },
   "rule_extras": {
-    "c_cpp": {"security-review": ["c-review"], "code-review": ["c-review"]},
-    "web": {"tests": ["webapp-testing"]}
+    "c_cpp": {
+      "security-review": [
+        "c-review"
+      ],
+      "code-review": [
+        "c-review"
+      ]
+    },
+    "web": {
+      "tests": [
+        "webapp-testing"
+      ]
+    }
   },
   "rules": [
-    {"id": "vet-third-party", "skills": ["vet-skill"], "model": "opus", "effort": "high", "match": ["cai skill", "cai plugin", "them plugin", "plugin marketplace", "marketplace", "mcp server", "npx skills", "plugin install", "co an toan khong", "an toan khong", "kiem duyet", "vet skill", "skill nay", "install skill"]},
-    {"id": "security-review", "agent": "agent-stack:reviewer", "skills": ["differential-review"], "model": "opus", "effort": "high", "match": ["bao mat", "lo hong", "security", "vulnerab", "threat model", "injection", "xss", "csrf", "ssrf", "path traversal", "secret", "phan quyen", "xac thuc", "cve", "secure code", "review bao mat", "kiem tra bao mat"]},
-    {"id": "code-review", "agent": "agent-stack:reviewer", "model": "opus", "effort": "high", "match": ["review code", "review pr", "code review", "xem lai code", "review giup", "truoc khi commit", "truoc khi merge", "soat code", "review diff"]},
-    {"id": "debug-hard", "model": "opus", "effort": "medium", "match": ["debug", "khong hieu sao", "loi la", "race condition", "memory leak", "segfault", "crash", "flaky", "deadlock", "bug kho", "chay sai", "loi ngau nhien", "stack trace", "traceback"]},
-    {"id": "architecture", "agent": "Plan", "skills": ["reuse-best"], "note": "chỉ khi việc không tầm thường; sửa nhỏ hay hàm vài dòng thì bỏ qua", "model": "opus", "effort": "high", "match": ["kien truc", "thiet ke he thong", "architecture", "design doc", "lap ke hoach", "chien luoc", "trade-off", "tradeoff", "migration plan", "thiet ke module", "chia module"]},
-    {"id": "progress", "skills": ["tien-do"], "model": "sonnet", "effort": "low", "match": ["tien do", "lam gi tiep", "viec tiep theo", "dang do", "dang o dau", "what's next", "whats next", "con viec gi", "task dang do", "lam toi dau", "toi dau roi", "status project"]},
-    {"id": "session-save", "skills": ["session-keeper"], "model": "sonnet", "effort": "low", "match": ["luu tien do", "luu lai", "het limit", "sap het limit", "usage limit", "ban giao", "handoff", "dung phien", "lam tiep tu", "checkpoint", "chuyen sang opencode", "mai lam tiep"]},
-    {"id": "tests", "agent": "agent-stack:test-runner", "skills": ["tdd"], "model": "sonnet", "effort": "medium", "match": ["chay test", "run test", "test fail", "test hong", "pytest", "unit test", "viet test", "coverage", "test do"]},
-    {"id": "reuse-best", "skills": ["reuse-best"], "model": "sonnet", "effort": "medium", "match": ["co san chua", "lam san", "co san", "co tool nao", "tool nao", "co thu vien nao", "thu vien nao", "da co ai lam", "tai su dung", "reuse", "sota", "state of the art", "tot nhat hien nay", "paper moi nhat", "bai bao moi nhat", "nghien cuu moi nhat", "thuat toan nao", "phuong phap nao", "tu viet", "phat minh lai", "reinvent", "existing tool", "existing library", "is there a tool", "is there a library", "best library", "best tool", "tren github"]},
-    {"id": "research", "agent": "agent-stack:researcher", "model": "sonnet", "effort": "medium", "match": ["nghien cuu", "tim hieu", "so sanh", "research", "compare", "tra cuu", "tong hop", "danh gia cong cu", "doc paper", "tai lieu chinh thuc", "nguon nao", "so sanh cac", "cac cong cu"]},
-    {"id": "mechanical", "agent": "agent-stack:oc-worker", "model": "haiku", "effort": "low", "match": ["doi ten", "rename", "format lai", "boilerplate", "hang loat", "dich file", "dich tai lieu", "sap xep import", "doi dinh dang", "chuyen dinh dang", "them header"]},
-    {"id": "writing", "skills": ["giong-van", "humanizer"], "model": "sonnet", "effort": "medium", "match": ["viet lai", "bai luan", "essay", "blog", "email", "giong van", "cho tu nhien", "rewrite", "cover letter", "doan van", "van phong", "proofread"]},
-    {"id": "refactor", "model": "sonnet", "effort": "medium", "match": ["refactor", "tai cau truc", "don dep code", "clean up", "tach ham", "gom code", "bo trung lap"]},
-    {"id": "feature", "skills": ["reuse-best"], "note": "chỉ khi việc không tầm thường; sửa nhỏ hay hàm vài dòng thì bỏ qua", "model": "sonnet", "effort": "medium", "match": ["them tinh nang", "implement", "viet ham", "viet code", "tao api", "them endpoint", "feature", "lam chuc nang", "them cot", "them nut", "tich hop"]},
-    {"id": "quick-question", "model": "sonnet", "effort": "low", "match": ["la gi", "nghia la gi", "giai thich ngan", "what is", "khac nhau", "khac gi", "co nghia"]}
+    {
+      "id": "vet-third-party",
+      "skills": [
+        "vet-skill"
+      ],
+      "model": "opus",
+      "effort": "high",
+      "match": [
+        "cai skill",
+        "cai plugin",
+        "them plugin",
+        "plugin marketplace",
+        "marketplace",
+        "mcp server",
+        "npx skills",
+        "plugin install",
+        "co an toan khong",
+        "an toan khong",
+        "kiem duyet",
+        "vet skill",
+        "skill nay",
+        "install skill"
+      ]
+    },
+    {
+      "id": "security-review",
+      "agent": "agent-stack:reviewer",
+      "skills": [
+        "differential-review"
+      ],
+      "model": "opus",
+      "effort": "high",
+      "match": [
+        "bao mat",
+        "lo hong",
+        "security",
+        "vulnerab",
+        "threat model",
+        "injection",
+        "xss",
+        "csrf",
+        "ssrf",
+        "path traversal",
+        "secret",
+        "phan quyen",
+        "xac thuc",
+        "cve",
+        "secure code",
+        "review bao mat",
+        "kiem tra bao mat"
+      ]
+    },
+    {
+      "id": "security-critical",
+      "refines": "security-review",
+      "model": "opus",
+      "effort": "xhigh",
+      "agent": "agent-stack:reviewer",
+      "skills": [
+        "differential-review"
+      ],
+      "match": [
+        "ma hoa",
+        "crypto",
+        "cryptograph",
+        "khoa bi mat",
+        "thanh toan",
+        "payment",
+        "sandbox",
+        "leo thang quyen",
+        "privilege escalation",
+        "jwt",
+        "oauth",
+        "session token",
+        "hmac",
+        "chu ky so"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "security-audit",
+      "refines": "security-review",
+      "model": "opus",
+      "effort": "max",
+      "agent": "agent-stack:reviewer",
+      "skills": [
+        "security-review"
+      ],
+      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng",
+      "match": [
+        "toan bo codebase",
+        "toan bo repo",
+        "ca repo",
+        "san lo hong",
+        "tim tat ca lo hong",
+        "truoc khi phat hanh",
+        "pentest",
+        "audit bao mat",
+        "security audit",
+        "whole codebase"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "code-review",
+      "agent": "agent-stack:reviewer",
+      "model": "opus",
+      "effort": "high",
+      "match": [
+        "review code",
+        "review pr",
+        "code review",
+        "xem lai code",
+        "review giup",
+        "truoc khi merge",
+        "soat code",
+        "review diff"
+      ]
+    },
+    {
+      "id": "code-review-small",
+      "refines": "code-review",
+      "model": "sonnet",
+      "effort": "high",
+      "agent": "agent-stack:reviewer",
+      "match": [
+        "truoc khi commit",
+        "diff nho",
+        "commit nay",
+        "thay doi nho",
+        "vai dong",
+        "small diff"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "debug-simple",
+      "model": "sonnet",
+      "effort": "medium",
+      "agent": "agent-stack:test-runner",
+      "match": [
+        "stack trace",
+        "traceback",
+        "loi la",
+        "test do",
+        "exception",
+        "typeerror",
+        "keyerror",
+        "importerror",
+        "attributeerror",
+        "khong chay duoc",
+        "bao loi"
+      ]
+    },
+    {
+      "id": "debug-hard",
+      "model": "opus",
+      "effort": "medium",
+      "match": [
+        "debug",
+        "khong hieu sao",
+        "race condition",
+        "memory leak",
+        "segfault",
+        "crash",
+        "flaky",
+        "deadlock",
+        "bug kho",
+        "chay sai",
+        "loi ngau nhien"
+      ]
+    },
+    {
+      "id": "debug-production",
+      "refines": "debug-hard",
+      "model": "opus",
+      "effort": "high",
+      "skills": [
+        "diagnosing-bugs"
+      ],
+      "match": [
+        "production",
+        "khong tai hien",
+        "khong reproduce",
+        "su co",
+        "incident",
+        "hoi quy hieu nang",
+        "cham dan",
+        "performance regression",
+        "chi xay ra tren server",
+        "memory leak",
+        "luc co luc khong"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "debug-stuck",
+      "refines": [
+        "debug-hard",
+        "debug-production",
+        "debug-simple"
+      ],
+      "model": "opus",
+      "effort": "xhigh",
+      "skills": [
+        "diagnosing-bugs"
+      ],
+      "match": [
+        "van chua ra",
+        "thu nhieu lan",
+        "thu mai khong",
+        "bi ket",
+        "be tac",
+        "stuck",
+        "khong tim ra nguyen nhan",
+        "da thu het",
+        "van khong sua duoc",
+        "still failing"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "architecture",
+      "agent": "Plan",
+      "skills": [
+        "reuse-best"
+      ],
+      "note": "chỉ khi việc không tầm thường; sửa nhỏ hay hàm vài dòng thì bỏ qua",
+      "model": "opus",
+      "effort": "high",
+      "match": [
+        "kien truc",
+        "thiet ke he thong",
+        "architecture",
+        "design doc",
+        "lap ke hoach",
+        "chien luoc",
+        "trade-off",
+        "tradeoff",
+        "migration plan",
+        "thiet ke module",
+        "chia module"
+      ]
+    },
+    {
+      "id": "architecture-critical",
+      "refines": "architecture",
+      "model": "opus",
+      "effort": "xhigh",
+      "agent": "Plan",
+      "skills": [
+        "reuse-best"
+      ],
+      "match": [
+        "kho dao nguoc",
+        "schema",
+        "migration du lieu",
+        "giao thuc",
+        "protocol",
+        "mo hinh bao mat",
+        "khong the rollback",
+        "quyet dinh lon",
+        "irreversible",
+        "du lieu that"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "progress",
+      "skills": [
+        "tien-do"
+      ],
+      "model": "sonnet",
+      "effort": "low",
+      "match": [
+        "tien do",
+        "lam gi tiep",
+        "viec tiep theo",
+        "dang do",
+        "dang o dau",
+        "what's next",
+        "whats next",
+        "con viec gi",
+        "task dang do",
+        "lam toi dau",
+        "toi dau roi",
+        "status project"
+      ]
+    },
+    {
+      "id": "session-save",
+      "skills": [
+        "session-keeper"
+      ],
+      "model": "sonnet",
+      "effort": "low",
+      "match": [
+        "luu tien do",
+        "luu lai",
+        "het limit",
+        "sap het limit",
+        "usage limit",
+        "ban giao",
+        "handoff",
+        "dung phien",
+        "lam tiep tu",
+        "checkpoint",
+        "chuyen sang opencode",
+        "mai lam tiep"
+      ]
+    },
+    {
+      "id": "tests",
+      "agent": "agent-stack:test-runner",
+      "skills": [
+        "tdd"
+      ],
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "chay test",
+        "run test",
+        "test fail",
+        "test hong",
+        "pytest",
+        "unit test",
+        "viet test",
+        "coverage",
+        "test do"
+      ]
+    },
+    {
+      "id": "reuse-best",
+      "skills": [
+        "reuse-best"
+      ],
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "co san chua",
+        "lam san",
+        "co san",
+        "co tool nao",
+        "tool nao",
+        "co thu vien nao",
+        "thu vien nao",
+        "da co ai lam",
+        "tai su dung",
+        "reuse",
+        "sota",
+        "state of the art",
+        "tot nhat hien nay",
+        "paper moi nhat",
+        "bai bao moi nhat",
+        "nghien cuu moi nhat",
+        "thuat toan nao",
+        "phuong phap nao",
+        "tu viet",
+        "phat minh lai",
+        "reinvent",
+        "existing tool",
+        "existing library",
+        "is there a tool",
+        "is there a library",
+        "best library",
+        "best tool",
+        "tren github"
+      ]
+    },
+    {
+      "id": "research",
+      "agent": "agent-stack:researcher",
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "nghien cuu",
+        "tim hieu",
+        "so sanh",
+        "research",
+        "compare",
+        "tra cuu",
+        "tong hop",
+        "danh gia cong cu",
+        "tai lieu chinh thuc",
+        "nguon nao",
+        "so sanh cac",
+        "cac cong cu"
+      ]
+    },
+    {
+      "id": "deep-research",
+      "refines": "research",
+      "model": "opus",
+      "effort": "medium",
+      "agent": "agent-stack:researcher",
+      "match": [
+        "nghien cuu sau",
+        "deep research",
+        "nhieu nguon",
+        "khao sat toan dien",
+        "bao cao nghien cuu",
+        "literature review",
+        "tong quan tai lieu",
+        "danh gia toan dien"
+      ]
+    },
+    {
+      "id": "mechanical",
+      "agent": "agent-stack:oc-worker",
+      "model": "haiku",
+      "effort": null,
+      "match": [
+        "doi ten",
+        "rename",
+        "format lai",
+        "boilerplate",
+        "hang loat",
+        "dich file",
+        "dich tai lieu",
+        "sap xep import",
+        "doi dinh dang",
+        "chuyen dinh dang",
+        "them header"
+      ]
+    },
+    {
+      "id": "writing",
+      "skills": [
+        "giong-van",
+        "humanizer"
+      ],
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "viet lai",
+        "bai luan",
+        "essay",
+        "blog",
+        "email",
+        "giong van",
+        "cho tu nhien",
+        "rewrite",
+        "cover letter",
+        "doan van",
+        "van phong",
+        "proofread"
+      ]
+    },
+    {
+      "id": "write-long",
+      "refines": "writing",
+      "model": "sonnet",
+      "effort": "high",
+      "skills": [
+        "giong-van"
+      ],
+      "match": [
+        "luan van",
+        "bao cao dai",
+        "tai lieu ky thuat",
+        "whitepaper",
+        "chuong sach",
+        "de cuong",
+        "bai dai",
+        "thesis"
+      ]
+    },
+    {
+      "id": "refactor",
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "refactor",
+        "tai cau truc",
+        "don dep code",
+        "clean up",
+        "tach ham",
+        "gom code",
+        "bo trung lap"
+      ]
+    },
+    {
+      "id": "feature",
+      "skills": [
+        "reuse-best"
+      ],
+      "note": "chỉ khi việc không tầm thường; sửa nhỏ hay hàm vài dòng thì bỏ qua",
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "them tinh nang",
+        "implement",
+        "viet ham",
+        "viet code",
+        "tao api",
+        "them endpoint",
+        "feature",
+        "lam chuc nang",
+        "them cot",
+        "them nut",
+        "tich hop"
+      ]
+    },
+    {
+      "id": "docs-lookup",
+      "model": "sonnet",
+      "effort": "low",
+      "note": "tra tài liệu mới bằng context7 nếu có, đừng đoán theo trí nhớ",
+      "match": [
+        "cu phap",
+        "syntax",
+        "cach dung ham",
+        "tham so cua",
+        "docs cua",
+        "tai lieu cua thu vien",
+        "how to use",
+        "function signature",
+        "api cua thu vien",
+        "option nao",
+        "flag nao"
+      ]
+    },
+    {
+      "id": "quick-question",
+      "model": "sonnet",
+      "effort": "low",
+      "match": [
+        "la gi",
+        "nghia la gi",
+        "giai thich ngan",
+        "what is",
+        "khac nhau",
+        "khac gi",
+        "co nghia"
+      ]
+    },
+    {
+      "id": "small-fix",
+      "model": "sonnet",
+      "effort": "low",
+      "note": "low dễ bỏ bước tự kiểm tra: yêu cầu chạy test sau khi sửa",
+      "match": [
+        "sua chinh ta",
+        "typo",
+        "loi chinh ta",
+        "sua mot dong",
+        "sua 1 dong",
+        "sua nho",
+        "chinh nho",
+        "doi chu",
+        "small fix",
+        "one-line",
+        "one line fix",
+        "doi message",
+        "sua comment"
+      ]
+    },
+    {
+      "id": "paper-reading",
+      "model": "sonnet",
+      "effort": "medium",
+      "skills": [
+        "paper-anatomy"
+      ],
+      "match": [
+        "doc paper",
+        "bai bao",
+        "paper nay",
+        "giai phau",
+        "mo xe",
+        "doc bai bao",
+        "phan tich bai bao",
+        "arxiv",
+        "hieu sau bai",
+        "research paper",
+        "this paper"
+      ]
+    },
+    {
+      "id": "paper-critique",
+      "refines": "paper-reading",
+      "model": "sonnet",
+      "effort": "high",
+      "skills": [
+        "paper-anatomy"
+      ],
+      "match": [
+        "phan bien",
+        "claim",
+        "bang chung co du",
+        "dung vung",
+        "vuot qua bang chung",
+        "reviewer",
+        "diem yeu cua bai",
+        "critique"
+      ],
+      "only_refine": true
+    },
+    {
+      "id": "long-agent",
+      "model": "opus",
+      "effort": "xhigh",
+      "note": "việc tự chạy trên 30 phút; /effort ultracode = xhigh kèm workflow",
+      "match": [
+        "chay qua dem",
+        "tu chay",
+        "nhieu gio",
+        "chay lien tuc",
+        "dai hoi",
+        "autonomous",
+        "khong can hoi lai",
+        "ultracode",
+        "long-running",
+        "ca ngay"
+      ]
+    },
+    {
+      "id": "frontier",
+      "model": "fable",
+      "effort": "high",
+      "note": "chỉ khi opus ở effort cao vẫn chưa đạt; fable · max cho bài biên giới thật sự",
+      "match": [
+        "chung minh dinh ly",
+        "chung minh toan hoc",
+        "thuat toan moi",
+        "bai toan mo",
+        "toi uu hoa kho",
+        "frontier problem",
+        "research-level",
+        "chua ai giai",
+        "vuot kha nang",
+        "opus khong giai duoc"
+      ]
+    },
+    {
+      "id": "max-explicit",
+      "model": "opus",
+      "effort": "max",
+      "note": "nếu chỉ cần cho một lượt, thêm từ ultrathink vào prompt thay vì đổi effort cả phiên",
+      "match": [
+        "nghi that ky",
+        "suy nghi ky nhat",
+        "het suc",
+        "max effort",
+        "dung toan luc",
+        "cang ky cang tot",
+        "khong quan tam chi phi",
+        "ky nhat co the",
+        "think as hard"
+      ]
+    },
+    {
+      "id": "write-short",
+      "model": "sonnet",
+      "effort": "low",
+      "skills": [
+        "giong-van"
+      ],
+      "match": [
+        "email ngan",
+        "tin nhan",
+        "tra loi ngan",
+        "nhan tin",
+        "caption",
+        "slack",
+        "reply ngan",
+        "vai cau"
+      ]
+    }
   ]
 }

@@ -28,6 +28,32 @@ class RouterRules(TempDirTestCase):
         hit = route.suggest("the secretary scheduled a meeting tomorrow")
         self.assertTrue(hit is None or hit["rule"] != "security-review")
 
+    def test_rules_are_consistent(self):
+        efforts = {"low", "medium", "high", "xhigh", "max"}
+        rules = route.rules()["rules"]
+        ids = {r["id"] for r in rules}
+        self.assertEqual(len(ids), len(rules), "id luật bị trùng")
+        for r in rules:
+            with self.subTest(rule=r["id"]):
+                self.assertIn(r["model"], route.FAMILIES)
+                if r["model"] == "haiku":
+                    self.assertIsNone(r.get("effort"), "Haiku không có tham số effort")
+                else:
+                    self.assertIn(r.get("effort"), efforts)
+                for base in r["_refines"]:
+                    self.assertIn(base, ids)
+                if r.get("only_refine"):
+                    self.assertTrue(r["_refines"], "only_refine cần luật gốc")
+        self.assertEqual({r.get("effort") for r in rules} - {None}, efforts, "bảng phải trải đủ low tới max")
+
+    def test_refinements_need_their_base(self):
+        self.assertEqual(route.suggest("Review bảo mật phần mã hóa token")["rule"], "security-critical")
+        self.assertEqual(route.suggest("Refactor module thanh toán này")["rule"], "refactor")
+        self.assertEqual(route.suggest("Audit bảo mật toàn bộ codebase")["effort"], "max")
+        hit = route.suggest("Đổi tên hàm getUser thành fetchUser trong cả project")
+        self.assertEqual(route.describe(hit).split(" · ")[0], "haiku")
+        self.assertNotIn("None", route.describe(hit))
+
     def test_fast(self):
         route.suggest("khởi động")
         start = time.time()
