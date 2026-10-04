@@ -143,7 +143,8 @@ PROBE = textwrap.dedent("""
 def check(workdir, answer):
     workdir = Path(workdir)
     src = (workdir / "udiff.py").read_text(encoding="utf-8")
-    if "difflib" in src or "subprocess" in src:
+    import re
+    if re.search(r"^\s*(?:import|from)\s+(?:difflib|subprocess)\b|__import__\(|\bos\.(?:system|popen)\(", src, re.M):
         return False, "dùng difflib hoặc gọi chương trình ngoài"
     try:
         out = subprocess.run([sys.executable, "-c", PROBE], cwd=str(workdir), input=json.dumps(CANON),

@@ -67,9 +67,12 @@
 | Cấu hình | Đạt | USD/việc (TB) | Giây/việc |
 |---|---:|---:|---:|
 | A: sonnet · medium | 12/12 | 0,116 | 32 |
+| C: opus · medium | 12/12 | 0,254 | 60 |
+| D: opus · low | 12/12 | 0,215 | 40 |
 | H: haiku · medium | 4/12 | 0,191 | 127 |
 
-- Sonnet · medium đạt hết, kể cả hai việc "rất khó" (pool asyncio an toàn khi hủy tác vụ, diff tối thiểu khớp `diff -u`). Bộ việc này vẫn chưa phân biệt được sonnet với opus; chưa chạy C, D trên chúng.
+- Sonnet · medium, opus · medium và opus · low đều đạt hết, kể cả hai việc "rất khó" (pool asyncio an toàn khi hủy tác vụ, diff tối thiểu khớp `diff -u`). Script chọn **A**: opus tốn gấp khoảng 2 lần mà không đạt thêm việc nào. Việc tự chứa, có đặc tả rõ, chấm được bằng test thì sonnet đủ; muốn tách sonnet với opus cần việc dài hơi (nhiều giờ, codebase lớn, đặc tả mơ hồ).
+- Lần chạy đầu D trượt 2 lượt diff vì grader bắt nhầm chữ "difflib" trong docstring; đã sửa grader (chỉ bắt `import`) và chấm lại mọi lượt bằng `--regrade`.
 - Haiku trượt cron (nhận dạng bị cấm, chậm), review diff (bỏ sót lỗi thu tiền hai lần, 2/2 lượt), pool asyncio và diff (0/4); chỉ đạt hai việc debug. Và **đắt hơn** sonnet vì mò nhiều vòng (0,191 so với 0,116 USD; ở hai việc rất khó là 0,33 so với 0,18). Khớp khuyến nghị của Anthropic: model nhỏ làm việc nhiều bước khó không rẻ hơn. Haiku chỉ hợp việc cơ học có kiểm tra tự động.
 
 ## Còn chưa quyết định bằng số liệu
