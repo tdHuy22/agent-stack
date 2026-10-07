@@ -86,3 +86,12 @@
 {"prompt": "Thêm cột created_at vào schema bảng users", "expect": "feature"}
 {"prompt": "deploy bản mới lên production giúp mình", "expect": "none"}
 {"prompt": "chạy test trước khi commit nhé", "expect": "tests"}
+{"prompt": "xong chưa? kiểm lại trước khi commit giúp mình", "expect": "finish-gate"}
+{"prompt": "chốt việc này đi rồi commit", "expect": "finish-gate"}
+{"prompt": "wrap up this change, is it ready to commit?", "expect": "finish-gate"}
+{"prompt": "kiểm tra lần cuối trước khi báo xong nhé", "expect": "finish-gate"}
+{"prompt": "tiến độ thế nào rồi, xong chưa", "expect": "progress"}
+{"prompt": "chạy test xong chưa?", "expect": "tests"}
+{"prompt": "kiểm tra lần cuối bài luận trước khi nộp", "expect": "writing"}
+{"prompt": "eval chạy xong chưa", "expect": "none"}
+{"prompt": "wrap up the meeting notes into a summary", "expect": "none"}

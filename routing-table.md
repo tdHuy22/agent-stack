@@ -82,7 +82,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Refactor có test | `sonnet · medium` | `sonnet · high` | — | — | E: 2/2 |
 | Refactor lớn, migration nhiều module, đổi API công khai | `opusplan` (Opus lập kế hoạch, Sonnet thực thi) | `opus · high` | Plan | reuse-best | A: `opusplan`; P |
 | Viết test | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | tdd | E: 2/2 |
-| Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | `opus · xhigh` hoặc `/effort ultracode` | `fable · high` | — | — | A: `xhigh` cho việc trên 30 phút |
+| Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | `opus · xhigh` hoặc `/effort ultracode` | `fable · high` | — | — | A: `xhigh` cho việc trên 30 phút. Cách chạy (theo `gnhf`, MIT): đặt điều kiện dừng và trần số vòng hoặc token trước khi đi ngủ, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file; sáng ra chọn commit nào giữ |
 | Việc dài hơi rất khó mà Opus ở `xhigh` vẫn chưa đạt | `fable · high` | `fable · xhigh` | — | — | A |
 
 ### Debug
@@ -99,7 +99,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer | — | E: `review-diff` sonnet·medium 2/2, haiku 0/2; P: nâng lên `high` vì lỗi lọt đắt |
+| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao | chot-viec | E: `review-diff` sonnet·medium 2/2, haiku 0/2; P: nâng lên `high` vì lỗi lọt đắt |
 | Review PR lớn trước khi merge | `opus · high` | `opus · xhigh` | agent-stack:reviewer | — | P |
 | Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review | P |
 | Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |

@@ -392,6 +392,23 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 - **Chưa kiểm với docs chính thức:** dạng `command` kèm `args` của hook trong `plugin/hooks/hooks.json` và trường `disallowed-tools` ở skill. Hook vẫn chạy (đầu ra SessionStart xuất hiện trong phiên) và `claude plugin validate` đạt.
 - **Ngoài phạm vi ba bước, chưa rà:** "Anthropic Directory" trên claude.ai; các repo Anthropic khác trong danh sách theo sao như financial-services, claude-for-legal, commerce-agents, prompt-eng-interactive-tutorial, anthropic-sdk-*.
 
+### 6.14 Áp dụng ý từ video của Kun Chen (07/10/2026)
+
+Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube `iQyg-KypKAA`, 45 phút; đọc bản phụ đề tự động), README của `no-mistakes`, `gnhf`, `lavish-axi` (đều MIT) và trang `axi.md`. Số liệu trong video (MCP GitHub tốn gấp 3 lần token so với CLI; một repo skill 177 nghìn sao làm kết quả tệ hơn và tốn thêm 5% token) là benchmark của chính tác giả, chưa có kiểm độc lập.
+
+| Ý trong video | Quyết định | Ở đâu |
+|---|---|---|
+| File nhớ toàn cục ngắn (27 dòng) vì nạp vào mọi phiên; phần chỉ cần cho một loại việc thì chuyển vào skill | Áp dụng một phần: thêm 5 luật nhưng viết gọn chỗ khác, nên hai file chỉ tăng từ 9.240 lên 10.190 byte (khoảng 10%). Không tách phần OpenCode ra file riêng, vì `~/.config/opencode/AGENTS.md` trỏ thẳng vào `AGENTS.global.md` và bạn dặn không đụng OpenCode | `global/` |
+| Model ước lượng công theo tốc độ người nên chọn cách rẻ mà kém | Thêm luật chọn theo chất lượng, độ bền, độ dễ bảo trì; thêm vào bước chấm ứng viên của `reuse-best` | `AGENTS.global.md`, `reuse-best` |
+| Sửa lỗi bắt đầu từ tái hiện end-to-end, giống người dùng nhất | Thêm luật chung; `diagnosing-bugs` đã có bước này nhưng chỉ khi được gọi | `AGENTS.global.md` |
+| File nhớ project lớn dần từ các lần người dùng sửa agent | Thêm luật: đề nghị ghi bài học thành luật ngắn trong `CLAUDE.md`/`AGENTS.md` của project, hoặc vào skill nếu chỉ cần cho một loại việc | `AGENTS.global.md` |
+| Sao không chứng minh skill giúp được agent | Thêm vào luật cài đồ bên thứ ba và vào `reuse-best`. Bộ eval có cấu hình V (A + plugin vendor) và ghi skill nào thực sự được gọi; chưa chạy thật | `evals/` |
+| `no-mistakes`: ý định, review đối kháng ở context mới, test có bằng chứng, rà tài liệu, chấm rủi ro để quyết người đọc tới đâu | Tự làm skill `chot-viec` từ các mảnh đã có (`receipt.py`, `agent-stack:reviewer`) cộng `risk.py`. Không cài `no-mistakes`: nó tự push, mở PR, trông CI (repo không push), và cài bằng `curl \| sh` | `plugin/skills/chot-viec` |
+| `lavish`: lên kế hoạch bằng trang HTML có bình luận và nút chọn | Dùng Artifact có sẵn của Claude (riêng tư, có bình luận đọc được bằng `ArtifactComments`), không cài lavish. Chỉ khi kế hoạch có từ hai phương án hoặc ba quyết định | `CLAUDE.global.md` |
+| `gnhf`: vòng lặp qua đêm có trần vòng, trần token, điều kiện dừng, mỗi vòng một commit | Ghi cách chạy vào dòng "agent tự chạy dài" của bảng định tuyến và ghi chú của luật router `long-agent`; `/goal`, `/loop` đã có | `routing-table.md`, `rules.json` |
+| AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Chưa rà lại các script cũ | `chot-viec/scripts/risk.py` |
+| WezTerm, tmux, Neovim, nhập bằng giọng (OpenSuperWhisper), Treehouse, firstmate | Không áp dụng: là thói quen terminal cá nhân, cần cài toàn cục, hoặc app desktop đã làm thay (worktree mỗi phiên, nhiều phiên song song) | |
+
 ---
 
 ## 7. Thiết kế chi tiết

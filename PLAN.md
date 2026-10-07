@@ -3,7 +3,7 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật khuya 03/10/2026.*
+*Cập nhật 07/10/2026.*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026); chưa push.
@@ -33,12 +33,14 @@
   - **Skill `paper-anatomy` nâng cấp** (03/10/2026, theo yêu cầu của bạn; nguồn ở `claude-ai-skills/paper-anatomy/`, không nằm trong plugin vì claude.ai đồng bộ nó thành `anthropic-skills:paper-anatomy`). Tìm skill có sẵn trước (deer-flow `academic-paper-review`, nanochat `read-arxiv-paper`, AI-SKILLS `reading-papers`, K-Dense): không cái nào thay được, chỉ lấy ý tưởng. Thêm `verify_anchors.py` (kiểm từng neo: trang, mục, Hình/Bảng/Eq, trích nguyên văn), viết lại `extract_paper.py` (nhãn trang khai báo trong PDF, outline, `--pages`, `--find`, `--render`), chế độ hỏi hẹp/giải phẫu/phản biện, `references/critical-appraisal.md`, `references/hard-pdfs.md`, bước tự rà con số và câu "bài không nói". PyMuPDF và pypdf cài vào `.venv` (không cài toàn cục). **Bench bằng sonnet trên 5 bài trong Zotero của bạn, chấm mù bằng opus** (`claude-ai-skills/paper-anatomy-bench/RESULTS.md`): bản mới thắng 10/12 lần so cặp qua ba vòng (đều sát nút trừ bài scan Biba); điểm kiểm chứng 5,0 so với 4,0–4,2; neo sai do máy kiểm 0/318 so với 17/167 (10,2%); dễ đọc kém hơn (4,0–4,2 so với 4,5–4,8); đắt hơn khoảng 45% (0,72–0,78 so với 0,51 USD/bài). Tổng chi phí bench khoảng 11,6 USD giá niêm yết cho lượt làm bài, cộng người chấm opus.
   - **Eval thêm 6 việc khó** (commit `7f01c16`): `debug-multifile`, `debug-race`, `review-diff`, `code-cron-next`, `code-async-pool`, `code-unified-diff`; self-test 18/18. Chạy thật (04/10/2026 có thêm C, D): sonnet·medium 12/12 (0,116 USD/việc), opus·medium 12/12 (0,254), opus·low 12/12 (0,215), haiku 4/12 và đắt hơn sonnet (0,191). Script chọn A. Ghi ở `routing-table.md`. Tổng khoảng 9 USD giá niêm yết.
   - **Bảng định tuyến mịn hơn, effort từ low tới max** (04/10/2026, theo yêu cầu của bạn; plugin 0.4.4, **đã cập nhật toàn cục** lúc 08:23 ngày 04/10/2026 theo lệnh của bạn, nhật ký `state/install-logs/20261004-082347.json`; `claude plugin list` báo 0.4.4, bản cache khớp `plugin/`, hook router từ bản cache chạy đúng trên Python 3.9 và 3.11). Đối chiếu tài liệu chính thức đọc lại 04/10/2026 (trang effort, model-config, chi phí, bảng giá): `xhigh` cho việc agent trên 30 phút (+1,4 điểm, 2,5 lần chi phí so với `high`), `max` cho bài khó tự làm tới cùng như săn lỗ hổng (lợi ích giảm dần), Haiku không có effort, `ultrathink` cho một lượt. `routing-table.md` viết lại: thang effort, thang leo thang 10 bậc, 47 dòng việc trong 8 nhóm, mỗi dòng có cấu hình bắt đầu, bậc tiếp theo và căn cứ (E/A/P). `rules.json` từ 15 lên 32 luật, có luật tinh chỉnh (`refines`, `only_refine`) để "thanh toán" một mình không bị đẩy lên review bảo mật `xhigh`; router đúng 88/88 câu có nhãn (thêm 35 câu, có ca dễ nhầm). Bảng ➡️ trong `global/CLAUDE.global.md` (symlink sang `~/.claude/CLAUDE.md`, có hiệu lực ngay) thay bằng 22 dòng.
-- **Đang dở:** không có việc đang sửa dở.
+  - **Áp dụng ý từ video của Kun Chen** (07/10/2026, theo yêu cầu của bạn; GĐ12, chi tiết và nguồn ở `KE-HOACH.md` mục 6.14; plugin 0.5.0 trong repo, **chưa cập nhật trên máy**). Luật chung thêm 5 ý (chọn theo chất lượng không theo công làm, tái hiện lỗi end-to-end trước, chạy `chot-viec` trước khi báo xong, ghi bài học vào file nhớ project, skill cần số liệu eval). Hai file luật có hiệu lực ngay ở phiên mới vì là symlink. Skill mới `chot-viec` với `risk.py`. Eval có cấu hình V để đo skill vendor, ghi skill nào được gọi. Router 33 luật, 97/97. Review độc lập (agent `reviewer`, opus · high) tìm 2 lỗi vừa, 2 thấp, đều đã sửa kèm test: `finish-gate` cướp câu hỏi tiến độ; `risk.py --base` sai ref thì âm thầm ra diff rỗng; repo chưa commit bỏ sót phần sửa sau `git add`; `meta.json` ghi sai tool của cấu hình có plugin. 382 test đạt trên Python 3.9 và 3.11, `claude plugin validate plugin` đạt, self-test eval đạt (có biên nhận).
+- **Đang dở:** không có việc đang sửa dở. `KE-HOACH.md` còn 2 dòng đổi từ trước phiên này (gỡ Phi-4-mini, ngày 05/10/2026) chưa commit; mình không đưa vào commit của GĐ12.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
-  2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
-  3. Cập nhật skill `paper-anatomy` trên claude.ai: tải `.tmp/dist/paper-anatomy.skill` (tạo lại bằng `python3 claude-ai-skills/package.py paper-anatomy`) lên Settings → Capabilities → Skills, thay bản cũ cùng tên. Claude Code nhận bản mới ở lần đồng bộ sau.
-  4. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
+  1. Cập nhật plugin trên máy lên 0.5.0 để app desktop có `chot-viec`: `./install.sh --apply --only plugin`, rồi mở phiên mới. Sau đó, nếu đồng ý tốn khoảng 3,4 USD hạn mức: chạy A/B skill vendor `python3 evals/run_eval.py --configs A,V --tasks debug-multifile,debug-race,code-duration,code-cron-next,code-async-pool,qa-write-tests,write-vn-rewrite --repeats 2 --yes`; skill nào không hơn A thì cân nhắc tắt.
+  2. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
+  3. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
+  4. Cập nhật skill `paper-anatomy` trên claude.ai: tải `.tmp/dist/paper-anatomy.skill` (tạo lại bằng `python3 claude-ai-skills/package.py paper-anatomy`) lên Settings → Capabilities → Skills, thay bản cũ cùng tên. Claude Code nhận bản mới ở lần đồng bộ sau.
+  5. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Quyết định còn treo:**
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
@@ -48,10 +50,10 @@
     - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa. Lưu ý quyền riêng tư ở trên: model free có thể dùng dữ liệu để huấn luyện.
     - Câu còn mở ở `KE-HOACH.md` mục 10 (việc hay thư mục tuyệt đối không gửi cho model từ xa) chỉ cần khi dùng model từ xa qua OpenCode, nên gác lại cùng mục này.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
-  - `/usr/bin/python3 -m unittest discover -s tests -t .` và với `python3` → `Ran 360 tests … OK (skipped=1)`; test bị bỏ qua cần PyMuPDF, chạy bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`
+  - `/usr/bin/python3 -m unittest discover -s tests -t .` và với `python3` → `Ran 382 tests … OK (skipped=1)`; test bị bỏ qua cần PyMuPDF, chạy bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`
   - `claude plugin validate plugin` → `Validation passed`
   - `python3 evals/run_eval.py --self-test` → 18 dấu ✓
-  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 88/88
+  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 97/97
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status`, `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
 
 ## 1. Giai đoạn
@@ -175,3 +177,14 @@
   - phiên `claude -p` cho thấy CLI nạp plugin tại chỗ;
   - desktop app chạy bản chép trong cache, nên thêm file `plugin/.agent-stack-home` để bản chép tìm về repo, và bước `plugin update`.
 - [x] Có một phiên SCEE được resume lúc 15:24, trước khi có file trỏ. Hook của phiên đó ghi trạng thái vào `~/.claude/plugins/data/agent-stack-inline`. Hook chỉ đọc SCEE, không sửa gì; thư mục đó sẽ được dọn khi gỡ.
+
+### GĐ12: Áp dụng ý từ video của Kun Chen (07/10/2026)
+Quyết định và nguồn: `KE-HOACH.md` mục 6.14.
+- [x] Luật chung thêm 5 ý: chọn giải pháp theo chất lượng, không theo công làm; sửa lỗi phải tái hiện end-to-end trước; chạy `chot-viec` trước khi báo xong; đề nghị ghi bài học vào file nhớ project; skill hứa làm agent giỏi hơn cần số liệu eval. Viết gọn chỗ khác nên hai file luật chỉ tăng từ 9.240 lên 10.190 byte.
+- [x] `CLAUDE.global.md`: kế hoạch có từ hai phương án hoặc ba quyết định thì đăng trang Artifact riêng tư để bình luận; dòng bảng ➡️ cho việc kiểm trước commit dùng `chot-viec`.
+- [x] Skill `chot-viec` (theo ý `no-mistakes`): ý định, phạm vi, `risk.py` chấm rủi ro, kiểm chứng có biên nhận cộng tái hiện như người dùng, review ở context mới theo mức rủi ro, rà tài liệu, báo cáo, commit có điều kiện, không push. 19 test.
+- [x] Eval: cấu hình V (A + plugin vendor), cho phép `Skill`, đọc `stream-json` để ghi skill nào được gọi, bảng có dòng "gọi skill ở n/m lượt". Lượt khói thật (haiku, 0,03 USD) xác nhận plugin nạp được và skill được ghi nhận. `meta.json` ghi tool và định dạng output theo từng cấu hình. 4 test.
+- [x] Router: luật `finish-gate`, skill `chot-viec` cho `code-review-small`, ghi chú cách chạy qua đêm cho `long-agent` (theo `gnhf`); 97/97 câu, gồm 5 câu âm (hỏi tiến độ, test, bài luận "xong chưa" không được rơi vào `finish-gate`). Ca eval kích hoạt `finish-gate` và grader không kích hoạt.
+- [x] `reuse-best`: sao chỉ đo độ phổ biến; đừng ước công tự viết theo tốc độ của người.
+- [ ] Chạy thật A/B vendor (khoảng 3,4 USD giá niêm yết, cần bạn đồng ý): `python3 evals/run_eval.py --configs A,V --tasks debug-multifile,debug-race,code-duration,code-cron-next,code-async-pool,qa-write-tests,write-vn-rewrite --repeats 2 --yes`.
+- [ ] Cập nhật plugin trên máy lên 0.5.0 (cần bạn đồng ý): `./install.sh --apply --only plugin`.

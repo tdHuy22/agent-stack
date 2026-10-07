@@ -238,7 +238,34 @@
         "vai dong",
         "small diff"
       ],
-      "only_refine": true
+      "only_refine": true,
+      "skills": [
+        "chot-viec"
+      ],
+      "note": "chot-viec chấm rủi ro bằng risk.py rồi mới quyết có giao reviewer không"
+    },
+    {
+      "id": "finish-gate",
+      "skills": [
+        "chot-viec"
+      ],
+      "agent": "agent-stack:reviewer",
+      "model": "sonnet",
+      "effort": "high",
+      "note": "reviewer chỉ khi risk.py báo rủi ro vừa hoặc cao; cao thì để reviewer chạy opus · high",
+      "match": [
+        "chot viec",
+        "chot lai viec",
+        "kiem lai truoc khi commit",
+        "kiem tra truoc khi commit",
+        "kiem tra lan cuoi truoc khi commit",
+        "truoc khi bao xong",
+        "san sang commit",
+        "commit duoc chua",
+        "ready to commit",
+        "wrap up this change",
+        "finish this change"
+      ]
     },
     {
       "id": "debug-simple",
@@ -707,7 +734,7 @@
       "id": "long-agent",
       "model": "opus",
       "effort": "xhigh",
-      "note": "việc tự chạy trên 30 phút; /effort ultracode = xhigh kèm workflow",
+      "note": "việc tự chạy trên 30 phút; /effort ultracode = xhigh kèm workflow; đặt điều kiện dừng và trần số vòng hoặc token, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file",
       "match": [
         "chay qua dem",
         "tu chay",

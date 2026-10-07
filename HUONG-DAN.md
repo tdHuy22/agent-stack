@@ -8,7 +8,7 @@ Mục lục:
 2. [Kiểm tra đã cài đúng chưa](#2-kiểm-tra-đã-cài-đúng-chưa)
 3. [Một ngày làm việc](#3-một-ngày-làm-việc)
 4. [Những gì tự chạy](#4-những-gì-tự-chạy)
-5. [Sáu skill](#5-sáu-skill)
+5. [Bảy skill](#5-bảy-skill)
 6. [Subagent](#6-subagent)
 7. [Dùng với OpenCode](#7-dùng-với-opencode)
 8. [Cài, cập nhật, gỡ](#8-cài-cập-nhật-gỡ)
@@ -28,7 +28,7 @@ Bộ này giải quyết bốn chuyện hay gặp khi làm việc với Claude C
 - **Tốn hạn mức vì chọn model quá mạnh** (hoặc quá yếu). Router gợi ý model, effort, subagent và skill cho từng việc; cuối mỗi câu trả lời có dòng ➡️.
 - **Cài đồ bên thứ ba thiếu kiểm tra.** Skill `vet-skill` quét skill, plugin, MCP trước khi cài và ghi kết quả vào `vetted.lock`.
 
-Ngoài ra có hai skill phụ: `giong-van` để chỉnh văn cho đúng giọng mình, và `reuse-best` để tìm thứ có sẵn trước khi tự viết.
+Ngoài ra có ba skill phụ: `giong-van` để chỉnh văn cho đúng giọng mình, `reuse-best` để tìm thứ có sẵn trước khi tự viết, và `chot-viec` để agent tự kiểm trước khi báo xong.
 
 Mọi thứ nằm trong repo này. Các file ngoài repo (`~/.claude/CLAUDE.md`, skill của OpenCode...) chỉ là symlink trỏ về đây, nên sửa trong repo là đủ.
 
@@ -127,7 +127,7 @@ Số liệu hạn mức do statusline ghi, mà statusline chỉ chạy trong ter
 
 ---
 
-## 5. Sáu skill
+## 5. Bảy skill
 
 Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng `/agent-stack:<tên> <tham số>`. Script đi kèm cũng chạy tay được; mọi đường dẫn dưới đây tính từ gốc repo.
 
@@ -324,6 +324,24 @@ python3 plugin/skills/reuse-best/scripts/scout.py papers "vietnamese ocr" --sinc
 
 Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`. Repo không có giấy phép thì chỉ học ý tưởng, không chép code.
 
+### 5.7 `chot-viec`: cổng kiểm trước khi báo xong
+
+**Khi nào:** vừa xong một tính năng, bản sửa lỗi hay refactor; "xong chưa", "chốt việc", "kiểm lại trước khi commit". Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường.
+
+**Gọi:** `/agent-stack:chot-viec` (thêm `--base main` để so với nhánh khác thay vì HEAD).
+
+**Làm gì:** nêu lại ý định và tiêu chí xong; tách file thuộc việc này khỏi file người khác đổi; chấm mức rủi ro của diff; chạy mốc kiểm tra qua `receipt.py` và tái hiện thay đổi đúng như bạn sẽ dùng; review ở context mới (mức thấp: tự đọc diff; vừa: `agent-stack:reviewer` chạy sonnet; cao: reviewer chạy opus · high); tự sửa lỗi máy móc, còn lỗi đụng tới ý định thì hỏi bạn; rà README và tài liệu; báo cáo ngắn kèm phần bạn nên đọc. Chỉ commit khi bạn hoặc luật project yêu cầu, không bao giờ push.
+
+**Chạy tay** phần chấm rủi ro (chỉ đọc):
+
+```bash
+python3 plugin/skills/chot-viec/scripts/risk.py
+```
+
+Điểm cộng khi đụng phần nhạy cảm (xác thực, secret, mã hóa, thanh toán, quyền, sandbox), schema, hook, cài đặt, phụ thuộc, file chỉ dẫn cho agent; khi dòng thêm vào có dấu hiệu secret, chạy lệnh qua shell, xóa file, tải rồi chạy mã, SQL ghép chuỗi; khi thay đổi lớn, đổi code mà không đổi test, hoặc bớt test. Đây là gợi ý thô để quyết review sâu tới đâu, không thay review.
+
+Ý tưởng lấy từ pipeline `no-mistakes` của Kun Chen (video "L8 Principal's Agentic Engineering Workflow", MIT). Phần tự push, mở PR và trông CI không lấy.
+
 ---
 
 ## 6. Subagent
@@ -485,7 +503,7 @@ Test phải đạt trên cả `/usr/bin/python3` (3.9) và `python3`.
 
 ### Eval chọn cấu hình
 
-`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (haiku, chỉ đo trần dưới).
+`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (haiku, chỉ đo trần dưới), V (A + plugin vendor, để biết skill bên thứ ba có giúp thật không).
 
 ```bash
 python3 evals/run_eval.py --configs A,C,D --repeats 2
@@ -494,6 +512,14 @@ python3 evals/run_eval.py --configs A,C,D --repeats 2
 Không có `--yes` thì chỉ in kế hoạch và chi phí ước tính. Thêm `--yes` mới chạy thật và tốn hạn mức (lần chạy trên khoảng 15 USD theo giá niêm yết). Nên đặt trần: `--max-total-usd 20 --cap-usd 1`. Model làm việc trong thư mục tạm ngoài repo, để không đọc được grader hay lời giải. Các tùy chọn không gọi model: `--report <file.jsonl>` tổng hợp kết quả đã có, `--regrade <file.jsonl>` chấm lại bằng grader mới.
 
 Có số liệu rồi thì cập nhật `routing-table.md` và `rules.json`.
+
+Đo lợi ích của skill vendor (`diagnosing-bugs`, `tdd`, `humanizer`…): so V với A trên các việc chúng nhắm tới. Khoảng 3,4 USD giá niêm yết:
+
+```bash
+python3 evals/run_eval.py --configs A,V --tasks debug-multifile,debug-race,code-duration,code-cron-next,code-async-pool,qa-write-tests,write-vn-rewrite --repeats 2
+```
+
+Cấu hình có plugin chạy với `stream-json`, nên bảng kết quả có thêm dòng "gọi skill ở n/m lượt". Skill có mà không được gọi thì chênh lệch giữa V và A chỉ là nhiễu. V không hơn A thì cân nhắc tắt skill đó: skill tốn token mỗi lần nạp mô tả, và có skill làm kết quả tệ đi.
 
 **Kết quả lần chạy ngày 02/10/2026** (72 lượt, khoảng 7,5 USD giá niêm yết): A, C và D đều đạt 24/24; A rẻ nhất (0,063 USD mỗi việc, so với 0,128 và 0,121). Vì cả ba đều đạt hết, bộ việc này chưa phân biệt được các cấu hình: nó chỉ cho thấy sonnet · medium đủ cho việc nhỏ có tín hiệu kiểm tra rõ. Muốn đo debug khó hay review diff thật, cần thêm việc khó hơn vào `evals/tasks/`. Chi tiết và khuyến nghị chính thức của Anthropic nằm ở `routing-table.md`.
 
@@ -573,6 +599,7 @@ rồi đọc §0 của `PLAN.md`. Muốn quay về trạng thái trước khi c�
 | Kiểm tra skill/plugin trước khi cài | `/agent-stack:vet-skill <owner/repo>` |
 | Sửa văn cho tự nhiên | "sửa đoạn này cho tự nhiên" · `/agent-stack:giong-van` |
 | Tìm thư viện có sẵn | `/agent-stack:reuse-best <nhu cầu>` |
+| Kiểm trước khi báo xong hay commit | "chốt việc", "xong chưa" · `/agent-stack:chot-viec` |
 | Review trước commit | "review trước khi commit" (subagent `agent-stack:reviewer`) |
 | Chạy test gọn | "giao test-runner chạy test" |
 

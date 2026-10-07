@@ -26,7 +26,7 @@ Bạn không thấy hội thoại với người dùng và không thấy task c�
    4. Công cụ và thư viện trên GitHub: `python3 <scout.py> github "<từ khóa tiếng Anh>"`. Thử 2–3 cách diễn đạt, thêm `--language` nếu cần. Với ứng viên đầu bảng, đọc README, lần phát hành gần nhất và các issue đang mở.
    5. Nghiên cứu, khi việc cần một thuật toán hay phương pháp: `python3 <scout.py> papers "<từ khóa>" --since <năm>`. Đọc bài tổng quan (survey) mới nhất để biết đâu là SOTA, rồi đọc bài gốc của phương pháp đứng đầu và xem có code công khai không.
 3. Giới hạn công sức theo cỡ việc: việc vừa thì khoảng 5 lượt tìm; việc lớn như kiến trúc hay thuật toán cốt lõi thì tìm kỹ hơn. Thấy ứng viên rõ ràng tốt thì dừng.
-4. Chấm từng ứng viên theo mức phù hợp với nhu cầu, độ trưởng thành (sao, người đóng góp, lần cập nhật), giấy phép, bảo mật, và chi phí tích hợp lẫn bảo trì. Với bài báo, xem nơi đăng (đã bình duyệt hay chỉ là preprint), năm, số trích dẫn, kết quả trên benchmark liên quan, và có code để tái lập không.
+4. Chấm từng ứng viên theo mức phù hợp với nhu cầu, độ trưởng thành (sao, người đóng góp, lần cập nhật), giấy phép, bảo mật, và chi phí tích hợp lẫn bảo trì. Sao chỉ đo độ phổ biến: thứ hứa làm agent giỏi hơn (skill, prompt, plugin) cần số liệu eval, không thì ghi rõ là chưa được đo. Khi so dùng lại với tự làm, đừng ước công tự viết theo tốc độ của người, vì agent viết nhanh hơn nhiều; cân chủ yếu chất lượng, độ bền và công bảo trì về lâu dài. Với bài báo, xem nơi đăng (đã bình duyệt hay chỉ là preprint), năm, số trích dẫn, kết quả trên benchmark liên quan, và có code để tái lập không.
 
 ## Kết quả trả về
 

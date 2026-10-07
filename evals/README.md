@@ -23,7 +23,8 @@ python3 evals/run_eval.py --configs A,C,D --repeats 2          # chỉ in kế h
 python3 evals/run_eval.py --configs A,C,D --repeats 2 --yes    # chạy thật, tính vào hạn mức
 ```
 
-- Cấu hình nằm trong `configs.json`: A sonnet·medium, B sonnet·high, C opus·medium, D opus·low, E = A + plugin, H haiku (chỉ để đo trần dưới).
+- Cấu hình nằm trong `configs.json`: A sonnet·medium, B sonnet·high, C opus·medium, D opus·low, E = A + plugin, H haiku (chỉ để đo trần dưới), V = A + plugin vendor (`vendor/`, không nằm trong git).
+- Cấu hình có plugin (`"plugin": true` hoặc `"plugins": [...]`) được phép gọi `Skill` và chạy với `--output-format stream-json --verbose`; mỗi lượt ghi `skills_used`, và bảng tổng hợp có dòng "gọi skill ở n/m lượt". So V với A cho biết skill vendor có giúp thật không; skill không được gọi thì chênh lệch chỉ là nhiễu. Từ 07/10/2026, E cũng được gọi `Skill` (trước đó skill của plugin bị từ chối quyền); E chưa từng chạy thật nên không có số liệu cũ bị lệch.
 - Mỗi lượt chạy trong thư mục tạm của hệ điều hành, **ngoài agent-stack**, nên model không đọc được `CLAUDE.md` của repo, grader (`check.py`) hay lời giải. Nếu `--work-root` nằm trong repo hoặc dưới một thư mục có `CLAUDE.md`/`AGENTS.md`, script từ chối chạy.
 - Chạy với `--setting-sources project` (không nạp hook cá nhân) và `--no-session-persistence`. File `evals/results/<thời điểm>.meta.json` ghi điều kiện chạy: commit, phiên bản CLI và plugin, dấu vân tay từng việc, và có `~/.claude/CLAUDE.md` hay không.
 - Bài làm được chốt ngay khi lượt chạy kết thúc: patch nằm trong `evals/results/<thời điểm>/`, câu trả lời nằm trong file JSONL (không đưa vào git). Thư mục tạm bị xóa sau khi chấm, trừ khi có `--keep-workdirs`.

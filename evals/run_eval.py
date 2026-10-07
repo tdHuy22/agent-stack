@@ -162,20 +162,67 @@ def classify(data: dict, timed_out: bool) -> tuple:
     return "van-hanh", subtype or "lỗi khi chạy"
 
 
+def plugin_dirs(cfg: dict) -> list:
+    """Thư mục plugin (tương đối với repo) nạp cho cấu hình: "plugin": true là agent-stack, "plugins" thêm cái khác."""
+    dirs = (["plugin"] if cfg.get("plugin") else []) + list(cfg.get("plugins") or [])
+    return list(dict.fromkeys(dirs))
+
+
+def cli_mode(cfg: dict) -> tuple:
+    """(danh sách tool được phép, định dạng output) của một cấu hình. Có plugin thì thêm Skill và đọc luồng sự kiện."""
+    dirs = plugin_dirs(cfg)
+    return ALLOWED_TOOLS + (" Skill" if dirs else ""), "stream-json" if dirs else "json"
+
+
+def parse_output(stdout: str) -> tuple:
+    """Đọc kết quả của `claude -p`: một JSON (json) hoặc mỗi dòng một sự kiện (stream-json).
+
+    Trả về (dữ liệu của dòng kết quả hoặc None, danh sách skill đã gọi theo thứ tự, không lặp)."""
+    text = stdout.strip()
+    if not text.startswith("{"):
+        return None, []
+    try:
+        return json.loads(text), []
+    except ValueError:
+        pass
+    result, skills = None, []
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "result":
+            result = event
+        content = (event.get("message") or {}).get("content") if event.get("type") == "assistant" else None
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill":
+                name = str((block.get("input") or {}).get("skill") or "?")
+                if name not in skills:
+                    skills.append(name)
+    return result, skills
+
+
 def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int = TIMEOUT_S) -> tuple:
     """Chạy một lượt, chốt bài làm rồi mới chấm. Trả về (dòng kết quả, patch đã chốt)."""
     prompt = (task / "task.md").read_text(encoding="utf-8") + SUFFIX
+    dirs = plugin_dirs(cfg)
+    tools, output_format = cli_mode(cfg)
     cmd = [os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "-p", prompt, "--model", cfg["model"],
-           "--effort", cfg["effort"], "--output-format", "json", "--no-session-persistence",
-           "--permission-mode", "acceptEdits", "--allowedTools", ALLOWED_TOOLS,
+           "--effort", cfg["effort"], "--output-format", output_format,
+           "--no-session-persistence", "--permission-mode", "acceptEdits", "--allowedTools", tools,
            "--max-budget-usd", str(cap_usd), "--setting-sources", "project"]
-    if cfg.get("plugin"):
-        cmd += ["--plugin-dir", str(REPO / "plugin")]
-    start, timed_out = time.time(), False
+    if dirs:
+        cmd.append("--verbose")
+    for d in dirs:
+        cmd += ["--plugin-dir", str(REPO / d)]
+    start, timed_out, skills = time.time(), False, []
     try:
         out = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=timeout)
-        data = (json.loads(out.stdout) if out.stdout.strip().startswith("{")
-                else {"is_error": True, "result": (out.stderr or out.stdout)[-300:]})
+        data, skills = parse_output(out.stdout)
+        if data is None:
+            data = {"is_error": True, "result": (out.stderr or out.stdout)[-300:]}
     except subprocess.TimeoutExpired:
         data, timed_out = {"is_error": True, "result": ""}, True
     except (OSError, ValueError) as exc:
@@ -191,6 +238,7 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
         cluster = "dat" if passed else "chat-luong"
     input_digest, grader_digest = digests(task)
     row = {"config": cfg["name"], "model": cfg["model"], "effort": cfg["effort"], "plugin": bool(cfg.get("plugin")),
+           "plugins": dirs, "skills_used": skills,
            "task": task.name, "passed": bool(passed), "why": str(why)[:400], "cluster": cluster,
            "cost_usd": data.get("total_cost_usd"), "turns": data.get("num_turns"), "seconds": seconds,
            "models_used": sorted((data.get("modelUsage") or {}).keys()),
@@ -299,6 +347,9 @@ def summarize(rows: list, n_tasks: int = 0) -> str:
         lines.append(f"| {s['name']} | {s['runs']} | {s['rate']:.0%} | {s['ops']} | {money} | {s['secs']:.0f} | "
                      f"{'← chọn' if s['name'] == choice else ''} |")
     lines.append("")
+    usage = skill_usage(scored)
+    if usage:
+        lines += usage + [""]
     if problems:
         lines.append("**Chưa đủ để chốt cấu hình:**")
         lines += [f"- {p}" for p in problems]
@@ -352,6 +403,18 @@ def regrade(path: Path) -> int:
     return 0
 
 
+def skill_usage(rows: list) -> list:
+    """Mỗi cấu hình có nạp plugin: skill được gọi ở bao nhiêu lượt. Skill có mà không được gọi thì so A/B vô nghĩa."""
+    lines = []
+    for name in sorted({r["config"] for r in rows if "skills_used" in r and r.get("plugins") != []}):
+        items = [r for r in rows if r["config"] == name]
+        counts = Counter(s for r in items for s in r.get("skills_used") or [])
+        used = sum(bool(r.get("skills_used")) for r in items)
+        detail = ", ".join(f"{s} {n}" for s, n in counts.most_common())
+        lines.append(f"{name}: gọi skill ở {used}/{len(items)} lượt" + (f" ({detail})" if detail else ""))
+    return lines
+
+
 def provenance(cfgs: list, tasks: list, args, work_root: Path) -> dict:
     """Ghi lại điều kiện chạy để các lần chạy so được với nhau."""
     def sh(*cmd):
@@ -361,13 +424,19 @@ def provenance(cfgs: list, tasks: list, args, work_root: Path) -> dict:
         except (OSError, subprocess.TimeoutExpired):
             return ""
     plugin = json.loads((REPO / "plugin" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    try:  # vendor/ không nằm trong git, có thể thiếu ở bản chép khác
+        vendor = json.loads((REPO / "vendor" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        vendor = {}
     return {"repo_commit": sh("git", "--no-optional-locks", "-C", str(REPO), "rev-parse", "HEAD"),
             "repo_dirty": bool(sh("git", "--no-optional-locks", "-C", str(REPO), "status", "--porcelain")),
             "claude_version": sh(os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "--version"),
-            "plugin_version": plugin.get("version"),
+            "plugin_version": plugin.get("version"), "vendor_version": vendor.get("version"),
             "user_claude_md": (Path.home() / ".claude" / "CLAUDE.md").exists(),
             "configs": cfgs, "tasks": {t.name: digests(t) for t in tasks}, "repeats": args.repeats,
-            "cap_usd": args.cap_usd, "timeout_s": TIMEOUT_S, "allowed_tools": ALLOWED_TOOLS,
+            "cap_usd": args.cap_usd, "timeout_s": TIMEOUT_S,
+            "allowed_tools": {c["name"]: cli_mode(c)[0] for c in cfgs},
+            "output_format": {c["name"]: cli_mode(c)[1] for c in cfgs},
             "work_root": str(work_root)}
 
 
@@ -402,8 +471,8 @@ def main(argv=None) -> int:
     print(f"Kế hoạch: {len(cfgs)} cấu hình × {len(tasks)} việc × {args.repeats} lần = {len(runs)} lượt.")
     print(f"Ước tính thô: khoảng {estimate:.1f} USD theo giá niêm yết (gói thuê bao: tính vào hạn mức 5 giờ/tuần).")
     for c in cfgs:
-        print(f"  {c['name']}: {c['model']} · {c['effort']}" + (" · có plugin agent-stack" if c.get("plugin") else "")
-              + f" — {c.get('note', '')}")
+        extra = " · nạp " + ", ".join(plugin_dirs(c)) if plugin_dirs(c) else ""
+        print(f"  {c['name']}: {c['model']} · {c['effort']}{extra} — {c.get('note', '')}")
     print(f"Model làm việc trong: {work_root}")
     leaks = context_leaks(work_root)
     if leaks:
