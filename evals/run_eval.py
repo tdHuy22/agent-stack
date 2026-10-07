@@ -47,6 +47,8 @@ SUFFIX = ("\n\nLàm việc ngay trong thư mục hiện tại. Không hỏi lạ
           "Khi xong, trả lời ngắn gọn kết quả cuối cùng.")
 ALLOWED_TOOLS = "Read Write Edit Grep Glob Bash(python3 *) Bash(git diff*) Bash(git status*) Bash(ls*) Bash(cat *)"
 TIMEOUT_S = 900
+# Giữ tối đa chừng này ký tự kết quả của mỗi lần gọi skill, đủ để soi mà không làm phình file kết quả.
+SKILL_OUTPUT_CHARS = 8000
 # File chỉ dẫn mà Claude Code và OpenCode tự đọc khi đi ngược lên từ thư mục làm việc.
 CONTEXT_FILES = ("CLAUDE.md", "CLAUDE.local.md", "AGENTS.md")
 FREEZE_EXCLUDE = ":(exclude,glob)**/__pycache__/**"
@@ -57,12 +59,26 @@ GIT_ISOLATION = ["-c", "user.name=eval", "-c", "user.email=eval@local", "-c", "c
                  "-c", "core.hooksPath=/dev/null", "-c", "init.defaultBranch=main"]
 
 
-def load_tasks(selected: str) -> list:
+def task_suite(task: Path) -> str:
+    """Bộ đo riêng của việc (khóa "suite" trong meta.json). Rỗng: việc thuộc bộ chọn cấu hình."""
+    try:
+        return str(json.loads((task / "meta.json").read_text(encoding="utf-8")).get("suite") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def load_tasks(selected: str, suites: bool = True) -> list:
+    """selected: "all", "suite:<tên>" hoặc danh sách tên cách nhau bởi dấu phẩy.
+
+    suites=False bỏ các việc thuộc bộ đo skill khỏi "all": chúng không dùng để chọn cấu hình."""
     tasks = sorted(p.parent for p in TASKS.glob("*/task.md"))
+    if selected and selected.startswith("suite:"):
+        name = selected.split(":", 1)[1].strip()
+        return [t for t in tasks if name and task_suite(t) == name]
     if selected and selected != "all":
         names = {s.strip() for s in selected.split(",")}
-        tasks = [t for t in tasks if t.name in names]
-    return tasks
+        return [t for t in tasks if t.name in names]
+    return tasks if suites else [t for t in tasks if not task_suite(t)]
 
 
 def load_check(task: Path):
@@ -130,6 +146,13 @@ def apply_patch(workdir: Path, patch: bytes) -> tuple:
     return out.returncode == 0, out.stderr.decode("utf-8", "replace")[-300:]
 
 
+def scratch_dir(prefix: str) -> Path:
+    """Thư mục tạm riêng cho mỗi lượt trong .tmp/: hai phiên chạy test cùng lúc không xóa thư mục của nhau."""
+    base = REPO / ".tmp"
+    base.mkdir(exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=str(base)))
+
+
 def default_work_root() -> Path:
     return Path(tempfile.gettempdir()) / "agent-stack-eval"
 
@@ -168,24 +191,51 @@ def plugin_dirs(cfg: dict) -> list:
     return list(dict.fromkeys(dirs))
 
 
+def plugin_paths(cfg: dict, plugin_root=None) -> list:
+    """Đường dẫn thật của từng plugin. plugin_root thay cho plugin/ của repo, để so hai phiên bản plugin."""
+    return [Path(plugin_root) if d == "plugin" and plugin_root else REPO / d for d in plugin_dirs(cfg)]
+
+
+def plugin_digest(root: Path) -> str:
+    """Dấu vân tay nội dung một plugin, bỏ evals/ và file máy tự sinh. Khác dấu là khác phiên bản."""
+    root = Path(root)
+    h = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel = path.relative_to(root)
+        if rel.parts[0] == "evals" or "__pycache__" in rel.parts or path.name in (".DS_Store", ".agent-stack-home"):
+            continue
+        h.update(rel.as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return h.hexdigest()[:16]
+
+
 def cli_mode(cfg: dict) -> tuple:
     """(danh sách tool được phép, định dạng output) của một cấu hình. Có plugin thì thêm Skill và đọc luồng sự kiện."""
     dirs = plugin_dirs(cfg)
     return ALLOWED_TOOLS + (" Skill" if dirs else ""), "stream-json" if dirs else "json"
 
 
+def tool_result_text(block: dict) -> str:
+    """Nội dung chữ của một tool_result: chuỗi, hoặc danh sách khối {"type": "text"}."""
+    content = block.get("content")
+    if isinstance(content, list):
+        return "\n".join(str(c.get("text") or "") for c in content if isinstance(c, dict))
+    return str(content or "")
+
+
 def parse_output(stdout: str) -> tuple:
     """Đọc kết quả của `claude -p`: một JSON (json) hoặc mỗi dòng một sự kiện (stream-json).
 
-    Trả về (dữ liệu của dòng kết quả hoặc None, danh sách skill đã gọi theo thứ tự, không lặp)."""
+    Trả về (dữ liệu của dòng kết quả hoặc None, danh sách skill đã gọi theo thứ tự, không lặp,
+    kết quả trả về của từng lần gọi skill). Kết quả của skill cho biết lỗi nằm ở skill hay ở bước
+    phiên chính tóm tắt lại."""
     text = stdout.strip()
     if not text.startswith("{"):
-        return None, []
+        return None, [], []
     try:
-        return json.loads(text), []
+        return json.loads(text), [], []
     except ValueError:
         pass
-    result, skills = None, []
+    result, skills, calls, outputs = None, [], {}, []
     for line in text.splitlines():
         try:
             event = json.loads(line)
@@ -195,19 +245,30 @@ def parse_output(stdout: str) -> tuple:
             continue
         if event.get("type") == "result":
             result = event
-        content = (event.get("message") or {}).get("content") if event.get("type") == "assistant" else None
+        content = (event.get("message") or {}).get("content") if event.get("type") in ("assistant", "user") else None
         for block in content if isinstance(content, list) else []:
-            if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill":
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use" and block.get("name") == "Skill":
                 name = str((block.get("input") or {}).get("skill") or "?")
+                if block.get("id"):
+                    calls[block["id"]] = name
                 if name not in skills:
                     skills.append(name)
-    return result, skills
+            elif block.get("type") == "tool_result" and block.get("tool_use_id") in calls:
+                outputs.append({"skill": calls[block["tool_use_id"]], "text": tool_result_text(block)[:SKILL_OUTPUT_CHARS]})
+    return result, skills, outputs
 
 
-def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int = TIMEOUT_S) -> tuple:
-    """Chạy một lượt, chốt bài làm rồi mới chấm. Trả về (dòng kết quả, patch đã chốt)."""
+def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int = TIMEOUT_S,
+            plugin_root=None, stream_file: Path = None) -> tuple:
+    """Chạy một lượt, chốt bài làm rồi mới chấm. Trả về (dòng kết quả, patch đã chốt).
+
+    plugin_root: nạp agent-stack từ thư mục này thay cho plugin/ của repo.
+    stream_file: lưu nguyên luồng sự kiện của CLI vào đây, để soi skill đã đọc và tìm những gì."""
     prompt = (task / "task.md").read_text(encoding="utf-8") + SUFFIX
     dirs = plugin_dirs(cfg)
+    paths = plugin_paths(cfg, plugin_root)
     tools, output_format = cli_mode(cfg)
     cmd = [os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "-p", prompt, "--model", cfg["model"],
            "--effort", cfg["effort"], "--output-format", output_format,
@@ -215,12 +276,17 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
            "--max-budget-usd", str(cap_usd), "--setting-sources", "project"]
     if dirs:
         cmd.append("--verbose")
-    for d in dirs:
-        cmd += ["--plugin-dir", str(REPO / d)]
-    start, timed_out, skills = time.time(), False, []
+    for path in paths:
+        cmd += ["--plugin-dir", str(path)]
+    # Tính trước khi chạy: dấu phải ứng với bản plugin mà CLI nạp lúc khởi động.
+    digests_before = {d: plugin_digest(p) for d, p in zip(dirs, paths)}
+    start, timed_out, skills, skill_outputs = time.time(), False, [], []
     try:
         out = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=timeout)
-        data, skills = parse_output(out.stdout)
+        if stream_file is not None and out.stdout:
+            stream_file.parent.mkdir(parents=True, exist_ok=True)
+            stream_file.write_text(out.stdout, encoding="utf-8")
+        data, skills, skill_outputs = parse_output(out.stdout)
         if data is None:
             data = {"is_error": True, "result": (out.stderr or out.stdout)[-300:]}
     except subprocess.TimeoutExpired:
@@ -244,13 +310,19 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
            "models_used": sorted((data.get("modelUsage") or {}).keys()),
            "denied": len(data.get("permission_denials") or []), "answer": answer,
            "input_digest": input_digest, "grader_digest": grader_digest}
+    if task_suite(task):
+        row["suite"] = task_suite(task)
+    if dirs:
+        row["plugin_digests"] = digests_before
+    if skill_outputs:
+        row["skill_outputs"] = skill_outputs
     return row, patch
 
 
 def self_test(tasks: list) -> int:
     """Grader phải chấm TRƯỢT bản chưa sửa, chấm ĐẠT lời giải mẫu, và vẫn ĐẠT khi lời giải đi qua
     patch đã chốt (để --regrade đáng tin). Setup không được chứa grader hay lời giải."""
-    root = REPO / ".tmp" / "eval-selftest"
+    root = scratch_dir("eval-selftest-")
     bad = 0
     for task in tasks:
         check = load_check(task)
@@ -306,6 +378,14 @@ def matrix_problems(rows: list) -> list:
         problems.append("đề bài hoặc setup đã đổi giữa các lượt (" + ", ".join(changed_input[:3]) + "): phải chạy lại")
     if changed_grader:
         problems.append("grader đã đổi giữa các lượt (" + ", ".join(changed_grader[:3]) + "): chạy --regrade")
+    versions = {}
+    for r in scored:
+        if r.get("plugin_digests"):
+            versions.setdefault(r["config"], set()).add(json.dumps(r["plugin_digests"], sort_keys=True))
+    mixed = sorted(c for c, v in versions.items() if len(v) > 1)
+    if mixed:
+        problems.append("cùng một cấu hình mà plugin khác phiên bản giữa các lượt (" + ", ".join(mixed[:3]) +
+                        "): chạy lại, hoặc dùng --tag để tách hai phiên bản")
     configs = sorted({r["config"] for r in scored})
     tasks = sorted({str(r.get("task") or "") for r in scored})
     counts = Counter((r["config"], str(r.get("task") or "")) for r in scored)
@@ -335,9 +415,11 @@ def summarize(rows: list, n_tasks: int = 0) -> str:
                       "p90": sorted(costs)[int(0.9 * (len(costs) - 1))] if costs else None,
                       "secs": statistics.mean(r.get("seconds") or 0 for r in items)})
     problems = matrix_problems(rows)
+    # Bộ đo skill so các phiên bản của một skill theo từng việc; quy tắc "rẻ nhất trong 1 việc" không áp dụng.
+    suite = any(r.get("suite") for r in scored)
     best = max((s["rate"] for s in stats), default=0)
     choice = None
-    if not problems:
+    if not problems and not suite:
         eligible = [s for s in stats if s["rate"] >= best - 1.0 / n_tasks - 1e-9 and s["cost"] is not None]
         choice = min(eligible, key=lambda s: s["cost"])["name"] if eligible else None
     lines = ["| Cấu hình | Lượt | Tỉ lệ đạt | Lỗi vận hành | USD/việc (TB) | USD p90 | Giây/việc | |",
@@ -347,23 +429,42 @@ def summarize(rows: list, n_tasks: int = 0) -> str:
         lines.append(f"| {s['name']} | {s['runs']} | {s['rate']:.0%} | {s['ops']} | {money} | {s['secs']:.0f} | "
                      f"{'← chọn' if s['name'] == choice else ''} |")
     lines.append("")
+    if scored:
+        lines += per_task_table(scored) + [""]
     usage = skill_usage(scored)
     if usage:
         lines += usage + [""]
     if problems:
-        lines.append("**Chưa đủ để chốt cấu hình:**")
+        lines.append("**Chưa đủ để so sánh:**" if suite else "**Chưa đủ để chốt cấu hình:**")
         lines += [f"- {p}" for p in problems]
+    elif suite:
+        lines.append("Bộ đo skill: so số lượt đạt của từng việc giữa các phiên bản (bảng trên). "
+                     "Quy tắc chọn cấu hình rẻ nhất không áp dụng.")
     else:
         lines.append(f"Quy tắc: rẻ nhất trong các cấu hình đạt ≥ {best:.0%} − 1 việc. Lượt chạy đơn lẻ có nhiễu; "
                      "nếu hai cấu hình sát nhau, chạy thêm lượt lặp trước khi chốt.")
     return "\n".join(lines)
 
 
+def per_task_table(rows: list) -> list:
+    """Bảng việc × cấu hình, mỗi ô là số lượt đạt trên số lượt: thấy cấu hình hỏng ở việc nào."""
+    configs = sorted({r["config"] for r in rows})
+    tasks = sorted({str(r.get("task") or "") for r in rows})
+    lines = ["| Việc | " + " | ".join(configs) + " |", "|---|" + "---:|" * len(configs)]
+    for t in tasks:
+        cells = []
+        for c in configs:
+            items = [r for r in rows if r["config"] == c and str(r.get("task") or "") == t]
+            cells.append(f"{sum(bool(r['passed']) for r in items)}/{len(items)}" if items else "–")
+        lines.append(f"| {t} | " + " | ".join(cells) + " |")
+    return lines
+
+
 def regrade(path: Path) -> int:
     """Chấm lại các bài đã chốt bằng grader hiện tại. Lượt hỏng vì vận hành hay môi trường giữ nguyên."""
     rows = load_rows([path])
     current = {t.name: t for t in load_tasks("all")}
-    root = REPO / ".tmp" / "eval-regrade"
+    root = scratch_dir("eval-regrade-")
     out_rows, changed = [], []
     for i, r in enumerate(rows):
         new, task = dict(r), current.get(r.get("task"))
@@ -423,7 +524,8 @@ def provenance(cfgs: list, tasks: list, args, work_root: Path) -> dict:
             return out.stdout.strip() if out.returncode == 0 else ""
         except (OSError, subprocess.TimeoutExpired):
             return ""
-    plugin = json.loads((REPO / "plugin" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    root = Path(args.plugin_root) if getattr(args, "plugin_root", None) else REPO / "plugin"
+    plugin = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     try:  # vendor/ không nằm trong git, có thể thiếu ở bản chép khác
         vendor = json.loads((REPO / "vendor" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -432,6 +534,7 @@ def provenance(cfgs: list, tasks: list, args, work_root: Path) -> dict:
             "repo_dirty": bool(sh("git", "--no-optional-locks", "-C", str(REPO), "status", "--porcelain")),
             "claude_version": sh(os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "--version"),
             "plugin_version": plugin.get("version"), "vendor_version": vendor.get("version"),
+            "plugin_root": str(root), "plugin_digest": plugin_digest(root), "tag": getattr(args, "tag", None),
             "user_claude_md": (Path.home() / ".claude" / "CLAUDE.md").exists(),
             "configs": cfgs, "tasks": {t.name: digests(t) for t in tasks}, "repeats": args.repeats,
             "cap_usd": args.cap_usd, "timeout_s": TIMEOUT_S,
@@ -453,6 +556,10 @@ def main(argv=None) -> int:
     ap.add_argument("--keep-workdirs", action="store_true", help="giữ thư mục làm việc sau khi chấm, để soi lỗi")
     ap.add_argument("--max-total-usd", type=float, default=15.0, help="dừng khi tổng chi phí vượt mức này")
     ap.add_argument("--cap-usd", type=float, default=1.0, help="trần chi phí mỗi lượt")
+    ap.add_argument("--plugin-root", help="nạp agent-stack từ thư mục này thay cho plugin/ (so hai phiên bản skill)")
+    ap.add_argument("--tag", help="gắn vào tên cấu hình (E@tag) để kết quả của hai phiên bản không lẫn nhau")
+    ap.add_argument("--save-streams", action="store_true",
+                    help="lưu luồng sự kiện của từng lượt (cấu hình có plugin) vào evals/results/<thời điểm>/")
     args = ap.parse_args(argv)
 
     if args.report:
@@ -460,18 +567,32 @@ def main(argv=None) -> int:
         return 0
     if args.regrade:
         return regrade(Path(args.regrade))
-    tasks = load_tasks(args.tasks)
+    tasks = load_tasks(args.tasks, suites=args.self_test)
+    if not tasks:  # gõ sai tên bộ đo thì báo, đừng để self-test "đạt" mà không chấm gì
+        print(f"Không có việc nào khớp --tasks {args.tasks}.")
+        return 2
     if args.self_test:
         return self_test(tasks)
+    if args.plugin_root:
+        root = Path(args.plugin_root).expanduser().resolve()
+        if not (root / ".claude-plugin" / "plugin.json").is_file():
+            print(f"{root} không phải thư mục plugin (thiếu .claude-plugin/plugin.json).")
+            return 2
+        if not args.tag:
+            print("Có --plugin-root thì phải có --tag, để kết quả không lẫn với plugin/ của repo.")
+            return 2
+        args.plugin_root = str(root)
     all_cfgs = json.loads((EVALS / "configs.json").read_text(encoding="utf-8"))["configs"]
-    cfgs = [dict(all_cfgs[n], name=n) for n in args.configs.split(",") if n in all_cfgs]
+    cfgs = [dict(all_cfgs[n], name=n + (f"@{args.tag}" if args.tag else "")) for n in args.configs.split(",")
+            if n in all_cfgs]
     runs = [(c, t, r) for c in cfgs for t in tasks for r in range(args.repeats)]
     estimate = sum(GUESS_USD.get(c["model"], 0.2) for c, _, _ in runs)
     work_root = Path(args.work_root).expanduser() if args.work_root else default_work_root()
     print(f"Kế hoạch: {len(cfgs)} cấu hình × {len(tasks)} việc × {args.repeats} lần = {len(runs)} lượt.")
     print(f"Ước tính thô: khoảng {estimate:.1f} USD theo giá niêm yết (gói thuê bao: tính vào hạn mức 5 giờ/tuần).")
     for c in cfgs:
-        extra = " · nạp " + ", ".join(plugin_dirs(c)) if plugin_dirs(c) else ""
+        paths = plugin_paths(c, args.plugin_root)
+        extra = " · nạp " + ", ".join(str(p) if args.plugin_root else p.name for p in paths) if paths else ""
         print(f"  {c['name']}: {c['model']} · {c['effort']}{extra} — {c.get('note', '')}")
     print(f"Model làm việc trong: {work_root}")
     leaks = context_leaks(work_root)
@@ -497,7 +618,9 @@ def main(argv=None) -> int:
         workdir = work_root / stamp / cfg["name"] / f"{task.name}-{rep}"
         workdir.parent.mkdir(parents=True, exist_ok=True)
         prepare(task, workdir)
-        row, patch = run_one(cfg, task, workdir, args.cap_usd)
+        stream = (RESULTS / stamp / cfg["name"] / f"{task.name}-{rep}.stream.jsonl"
+                  if args.save_streams and plugin_dirs(cfg) else None)
+        row, patch = run_one(cfg, task, workdir, args.cap_usd, plugin_root=args.plugin_root, stream_file=stream)
         rel = Path(stamp) / cfg["name"] / f"{task.name}-{rep}.patch"
         (RESULTS / rel).parent.mkdir(parents=True, exist_ok=True)
         (RESULTS / rel).write_bytes(patch)

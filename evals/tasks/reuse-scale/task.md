@@ -1,0 +1,1 @@
+API của project cần giới hạn tốc độ: mỗi API key tối đa 100 request mỗi phút, vượt thì trả 429. Dùng skill reuse-best tìm thứ có sẵn tốt nhất trước khi làm, rồi báo lại cho mình quyết định. Chưa sửa file nào.

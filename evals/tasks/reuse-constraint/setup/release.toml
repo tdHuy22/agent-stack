@@ -1,0 +1,8 @@
+[package]
+name = "relkit"
+version = "0.3.0"
+files = ["tools/release.py", "README.md"]
+
+[tag]
+prefix = "v"
+sign = false

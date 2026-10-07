@@ -77,7 +77,7 @@ Skill `tien-do` trả về tối đa 3 việc, kèm lý do, gợi ý model và m
 
 > có sẵn thư viện nào làm việc X chưa?
 
-Skill `reuse-best` tìm theo thứ tự: tính năng sẵn có, code trong project, skill đã duyệt, GitHub, rồi bài nghiên cứu. Kết quả là một quyết định dùng lại, điều chỉnh hay tự làm, kèm nguồn.
+Skill `reuse-best` tìm theo thứ tự: tính năng sẵn có, code trong project, skill đã duyệt, GitHub, rồi bài nghiên cứu. Kết quả là một quyết định dùng lại, điều chỉnh hay tự làm, kèm nguồn, phần còn phải tự làm, và những điểm cần bạn quyết.
 
 **Trong lúc làm.** Để ý dòng ➡️ cuối mỗi câu trả lời:
 
@@ -308,9 +308,11 @@ Skill này để văn hay hơn, không phải để qua mặt công cụ phát h
 
 **Gọi:** `/agent-stack:reuse-best <nhu cầu>`, ví dụ `/agent-stack:reuse-best đọc PDF scan tiếng Việt ra text, chạy offline`.
 
-**Thứ tự tìm**, dừng ở bậc đầu tiên đáp ứng được: tính năng sẵn có của công cụ → code trong project → skill đã duyệt trong `vetted.lock` → GitHub → bài nghiên cứu. Kết quả gồm tối đa 5 ứng viên (kèm sao, lần cập nhật, giấy phép; hoặc nơi đăng, năm, trích dẫn) và quyết định có nguồn. Claude sẽ đề nghị ghi quyết định vào file kế hoạch để phiên sau khỏi tìm lại.
+**Cách làm.** Trước khi tìm, skill đọc ràng buộc trong file của project (phiên bản Python hay Node, luật về phụ thuộc, CI, cách chạy production), rồi viết nhu cầu thành tiêu chí bắt buộc và nên có. **Thứ tự tìm:** tính năng sẵn có của công cụ → code trong project → skill đã duyệt trong `vetted.lock` → GitHub → bài nghiên cứu. Chỉ dừng ở một bậc khi có ứng viên đạt mọi tiêu chí bắt buộc, có bằng chứng (`file:dòng` với code trong project, dòng README với thư viện ngoài); "chạy được" hay "có sẵn trong repo" thì chưa đủ.
 
-**Chạy tay** (có gọi mạng tới GitHub, Semantic Scholar, arXiv; chỉ dùng từ khóa chung, đừng đưa code hay thông tin riêng vào):
+**Kết quả** gồm tối đa 5 ứng viên chấm theo từng tiêu chí (kèm sao, lần cập nhật, giấy phép; hoặc nơi đăng, năm, trích dẫn), quyết định có nguồn, mục **Phần còn phải làm** (tiêu chí mà lựa chọn chưa đạt) và mục **Cần người dùng quyết** (ràng buộc va nhau, thứ cần duyệt). Quyết định không được thu hẹp nhu cầu của bạn. Claude sẽ đề nghị ghi quyết định vào file kế hoạch để phiên sau khỏi tìm lại.
+
+**Chạy tay** (có gọi mạng tới GitHub, OpenAlex, Semantic Scholar, arXiv; chỉ dùng từ khóa chung, đừng đưa code hay thông tin riêng vào):
 
 ```bash
 python3 plugin/skills/reuse-best/scripts/scout.py github "pdf ocr vietnamese" --language python
@@ -320,7 +322,11 @@ python3 plugin/skills/reuse-best/scripts/scout.py github "pdf ocr vietnamese" --
 python3 plugin/skills/reuse-best/scripts/scout.py papers "vietnamese ocr" --since 2024
 ```
 
-`github` có thêm `--limit`, `--sort {both,best-match,stars,updated}`, `--json`.
+```bash
+python3 plugin/skills/reuse-best/scripts/scout.py repo lycheeverse/lychee --find "fragment, retry, exclude"
+```
+
+`github` có thêm `--limit`, `--sort {both,best-match,stars,updated}`, `--json`. GitHub đòi mọi từ trong câu tìm đều khớp, nên câu ra rỗng sẽ được tìm lại một lần sau khi bỏ từ chung chung và tên ngôn ngữ; tốt nhất dùng tên khái niệm (`toml parser`) và để tên ngôn ngữ ở `--language`. `repo` cho biết lần phát hành gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng từ khóa của `--find`, kèm số dòng.
 
 Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`. Repo không có giấy phép thì chỉ học ý tưởng, không chép code.
 

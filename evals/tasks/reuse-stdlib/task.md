@@ -1,0 +1,1 @@
+Script dọn dẹp `tools/cleanup.py` cần một hàm tìm các file trùng nội dung trong một thư mục (duyệt cả thư mục con), trả về từng nhóm file giống hệt nhau. Dùng skill reuse-best trước khi làm, rồi báo lại cho mình quyết định. Chưa sửa file nào.

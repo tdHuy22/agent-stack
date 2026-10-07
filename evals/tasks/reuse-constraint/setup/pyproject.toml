@@ -1,0 +1,6 @@
+[project]
+name = "relkit"
+version = "0.3.0"
+description = "Script phát hành nội bộ"
+requires-python = ">=3.9"
+dependencies = []

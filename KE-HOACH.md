@@ -409,6 +409,29 @@ Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube 
 | AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Chưa rà lại các script cũ | `chot-viec/scripts/risk.py` |
 | WezTerm, tmux, Neovim, nhập bằng giọng (OpenSuperWhisper), Treehouse, firstmate | Không áp dụng: là thói quen terminal cá nhân, cần cài toàn cục, hoặc app desktop đã làm thay (worktree mỗi phiên, nhiều phiên song song) | |
 
+### 6.15 Sửa `reuse-best` sau eval có bẫy (07/10/2026)
+
+**Câu hỏi của bạn:** `reuse-best` có làm agent lười như [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) không. Lỗi "lười" của ponytail lấy từ issue của chính repo đó: vá triệu chứng thay vì đọc hiểu (#245; tác giả đo thấy dặn bằng lời "trace the flow" thì 0/3 lần có tác dụng, phải đổi thành bước thao tác cụ thể), cắt bớt việc được giao (#602), lan sang subagent review (#502). Gốc của chúng là luật luôn bật và mục tiêu "ít code". `reuse-best` không có hai điều này: nó chỉ chạy khi build thứ không tầm thường, chạy trong context riêng và chỉ trả về báo cáo. Mình vẫn nêu 4 rủi ro giả định (dừng ở thứ "đủ dùng", chấm trên đề bài mỏng, hụt phạm vi khi dùng lại, đọc nông) cộng việc chưa có eval; bạn yêu cầu sửa hết và test kỹ.
+
+**Tái hiện trước khi sửa.** Bộ đo `suite:reuse-best` gồm 4 việc có bẫy (`evals/README.md`, mục "Bộ đo riêng cho skill"), chạy bằng cấu hình E (sonnet · medium + plugin) trong thư mục tạm, chấm bằng code. Bản cũ (plugin 0.5.0, chụp từ HEAD) đạt 12/12 lượt: tự đọc `CONTRIBUTING.md` và `pyproject.toml`, đọc code `md_links.py` thấy `anchor_exists` luôn trả True, đọc `gunicorn.conf.py` và `docker-compose.yml` rồi tính ra 1.200 request/phút. Nghĩa là **4 rủi ro giả định không tái hiện được**; nhận định ban đầu đã thổi phồng chúng. Lỗi thật tìm được nhờ lưu luồng sự kiện (`--save-streams`, `evals/trace_stats.py`):
+
+1. Không kiểm chứng được ứng viên: `gh api`, `gh repo view` và WebFetch bị chặn khi quyền hạn chế, nên skill quyết theo trí nhớ (trung bình 2,6 chỗ "chưa kiểm", "theo hiểu biết" mỗi báo cáo). Ví dụ: không kiểm được lychee có kiểm anchor không, nên chọn tự viết phần tạo slug heading cho tiếng Việt.
+2. Lệnh shell ghép (`cd …; ls`, `S=…; [ -f $S ] || …`): 6,3 lệnh mỗi lượt, 3,6 lệnh bị chặn.
+3. `scout.py github "toml parser python" --language python` ra 0 kết quả vì GitHub đòi mọi từ đều khớp; skill đọc thành "có thể máy không có mạng". 1,1 trên 3,3 lần tìm mỗi lượt ra rỗng.
+
+**Sửa:**
+- `scout.py repo owner/name --find "từ khóa"`: phát hành gần nhất, issue đang mở, giấy phép, các dòng README nhắc tới từng tiêu chí kèm số dòng. Chỉ cần quyền chạy `python3`.
+- `scout.py github`: câu ra rỗng thì bỏ từ chung chung và tên ngôn ngữ rồi tìm lại một lần; thông báo rỗng nói rõ không phải lỗi mạng.
+- `SKILL.md`: mỗi lần gọi Bash một lệnh đơn; đọc ràng buộc trong file của project trước khi tìm; viết nhu cầu thành tiêu chí bắt buộc và nên có; chỉ dừng ở một bậc khi có ứng viên đạt mọi tiêu chí bắt buộc, có bằng chứng; kiểm ứng viên ngoài bằng `scout.py repo`; hai mục bắt buộc "Phần còn phải làm" và "Cần người dùng quyết"; quyết định không được thu hẹp nhu cầu. Chốt chặn cho 4 rủi ro giả định được viết thành bước thao tác và mục đầu ra, theo bài học #245 của ponytail, không phải lời dặn chung.
+- Luật chung (`SHARED.global.md`): phần nhu cầu mà thứ dùng lại chưa đáp ứng vẫn phải làm hoặc hỏi người dùng, không lặng lẽ bỏ.
+- Harness eval: bộ đo riêng (`"suite"` trong `meta.json`, không lẫn vào bộ chọn cấu hình), `--plugin-root` + `--tag` để so hai phiên bản plugin, dấu vân tay plugin mỗi lượt (đã bắt được chính lần mình sửa `scout.py` giữa đợt chạy), `skill_outputs`, thư mục tạm riêng cho self-test và regrade (hai phiên chạy test cùng lúc từng xóa thư mục của nhau).
+
+**Kết quả** (cấu hình E, mỗi bản 12 lượt; bảng đầy đủ ở `evals/README.md`): cả hai bản đạt 12/12. Bản mới không còn lệnh ghép (6,3 → 0), lệnh bị chặn giảm từ 3,6 xuống 0,2, kiểm repo bằng bằng chứng 2,7 lần mỗi lượt (bản cũ 0), chỗ "chưa kiểm" giảm từ 2,6 xuống 1,2; đổi lại đắt hơn 7% (0,203 → 0,218 USD) và chậm hơn 24% (45 → 55 giây), vì đọc README của ứng viên. Tổng chi phí eval 7,49 USD giá niêm yết.
+
+**Review độc lập** (agent `reviewer`, opus · high): 0 cao, 4 vừa, 2 thấp, đều đã sửa. Bốn lỗi vừa nằm ở grader: bản đầu cho lọt 10 trên 27 câu sai (câu của model tin docstring, chép lại đề, nhắc tên `CONTRIBUTING.md` mà quyết định trái luật) và chấm oan 8 trên 26 câu đúng. Grader nay chỉ tính lời phủ định nằm cùng mệnh đề với điều nó phủ định, và chấm cả quyết định. Hai lỗi thấp: `scout.py repo` ghi "chưa có bản phát hành" cho repo chỉ phát hành bằng tag (`hukkin/tomli`), nay ghi tag mới nhất kèm ngày; `--self-test` với tên bộ đo gõ sai từng thoát 0. Chấm lại bài thật bằng bản sửa đầu tiên của grader còn lộ 3 lượt bị chấm oan vì coi "còn" ("`anchor_exists` còn TODO") là chữ nối; đã sửa và đưa vào test.
+
+**Chưa làm, có thể làm sau:** câu tìm GitHub gồm nhiều khái niệm chuyên ngành ("fastapi rate limiter redis") vẫn có thể ra rỗng vì không có từ chung chung để bỏ; skill khi đó thử cách diễn đạt khác. Skill có lúc gọi `scout.py repo` nhiều lần cho cùng một repo với từ khóa khác nhau, trong khi `--find` nhận nhiều từ khóa một lần. Bốn bẫy hiện chưa phân biệt được hai bản ở đầu ra; muốn đo kỹ hơn thì cần bẫy mà quyết định đúng phụ thuộc vào một chi tiết chỉ kiểm được bằng README.
+
 ---
 
 ## 7. Thiết kế chi tiết
@@ -742,13 +765,14 @@ tien-do/
 
 **Nhu cầu** (bạn làm rõ ngày 02/10/2026): trước khi build hay làm gì, luôn tìm thứ có sẵn tốt nhất, như công cụ trên GitHub hoặc bài nghiên cứu SOTA.
 
-- **Thang tìm:** tính năng sẵn có của công cụ đang dùng → code trong project → skill đã duyệt (`vetted.lock`) → công cụ và thư viện trên GitHub → bài nghiên cứu SOTA. Dừng ở bậc đầu tiên đáp ứng được; công sức tìm tỉ lệ với cỡ việc.
+- **Thang tìm:** tính năng sẵn có của công cụ đang dùng → code trong project → skill đã duyệt (`vetted.lock`) → công cụ và thư viện trên GitHub → bài nghiên cứu SOTA. Từ 07/10/2026 (mục 6.15): trước khi tìm, đọc ràng buộc trong file của project (phiên bản, luật phụ thuộc, cách chạy production) và viết nhu cầu thành tiêu chí bắt buộc; chỉ dừng ở một bậc khi có ứng viên đạt mọi tiêu chí bắt buộc, có bằng chứng (`file:dòng`, dòng README), còn "chạy được" hay "có sẵn trong repo" thì chưa đủ; việc lớn vẫn tìm tới bậc GitHub để đối chứng. Công sức tìm tỉ lệ với cỡ việc.
 - **Script `scout.py`** (chỉ đọc, chỉ dùng thư viện chuẩn):
-  - GitHub qua `gh`, có dự phòng bằng API công khai. Tìm hai lần (khớp nhất và nhiều sao nhất) rồi gộp, vì chạy thử thật cho thấy xếp theo độ khớp bỏ sót công cụ nổi tiếng.
+  - GitHub qua `gh`, có dự phòng bằng API công khai. Tìm hai lần (khớp nhất và nhiều sao nhất) rồi gộp, vì chạy thử thật cho thấy xếp theo độ khớp bỏ sót công cụ nổi tiếng. Câu tìm ra rỗng thì bỏ từ chung chung và tên ngôn ngữ rồi tìm lại một lần, vì GitHub đòi mọi từ đều khớp ("toml parser python" không ra `hukkin/tomli`).
+  - `repo owner/name --find "từ khóa"`: lần phát hành gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng tiêu chí, để kiểm ứng viên bằng bằng chứng chỉ với một lệnh `python3` (không cần quyền `gh` hay WebFetch).
   - Bài báo qua OpenAlex, dự phòng bằng Semantic Scholar rồi arXiv. Chạy thử thật cho thấy Semantic Scholar hay trả 429 khi không có khóa, còn arXiv hay chậm.
   - Đánh dấu chỗ cần xem: repo đã lưu trữ, không có giấy phép, copyleft, lâu không cập nhật, ít sao; bài preprint, không rõ nơi đăng.
 - **Luôn được nhắc:** luật chung trong `SHARED.global.md`, và router gợi ý skill này cho mọi việc thuộc nhóm "tính năng" và "kiến trúc", kèm lưu ý bỏ qua việc vặt. Có thêm luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA".
-- **Kết quả:** tối đa 5 ứng viên có bằng chứng, rồi quyết định dùng lại, điều chỉnh hay tự làm, ghi vào mục quyết định của file kế hoạch kèm nguồn.
+- **Kết quả:** tối đa 5 ứng viên có bằng chứng theo từng tiêu chí, rồi quyết định dùng lại, điều chỉnh hay tự làm, ghi vào mục quyết định của file kế hoạch kèm nguồn. Có hai mục bắt buộc: "Phần còn phải làm" (tiêu chí mà lựa chọn chưa đạt) và "Cần người dùng quyết" (ràng buộc va nhau, thứ cần duyệt); quyết định không được thu hẹp nhu cầu.
 - **An toàn:** thứ tìm được phải qua `vet-skill` trước khi cài; chỉ chép code khi giấy phép cho phép; câu tìm kiếm không chứa code hay thông tin riêng.
 
 ## 8. Lộ trình triển khai

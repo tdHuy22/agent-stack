@@ -1,0 +1,1 @@
+Script `tools/release.py` cần đọc cấu hình từ file `release.toml` (tên gói, phiên bản, danh sách file cần đóng gói). Dùng skill reuse-best tìm cách tốt nhất để đọc TOML trong project này, rồi báo lại cho mình quyết định. Chưa sửa file nào.

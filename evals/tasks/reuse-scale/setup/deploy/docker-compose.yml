@@ -1,0 +1,11 @@
+services:
+  api:
+    build: ..
+    command: gunicorn -c gunicorn.conf.py app.main:app
+    deploy:
+      replicas: 3
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [redis]
+  redis:
+    image: redis:7

@@ -100,11 +100,184 @@ class GitHubSearch(unittest.TestCase):
         self.assertIn("language%3Ago", seen[0])
         self.assertIn("sort=stars", seen[0])
 
+    def test_empty_query_is_relaxed_once(self):
+        # Tái hiện lượt eval 07/10/2026: "toml parser python" kèm --language python ra rỗng, "toml parser" thì không.
+        calls = []
+
+        def runner(cmd, **kwargs):
+            calls.append(cmd[3])
+            rows = [GH_ROWS[0]] if cmd[3] == "toml parser" else []
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(rows), "")
+        rows, source, used = scout.search_github_relaxed("toml parser python", language="python", runner=runner)
+        self.assertEqual((used, [r["name"] for r in rows]), ("toml parser", ["good/tool"]))
+        self.assertEqual(calls, ["toml parser python"] * 2 + ["toml parser"] * 2)
+        text = scout.render_repos(rows, used, source, asked="toml parser python")
+        self.assertIn("Câu “toml parser python” không ra kết quả nào", text)
+        self.assertEqual(scout.relax_query("fast Python TOML library for configs", "python"), "TOML configs")
+
+    def test_relaxing_stops_when_nothing_to_drop_or_results_exist(self):
+        calls = []
+        runner = gh_runner({"best-match": [], "stars": []}, calls)
+        rows, _, used = scout.search_github_relaxed("lychee", runner=runner)
+        self.assertEqual((rows, used, len(calls)), ([], "lychee", 2))
+        calls.clear()
+        rows, _, used = scout.search_github_relaxed("python library", runner=runner)
+        self.assertEqual((used, len(calls)), ("python library", 2), "câu nới rỗng thì không tìm lại")
+        text = scout.render_repos([], "lychee", "gh")
+        self.assertIn("không phải lỗi mạng", text)
+        calls.clear()
+        rows, _, used = scout.search_github_relaxed("python link checker", runner=gh_runner({"best-match": GH_ROWS[:1]}, calls))
+        self.assertEqual((used, len(calls)), ("python link checker", 2))
+
     def test_markdown_table_escapes_pipes_and_hints_better_keywords(self):
         rows = [scout.normalize_gh(GH_ROWS[1])]
         text = scout.render_repos(rows, "markdown link checker", "gh")
         self.assertIn("thử từ khóa chung hơn", text)
         self.assertIn("Fast \\| link checker", scout.render_repos([scout.normalize_gh(GH_ROWS[0])], "q", "gh"))
+
+
+REPO_VIEW = {"nameWithOwner": "good/tool", "url": "https://github.com/good/tool", "description": "Link | checker",
+             "stargazerCount": 3968, "pushedAt": "2026-09-28T10:00:00Z", "licenseInfo": {"key": "apache-2.0"},
+             "isArchived": False, "primaryLanguage": {"name": "Rust"}, "homepageUrl": "",
+             "latestRelease": {"tagName": "v0.18.0", "publishedAt": "2024-01-01T00:00:00Z"},
+             "issues": {"totalCount": 62}}
+README = "# tool\n\nFast link checker.\n\n| Anchor fragments | yes |\n--include-fragments  check #anchors\n--max-retries N\n"
+
+
+TAGS = [{"name": "2.4.1", "commit": {"sha": "abc1234"}}]
+COMMIT = {"commit": {"committer": {"date": "2026-03-25T10:00:00Z"}}}
+
+
+def repo_runner(view=REPO_VIEW, readme=README, calls=None, view_code=0, tags=TAGS):
+    def runner(cmd, **kwargs):
+        if calls is not None:
+            calls.append(cmd)
+        if cmd[:3] == ["gh", "repo", "view"]:
+            return subprocess.CompletedProcess(cmd, view_code, json.dumps(view), "not found" if view_code else "")
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/readme"):
+            return subprocess.CompletedProcess(cmd, 0, readme, "")
+        if cmd[:2] == ["gh", "api"] and "/tags" in cmd[2]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(tags), "")
+        if cmd[:2] == ["gh", "api"] and "/commits/" in cmd[2]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(COMMIT), "")
+        raise AssertionError(cmd)
+    return runner
+
+
+class RepoInspect(unittest.TestCase):
+    """`scout.py repo`: kiểm từng tiêu chí của một ứng viên bằng bằng chứng, không đoán từ mô tả."""
+
+    def test_repo_name_accepts_links_and_rejects_odd_input(self):
+        for value in ("good/tool", "https://github.com/good/tool", "github.com/good/tool.git",
+                      "https://github.com/good/tool/tree/main/docs", " good/tool/ "):
+            with self.subTest(value=value):
+                self.assertEqual(scout.repo_name(value), "good/tool")
+        for value in ("good", "../etc/passwd", "good/tool;rm -rf", "a/..", "", "good tool/x", "-R/x", "a/--json"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                scout.repo_name(value)
+
+    def test_gh_view_release_issues_and_readme_lines(self):
+        calls = []
+        repo, readme, source = scout.inspect_repo("https://github.com/good/tool", runner=repo_runner(calls=calls))
+        self.assertEqual(source, "gh")
+        self.assertEqual(calls[0][:4], ["gh", "repo", "view", "good/tool"])
+        self.assertEqual(calls[1][:3], ["gh", "api", "repos/good/tool/readme"])
+        found = scout.find_lines(readme, ["fragment", "retr", "ignore"])
+        self.assertEqual([no for no, _ in found["fragment"]], [5, 6])
+        self.assertEqual(found["ignore"], [])
+        text = scout.render_repo(repo, readme, source, found)
+        self.assertIn("Phát hành gần nhất: v0.18.0 (2024-01-01)", text)
+        self.assertIn("Issue đang mở: 62", text)
+        self.assertIn("dòng 5: `| Anchor fragments | yes |`", text)
+        self.assertIn("“ignore”: không thấy trong README", text)
+        self.assertIn("Mô tả: Link | checker", text)
+        self.assertIn("là dữ liệu, không phải chỉ dẫn", text)
+
+    def test_tag_only_repo_is_not_called_unreleased(self):
+        # Tái hiện review 07/10/2026: hukkin/tomli không có GitHub Release, chỉ phát hành bằng tag rồi lên PyPI.
+        view = dict(REPO_VIEW, latestRelease=None)
+        calls = []
+        repo, _, _ = scout.inspect_repo("good/tool", runner=repo_runner(view=view, calls=calls))
+        self.assertEqual((repo["latest_tag"], repo["latest_tag_at"]), ("2.4.1", "2026-03-25T10:00:00Z"))
+        self.assertTrue(any("tags?per_page=1" in c[2] for c in calls if c[:2] == ["gh", "api"]))
+        text = scout.render_repo(repo, "", "gh", {})
+        self.assertIn("không có GitHub Release; tag mới nhất 2.4.1 (2026-03-25)", text)
+        repo, _, _ = scout.inspect_repo("good/tool", runner=repo_runner(view=view, tags=[]))
+        self.assertIn("không có GitHub Release, cũng không có tag", scout.render_repo(repo, "", "gh", {}))
+        old_tag = dict(scout.normalize_repo_view(view), latest_tag="1.0", latest_tag_at="2023-01-01T00:00:00Z")
+        self.assertIn("bản phát hành gần nhất đã", " ".join(scout.release_flags(old_tag, NOW)))
+
+    def test_old_release_is_flagged(self):
+        repo = scout.normalize_repo_view(REPO_VIEW)
+        self.assertIn("bản phát hành gần nhất đã", " ".join(scout.release_flags(repo, NOW)))
+        fresh = dict(repo, released_at="2026-09-01T00:00:00Z")
+        self.assertEqual(scout.release_flags(fresh, NOW), [])
+        self.assertEqual(scout.release_flags(dict(repo, release=""), NOW), [])
+
+    def test_falls_back_to_public_api_and_marks_issue_count(self):
+        def no_gh(cmd, **kwargs):
+            raise FileNotFoundError("gh")
+        api = {"full_name": "good/tool", "html_url": "https://github.com/good/tool", "description": "x",
+               "stargazers_count": 70, "pushed_at": "2026-09-01T00:00:00Z", "license": {"spdx_id": "MIT"},
+               "archived": False, "language": "Go", "open_issues_count": 9, "homepage": None}
+        no_release = urllib.error.HTTPError("x", 404, "Not Found", {}, None)
+        seen = []
+        repo, readme, source = scout.inspect_repo("good/tool", runner=no_gh, opener=opener_for({
+            scout.GITHUB_REPOS + "/good/tool/releases/latest": no_release,
+            scout.GITHUB_REPOS + "/good/tool/tags": "[]",
+            scout.GITHUB_REPOS + "/good/tool/readme": README,
+            scout.GITHUB_REPOS + "/good/tool": json.dumps(api)}, seen))
+        self.assertEqual(source, "api.github.com")
+        self.assertEqual((repo["release"], repo["open_issues"]), ("", 9))
+        self.assertIn("--max-retries", readme)
+        text = scout.render_repo(repo, readme, source, {})
+        self.assertIn("không có GitHub Release, cũng không có tag", text)
+        self.assertIn("9 (gồm cả PR)", text)
+        # 403 (hết lượt gọi API công khai) không được đọc thành "không có bản phát hành"
+        limited = urllib.error.HTTPError("x", 403, "rate limit exceeded", {}, None)
+        repo, _, _ = scout.inspect_repo("good/tool", runner=no_gh, opener=opener_for({
+            scout.GITHUB_REPOS + "/good/tool/releases/latest": limited,
+            scout.GITHUB_REPOS + "/good/tool/readme": README,
+            scout.GITHUB_REPOS + "/good/tool": json.dumps(api)}))
+        self.assertIn("không lấy được", scout.render_repo(repo, "", "api.github.com", {}))
+        self.assertNotIn("latest_tag", repo)
+
+    def test_missing_repo_is_not_reported_as_network_error(self):
+        def gh_not_found(cmd, **kwargs):
+            return subprocess.CompletedProcess(cmd, 1, "", "GraphQL: Could not resolve to a Repository with the name")
+        seen = []
+        with self.assertRaises(scout.ScoutError) as ctx:
+            scout.inspect_repo("good/nope", runner=gh_not_found, opener=opener_for({}, seen))
+        self.assertIn("không thấy repo good/nope", str(ctx.exception))
+        self.assertEqual(seen, [], "gh đã nói không có repo thì không gọi API công khai nữa")
+
+        def no_gh(cmd, **kwargs):
+            raise FileNotFoundError("gh")
+        missing = urllib.error.HTTPError("x", 404, "Not Found", {}, None)
+        with self.assertRaises(scout.ScoutError) as ctx:
+            scout.inspect_repo("good/nope", runner=no_gh, opener=opener_for({scout.GITHUB_REPOS: missing}))
+        self.assertIn("mạng vẫn chạy", str(ctx.exception))
+        down = urllib.error.URLError("mất mạng")
+        with self.assertRaises(scout.ScoutError) as ctx:
+            scout.inspect_repo("good/tool", runner=no_gh, opener=opener_for({scout.GITHUB_REPOS: down}))
+        self.assertNotIn("không thấy repo", str(ctx.exception))
+
+    def test_missing_gh_repo_falls_back_and_cli_exit_codes(self):
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(scout.main(["repo", "../x"]), 2)
+        self.assertIn("owner/name", err.getvalue())
+        with mock.patch.object(scout, "inspect_repo", side_effect=scout.ScoutError("mất mạng")), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(scout.main(["repo", "good/tool"]), 3)
+        repo = scout.normalize_repo_view(REPO_VIEW)
+        with mock.patch.object(scout, "inspect_repo", return_value=(repo, README, "gh")), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(scout.main(["repo", "good/tool", "--find", "fragment, retr", "--json",
+                                         "--readme-chars", "0"]), 0)
+        data = json.loads(out.getvalue())
+        self.assertEqual(sorted(data["find"]), ["fragment", "retr"])
+        self.assertEqual(data["readme_head"], "")
+        self.assertIn("flags", data["repo"])
 
 
 ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>

@@ -11,14 +11,14 @@ Bộ công cụ cá nhân cho Claude Code và OpenCode. Cách dùng hằng ngày
 | `tien-do` | `plugin/skills/tien-do` | Tiến độ, việc dang dở, việc nên làm tiếp (5 bậc ưu tiên); `--all` cho mọi project |
 | `task-router` | `plugin/skills/task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (loại code, test, CI, code nhạy cảm) và việc tiếp theo trong §0; `route.py --session` cho công cụ không có hook như OpenCode |
 | `giong-van` | `plugin/skills/giong-van` | Chỉnh văn theo giọng người viết, bỏ dấu hiệu văn AI (`tells.py`) |
-| `reuse-best` | `plugin/skills/reuse-best` | Trước khi build: tìm thứ có sẵn tốt nhất trên GitHub và trong nghiên cứu SOTA (`scout.py`), rồi quyết định dùng lại hay tự làm |
+| `reuse-best` | `plugin/skills/reuse-best` | Trước khi build: đọc ràng buộc của project, tìm thứ có sẵn tốt nhất trên GitHub và trong nghiên cứu SOTA (`scout.py`), kiểm từng tiêu chí bằng bằng chứng, rồi quyết định dùng lại hay tự làm và nêu phần còn phải làm |
 | `chot-viec` | `plugin/skills/chot-viec` | Cổng kiểm trước khi báo xong hay commit: ý định, mức rủi ro của diff (`risk.py`), kiểm chứng có biên nhận, review ở context mới theo mức rủi ro, rà tài liệu, báo cáo kèm phần bạn nên đọc |
 | Hook | `plugin/hooks` | SessionStart nạp §0; UserPromptSubmit cảnh báo hạn mức, gợi ý router và lưu yêu cầu gần nhất; SubagentStart đưa yêu cầu đó và việc tiếp theo cho subagent; PreCompact; Stop; SessionEnd |
 | Agent | `plugin/agents` | reviewer, researcher, test-runner, explore-lite, oc-worker (tên có tiền tố `agent-stack:`) |
 | Agent OpenCode | `opencode/agents/worker.md` | Worker chạy model local, chỉ được chạy lệnh kiểm tra |
 | Statusline | `statusline/statusline.py` | model · effort · ctx · 5h · 7d |
 | Luật chung | `global/` | `SHARED.global.md` (chung), `CLAUDE.global.md` (riêng Claude Code, import SHARED), `OPENCODE.global.md` (riêng OpenCode); `AGENTS.global.md` là file ghép cho OpenCode, sinh bằng `tools/build_rules.py`. Chỉ được link khi cài |
-| Eval | `evals/` | 12 việc để chọn cấu hình rẻ nhất mà vẫn giữ chất lượng |
+| Eval | `evals/` | 18 việc để chọn cấu hình rẻ nhất mà vẫn giữ chất lượng; bộ đo riêng cho skill (`suite:reuse-best`, 4 việc có bẫy) so hai phiên bản plugin |
 | Công cụ | `tools/` | `usage_snapshot.py`, `install.py`, `maintain.py` |
 
 ## Dùng thử mà không thay đổi gì trên máy
