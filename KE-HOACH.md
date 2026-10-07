@@ -398,10 +398,10 @@ Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube 
 
 | Ý trong video | Quyết định | Ở đâu |
 |---|---|---|
-| File nhớ toàn cục ngắn (27 dòng) vì nạp vào mọi phiên; phần chỉ cần cho một loại việc thì chuyển vào skill | Áp dụng một phần: thêm 5 luật nhưng viết gọn chỗ khác, nên hai file chỉ tăng từ 9.240 lên 10.190 byte (khoảng 10%). Không tách phần OpenCode ra file riêng, vì `~/.config/opencode/AGENTS.md` trỏ thẳng vào `AGENTS.global.md` và bạn dặn không đụng OpenCode | `global/` |
-| Model ước lượng công theo tốc độ người nên chọn cách rẻ mà kém | Thêm luật chọn theo chất lượng, độ bền, độ dễ bảo trì; thêm vào bước chấm ứng viên của `reuse-best` | `AGENTS.global.md`, `reuse-best` |
-| Sửa lỗi bắt đầu từ tái hiện end-to-end, giống người dùng nhất | Thêm luật chung; `diagnosing-bugs` đã có bước này nhưng chỉ khi được gọi | `AGENTS.global.md` |
-| File nhớ project lớn dần từ các lần người dùng sửa agent | Thêm luật: đề nghị ghi bài học thành luật ngắn trong `CLAUDE.md`/`AGENTS.md` của project, hoặc vào skill nếu chỉ cần cho một loại việc | `AGENTS.global.md` |
+| File nhớ toàn cục ngắn (27 dòng) vì nạp vào mọi phiên; phần chỉ cần cho một loại việc thì chuyển vào skill | Áp dụng một phần: thêm 5 luật nhưng viết gọn chỗ khác, nên hai file chỉ tăng từ 9.240 lên 10.190 byte (khoảng 10%). Sau đó, theo yêu cầu của bạn, tách phần OpenCode (GĐ13): Claude Code nạp `SHARED.global.md` + `CLAUDE.global.md`, OpenCode nạp `AGENTS.global.md` là file ghép bằng `tools/build_rules.py`, không đổi symlink hay cấu hình OpenCode; viết gọn từng luật nên Claude Code nạp 8.924 thay vì 10.190 byte (−12%), OpenCode 5.683 thay vì 5.922 (−4%) | `global/` |
+| Model ước lượng công theo tốc độ người nên chọn cách rẻ mà kém | Thêm luật chọn theo chất lượng, độ bền, độ dễ bảo trì; thêm vào bước chấm ứng viên của `reuse-best` | `SHARED.global.md`, `reuse-best` |
+| Sửa lỗi bắt đầu từ tái hiện end-to-end, giống người dùng nhất | Thêm luật chung; `diagnosing-bugs` đã có bước này nhưng chỉ khi được gọi | `SHARED.global.md` |
+| File nhớ project lớn dần từ các lần người dùng sửa agent | Thêm luật: đề nghị ghi bài học thành luật ngắn trong `CLAUDE.md`/`AGENTS.md` của project, hoặc vào skill nếu chỉ cần cho một loại việc | `SHARED.global.md` |
 | Sao không chứng minh skill giúp được agent | Thêm vào luật cài đồ bên thứ ba và vào `reuse-best`. Bộ eval có cấu hình V (A + plugin vendor) và ghi skill nào thực sự được gọi; chưa chạy thật | `evals/` |
 | `no-mistakes`: ý định, review đối kháng ở context mới, test có bằng chứng, rà tài liệu, chấm rủi ro để quyết người đọc tới đâu | Tự làm skill `chot-viec` từ các mảnh đã có (`receipt.py`, `agent-stack:reviewer`) cộng `risk.py`. Không cài `no-mistakes`: nó tự push, mở PR, trông CI (repo không push), và cài bằng `curl \| sh` | `plugin/skills/chot-viec` |
 | `lavish`: lên kế hoạch bằng trang HTML có bình luận và nút chọn | Dùng Artifact có sẵn của Claude (riêng tư, có bình luận đọc được bằng `ArtifactComments`), không cài lavish. Chỉ khi kế hoạch có từ hai phương án hoặc ba quyết định | `CLAUDE.global.md` |
@@ -432,7 +432,7 @@ Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc pl
 │   ├── agents/   reviewer · researcher · test-runner · oc-worker · explore-lite
 │   ├── hooks/    hooks.json + script Python (stdlib, chạy được trên Python 3.9)
 │   └── lib/      thư viện dùng chung: đọc §0/checkbox, git chỉ đọc, thư mục state
-├── global/                              # AGENTS.global.md, CLAUDE.global.md (chỉ link khi cài)
+├── global/                              # SHARED (chung), CLAUDE (riêng Claude Code), OPENCODE (riêng OpenCode), AGENTS (file ghép cho OpenCode); chỉ link khi cài
 ├── opencode/agents/worker.md            # agent OpenCode
 ├── statusline/ · tools/ · evals/ · tests/      # mẫu PLAN/HANDOFF nằm trong skill session-keeper
 ├── vet-reports/ · vetted.lock           # kết quả kiểm duyệt đồ bên thứ ba
@@ -540,7 +540,7 @@ Gồm năm tầng, từ có sẵn đến tự làm:
 ### 7.4 Bộ định tuyến (#4 + #5), skill `task-router` ✍️
 
 **Cập nhật 02/10/2026 theo yêu cầu của bạn:**
-- **Dòng ➡️ có ở cuối mọi câu trả lời**, kể cả câu hỏi nhanh, và có thêm trường Skill: `➡️ Tiếp: <việc> · Model · Effort · Subagent · Skill`. Luật nằm trong `AGENTS.global.md`, nên áp cho cả Claude Code lẫn OpenCode; bảng chọn của Claude Code nằm trong `CLAUDE.global.md`.
+- **Dòng ➡️ có ở cuối mọi câu trả lời**, kể cả câu hỏi nhanh, và có thêm trường Skill: `➡️ Tiếp: <việc> · Model · Effort · Subagent · Skill`. Luật nằm trong `SHARED.global.md`, nên áp cho cả Claude Code lẫn OpenCode; bảng chọn của Claude Code nằm trong `CLAUDE.global.md`.
 - **Router đọc nội dung project**, không chỉ đọc câu bạn gõ.
   - Lúc mở phiên, hook dựng hồ sơ project từ danh sách file: loại code, có test, có CI, có code xác thực hay mã hóa. Hồ sơ được lưu tạm 6 giờ, và chỉ dựng cho git repo hoặc thư mục có file kế hoạch.
   - Từ hồ sơ đó, hook gợi ý skill và subagent hợp với project, rồi định tuyến luôn việc tiếp theo trong §0.
@@ -747,7 +747,7 @@ tien-do/
   - GitHub qua `gh`, có dự phòng bằng API công khai. Tìm hai lần (khớp nhất và nhiều sao nhất) rồi gộp, vì chạy thử thật cho thấy xếp theo độ khớp bỏ sót công cụ nổi tiếng.
   - Bài báo qua OpenAlex, dự phòng bằng Semantic Scholar rồi arXiv. Chạy thử thật cho thấy Semantic Scholar hay trả 429 khi không có khóa, còn arXiv hay chậm.
   - Đánh dấu chỗ cần xem: repo đã lưu trữ, không có giấy phép, copyleft, lâu không cập nhật, ít sao; bài preprint, không rõ nơi đăng.
-- **Luôn được nhắc:** luật chung trong `AGENTS.global.md`, và router gợi ý skill này cho mọi việc thuộc nhóm "tính năng" và "kiến trúc", kèm lưu ý bỏ qua việc vặt. Có thêm luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA".
+- **Luôn được nhắc:** luật chung trong `SHARED.global.md`, và router gợi ý skill này cho mọi việc thuộc nhóm "tính năng" và "kiến trúc", kèm lưu ý bỏ qua việc vặt. Có thêm luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA".
 - **Kết quả:** tối đa 5 ứng viên có bằng chứng, rồi quyết định dùng lại, điều chỉnh hay tự làm, ghi vào mục quyết định của file kế hoạch kèm nguồn.
 - **An toàn:** thứ tìm được phải qua `vet-skill` trước khi cài; chỉ chép code khi giấy phép cho phép; câu tìm kiếm không chứa code hay thông tin riêng.
 

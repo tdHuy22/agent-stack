@@ -267,11 +267,11 @@ class ProjectAware(ProjectFixtures):
         self.assertIn("🧭 Python", data["systemMessage"])
 
     def test_footer_rule_is_every_message_and_includes_skill(self):
-        shared = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
+        shared = (REPO / "global" / "SHARED.global.md").read_text(encoding="utf-8")
         self.assertIn("Cuối mọi câu trả lời, kể cả câu trả lời ngắn", shared)
         self.assertIn("· Skill: <tên|không>", shared)
         claude = (REPO / "global" / "CLAUDE.global.md").read_text(encoding="utf-8")
-        self.assertIn("| Việc tiếp theo | Model · Effort | Subagent | Skill |", claude)
+        self.assertIn("| Việc | Model·Effort | Subagent | Skill |", claude)
         self.assertNotIn("Bỏ qua dòng này với câu hỏi nhanh", claude)
 
 
@@ -297,6 +297,7 @@ class SessionCliForToolsWithoutHooks(ProjectFixtures):
         data = json.loads(self.run_cli("review bảo mật hàm đăng nhập", "--project", str(root)).stdout)
         self.assertIn("c-review", data["skills"])
 
-    def test_shared_rules_tell_tools_without_hooks_to_run_it(self):
-        shared = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
-        self.assertIn("route.py --session <thư mục project>", shared)
+    def test_opencode_rules_tell_tools_without_hooks_to_run_it(self):
+        # OpenCode đọc AGENTS.global.md, file ghép từ SHARED.global.md và OPENCODE.global.md
+        opencode = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
+        self.assertIn("route.py --session <thư mục project>", opencode)

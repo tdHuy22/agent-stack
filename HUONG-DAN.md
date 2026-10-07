@@ -114,7 +114,7 @@ Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo s�
 | Hook Stop | Cuối mỗi lượt trả lời | Nhắc cập nhật §0 khi đã có từ 3 file đổi sau lần cập nhật §0 gần nhất; nhắc tối đa 30 phút một lần |
 | Hook SessionEnd | Đóng phiên | Ghi một dòng vào `state/sessions.jsonl`, để `tien-do` gợi ý `claude --resume` |
 | Statusline | Liên tục, chỉ trong terminal | Hiện model, effort, ctx, 5h, 7d; ghi `state/limits.json` cho hook cảnh báo |
-| Luật chung | Mọi phiên | `~/.claude/CLAUDE.md` trỏ về `global/CLAUDE.global.md`: trả lời tiếng Việt, đọc §0 trước, không nói "xong" khi chưa kiểm chứng, dòng ➡️ |
+| Luật chung | Mọi phiên | `~/.claude/CLAUDE.md` trỏ về `global/CLAUDE.global.md`, file này import `global/SHARED.global.md`: trả lời tiếng Việt, đọc §0 trước, không nói "xong" khi chưa kiểm chứng, dòng ➡️ |
 | `autoContinueAtUsageLimit` | Khi chạm hạn mức | Claude Code tự làm tiếp khi hạn mức reset |
 
 ### Cảnh báo hạn mức
@@ -326,7 +326,7 @@ Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`.
 
 ### 5.7 `chot-viec`: cổng kiểm trước khi báo xong
 
-**Khi nào:** vừa xong một tính năng, bản sửa lỗi hay refactor; "xong chưa", "chốt việc", "kiểm lại trước khi commit". Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường.
+**Khi nào:** vừa xong một tính năng, bản sửa lỗi hay refactor; "chốt việc", "kiểm lại trước khi commit", "sẵn sàng commit chưa". Câu hỏi tiến độ kiểu "xong chưa" không kích hoạt nó. Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường.
 
 **Gọi:** `/agent-stack:chot-viec` (thêm `--base main` để so với nhánh khác thay vì HEAD).
 
@@ -369,7 +369,7 @@ Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí
 
 OpenCode đọc cùng bộ luật và skill, qua symlink:
 
-- `~/.config/opencode/AGENTS.md` → `global/AGENTS.global.md`
+- `~/.config/opencode/AGENTS.md` → `global/AGENTS.global.md`, file ghép từ luật chung `SHARED.global.md` và phần riêng OpenCode `OPENCODE.global.md` (OpenCode không hiểu `@import`)
 - `~/.config/opencode/skills/<tên>` → skill trong `plugin/skills/` và `vendor/skills/`
 - `~/.config/opencode/agents/worker.md` → `opencode/agents/worker.md`
 
@@ -379,7 +379,7 @@ OpenCode không có hook, nên đầu phiên Claude (hoặc model trong OpenCode
 python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py --session .
 ```
 
-Luật chung đã dặn việc này, nên thường không cần nhắc.
+Phần riêng OpenCode của luật (`OPENCODE.global.md`) đã dặn việc này, nên thường không cần nhắc.
 
 ### Agent `worker`
 
@@ -538,7 +538,7 @@ Trần 3 USD chỉ đủ khoảng 11 trên 13 ca; chạy nốt phần còn lại
 | Muốn đổi | Sửa ở đâu |
 |---|---|
 | Ngưỡng cảnh báo hạn mức | Biến môi trường `AGENT_STACK_WARN_5H` (mặc định 90) và `AGENT_STACK_WARN_7D` (mặc định 80) |
-| Luật chung cho mọi project | `global/AGENTS.global.md` (dùng chung) và `global/CLAUDE.global.md` (riêng Claude Code, có bảng chọn cho dòng ➡️) |
+| Luật chung cho mọi project | `global/SHARED.global.md` (dùng chung), `global/CLAUDE.global.md` (riêng Claude Code, có bảng chọn cho dòng ➡️), `global/OPENCODE.global.md` (riêng OpenCode). Sửa SHARED hay OPENCODE xong thì chạy `python3 tools/build_rules.py` để ghép lại `global/AGENTS.global.md` cho OpenCode; quên thì test báo |
 | Luật router | `plugin/skills/task-router/rules.json`, rồi chạy lại `route.py --eval evals/router-prompts.jsonl` |
 | Giọng văn | `plugin/skills/giong-van/style-card.md` và `samples/` (chung); `.agent/giong-van/` trong từng project viết luận |
 | Danh sách dấu hiệu văn AI tiếng Việt | `plugin/skills/giong-van/vi-ai-tells.md` |
@@ -599,7 +599,7 @@ rồi đọc §0 của `PLAN.md`. Muốn quay về trạng thái trước khi c�
 | Kiểm tra skill/plugin trước khi cài | `/agent-stack:vet-skill <owner/repo>` |
 | Sửa văn cho tự nhiên | "sửa đoạn này cho tự nhiên" · `/agent-stack:giong-van` |
 | Tìm thư viện có sẵn | `/agent-stack:reuse-best <nhu cầu>` |
-| Kiểm trước khi báo xong hay commit | "chốt việc", "xong chưa" · `/agent-stack:chot-viec` |
+| Kiểm trước khi báo xong hay commit | "chốt việc", "kiểm lại trước khi commit" · `/agent-stack:chot-viec` |
 | Review trước commit | "review trước khi commit" (subagent `agent-stack:reviewer`) |
 | Chạy test gọn | "giao test-runner chạy test" |
 

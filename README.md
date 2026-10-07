@@ -17,7 +17,7 @@ Bộ công cụ cá nhân cho Claude Code và OpenCode. Cách dùng hằng ngày
 | Agent | `plugin/agents` | reviewer, researcher, test-runner, explore-lite, oc-worker (tên có tiền tố `agent-stack:`) |
 | Agent OpenCode | `opencode/agents/worker.md` | Worker chạy model local, chỉ được chạy lệnh kiểm tra |
 | Statusline | `statusline/statusline.py` | model · effort · ctx · 5h · 7d |
-| Luật chung | `global/` | Cho Claude Code và OpenCode; chỉ được link khi cài |
+| Luật chung | `global/` | `SHARED.global.md` (chung), `CLAUDE.global.md` (riêng Claude Code, import SHARED), `OPENCODE.global.md` (riêng OpenCode); `AGENTS.global.md` là file ghép cho OpenCode, sinh bằng `tools/build_rules.py`. Chỉ được link khi cài |
 | Eval | `evals/` | 12 việc để chọn cấu hình rẻ nhất mà vẫn giữ chất lượng |
 | Công cụ | `tools/` | `usage_snapshot.py`, `install.py`, `maintain.py` |
 
