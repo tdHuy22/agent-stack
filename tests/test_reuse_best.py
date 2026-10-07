@@ -129,6 +129,31 @@ class GitHubSearch(unittest.TestCase):
         rows, _, used = scout.search_github_relaxed("python link checker", runner=gh_runner({"best-match": GH_ROWS[:1]}, calls))
         self.assertEqual((used, len(calls)), ("python link checker", 2))
 
+    def test_domain_query_drops_last_word_when_still_empty(self):
+        # Tái hiện eval 07/10/2026: "markdown link check anchor" không có từ chung chung để bỏ nên vẫn ra rỗng.
+        calls = []
+
+        def runner(cmd, **kwargs):
+            calls.append(cmd[3])
+            rows = [GH_ROWS[0]] if cmd[3] == "markdown link check" else []
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(rows), "")
+        rows, _, used = scout.search_github_relaxed("markdown link check anchor", runner=runner)
+        self.assertEqual((used, len(rows)), ("markdown link check", 1))
+        self.assertEqual(scout.relaxations("fast toml parser python", "python"), ["toml parser"])
+        self.assertEqual(scout.relaxations("rate limiter redis sliding window"), ["rate limiter redis sliding"])
+        self.assertEqual(scout.relaxations("lychee"), [])
+
+    def test_results_end_with_next_command_and_skip_archived(self):
+        rows = [scout.normalize_gh(r) for r in GH_ROWS]
+        text = scout.render_repos(rows, "link checker", "gh")
+        self.assertTrue(text.startswith("GitHub “link checker”: 3 repo"), text[:80])
+        tip = [line for line in text.splitlines() if line.startswith("Tiếp:")][0]
+        self.assertIn("scout.py repo good/tool old/gpl --find", tip)
+        self.assertNotIn("dead/nolicense", tip, "repo đã lưu trữ không đáng kiểm tiếp")
+        self.assertNotIn("](", text, "bỏ link trong bảng để đỡ tốn token; tên repo đủ để dựng link")
+        empty = scout.render_repos([], "markdown link check anchor", "gh")
+        self.assertIn('github "markdown link"', empty)
+
     def test_markdown_table_escapes_pipes_and_hints_better_keywords(self):
         rows = [scout.normalize_gh(GH_ROWS[1])]
         text = scout.render_repos(rows, "markdown link checker", "gh")
@@ -241,6 +266,49 @@ class RepoInspect(unittest.TestCase):
             scout.GITHUB_REPOS + "/good/tool": json.dumps(api)}))
         self.assertIn("không lấy được", scout.render_repo(repo, "", "api.github.com", {}))
         self.assertNotIn("latest_tag", repo)
+
+    def test_several_repos_in_one_call_and_one_bad_repo_does_not_sink_the_rest(self):
+        repo = scout.normalize_repo_view(REPO_VIEW)
+
+        def fake_inspect(name, runner=None, opener=None):
+            if name == "good/nope":
+                raise scout.not_found(name)
+            return dict(repo, name=name), README, "gh"
+        with mock.patch.object(scout, "inspect_repo", side_effect=fake_inspect):
+            text, data, ok = scout.inspect_many(["good/tool", "good/nope"], ["fragment", "ignore"], 1, 0)
+        self.assertEqual(ok, 1)
+        self.assertTrue(text.startswith("Đã kiểm 1/2 repo, từ khóa: fragment, ignore"))
+        self.assertIn("## good/nope: không đọc được (không thấy repo good/nope", text)
+        self.assertIn("“fragment” (2 dòng khớp, in 1; xem thêm: --max-lines 2)", text)
+        self.assertIn("Không repo nào có dòng README nhắc “ignore”", text)
+        self.assertNotIn("README (đầu", text, "có --find thì mặc định không in README")
+        self.assertIn(f"README: {len(README)} ký tự, chưa in; xem đầu README: --readme-chars", text)
+        many = "\n".join(["toml"] * 40)
+        rendered = scout.render_repo(dict(repo, name="good/tool"), many, "gh", scout.find_lines(many, ["toml"]), 0)
+        self.assertIn("40 dòng khớp, in 3; từ khóa quá chung", rendered)
+        self.assertNotIn("--max-lines 40", rendered)
+        self.assertEqual(data[1], {"name": "good/nope", "error": str(scout.not_found("good/nope"))})
+
+    def test_cli_repo_limits_and_usage_without_arguments(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(scout.main([]), 0)
+        self.assertIn("scout.py repo <owner/name>", out.getvalue())
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(scout.main(["repo", "a/b", "c/d", "e/f", "g/h", "i/j", "k/l"]), 2)
+        self.assertIn("Tối đa 5 repo", err.getvalue())
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(scout.main(["repo", "a/b", "--max-lines", "0"]), 2)
+        self.assertIn("--max-lines", err.getvalue())
+        repo = scout.normalize_repo_view(REPO_VIEW)
+        with mock.patch.object(scout, "inspect_repo", return_value=(repo, README, "gh")), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(scout.main(["repo", "good/tool"]), 0)
+        self.assertIn("README (đầu", out.getvalue(), "một repo, không --find: in đầu README để nắm repo làm gì")
+        self.assertIn("Tiếp:", out.getvalue())
+        with mock.patch.object(scout, "inspect_repo", return_value=(repo, README, "gh")), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(scout.main(["repo", "good/tool", "github.com/good/tool", "--json", "--find", "x"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["repo"]["name"], "good/tool", "trùng tên thì chỉ kiểm một lần")
 
     def test_missing_repo_is_not_reported_as_network_error(self):
         def gh_not_found(cmd, **kwargs):

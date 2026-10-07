@@ -83,17 +83,18 @@ python3 evals/trace_stats.py evals/results/<cũ>.jsonl evals/results/<mới>.jso
 
 Grader chấm theo ý, không theo chữ: `tests/test_eval_suites.py` thử mỗi grader với câu đúng viết kiểu khác (phải đạt) và câu sai có đủ từ khóa (phải trượt).
 
-Kết quả ngày 07/10/2026, cấu hình E, mỗi phiên bản 12 lượt (4 việc × 3), tổng 7,49 USD giá niêm yết cho cả các đợt thăm dò:
+Kết quả ngày 07/10/2026, cấu hình E, mỗi phiên bản 12 lượt (4 việc × 3), tổng 9,87 USD giá niêm yết cho cả các đợt thăm dò (bản 0.5.2 là `scout.py` theo nguyên tắc AXI, `KE-HOACH.md` mục 6.16):
 
-| Trung bình mỗi lượt | Bản cũ (0.5.0) | Bản mới (0.5.1) |
-|---|---:|---:|
-| Đạt | 12/12 | 12/12 |
-| USD | 0,203 | 0,218 |
-| Giây | 45 | 55 |
-| Lệnh shell ghép | 6,3 | 0 |
-| Lệnh bị chặn quyền | 3,6 | 0,2 |
-| Lần tìm GitHub ra rỗng | 1,1 | 0,4 |
-| Lần kiểm repo bằng `scout.py repo` | 0 | 2,7 |
-| Chỗ skill tự nhận "chưa kiểm", "theo hiểu biết" | 2,6 | 1,2 |
+| Trung bình mỗi lượt | Bản cũ (0.5.0) | 0.5.1 | 0.5.2 |
+|---|---:|---:|---:|
+| Đạt | 12/12 | 12/12 | 12/12 |
+| USD | 0,203 | 0,218 | 0,198 |
+| Giây | 45 | 55 | 46 |
+| Lệnh shell ghép | 6,3 | 0 | 0,1 |
+| Lệnh bị chặn quyền | 3,6 | 0,2 | 0 |
+| Lần tìm GitHub ra rỗng | 1,1 | 0,4 | 0 |
+| Lần gọi `scout.py repo` | 0 | 2,7 | 0,9 |
+| Số repo được kiểm bằng README | 0 | 2,6 | 2,2 |
+| Chỗ skill tự nhận "chưa kiểm", "theo hiểu biết" | 2,6 | 1,2 | 1,0 |
 
-Bản cũ đạt hết, nghĩa là bốn bẫy chưa phân biệt được hai bản ở đầu ra; khác biệt nằm ở quá trình và ở bằng chứng. Ví dụ với `reuse-gap`, bản cũ không kiểm được lychee có kiểm anchor không nên chọn tự viết phần slug heading, còn bản mới đọc được dòng README nói về `--include-fragments` và chọn lychee cho cả anchor lẫn link ngoài. Grader đã qua review đối kháng. Trên bộ câu thử hiện có, bản đầu cho lọt 10 trên 27 câu sai (phần lớn là câu của model tin docstring hay chép lại đề) và chấm oan 8 trên 26 câu đúng. Bản sửa đầu tiên, khi chấm lại bài thật, lại chấm oan 3 lượt vì coi chữ "còn" ("anchor_exists còn TODO") là chữ nối. Mọi câu đó nay nằm trong `tests/test_eval_suites.py`. Mọi bài đã chốt được chấm lại bằng grader cuối (`--regrade`) và đọc soát đúng câu mà grader dựa vào.
+Bản cũ đạt hết, nghĩa là bốn bẫy chưa phân biệt được hai bản ở đầu ra; khác biệt nằm ở quá trình và ở bằng chứng. Ví dụ với `reuse-gap`, bản cũ không kiểm được lychee có kiểm anchor không nên chọn tự viết phần slug heading, còn bản mới đọc được dòng README nói về `--include-fragments` và chọn lychee cho cả anchor lẫn link ngoài. Grader đã qua review đối kháng. Trên bộ câu thử lúc review, bản đầu cho lọt 10 trên 27 câu sai (phần lớn là câu của model tin docstring hay chép lại đề) và chấm oan 8 trên 26 câu đúng. Bản sửa đầu tiên, khi chấm lại bài thật, lại chấm oan 3 lượt vì coi chữ "còn" ("anchor_exists còn TODO") là chữ nối. Mọi câu đó nay nằm trong `tests/test_eval_suites.py`. Đợt 0.5.2 lộ thêm một lượt bị chấm oan ở `reuse-stdlib` (câu quyết định nói "bằng thư viện chuẩn", chữ SHA-256 nằm xa); đã sửa. Mọi bài đã chốt được chấm lại bằng grader cuối (`--regrade`) và đọc soát đúng câu mà grader dựa vào.

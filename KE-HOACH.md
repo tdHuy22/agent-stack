@@ -406,7 +406,7 @@ Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube 
 | `no-mistakes`: ý định, review đối kháng ở context mới, test có bằng chứng, rà tài liệu, chấm rủi ro để quyết người đọc tới đâu | Tự làm skill `chot-viec` từ các mảnh đã có (`receipt.py`, `agent-stack:reviewer`) cộng `risk.py`. Không cài `no-mistakes`: nó tự push, mở PR, trông CI (repo không push), và cài bằng `curl \| sh` | `plugin/skills/chot-viec` |
 | `lavish`: lên kế hoạch bằng trang HTML có bình luận và nút chọn | Dùng Artifact có sẵn của Claude (riêng tư, có bình luận đọc được bằng `ArtifactComments`), không cài lavish. Chỉ khi kế hoạch có từ hai phương án hoặc ba quyết định | `CLAUDE.global.md` |
 | `gnhf`: vòng lặp qua đêm có trần vòng, trần token, điều kiện dừng, mỗi vòng một commit | Ghi cách chạy vào dòng "agent tự chạy dài" của bảng định tuyến và ghi chú của luật router `long-agent`; `/goal`, `/loop` đã có | `routing-table.md`, `rules.json` |
-| AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Chưa rà lại các script cũ | `chot-viec/scripts/risk.py` |
+| AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Ngày 07/10/2026 rà thêm `scout.py` (mục 6.16); các script cũ khác chưa rà | `chot-viec/scripts/risk.py`, `reuse-best/scripts/scout.py` |
 | WezTerm, tmux, Neovim, nhập bằng giọng (OpenSuperWhisper), Treehouse, firstmate | Không áp dụng: là thói quen terminal cá nhân, cần cài toàn cục, hoặc app desktop đã làm thay (worktree mỗi phiên, nhiều phiên song song) | |
 
 ### 6.15 Sửa `reuse-best` sau eval có bẫy (07/10/2026)
@@ -430,7 +430,19 @@ Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube 
 
 **Review độc lập** (agent `reviewer`, opus · high): 0 cao, 4 vừa, 2 thấp, đều đã sửa. Bốn lỗi vừa nằm ở grader: bản đầu cho lọt 10 trên 27 câu sai (câu của model tin docstring, chép lại đề, nhắc tên `CONTRIBUTING.md` mà quyết định trái luật) và chấm oan 8 trên 26 câu đúng. Grader nay chỉ tính lời phủ định nằm cùng mệnh đề với điều nó phủ định, và chấm cả quyết định. Hai lỗi thấp: `scout.py repo` ghi "chưa có bản phát hành" cho repo chỉ phát hành bằng tag (`hukkin/tomli`), nay ghi tag mới nhất kèm ngày; `--self-test` với tên bộ đo gõ sai từng thoát 0. Chấm lại bài thật bằng bản sửa đầu tiên của grader còn lộ 3 lượt bị chấm oan vì coi "còn" ("`anchor_exists` còn TODO") là chữ nối; đã sửa và đưa vào test.
 
-**Chưa làm, có thể làm sau:** câu tìm GitHub gồm nhiều khái niệm chuyên ngành ("fastapi rate limiter redis") vẫn có thể ra rỗng vì không có từ chung chung để bỏ; skill khi đó thử cách diễn đạt khác. Skill có lúc gọi `scout.py repo` nhiều lần cho cùng một repo với từ khóa khác nhau, trong khi `--find` nhận nhiều từ khóa một lần. Bốn bẫy hiện chưa phân biệt được hai bản ở đầu ra; muốn đo kỹ hơn thì cần bẫy mà quyết định đúng phụ thuộc vào một chi tiết chỉ kiểm được bằng README.
+**Chưa làm lúc đó:** câu tìm nhiều khái niệm chuyên ngành vẫn ra rỗng, và skill gọi `scout.py repo` lặp lại cho cùng một repo; cả hai đã sửa ở mục 6.16. Còn lại: bốn bẫy chưa phân biệt được các bản ở đầu ra; muốn đo kỹ hơn thì cần bẫy mà quyết định đúng phụ thuộc vào một chi tiết chỉ kiểm được bằng README.
+
+### 6.16 Gộp kết quả phiên "Video review và áp dụng": AXI cho `scout.py` (07/10/2026)
+
+Phiên đó (GĐ12, GĐ13, đã commit) để lại một ý chưa áp dụng: nguyên tắc AXI cho công cụ dành cho agent ([axi.md](https://axi.md), mục 6.14), với ghi chú "chưa rà lại các script cũ". `scout.py` là script như vậy, và eval ở mục 6.15 cho thấy đúng các triệu chứng AXI nhắm tới: gọi `repo` lặp lại, gọi `repo --help`, in 2.000 ký tự README mặc định, câu tìm nhiều khái niệm ra rỗng mà không có gợi ý.
+
+- Dòng tổng đứng đầu; cuối kết quả có dòng "Tiếp:" là lệnh chạy được ngay, tên repo điền sẵn, bỏ repo đã lưu trữ.
+- `repo` kiểm tối đa 5 repo trong một lần gọi; repo lỗi được ghi ngay trong kết quả; mỗi từ khóa có số dòng khớp và cách xem thêm (`--max-lines`, từ khóa quá chung thì gợi ý từ cụ thể hơn); có `--find` thì không in README, chỉ ghi độ dài và cách xem.
+- Câu tìm vẫn rỗng sau khi bỏ từ chung chung thì bỏ thêm từ cuối; còn rỗng thì gợi ý câu ngắn hơn.
+- Chạy không tham số thì in cách dùng; đầu vào sai (`--max-lines 0`, quá 5 repo) thì báo lỗi, thoát mã 2.
+- `SKILL.md`: kiểm các ứng viên đầu bảng trong một lệnh, gộp mọi tiêu chí vào một `--find`, làm theo dòng "Tiếp:".
+
+**Kết quả** (cấu hình E, 12 lượt; bảng ở `evals/README.md`): đạt 12/12; 0,198 USD và 46 giây mỗi lượt, tức rẻ hơn bản 0.5.1 (0,218 USD, 55 giây) và ngang bản cũ (0,203 USD, 45 giây); 0 lệnh bị chặn, 0 lần tìm ra rỗng; vẫn kiểm 2,2 repo mỗi lượt nhưng chỉ bằng 0,9 lần gọi (0.5.1: 2,6 repo, 2,7 lần gọi); chỗ "chưa kiểm" còn 1,0. Một lượt ban đầu bị chấm trượt là grader chấm oan (câu quyết định nói "bằng thư viện chuẩn", chữ SHA-256 nằm xa); đã sửa grader, đưa câu đó vào test, chấm lại cả năm đợt: không lượt nào khác đổi. Review độc lập (sonnet): không lỗi nào đạt ngưỡng, ba nhận xét nhỏ đã sửa. Chi phí đợt này 2,38 USD.
 
 ---
 
@@ -768,7 +780,7 @@ tien-do/
 - **Thang tìm:** tính năng sẵn có của công cụ đang dùng → code trong project → skill đã duyệt (`vetted.lock`) → công cụ và thư viện trên GitHub → bài nghiên cứu SOTA. Từ 07/10/2026 (mục 6.15): trước khi tìm, đọc ràng buộc trong file của project (phiên bản, luật phụ thuộc, cách chạy production) và viết nhu cầu thành tiêu chí bắt buộc; chỉ dừng ở một bậc khi có ứng viên đạt mọi tiêu chí bắt buộc, có bằng chứng (`file:dòng`, dòng README), còn "chạy được" hay "có sẵn trong repo" thì chưa đủ; việc lớn vẫn tìm tới bậc GitHub để đối chứng. Công sức tìm tỉ lệ với cỡ việc.
 - **Script `scout.py`** (chỉ đọc, chỉ dùng thư viện chuẩn):
   - GitHub qua `gh`, có dự phòng bằng API công khai. Tìm hai lần (khớp nhất và nhiều sao nhất) rồi gộp, vì chạy thử thật cho thấy xếp theo độ khớp bỏ sót công cụ nổi tiếng. Câu tìm ra rỗng thì bỏ từ chung chung và tên ngôn ngữ rồi tìm lại một lần, vì GitHub đòi mọi từ đều khớp ("toml parser python" không ra `hukkin/tomli`).
-  - `repo owner/name --find "từ khóa"`: lần phát hành gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng tiêu chí, để kiểm ứng viên bằng bằng chứng chỉ với một lệnh `python3` (không cần quyền `gh` hay WebFetch).
+  - `repo owner/name [owner/name …] --find "từ khóa"`: tối đa 5 repo một lần; lần phát hành (hay tag) gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng tiêu chí, để kiểm ứng viên bằng bằng chứng chỉ với một lệnh `python3` (không cần quyền `gh` hay WebFetch). Đầu ra theo AXI (mục 6.16).
   - Bài báo qua OpenAlex, dự phòng bằng Semantic Scholar rồi arXiv. Chạy thử thật cho thấy Semantic Scholar hay trả 429 khi không có khóa, còn arXiv hay chậm.
   - Đánh dấu chỗ cần xem: repo đã lưu trữ, không có giấy phép, copyleft, lâu không cập nhật, ít sao; bài preprint, không rõ nơi đăng.
 - **Luôn được nhắc:** luật chung trong `SHARED.global.md`, và router gợi ý skill này cho mọi việc thuộc nhóm "tính năng" và "kiến trúc", kèm lưu ý bỏ qua việc vặt. Có thêm luật riêng cho câu hỏi kiểu "có sẵn chưa", "SOTA".

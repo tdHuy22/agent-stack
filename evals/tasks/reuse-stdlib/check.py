@@ -10,6 +10,9 @@ FLAGS = re.IGNORECASE
 # Một ký tự trong cùng mệnh đề (xem reuse-gap/check.py).
 C = r"(?:(?![.;,]\s|\s(?:nhưng|but|while|whereas|tuy nhiên|however)\b)[^\n])"
 STDLIB = r"\b(hashlib|filecmp|sha-?256|sha1|blake2b?|md5)\b"
+# Câu quyết định có thể nói thẳng "bằng thư viện chuẩn" mà chữ hashlib nằm xa ở phần cách làm (eval 07/10/2026).
+STDLIB_CHOICE = r"(\b(hashlib|filecmp|sha-?256|sha1|blake2b?|md5)\b|thư viện chuẩn|standard library|\bstdlib\b)"
+REJECT_STDLIB = r"(không|chẳng|đừng) (dùng|chọn) (thư viện chuẩn|stdlib|hashlib)"
 DECIDE = (r"(quyết định|decision|chọn|khuyến nghị|đề xuất|recommend|nên dùng|nên tự viết|tự viết|"
           r"dùng thư viện chuẩn)")
 DEP_ADD = (r"(pip install|uv add|poetry add|pipx install|brew install|apt(-get)? install|npm install|cargo install|"
@@ -46,7 +49,7 @@ def check(workdir, answer):
     missing = []
     if not re.search(STDLIB, text, FLAGS):
         missing.append("không dùng cách của thư viện chuẩn (hashlib, filecmp)")
-    elif not near(text, DECIDE, STDLIB, 250):
+    elif not near(text, DECIDE, STDLIB_CHOICE, 250) or re.search(REJECT_STDLIB, text, FLAGS):
         missing.append("có nhắc hashlib/filecmp nhưng quyết định không chọn thư viện chuẩn")
     if decides_to_add_dependency(text):
         missing.append("quyết định thêm gói ngoài cho một việc thư viện chuẩn làm được")

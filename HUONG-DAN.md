@@ -323,10 +323,10 @@ python3 plugin/skills/reuse-best/scripts/scout.py papers "vietnamese ocr" --sinc
 ```
 
 ```bash
-python3 plugin/skills/reuse-best/scripts/scout.py repo lycheeverse/lychee --find "fragment, retry, exclude"
+python3 plugin/skills/reuse-best/scripts/scout.py repo lycheeverse/lychee tcort/markdown-link-check --find "fragment, retry, ignore"
 ```
 
-`github` có thêm `--limit`, `--sort {both,best-match,stars,updated}`, `--json`. GitHub đòi mọi từ trong câu tìm đều khớp, nên câu ra rỗng sẽ được tìm lại một lần sau khi bỏ từ chung chung và tên ngôn ngữ; tốt nhất dùng tên khái niệm (`toml parser`) và để tên ngôn ngữ ở `--language`. `repo` cho biết lần phát hành gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng từ khóa của `--find`, kèm số dòng.
+`github` có thêm `--limit`, `--sort {both,best-match,stars,updated}`, `--json`. GitHub đòi mọi từ trong câu tìm đều khớp, nên câu ra rỗng được nới dần: bỏ từ chung chung và tên ngôn ngữ, rồi bỏ từ cuối. Tốt nhất dùng tên khái niệm ngắn (`toml parser`) và để tên ngôn ngữ ở `--language`. `repo` kiểm tối đa 5 repo một lần: lần phát hành (hay tag) gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng từ khóa của `--find`, kèm số dòng; `--max-lines` in thêm dòng khớp, `--readme-chars` in đầu README. Kết quả nào cũng mở đầu bằng một dòng tổng và kết thúc bằng dòng "Tiếp:" là lệnh nên chạy tiếp; chạy `scout.py` không tham số thì in cách dùng.
 
 Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`. Repo không có giấy phép thì chỉ học ý tưởng, không chép code.
 

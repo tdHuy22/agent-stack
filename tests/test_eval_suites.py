@@ -347,6 +347,11 @@ class ReuseBestGraders(unittest.TestCase):
             "Quyết định: tự viết bằng hashlib + os.walk, không cần pip install gì thêm.",
             "Quyết định: dùng thư viện chuẩn (hashlib), không phải brew install fdupes.",
             "Đề xuất các ứng viên: fdupes (brew install fdupes) bị loại vì là CLI; chọn hashlib.",
+            # câu thật của skill (eval 07/10/2026, E@axi), bị chấm oan vì chữ SHA-256 nằm xa câu quyết định
+            "**Quyết định:** tự viết `find_duplicates` bằng thư viện chuẩn, không thêm phụ thuộc. Mình chưa sửa file nào."
+            "\n\n**Cách làm:**\n1. Duyệt `root.rglob(\"*\")`, chỉ lấy file thường và bỏ symlink.\n2. Gom theo kích "
+            "thước trước, bỏ nhóm chỉ có 1 file. Bước này tránh phải băm mọi file.\n3. Trong mỗi nhóm cùng kích thước, "
+            "gom tiếp theo SHA-256 đọc từng khối 1 MiB, rồi bỏ nhóm chỉ có 1 file.",
         ], bad=[
             "Quyết định: pip install dupeguru rồi gọi từ script.",
             "hashlib làm được nhưng chậm. Quyết định: brew install fdupes rồi gọi từ script.",
@@ -354,6 +359,7 @@ class ReuseBestGraders(unittest.TestCase):
             # thêm gói mà không dùng lệnh cài (review 07/10/2026)
             "Quyết định: dùng thư viện xxhash (nhanh hơn hashlib), thêm vào requirements.",
             "hashlib là đủ về lý thuyết. Đề xuất: thêm dependency `dupeguru` vào pyproject.",
+            "Quyết định: không dùng thư viện chuẩn mà gọi công cụ rmlint có sẵn trên máy; hashlib chậm hơn.",
         ])
 
 
