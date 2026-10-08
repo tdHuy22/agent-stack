@@ -567,14 +567,10 @@ def provenance(cfgs: list, tasks: list, args, work_root: Path) -> dict:
             return ""
     root = Path(args.plugin_root) if getattr(args, "plugin_root", None) else REPO / "plugin"
     plugin = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    try:  # vendor/ không nằm trong git, có thể thiếu ở bản chép khác
-        vendor = json.loads((REPO / "vendor" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        vendor = {}
     return {"repo_commit": sh("git", "--no-optional-locks", "-C", str(REPO), "rev-parse", "HEAD"),
             "repo_dirty": bool(sh("git", "--no-optional-locks", "-C", str(REPO), "status", "--porcelain")),
             "claude_version": sh(os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "--version"),
-            "plugin_version": plugin.get("version"), "vendor_version": vendor.get("version"),
+            "plugin_version": plugin.get("version"),
             "plugin_root": str(root), "plugin_digest": plugin_digest(root), "tag": getattr(args, "tag", None),
             "user_claude_md": (Path.home() / ".claude" / "CLAUDE.md").exists(),
             "configs": cfgs, "tasks": {t.name: digests(t) for t in tasks}, "repeats": args.repeats,
@@ -624,8 +620,12 @@ def main(argv=None) -> int:
             return 2
         args.plugin_root = str(root)
     all_cfgs = json.loads((EVALS / "configs.json").read_text(encoding="utf-8"))["configs"]
-    cfgs = [dict(all_cfgs[n], name=n + (f"@{args.tag}" if args.tag else "")) for n in args.configs.split(",")
-            if n in all_cfgs]
+    names = [n.strip() for n in args.configs.split(",") if n.strip()]
+    unknown = [n for n in names if n not in all_cfgs]
+    if unknown:
+        print(f"Không có cấu hình: {', '.join(unknown)}. Có: {', '.join(all_cfgs)}.")
+        return 2
+    cfgs = [dict(all_cfgs[n], name=n + (f"@{args.tag}" if args.tag else "")) for n in names]
     runs = [(c, t, r) for c in cfgs for t in tasks for r in range(args.repeats)]
     estimate = sum(guess_usd(c["model"]) for c, _, _ in runs)
     work_root = Path(args.work_root).expanduser() if args.work_root else default_work_root()

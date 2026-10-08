@@ -29,7 +29,7 @@ events = [
     {"type": "system", "subtype": "init"},
     {"type": "assistant", "message": {"content": [
         {"type": "text", "text": "Dùng skill."},
-        {"type": "tool_use", "name": "Skill", "input": {"skill": "agent-stack-vendor:diagnosing-bugs"}}]}},
+        {"type": "tool_use", "name": "Skill", "input": {"skill": "khac:demo"}}]}},
     {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Edit", "input": {}}]}},
     {"type": "result", "result": "Đã sửa.", "total_cost_usd": 0.07, "num_turns": 4, "is_error": False},
 ]
@@ -88,6 +88,16 @@ class Selection(unittest.TestCase):
         self.assertEqual(len(chosen), 1)
         self.assertTrue(chosen[0].startswith("| A |"), table)
 
+    def test_unknown_config_is_refused_not_dropped(self):
+        # Cấu hình V đã bỏ 08/10/2026: gõ lại tên cũ phải báo lỗi, không lặng lẽ chạy phần còn lại.
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()) as buf:
+            code = run_eval.main(["--configs", "A,V", "--tasks", "code-off-by-one"])
+        self.assertEqual(code, 2, buf.getvalue())
+        self.assertIn("Không có cấu hình: V.", buf.getvalue())
+        self.assertNotIn("Kế hoạch:", buf.getvalue())
+
 
 class RunnerEndToEnd(TempDirTestCase):
     def test_run_one_with_fake_claude(self):
@@ -123,7 +133,7 @@ class RunnerEndToEnd(TempDirTestCase):
         self.assertNotIn("Skill", args[args.index("--allowedTools") + 1].split())
         self.assertEqual(row["skills_used"], [])
 
-    def test_vendor_config_loads_plugin_and_records_skills(self):
+    def test_extra_plugin_config_loads_plugin_and_records_skills(self):
         fake = self.tmp / "claude"
         fake.write_text(FAKE_CLAUDE_STREAM)
         fake.chmod(0o755)
@@ -134,15 +144,15 @@ class RunnerEndToEnd(TempDirTestCase):
         task = run_eval.TASKS / "code-off-by-one"
         work = self.tmp / "work"
         run_eval.prepare(task, work)
-        cfg = {"name": "V", "model": "sonnet", "effort": "medium", "plugins": ["vendor"]}
+        cfg = {"name": "X", "model": "sonnet", "effort": "medium", "plugins": ["khac"]}
         row, _ = run_eval.run_one(cfg, task, work, 0.5)
         self.assertTrue(row["passed"], row)
         self.assertEqual(row["cost_usd"], 0.07)
         self.assertEqual(row["answer"], "Đã sửa.")
-        self.assertEqual(row["plugins"], ["vendor"])
-        self.assertEqual(row["skills_used"], ["agent-stack-vendor:diagnosing-bugs"])
+        self.assertEqual(row["plugins"], ["khac"])
+        self.assertEqual(row["skills_used"], ["khac:demo"])
         args = json.loads((self.tmp / "args.json").read_text())
-        self.assertEqual(args[args.index("--plugin-dir") + 1], str(run_eval.REPO / "vendor"))
+        self.assertEqual(args[args.index("--plugin-dir") + 1], str(run_eval.REPO / "khac"))
         self.assertIn("Skill", args[args.index("--allowedTools") + 1].split())
         self.assertEqual(args[args.index("--output-format") + 1], "stream-json")
         self.assertIn("--verbose", args)
@@ -150,17 +160,17 @@ class RunnerEndToEnd(TempDirTestCase):
     def test_cli_mode_only_changes_for_plugin_configs(self):
         tools, fmt = run_eval.cli_mode({"name": "A", "model": "sonnet", "effort": "medium"})
         self.assertEqual((tools, fmt), (run_eval.ALLOWED_TOOLS, "json"))
-        tools, fmt = run_eval.cli_mode({"name": "V", "model": "sonnet", "effort": "medium", "plugins": ["vendor"]})
+        tools, fmt = run_eval.cli_mode({"name": "X", "model": "sonnet", "effort": "medium", "plugins": ["khac"]})
         self.assertEqual((tools, fmt), (run_eval.ALLOWED_TOOLS + " Skill", "stream-json"))
 
     def test_skill_usage_is_summarized(self):
-        rows = [{"config": "V", "passed": True, "cost_usd": 0.1, "seconds": 5, "cluster": "dat",
-                 "skills_used": ["agent-stack-vendor:tdd"]},
-                {"config": "V", "passed": False, "cost_usd": 0.1, "seconds": 5, "cluster": "chat-luong",
+        rows = [{"config": "X", "passed": True, "cost_usd": 0.1, "seconds": 5, "cluster": "dat",
+                 "skills_used": ["khac:demo"]},
+                {"config": "X", "passed": False, "cost_usd": 0.1, "seconds": 5, "cluster": "chat-luong",
                  "skills_used": []},
                 {"config": "A", "passed": True, "cost_usd": 0.1, "seconds": 5, "cluster": "dat"}]
         table = run_eval.summarize(rows, n_tasks=1)
-        self.assertIn("V: gọi skill ở 1/2 lượt (agent-stack-vendor:tdd 1)", table)
+        self.assertIn("X: gọi skill ở 1/2 lượt (khac:demo 1)", table)
         self.assertNotIn("A: gọi skill", table)
 
 

@@ -31,14 +31,6 @@
       "effort": "medium",
       "note": "alias haiku = Haiku 4.5 (kiểm 08/10/2026), không có effort; chỉ để đo trần dưới"
     },
-    "V": {
-      "model": "sonnet",
-      "effort": "medium",
-      "plugins": [
-        "vendor"
-      ],
-      "note": "A + plugin vendor (diagnosing-bugs, tdd, humanizer, grill-me, handoff): so với A để biết skill có giúp thật không"
-    },
     "HM": {
       "model": "claude-haiku-5-5",
       "effort": "max",

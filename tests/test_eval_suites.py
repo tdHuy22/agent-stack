@@ -85,9 +85,9 @@ class PluginVersions(TempDirTestCase):
         self.assertNotEqual(run_eval.plugin_digest(root), first)
 
     def test_plugin_root_replaces_only_agent_stack(self):
-        cfg = {"name": "X", "plugin": True, "plugins": ["vendor"]}
-        self.assertEqual(run_eval.plugin_paths(cfg), [REPO / "plugin", REPO / "vendor"])
-        self.assertEqual(run_eval.plugin_paths(cfg, self.tmp / "old"), [self.tmp / "old", REPO / "vendor"])
+        cfg = {"name": "X", "plugin": True, "plugins": ["khac"]}
+        self.assertEqual(run_eval.plugin_paths(cfg), [REPO / "plugin", REPO / "khac"])
+        self.assertEqual(run_eval.plugin_paths(cfg, self.tmp / "old"), [self.tmp / "old", REPO / "khac"])
         self.assertEqual(run_eval.plugin_paths({"name": "A"}, self.tmp / "old"), [])
 
     def test_mixed_plugin_versions_block_comparison(self):

@@ -193,7 +193,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | A: sonnet · medium | 20/20 | 0,093 (7 việc) · 0,144 (3 việc khó) | 27 · 45 |
 | V: A + vendor | 20/20 | 0,094 · 0,140 | 25 · 42 |
 
-- V không đạt thêm việc nào, và **không gọi skill vendor ở lượt nào (0/20)**: sonnet tự làm xong. Vì vậy skill vendor **tắt mặc định** (`catalog.json` scope `on-demand`, router không gợi ý). Cài lại khi cần: đổi scope thành `user` rồi chạy `install.sh`. `install.sh` không tự gỡ bản đã cài: trên máy, plugin `agent-stack-vendor` (và 5 symlink trong `~/.config/opencode/skills/`) vẫn bật cho tới khi bạn gỡ.
+- V không đạt thêm việc nào, và **không gọi skill vendor ở lượt nào (0/20)**: sonnet tự làm xong. Vì vậy skill vendor **tắt mặc định** (`catalog.json` scope `on-demand`, router không gợi ý). Ngày 08/10/2026 đã gỡ hẳn khỏi máy: plugin và marketplace `agent-stack-vendor-local`, 5 symlink trong `~/.config/opencode/skills/`, thư mục `vendor/` và cấu hình V. Cài lại khi cần: đổi scope thành `user` rồi chạy `install.sh` (chép lại từ bản đã kiểm trong `.vet-cache/`).
 - Giới hạn: số đo này không nói skill có giúp khi được gọi hay không; nó chỉ cho thấy với sonnet · medium chúng không được dùng tới.
 
 **Haiku 5.5 (08/10/2026).** Lần đo đầu (alias `haiku`, thật ra là Haiku 4.5; rồi `claude-haiku-5-5 · max` bị trần chi phí cắt sớm vì CLI 2.1.285 tính giá Haiku 5.5 theo Opus 5.5, gấp 40 lần) đã bỏ. `run_eval.py` nay tự tính chi phí từ token khi CLI báo `costBasis: unknown`, và cấu hình đặt `cli_cost_factor: 40`. Đo lại trên cùng 10 việc × 2 lượt:
