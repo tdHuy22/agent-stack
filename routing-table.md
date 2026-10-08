@@ -25,7 +25,7 @@ Effort là tín hiệu hành vi, không phải trần token cứng: ở mức th
 
 | Bậc | Cấu hình | Dùng cho | Căn cứ |
 |---:|---|---|---|
-| 0 | `claude-haiku-5-5 · low` | Việc cơ học có test hay diff kiểm được; subagent chỉ đọc | A: Haiku cho worker và khối lượng lớn có đầu ra kiểm được; Haiku 5.5 rẻ hơn Sonnet 5.5 khoảng 20 lần. E: Haiku 4.5 chỉ đạt 4/12 việc khó; Haiku 5.5 chưa có số đo hợp lệ (mục 8) |
+| 0 | `claude-haiku-5-5 · low` | Việc có test kiểm được (tính năng, sửa lỗi, viết test, việc cơ học); subagent chỉ đọc | E: 9/9 việc code, debug có test (18/18 lượt) với khoảng 1/10 chi phí sonnet (mục 8). Văn tiếng Việt yếu (2/6) |
 | 1 | `sonnet · low` | Hỏi nhanh, sửa nhỏ, tra cứu, ghi chép | A |
 | 2 | `sonnet · medium` | Mặc định cho việc rõ ràng | E: 24/24 việc nhỏ, 12/12 việc khó, rẻ nhất |
 | 3 | `sonnet · high` | Việc khó hơn mà vẫn rõ đặc tả; review diff nhỏ; phản biện; văn bản dài | A: Sonnet 5.5 chuyển sang `high` cho việc khó hay dài hơn |
@@ -77,12 +77,12 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 |---|---|---|---|---|---|
 | Sửa nhỏ mô tả chính xác (vài dòng, chính tả, thông báo) | `sonnet · low`, dặn chạy test | `sonnet · medium` | — | — | A: `low` cho thay đổi nhỏ; ở `low` model dễ bỏ bước tự kiểm |
 | Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `claude-haiku-5-5 · low` | `claude-haiku-5-5 · medium`, rồi `sonnet · low` | agent-stack:oc-worker | — | A; P cho Haiku 5.5 |
-| Tính năng thông thường, đặc tả rõ | `sonnet · medium` | `sonnet · high` | — | reuse-best nếu không tầm thường | E: 6/6 |
+| Tính năng thông thường, đặc tả rõ | `sonnet · medium`; project có test: `claude-haiku-5-5 · low` | `sonnet · medium`, rồi `sonnet · high` | — | reuse-best nếu không tầm thường | E: sonnet 6/6; Haiku 5.5 · low 9/9 việc có test, 18/18 lượt (mục 8) |
 | Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · medium` | `sonnet · high`, rồi `opus · medium` | — | — | E: cron và diff tối thiểu, sonnet 4/4, Haiku 4.5 0/4 |
 | Code đồng thời, async, khóa | `sonnet · medium` | `sonnet · high`, rồi `opus · high` | — | — | E: race và pool asyncio, sonnet 4/4, opus 4/4 |
 | Refactor có test | `sonnet · medium` | `sonnet · high` | — | — | E: 2/2 |
 | Refactor lớn, migration nhiều module, đổi API công khai | `opusplan` (Opus lập kế hoạch, Sonnet thực thi) | `opus · high` | Plan | reuse-best | A: `opusplan`; P |
-| Viết test | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | — | E: 2/2; `tdd` không giúp thêm (mục 8) |
+| Viết test | `claude-haiku-5-5 · low` khi project có test | `sonnet · medium`, rồi `sonnet · high` | agent-stack:test-runner | — | E: Haiku 5.5 · low 2/2 (bắt đủ 3/3 lỗi cấy); `tdd` không giúp thêm (mục 8) |
 | Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | `opus · xhigh` hoặc `/effort ultracode` | `fable · high` | — | — | A: `xhigh` cho việc trên 30 phút. Cách chạy (theo `gnhf`, MIT): đặt điều kiện dừng và trần số vòng hoặc token trước khi đi ngủ, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file; sáng ra chọn commit nào giữ |
 | Việc dài hơi rất khó mà Opus ở `xhigh` vẫn chưa đạt | `fable · high` | `fable · xhigh` | — | — | A |
 
@@ -90,7 +90,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Lỗi có traceback, test đỏ rõ | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | — | E |
+| Lỗi có traceback, test đỏ rõ | `claude-haiku-5-5 · low` khi project có test, không thì `sonnet · medium` | `sonnet · medium`, rồi `sonnet · high` | agent-stack:test-runner | — | E: Haiku 5.5 · low đạt cả 4 việc debug (mục 8) |
 | Lỗi nhiều file, nguyên nhân xa triệu chứng | `opus · medium` | `opus · high` | — | — | A: model lớn cho lỗi tinh vi. E: sonnet·medium đạt `debug-multifile` 2/2, có thể thử trước khi đã có test |
 | Race, deadlock, lỗi lúc được lúc không | `opus · medium` | `opus · high` | — | — | E: `debug-race` mọi cấu hình trừ Haiku 4.5 đều đạt; `debug-flaky-rank` (phụ thuộc hash) sonnet·medium 4/4; P cho lỗi thật |
 | Lỗi chỉ xảy ra trên production, không tái hiện, hồi quy hiệu năng | `opus · high` | `opus · xhigh` | — | — | P: không có tín hiệu kiểm nhanh |
@@ -181,7 +181,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 - Các dòng `sonnet · high` (review diff nhỏ, phản biện, văn bản dài, kế hoạch vừa) là phán đoán: chưa so với `sonnet · medium`.
 
 - Đặt `Explore` sang Haiku 5.5 (`explore-lite`) có làm giảm chất lượng các việc coding không? Cần so cấu hình E với A.
-- Haiku 4.5 (cấu hình H) trên việc khó: 4/12 và đắt hơn sonnet (mục trên). Haiku 5.5: chưa có số đo hợp lệ (mục 8); trên việc cơ học: chưa đo.
+- Haiku 4.5 (cấu hình H) trên việc khó: 4/12 và đắt hơn sonnet (mục trên). Haiku 5.5: 9/9 việc code, debug có test (18/18 lượt) ở mọi effort (mục 8); việc cơ học, việc dài hơi, codebase lớn: chưa đo.
 - Bảng `BASELINE.md` cho thấy 70% chi phí đến từ subagent và workflow. Đây là chỗ đáng đo tiếp.
 
 ## 8. Skill vendor và Haiku 5.5 (07–08/10/2026)
@@ -196,4 +196,17 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 - V không đạt thêm việc nào, và **không gọi skill vendor ở lượt nào (0/20)**: sonnet tự làm xong. Vì vậy skill vendor **tắt mặc định** (`catalog.json` scope `on-demand`, router không gợi ý). Cài lại khi cần: đổi scope thành `user` rồi chạy `install.sh`. `install.sh` không tự gỡ bản đã cài: trên máy, plugin `agent-stack-vendor` (và 5 symlink trong `~/.config/opencode/skills/`) vẫn bật cho tới khi bạn gỡ.
 - Giới hạn: số đo này không nói skill có giúp khi được gọi hay không; nó chỉ cho thấy với sonnet · medium chúng không được dùng tới.
 
-**Haiku 5.5 · max (08/10/2026).** Lần chạy đầu dùng alias `haiku`, thực ra là Haiku 4.5, nên đã bỏ. Lần chạy lại với `claude-haiku-5-5`: 2 lượt `code-async-pool` đều dừng vì chạm trần chi phí mỗi lượt, rồi cả lượt chạy dừng vì vượt trần tổng 3 USD. **Kết quả này không hợp lệ**: CLI 2.1.285 tính Haiku 5.5 theo giá Opus 5.5 (`costBasis: unknown`), gấp 40 lần giá thật, nên trần 1 USD mỗi lượt thật ra chỉ khoảng 0,025 USD. Chi phí thật mỗi lượt vào khoảng 0,04–0,22 USD (tùy prompt có vượt 100K token không), chưa chắc "đắt hơn sonnet". Muốn đo Haiku 5.5 cần sửa cách `run_eval.py` tính chi phí (tự tính từ token khi `costBasis` là `unknown`) hoặc chờ CLI cập nhật.
+**Haiku 5.5 (08/10/2026).** Lần đo đầu (alias `haiku`, thật ra là Haiku 4.5; rồi `claude-haiku-5-5 · max` bị trần chi phí cắt sớm vì CLI 2.1.285 tính giá Haiku 5.5 theo Opus 5.5, gấp 40 lần) đã bỏ. `run_eval.py` nay tự tính chi phí từ token khi CLI báo `costBasis: unknown`, và cấu hình đặt `cli_cost_factor: 40`. Đo lại trên cùng 10 việc × 2 lượt:
+
+| Cấu hình | Lượt đạt | 9 việc code, debug (lượt) | Viết lại văn tiếng Việt (lượt) | USD/việc (TB) | Giây/việc |
+|---|---:|---:|---:|---:|---:|
+| `claude-haiku-5-5 · low` | 19/20 | 18/18 | 1/2 | 0,009 | 32 |
+| `claude-haiku-5-5 · medium` | 18/20 | 18/18 | 0/2 | 0,012 | 50 |
+| `claude-haiku-5-5 · max` | 19/20 | 18/18 | 1/2 | 0,063 | 314 |
+| A: `sonnet · medium` (07/10) | 20/20 | 18/18 | 2/2 | 0,093–0,144 | 27–45 |
+
+- Haiku 5.5 · low giải hết 9 việc code và debug có test, kể cả `code-async-pool`, `code-unified-diff` (rất khó) và hai việc debug mới, với khoảng **1/10 chi phí** sonnet · medium. Haiku 4.5 trên nhóm việc khó chỉ đạt 4/12.
+- Effort cao hơn không đạt thêm việc nào: `max` tốn gấp 7 lần `low` và chậm gấp 10 lần.
+- Văn tiếng Việt thì Haiku 5.5 yếu: bỏ sót sự kiện hay còn nhiều dấu hiệu văn AI (2/6 lượt đạt). Giữ sonnet cho việc viết.
+- Áp dụng: luật `feature`, `debug-simple`, `tests` có mục `with_tests` (không áp cho sửa vài dòng: chưa đo, và đổi model giữa phiên làm mất prompt cache). Khi hồ sơ project có test, router gợi ý `claude-haiku-5-5 · low`, test trượt thì làm lại ở cấu hình cũ. Không có test thì giữ cấu hình cũ, vì đây là nơi model rẻ dễ hỏng mà không ai biết.
+- Giới hạn: việc eval tự chứa, đặc tả rõ, ngắn (ở `low` lượt dài nhất 88 giây; ở `max` trung bình 5 phút, dài nhất khoảng 15 phút). Chưa đo việc dài hơi, codebase lớn hay đặc tả mơ hồ; debug nhiều file thật vẫn bắt đầu ở opus · medium. Chi phí Haiku 5.5 tính theo giá prompt dưới 100K token, nên là mức thấp nhất (trên 100K đắt gấp 5, vẫn rẻ hơn sonnet). Kết quả: `evals/results/20261008-093626.jsonl`.

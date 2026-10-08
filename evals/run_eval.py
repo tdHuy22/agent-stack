@@ -41,8 +41,15 @@ EVALS = Path(__file__).resolve().parent
 REPO = EVALS.parent
 TASKS = EVALS / "tasks"
 RESULTS = EVALS / "results"
+sys.path.insert(0, str(REPO / "tools"))
+import usage_snapshot  # noqa: E402  (bảng giá niêm yết, để tự tính chi phí khi CLI chưa biết giá model)
 # Ước tính thô chi phí mỗi việc (USD theo giá niêm yết), chỉ để báo trước khi chạy.
-GUESS_USD = {"haiku": 0.04, "sonnet": 0.12, "opus": 0.25, "fable": 0.6}
+GUESS_USD = {"claude-haiku-5-5": 0.01, "haiku": 0.04, "sonnet": 0.12, "opus": 0.25, "fable": 0.6}
+
+
+def guess_usd(model: str) -> float:
+    """Ước tính thô mỗi lượt: khớp ID đầy đủ trước, rồi theo họ model (alias hay ID)."""
+    return GUESS_USD.get(model) or next((v for k, v in GUESS_USD.items() if k in model), 0.2)
 SUFFIX = ("\n\nLàm việc ngay trong thư mục hiện tại. Không hỏi lại. "
           "Khi xong, trả lời ngắn gọn kết quả cuối cùng.")
 ALLOWED_TOOLS = "Read Write Edit Grep Glob Bash(python3 *) Bash(git diff*) Bash(git status*) Bash(ls*) Bash(cat *)"
@@ -185,6 +192,35 @@ def classify(data: dict, timed_out: bool) -> tuple:
     return "van-hanh", subtype or "lỗi khi chạy"
 
 
+def priced_cost(data: dict) -> tuple:
+    """(chi phí, chi phí CLI báo, các model CLI chưa biết giá).
+
+    Model có costBasis "unknown" trong modelUsage bị CLI tính theo giá mặc định (CLI 2.1.285 tính Haiku 5.5 theo giá
+    Opus 5.5, gấp 40 lần). Phần của các model đó được tính lại từ số token theo bảng giá của usage_snapshot, theo
+    giá cho prompt tới 100K token, nên là mức thấp nhất. Không có giá trong bảng thì giữ số của CLI."""
+    cli = data.get("total_cost_usd")
+    usage = data.get("modelUsage") or {}
+    unknown = sorted(m for m, u in usage.items() if isinstance(u, dict) and u.get("costBasis") == "unknown")
+    if not unknown or cli is None:
+        return cli, cli, unknown
+    # modelUsage không tách ghi cache 1 giờ và 5 phút; lấy tỉ lệ từ usage tổng (không có thì coi là 1 giờ, như CLI).
+    split = (data.get("usage") or {}).get("cache_creation") or {}
+    w1h, w5m = split.get("ephemeral_1h_input_tokens") or 0, split.get("ephemeral_5m_input_tokens") or 0
+    share_1h = w1h / (w1h + w5m) if (w1h + w5m) else 1.0
+    total = cli
+    for model in unknown:
+        u = usage[model]
+        writes = u.get("cacheCreationInputTokens") or 0
+        w1 = round(writes * share_1h)
+        real = usage_snapshot.entry_cost(model, {
+            "input_tokens": u.get("inputTokens"), "output_tokens": u.get("outputTokens"),
+            "cache_read_input_tokens": u.get("cacheReadInputTokens"), "cache_creation_input_tokens": writes,
+            "cache_creation": {"ephemeral_1h_input_tokens": w1, "ephemeral_5m_input_tokens": writes - w1}})
+        if real is not None:
+            total += real - (u.get("costUSD") or 0)
+    return round(total, 6), cli, unknown
+
+
 def plugin_dirs(cfg: dict) -> list:
     """Thư mục plugin (tương đối với repo) nạp cho cấu hình: "plugin": true là agent-stack, "plugins" thêm cái khác."""
     dirs = (["plugin"] if cfg.get("plugin") else []) + list(cfg.get("plugins") or [])
@@ -273,7 +309,9 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
     cmd = [os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "-p", prompt, "--model", cfg["model"],
            "--effort", cfg["effort"], "--output-format", output_format,
            "--no-session-persistence", "--permission-mode", "acceptEdits", "--allowedTools", tools,
-           "--max-budget-usd", str(cap_usd), "--setting-sources", "project"]
+           # CLI chưa biết giá model thì tính sai theo một hệ số; nhân trần lên để trần ứng với giá thật.
+           "--max-budget-usd", str(round(cap_usd * float(cfg.get("cli_cost_factor") or 1), 4)),
+           "--setting-sources", "project"]
     if dirs:
         cmd.append("--verbose")
     for path in paths:
@@ -302,14 +340,17 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
     else:
         passed, why = load_check(task)(workdir, answer)
         cluster = "dat" if passed else "chat-luong"
+    cost, cli_cost, unpriced = priced_cost(data)
     input_digest, grader_digest = digests(task)
     row = {"config": cfg["name"], "model": cfg["model"], "effort": cfg["effort"], "plugin": bool(cfg.get("plugin")),
            "plugins": dirs, "skills_used": skills,
            "task": task.name, "passed": bool(passed), "why": str(why)[:400], "cluster": cluster,
-           "cost_usd": data.get("total_cost_usd"), "turns": data.get("num_turns"), "seconds": seconds,
+           "cost_usd": cost, "turns": data.get("num_turns"), "seconds": seconds,
            "models_used": sorted((data.get("modelUsage") or {}).keys()),
            "denied": len(data.get("permission_denials") or []), "answer": answer,
            "input_digest": input_digest, "grader_digest": grader_digest}
+    if unpriced:
+        row.update(cli_cost_usd=cli_cost, cost_note="tự tính từ token (CLI chưa biết giá): " + ", ".join(unpriced))
     if task_suite(task):
         row["suite"] = task_suite(task)
     if dirs:
@@ -586,7 +627,7 @@ def main(argv=None) -> int:
     cfgs = [dict(all_cfgs[n], name=n + (f"@{args.tag}" if args.tag else "")) for n in args.configs.split(",")
             if n in all_cfgs]
     runs = [(c, t, r) for c in cfgs for t in tasks for r in range(args.repeats)]
-    estimate = sum(GUESS_USD.get(c["model"], 0.2) for c, _, _ in runs)
+    estimate = sum(guess_usd(c["model"]) for c, _, _ in runs)
     work_root = Path(args.work_root).expanduser() if args.work_root else default_work_root()
     print(f"Kế hoạch: {len(cfgs)} cấu hình × {len(tasks)} việc × {args.repeats} lần = {len(runs)} lượt.")
     print(f"Ước tính thô: khoảng {estimate:.1f} USD theo giá niêm yết (gói thuê bao: tính vào hạn mức 5 giờ/tuần).")
@@ -610,7 +651,7 @@ def main(argv=None) -> int:
     out_file = RESULTS / f"{stamp}.jsonl"
     (RESULTS / f"{stamp}.meta.json").write_text(
         json.dumps(provenance(cfgs, tasks, args, work_root), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    rows, spent = [], 0.0
+    rows, spent, warned = [], 0.0, set()
     for cfg, task, rep in runs:
         if spent > args.max_total_usd:
             print(f"Dừng: đã vượt trần {args.max_total_usd} USD.")
@@ -631,6 +672,16 @@ def main(argv=None) -> int:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
         print(f"{'✓' if row['passed'] else '✗'} {cfg['name']} {task.name} #{rep} · {row['cost_usd']} USD · "
               f"{row['why'][:80]}")
+        if row.get("cost_note") and not cfg.get("cli_cost_factor") and cfg["name"] not in warned:
+            warned.add(cfg["name"])
+            factor = (row["cli_cost_usd"] or 0) / row["cost_usd"] if row["cost_usd"] else 0
+            print(f"  ! {cfg['name']}: CLI chưa biết giá {row['models_used']}, tính sai khoảng {factor:.0f} lần; "
+                  f"trần mỗi lượt đang cắt sớm. Thêm \"cli_cost_factor\" vào configs.json.")
+        if cfg.get("cli_cost_factor") and row["cost_usd"] is not None and not row.get("cost_note") \
+                and cfg["name"] not in warned:
+            warned.add(cfg["name"])
+            print(f"  ! {cfg['name']}: CLI đã biết giá model, \"cli_cost_factor\" không còn cần; bỏ khỏi configs.json, "
+                  "kẻo trần mỗi lượt bị nhân lên.")
         if not args.keep_workdirs:
             shutil.rmtree(workdir, ignore_errors=True)
         if row["cluster"] == "moi-truong":

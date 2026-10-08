@@ -37,6 +37,9 @@ class RouterRules(TempDirTestCase):
             with self.subTest(rule=r["id"]):
                 self.assertIn(r["model"], route.FAMILIES)
                 self.assertIn(r.get("effort"), efforts)  # Haiku 5.5 cũng có effort
+                if r.get("with_tests"):
+                    self.assertIn(r["with_tests"]["model"], route.FAMILIES)
+                    self.assertIn(r["with_tests"]["effort"], efforts)
                 for base in r["_refines"]:
                     self.assertIn(base, ids)
                 if r.get("only_refine"):
@@ -62,6 +65,19 @@ class RouterRules(TempDirTestCase):
         self.assertTrue(route.needs_model_switch("sonnet", "claude-haiku-5-5"))
         self.assertFalse(route.needs_model_switch("sonnet", "claude-sonnet-5-5"))
         self.assertFalse(route.needs_model_switch("opus", ""))
+
+    def test_cheaper_model_only_when_project_has_tests(self):
+        text = "Thêm tính năng xuất CSV cho báo cáo, viết hàm mới"
+        plain = route.suggest_for(text, {"kinds": ["python"], "markers": []})
+        tested = route.suggest_for(text, {"kinds": ["python"], "markers": ["tests"]})
+        self.assertEqual((plain["model"], plain["effort"]), ("sonnet", "medium"))
+        self.assertEqual((tested["model_id"], tested["effort"]), ("claude-haiku-5-5", "low"))
+        self.assertEqual(tested["fallback"], "sonnet · medium")  # có đường lên bậc khi test trượt
+        self.assertNotIn("test trượt", tested["note"])  # đường lên bậc chỉ có một nguồn (fallback)
+        small = route.suggest_for("Sửa lỗi chính tả trong thông báo lỗi này", {"kinds": [], "markers": ["tests"]})
+        self.assertEqual((small["rule"], small["model"], small["effort"]), ("small-fix", "sonnet", "low"))
+        review = route.suggest_for("Review code PR này giúp mình", {"kinds": [], "markers": ["tests"]})
+        self.assertEqual(review["model"], "opus")  # việc không chấm được bằng test thì giữ nguyên
 
     def test_on_demand_skills_not_suggested(self):
         # Skill scope on-demand (vendor tắt mặc định 08/10/2026) không được nằm trong luật hay hồ sơ project.
@@ -266,7 +282,8 @@ class ProjectAware(ProjectFixtures):
         hint = route.session_hint(root)
         self.assertIn("Python", hint["context"])
         self.assertIn("agent-stack:test-runner", hint["context"])
-        self.assertIn("→ sonnet · medium · skill reuse-best", hint["context"])
+        # Project có test nên dùng cấu hình rẻ, kèm đường lên bậc.
+        self.assertIn("→ claude-haiku-5-5 · low (test trượt thì sonnet · medium) · skill reuse-best", hint["context"])
         self.assertIn("dòng ➡️", hint["context"])
         self.assertIn("🧭 Python", hint["user"])
 

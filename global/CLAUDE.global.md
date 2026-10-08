@@ -15,7 +15,8 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
 | Nghiên cứu sâu nhiều nguồn, sai thì đắt | opus·medium | researcher | – |
 | Đọc sâu bài báo; phản biện bài báo | sonnet·medium; sonnet·high | – | paper-anatomy |
-| Tính năng, refactor, viết test, lỗi có traceback rõ | sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường |
+| Tính năng, viết test, lỗi có traceback rõ, khi project có test | claude-haiku-5-5·low; test trượt thì sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường |
+| Như trên mà không có test; refactor | sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường |
 | Debug nhiều file, race, lỗi lúc được lúc không | opus·medium, chưa ra thì high | – | – |
 | Lỗi chỉ có trên production, không tái hiện được | opus·high | – | – |
 | Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | – |

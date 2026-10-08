@@ -509,7 +509,7 @@ Test phải đạt trên cả `/usr/bin/python3` (3.9) và `python3`.
 
 ### Eval chọn cấu hình
 
-`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), HM (Haiku 5.5 · max), V (A + plugin vendor, để biết skill bên thứ ba có giúp thật không).
+`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), H5L, H5M, HM (Haiku 5.5 · low, medium, max), V (A + plugin vendor, để biết skill bên thứ ba có giúp thật không).
 
 ```bash
 python3 evals/run_eval.py --configs A,C,D --repeats 2

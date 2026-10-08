@@ -98,6 +98,14 @@ def suggest(text: str):
 def suggest_for(text: str, profile=None):
     """Như suggest(), thêm skill theo loại project (ví dụ c-review khi review code C)."""
     hit = suggest(text)
+    if hit and profile and "tests" in (profile.get("markers") or []):
+        # Có test để kiểm thì dùng cấu hình rẻ hơn (mục with_tests của luật); test trượt thì lên bậc cũ.
+        cheaper = next((r.get("with_tests") for r in rules()["rules"] if r["id"] == hit["rule"]), None)
+        if cheaper:
+            note = "; ".join(x for x in (hit["note"], cheaper.get("note", "")) if x)
+            fallback = model_effort(hit)
+            hit.update(model=cheaper["model"], model_id=model_name(cheaper["model"]), effort=cheaper["effort"], note=note,
+                       fallback=fallback)
     if hit and profile:
         extras = []
         for kind in profile.get("kinds", []):
@@ -238,7 +246,7 @@ def model_effort(hit: dict) -> str:
 def describe(hit: dict) -> str:
     bits = []
     if hit.get("model"):
-        bits.append(model_effort(hit))
+        bits.append(model_effort(hit) + (f" (test trượt thì {hit['fallback']})" if hit.get("fallback") else ""))
     if hit.get("agent"):
         bits.append(f"subagent {hit['agent']}")
     if hit.get("skills"):
@@ -348,7 +356,8 @@ def hook_suggestion(prompt: str, data: dict):
     if not A.once(f"route-{sid}-{hit['rule']}", 3600):
         return None  # cùng một gợi ý không nhắc lại trong một giờ
     reason = ", ".join(f"'{m}'" for m in hit["matched"][:3])
-    model_note = (f"model {model_effort(hit)}" if hit["model"] else "")
+    model_note = (f"model {model_effort(hit)}" + (f", test trượt thì {hit['fallback']}" if hit.get("fallback") else "")
+                  if hit["model"] else "")
     context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
                + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi.")
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)

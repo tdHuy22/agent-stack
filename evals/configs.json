@@ -42,7 +42,20 @@
     "HM": {
       "model": "claude-haiku-5-5",
       "effort": "max",
-      "note": "Haiku 5.5 effort max. CLI 2.1.285 tính giá Haiku 5.5 theo Opus 5.5 (gấp 40 lần), nên chi phí và --cap-usd của cấu hình này sai cho tới khi sửa"
+      "cli_cost_factor": 40,
+      "note": "Haiku 5.5 · max. CLI 2.1.285 chưa biết giá Haiku 5.5 (costBasis unknown) và tính theo giá Opus 5.5, gấp 40 lần; cli_cost_factor nhân trần của CLI cho khớp giá thật, chi phí trong kết quả tự tính từ token"
+    },
+    "H5L": {
+      "model": "claude-haiku-5-5",
+      "effort": "low",
+      "cli_cost_factor": 40,
+      "note": "Haiku 5.5 · low. CLI 2.1.285 chưa biết giá Haiku 5.5 (costBasis unknown) và tính theo giá Opus 5.5, gấp 40 lần; cli_cost_factor nhân trần của CLI cho khớp giá thật, chi phí trong kết quả tự tính từ token"
+    },
+    "H5M": {
+      "model": "claude-haiku-5-5",
+      "effort": "medium",
+      "cli_cost_factor": 40,
+      "note": "Haiku 5.5 · medium (mặc định của Haiku 5.5). CLI 2.1.285 chưa biết giá Haiku 5.5 (costBasis unknown) và tính theo giá Opus 5.5, gấp 40 lần; cli_cost_factor nhân trần của CLI cho khớp giá thật, chi phí trong kết quả tự tính từ token"
     }
   }
 }

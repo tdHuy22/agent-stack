@@ -112,7 +112,14 @@ class RunnerEndToEnd(TempDirTestCase):
         for flag in ("--model", "--effort", "--no-session-persistence", "--max-budget-usd", "--setting-sources"):
             self.assertIn(flag, args)
         self.assertEqual(args[args.index("--model") + 1], "sonnet")
+        self.assertEqual(args[args.index("--max-budget-usd") + 1], "0.5")
         self.assertNotIn("--plugin-dir", args)
+        # Có hệ số giá của CLI thì trần CLI nhân lên tương ứng.
+        run_eval.prepare(task, work)
+        run_eval.run_one({"name": "HM", "model": "claude-haiku-5-5", "effort": "low", "cli_cost_factor": 40},
+                         task, work, 0.5)
+        args = json.loads((self.tmp / "args.json").read_text())
+        self.assertEqual(args[args.index("--max-budget-usd") + 1], "20.0")
         self.assertNotIn("Skill", args[args.index("--allowedTools") + 1].split())
         self.assertEqual(row["skills_used"], [])
 
@@ -265,6 +272,40 @@ class Regrade(TempDirTestCase):
         self.assertTrue(new["passed"], buf.getvalue())
         self.assertEqual(new["grader_digest"], run_eval.digests(task)[1])
         self.assertIn("trượt → đạt", buf.getvalue())
+
+
+class UnpricedModelCost(unittest.TestCase):
+    """CLI chưa biết giá model (costBasis "unknown") thì tính lại từ token theo bảng giá thật."""
+    # Số thật từ một lượt `claude --model claude-haiku-5-5` (CLI 2.1.285, 08/10/2026): CLI báo 0,1156 USD, tức giá Opus 5.5.
+    DATA = {"total_cost_usd": 0.1156448, "usage": {"cache_creation": {"ephemeral_1h_input_tokens": 13425,
+                                                                      "ephemeral_5m_input_tokens": 0}},
+            "modelUsage": {"claude-haiku-5-5": {"inputTokens": 2, "outputTokens": 49, "cacheReadInputTokens": 36284,
+                                                "cacheCreationInputTokens": 13425, "costUSD": 0.1156448,
+                                                "costBasis": "unknown"}}}
+
+    def test_recomputes_unknown_model_from_tokens(self):
+        cost, cli, unknown = run_eval.priced_cost(self.DATA)
+        self.assertEqual((cli, unknown), (0.1156448, ["claude-haiku-5-5"]))
+        expected = (2 * 0.1 + 49 * 0.5 + 36284 * 0.01 + 13425 * 0.1 * 2.0) / 1e6
+        self.assertAlmostEqual(cost, expected, places=6)
+        self.assertLess(cost * 30, cli)  # giá thật rẻ hơn khoảng 40 lần
+
+    def test_known_models_keep_cli_cost(self):
+        data = {"total_cost_usd": 0.05, "modelUsage": {"claude-sonnet-5-5": {"costUSD": 0.05, "costBasis": "pricing"}}}
+        self.assertEqual(run_eval.priced_cost(data), (0.05, 0.05, []))
+        self.assertEqual(run_eval.priced_cost({}), (None, None, []))
+
+    def test_mixed_models_only_fix_the_unknown_part(self):
+        data = json.loads(json.dumps(self.DATA))
+        data["modelUsage"]["claude-sonnet-5-5"] = {"costUSD": 0.06, "costBasis": "pricing"}
+        data["total_cost_usd"] = 0.1156448 + 0.06
+        cost, _, _ = run_eval.priced_cost(data)
+        self.assertAlmostEqual(cost - 0.06, run_eval.priced_cost(self.DATA)[0], places=6)
+
+    def test_guess_matches_family_or_full_id(self):
+        self.assertEqual(run_eval.guess_usd("claude-haiku-5-5"), 0.01)
+        self.assertEqual(run_eval.guess_usd("sonnet"), 0.12)
+        self.assertEqual(run_eval.guess_usd("claude-opus-5-5"), 0.25)
 
 
 if __name__ == "__main__":

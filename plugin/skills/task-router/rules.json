@@ -286,7 +286,12 @@
         "attributeerror",
         "khong chay duoc",
         "bao loi"
-      ]
+      ],
+      "with_tests": {
+        "model": "haiku",
+        "effort": "low",
+        "note": "project có test: claude-haiku-5-5 · low đạt 9/9 việc code, debug có test (18/18 lượt, eval 08/10/2026) với khoảng 1/10 chi phí sonnet"
+      }
     },
     {
       "id": "debug-hard",
@@ -457,7 +462,12 @@
         "viet test",
         "coverage",
         "test do"
-      ]
+      ],
+      "with_tests": {
+        "model": "haiku",
+        "effort": "low",
+        "note": "project có test: claude-haiku-5-5 · low đạt 9/9 việc code, debug có test (18/18 lượt, eval 08/10/2026) với khoảng 1/10 chi phí sonnet"
+      }
     },
     {
       "id": "reuse-best",
@@ -628,7 +638,12 @@
         "them cot",
         "them nut",
         "tich hop"
-      ]
+      ],
+      "with_tests": {
+        "model": "haiku",
+        "effort": "low",
+        "note": "project có test: claude-haiku-5-5 · low đạt 9/9 việc code, debug có test (18/18 lượt, eval 08/10/2026) với khoảng 1/10 chi phí sonnet"
+      }
     },
     {
       "id": "docs-lookup",
