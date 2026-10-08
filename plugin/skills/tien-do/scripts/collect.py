@@ -571,7 +571,8 @@ def route_text(item) -> str:
     r = item.get("route") or {}
     if not r:
         return ""
-    bits = [r.get("model"), r.get("effort")] + ([r["agent"]] if r.get("agent") else [])
+    # model_id: tên gõ được vào /model (vd claude-haiku-5-5 thay cho alias haiku còn trỏ bản cũ)
+    bits = [r.get("model_id") or r.get("model"), r.get("effort")] + ([r["agent"]] if r.get("agent") else [])
     return " · " + " · ".join(b for b in bits if b)
 
 

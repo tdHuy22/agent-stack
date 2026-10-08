@@ -30,7 +30,8 @@ Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:
 5. **Chỉ đổi model hoặc effort ở ranh giới giữa hai việc.** Đổi giữa chừng làm mất prompt cache, nên có thể tốn hơn.
 6. **Leo thang theo thang trong `routing-table.md`:** sonnet · low → medium → high → opus · medium → high → xhigh → fable · high → opus · max hoặc fable · xhigh → fable · max. Hỏng vì bỏ sót thì tăng effort; đủ ngữ cảnh mà vẫn sai thì đổi model lớn hơn.
 7. Fable chỉ dành cho việc mà Opus ở effort cao vẫn chưa đạt: Opus 5.5 mặc định giải ngang Fable 5.1 mặc định với khoảng 1/5 chi phí. Tùy gói, Fable có thể bị tính vào usage credits.
-8. **Haiku không có tham số effort**: ghi `haiku`, không ghi mức. Chỉ cần nghĩ sâu cho một lượt thì khuyên thêm `ultrathink` vào prompt thay vì đổi effort cả phiên.
+8. **Luôn dùng model mới nhất**: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.1), và `claude-haiku-5-5` thay cho alias `haiku` (alias này còn trỏ Haiku 4.5, không có effort). Haiku 5.5 có effort `low` tới `max`, mặc định `medium`; dùng nó ở `low` cho việc cơ học có kiểm tra tự động và subagent chỉ đọc. Chưa có số đo Haiku 5.5 trên việc coding khó, nên đừng khuyên nó thay Sonnet ở đó. Chỉ cần nghĩ sâu cho một lượt thì khuyên thêm `ultrathink` vào prompt thay vì đổi effort cả phiên.
+9. **Skill vendor** (`tdd`, `diagnosing-bugs`, `humanizer`, `handoff`, `grill-me`) đã tắt mặc định từ 08/10/2026: A/B 20 lượt cho thấy chúng không giúp đạt thêm việc nào và không được gọi lần nào. Đừng gợi ý chúng, trừ khi người dùng hỏi.
 
 ## Kết quả trả về
 
@@ -38,6 +39,6 @@ Một dòng, đúng định dạng:
 
 `➡️ Model: <...> · Effort: <...> · Subagent: <tên|không> · Skill: <tên|không> · Lý do: <tối đa 15 từ>`
 
-Sau đó, nếu cần, thêm tối đa 2 câu về điều kiện để dùng được mức rẻ hơn (ví dụ "nếu có test bao phủ thì haiku đủ").
+Sau đó, nếu cần, thêm tối đa 2 câu về điều kiện để dùng được mức rẻ hơn (ví dụ "nếu có test bao phủ thì claude-haiku-5-5 · low đủ").
 
 Bảng đầy đủ kèm căn cứ từng dòng (số đo của người dùng, tài liệu Anthropic, hay phán đoán) ở `routing-table.md`. Khi có số liệu eval mới (`evals/run_eval.py`), cập nhật `rules.json` và `routing-table.md` cùng lúc.

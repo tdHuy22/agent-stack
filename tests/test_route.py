@@ -36,10 +36,7 @@ class RouterRules(TempDirTestCase):
         for r in rules:
             with self.subTest(rule=r["id"]):
                 self.assertIn(r["model"], route.FAMILIES)
-                if r["model"] == "haiku":
-                    self.assertIsNone(r.get("effort"), "Haiku không có tham số effort")
-                else:
-                    self.assertIn(r.get("effort"), efforts)
+                self.assertIn(r.get("effort"), efforts)  # Haiku 5.5 cũng có effort
                 for base in r["_refines"]:
                     self.assertIn(base, ids)
                 if r.get("only_refine"):
@@ -51,8 +48,36 @@ class RouterRules(TempDirTestCase):
         self.assertEqual(route.suggest("Refactor module thanh toán này")["rule"], "refactor")
         self.assertEqual(route.suggest("Audit bảo mật toàn bộ codebase")["effort"], "max")
         hit = route.suggest("Đổi tên hàm getUser thành fetchUser trong cả project")
-        self.assertEqual(route.describe(hit).split(" · ")[0], "haiku")
+        self.assertEqual(route.describe(hit).split(" · ")[:2], ["claude-haiku-5-5", "low"])
         self.assertNotIn("None", route.describe(hit))
+
+    def test_model_ids_point_to_newest(self):
+        # Alias haiku của CLI còn trỏ Haiku 4.5 (không có effort), nên router ghi ID đầy đủ.
+        self.assertEqual(route.model_name("haiku"), "claude-haiku-5-5")
+        self.assertEqual(route.model_name("sonnet"), "sonnet")
+        self.assertEqual(route.model_effort({"model": "haiku", "effort": "low"}), "claude-haiku-5-5 · low")
+        self.assertEqual(route.suggest("Đổi tên hàm getUser thành fetchUser trong cả project")["model_id"], "claude-haiku-5-5")
+        self.assertTrue(route.needs_model_switch("haiku", "claude-haiku-4-5-20251001"))
+        self.assertFalse(route.needs_model_switch("haiku", "claude-haiku-5-5"))
+        self.assertTrue(route.needs_model_switch("sonnet", "claude-haiku-5-5"))
+        self.assertFalse(route.needs_model_switch("sonnet", "claude-sonnet-5-5"))
+        self.assertFalse(route.needs_model_switch("opus", ""))
+
+    def test_on_demand_skills_not_suggested(self):
+        # Skill scope on-demand (vendor tắt mặc định 08/10/2026) không được nằm trong luật hay hồ sơ project.
+        catalog = json.loads((REPO / "catalog.json").read_text(encoding="utf-8"))
+        on_demand = {i["install"].get("name") or i["install"].get("plugin")
+                     for i in catalog["items"] if i["scope"] == "on-demand"}
+        self.assertTrue({"tdd", "diagnosing-bugs", "humanizer"} <= on_demand)
+        data = route.rules()
+        used = {s for r in data["rules"] for s in r.get("skills", [])}
+        used |= {s for v in data["markers"].values() for s in v.get("skills", [])}
+        used |= {s for k, v in data["profiles"].items() if k != "web" for s in v.get("skills", [])}
+        self.assertEqual(used & on_demand, set())
+        # Skill theo loại project (rule_extras) cũng bị lọc khi chỉ cài khi cần.
+        hit = route.suggest_for("Viết test cho module đăng nhập này", {"kinds": ["web"], "markers": []})
+        self.assertEqual(hit["rule"], "tests")
+        self.assertNotIn("webapp-testing", hit["skills"])
 
     def test_fast(self):
         route.suggest("khởi động")

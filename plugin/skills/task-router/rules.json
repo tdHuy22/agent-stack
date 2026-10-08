@@ -1,13 +1,15 @@
 {
   "version": 2,
-  "status": "đối chiếu tài liệu chính thức 04/10/2026 (effort, model-config, chi phí); số liệu eval 02–04/10/2026; dòng không có số đo là phán đoán, xem routing-table.md",
+  "status": "đối chiếu tài liệu chính thức 04/10/2026; model mới nhất kiểm 08/10/2026 (Haiku 5.5 có effort); số liệu eval 02–08/10/2026; skill vendor tắt mặc định 08/10/2026 (A/B không hơn A); dòng không có số đo là phán đoán, xem routing-table.md",
   "min_words": 4,
+  "model_ids": {
+    "_note": "Alias còn trỏ bản cũ thì ghi ID đầy đủ. Kiểm 08/10/2026 bằng claude 2.1.285: sonnet → claude-sonnet-5-5, opus → claude-opus-5-5, fable → claude-fable-5-1, nhưng haiku → claude-haiku-4-5 (không có effort).",
+    "haiku": "claude-haiku-5-5"
+  },
   "profiles": {
     "python": {
       "label": "Python",
-      "skills": [
-        "tdd"
-      ],
+      "skills": [],
       "lsp": {
         "plugin": "pyright-lsp@claude-plugins-official",
         "binary": "pyright-langserver",
@@ -309,9 +311,7 @@
       "refines": "debug-hard",
       "model": "opus",
       "effort": "high",
-      "skills": [
-        "diagnosing-bugs"
-      ],
+      "skills": [],
       "match": [
         "production",
         "khong tai hien",
@@ -336,9 +336,7 @@
       ],
       "model": "opus",
       "effort": "xhigh",
-      "skills": [
-        "diagnosing-bugs"
-      ],
+      "skills": [],
       "match": [
         "van chua ra",
         "thu nhieu lan",
@@ -446,9 +444,7 @@
     {
       "id": "tests",
       "agent": "agent-stack:test-runner",
-      "skills": [
-        "tdd"
-      ],
+      "skills": [],
       "model": "sonnet",
       "effort": "medium",
       "match": [
@@ -542,7 +538,7 @@
       "id": "mechanical",
       "agent": "agent-stack:oc-worker",
       "model": "haiku",
-      "effort": null,
+      "effort": "low",
       "match": [
         "doi ten",
         "rename",
@@ -560,8 +556,7 @@
     {
       "id": "writing",
       "skills": [
-        "giong-van",
-        "humanizer"
+        "giong-van"
       ],
       "model": "sonnet",
       "effort": "medium",

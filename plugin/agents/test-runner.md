@@ -3,7 +3,8 @@ name: test-runner
 description: Chạy test, linter hoặc build và chỉ trả về phần lỗi, để log dài không làm đầy context chính. Dùng sau mỗi lần sửa code, hoặc khi cần biết test nào đang hỏng. Không sửa code.
 tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit, NotebookEdit
-model: haiku
+model: claude-haiku-5-5
+effort: low
 maxTurns: 15
 color: green
 ---

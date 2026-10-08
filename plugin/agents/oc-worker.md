@@ -2,7 +2,8 @@
 name: oc-worker
 description: Giao việc cơ học, lặp lại, rủi ro thấp (đổi tên hàng loạt, định dạng, boilerplate, dịch tài liệu, sinh test đơn giản) cho OpenCode chạy model local trong mạng nhà (không gửi code ra ngoài), rồi kiểm tra kết quả. Không dùng cho logic khó, bảo mật, kiến trúc, và không dùng cho file chứa secret hay mã riêng tư khi phải rơi về model từ xa.
 tools: Bash, Read, Grep, Glob
-model: haiku
+model: claude-haiku-5-5
+effort: low
 maxTurns: 12
 color: yellow
 ---

@@ -22,7 +22,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Giá niêm yết API, USD trên 1 triệu token: (input, output, cache_read).
-# Nguồn: bảng model trong skill claude-api (cập nhật 2026-09-25).
+# Nguồn: bảng model trong skill claude-api (cập nhật 2026-09-25; Haiku 5.5 theo bảng 2026-10-06, giá cho prompt
+# tới 100K token, dài hơn thì 0,5/2,5).
 # cache_read = None nghĩa là dùng mặc định 0,1 x giá input.
 PRICES = {
     "claude-fable-5-1": (10.0, 50.0, 0.25),
@@ -36,6 +37,7 @@ PRICES = {
     "claude-sonnet-5-5": (2.0, 10.0, 0.20),
     "claude-sonnet-5": (2.0, 10.0, None),
     "claude-sonnet-4-6": (3.0, 15.0, None),
+    "claude-haiku-5-5": (0.10, 0.50, None),
     "claude-haiku-4-5": (1.0, 5.0, None),
 }
 CACHE_WRITE_5M = 1.25  # hệ số so với giá input

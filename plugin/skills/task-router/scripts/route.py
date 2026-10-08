@@ -90,7 +90,8 @@ def suggest(text: str):
     rule, hits = score(text or "")
     if not rule:
         return None
-    return {"rule": rule["id"], "model": rule.get("model"), "effort": rule.get("effort"),
+    return {"rule": rule["id"], "model": rule.get("model"), "model_id": model_name(rule.get("model")),
+            "effort": rule.get("effort"),
             "agent": rule.get("agent"), "skills": rule.get("skills", []), "note": rule.get("note", ""), "matched": hits}
 
 
@@ -101,13 +102,16 @@ def suggest_for(text: str, profile=None):
         extras = []
         for kind in profile.get("kinds", []):
             extras += rules().get("rule_extras", {}).get(kind, {}).get(hit["rule"], [])
+        status = available_skills()
+        extras = [x for x in extras if status.get(x) != "khi cần"]  # skill chỉ cài khi cần thì không gợi ý
         hit["skills"] = list(dict.fromkeys(hit["skills"] + extras))
     return hit
 
 
 def available_skills() -> dict:
     """{tên skill: trạng thái}: "có" (của agent-stack hoặc có sẵn trong Claude Code), "đã duyệt" (cài bằng
-    install.sh), "chờ duyệt" (đã kiểm duyệt, chờ người dùng duyệt)."""
+    install.sh), "khi cần" (đã duyệt nhưng scope on-demand: không cài mặc định), "chờ duyệt" (đã kiểm duyệt,
+    chờ người dùng duyệt)."""
     status = {name: "có" for name in BUILTIN_SKILLS}
     home = A.home_dir()
     if not home:
@@ -119,7 +123,10 @@ def available_skills() -> dict:
         name = item.get("install", {}).get("name") or item.get("install", {}).get("plugin")
         review = ((lock.get(item.get("key")) or {}).get("human_review") or {}).get("status")
         if name and name not in status:
-            status[name] = "đã duyệt" if review == "approved" else "chờ duyệt"
+            if review != "approved":
+                status[name] = "chờ duyệt"
+            else:
+                status[name] = "khi cần" if item.get("scope") == "on-demand" else "đã duyệt"
     return status
 
 
@@ -140,7 +147,7 @@ def profile_summary(profile: dict) -> tuple:
     status = available_skills()
     skills = list(dict.fromkeys(skills))
     ready = [s for s in skills if status.get(s) in ("có", "đã duyệt")]
-    pending = [s for s in skills if status.get(s) == "chờ duyệt"]
+    pending = [s for s in skills if status.get(s) in ("chờ duyệt", "khi cần")]
     return labels, ready, pending, list(dict.fromkeys(agents))
 
 
@@ -217,9 +224,15 @@ def next_task(root) -> str:
     return in_progress if A.has_value(in_progress) else ""
 
 
+def model_name(model) -> str:
+    """Tên để gõ vào /model: alias, trừ họ có alias còn trỏ bản cũ (mục model_ids của rules.json)."""
+    return str((rules().get("model_ids") or {}).get(model) or model or "")
+
+
 def model_effort(hit: dict) -> str:
-    """"opus · xhigh"; model không có effort (haiku) thì chỉ tên model."""
-    return f"{hit['model']} · {hit['effort']}" if hit.get("effort") else str(hit.get("model") or "")
+    """"opus · xhigh"; luật không ghi effort thì chỉ tên model."""
+    name = model_name(hit.get("model"))
+    return f"{name} · {hit['effort']}" if hit.get("effort") else name
 
 
 def describe(hit: dict) -> str:
@@ -248,7 +261,7 @@ def session_hint(root):
     if ready:
         ctx.append("Skill hợp với project: " + ", ".join(ready) + ".")
     if pending:
-        ctx.append("Có thể thêm (đã kiểm duyệt, chờ người dùng duyệt): " + ", ".join(pending) + ".")
+        ctx.append("Có thể thêm (đã kiểm duyệt; chưa cài, chờ người dùng duyệt hoặc cài khi cần): " + ", ".join(pending) + ".")
     if agents:
         ctx.append("Subagent nên dùng: " + ", ".join(agents) + ".")
     lsps = lsp_suggestions(root, profile)
@@ -275,16 +288,28 @@ def family(model) -> str:
 
 
 def current_model(session_id: str) -> str:
-    """Model hiện tại, lấy từ thông tin phiên do hook SessionStart ghi, hoặc từ statusline."""
+    """Model hiện tại (chuỗi gốc, chữ thường), lấy từ thông tin phiên do hook SessionStart ghi, hoặc từ statusline."""
+    def raw(model) -> str:
+        return (model or "").lower() if isinstance(model, str) else json.dumps(model or {}).lower()
     if session_id:
         name = hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json"
         info = A.read_json(A.state_dir() / "sessions" / name, {}) or {}
         if info.get("model"):
-            return family(info["model"])
+            return raw(info["model"])
     limits = A.read_json(A.state_dir() / "limits.json", {}) or {}
     if limits.get("session_id") == session_id:
-        return family(limits.get("model"))
+        return raw(limits.get("model"))
     return ""
+
+
+def needs_model_switch(wanted: str, now: str) -> bool:
+    """Có nên gợi ý /model không: khác họ, hoặc cùng họ mà đang ở bản cũ (vd Haiku 4.5 khi luật muốn claude-haiku-5-5)."""
+    if not wanted or not now:
+        return False
+    if family(now) != wanted:
+        return True
+    target = model_name(wanted)
+    return target != wanted and target not in now
 
 
 def hook_suggestion(prompt: str, data: dict):
@@ -303,11 +328,11 @@ def hook_suggestion(prompt: str, data: dict):
     if not hit:
         return None
     sid = data.get("session_id", "")
-    now_family = current_model(sid)
+    now_model = current_model(sid)
     now_effort = (data.get("effort") or {}).get("level")
     parts_user, parts_ctx = [], []
-    if hit["model"] and now_family and hit["model"] != now_family:
-        parts_user.append(f"/model {hit['model']}")
+    if needs_model_switch(hit["model"], now_model):
+        parts_user.append(f"/model {model_name(hit['model'])}")
     if hit["effort"] and now_effort and hit["effort"] != now_effort:
         parts_user.append(f"/effort {hit['effort']}")
     if hit["agent"]:

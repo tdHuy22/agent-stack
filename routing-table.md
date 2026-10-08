@@ -1,6 +1,6 @@
 # Bảng định tuyến
 
-> Trạng thái: đối chiếu tài liệu chính thức của Anthropic đọc ngày 04/10/2026 (trang effort, model-config của Claude Code, trang chi phí, bảng giá) và số liệu eval của chính bạn (02–04/10/2026). Nguồn luật máy đọc: `plugin/skills/task-router/rules.json` (router chỉ bắt được những loại việc nhận ra bằng từ khóa; bảng này đầy đủ hơn). Cột **Căn cứ**: **E** là số đo của bạn, **A** là tài liệu hay số đo của Anthropic, **P** là phán đoán chưa có số đo.
+> Trạng thái: đối chiếu tài liệu chính thức của Anthropic đọc ngày 04/10/2026 (trang effort, model-config của Claude Code, trang chi phí, bảng giá), model mới nhất kiểm lại ngày 08/10/2026 (Haiku 5.5), và số liệu eval của chính bạn (02–08/10/2026). Nguồn luật máy đọc: `plugin/skills/task-router/rules.json` (router chỉ bắt được những loại việc nhận ra bằng từ khóa; bảng này đầy đủ hơn). Cột **Căn cứ**: **E** là số đo của bạn, **A** là tài liệu hay số đo của Anthropic, **P** là phán đoán chưa có số đo.
 
 ## 1. Thang effort
 
@@ -15,16 +15,17 @@ Effort là tín hiệu hành vi, không phải trần token cứng: ở mức th
 | `max` | Không giới hạn token; bài khó muốn Claude tự làm tới cùng, ví dụ săn lỗ hổng bảo mật. Lợi ích giảm dần và dễ nghĩ quá đà | Anthropic không công bố số | Đợt audit bảo mật cả repo, bài toán biên giới, khi bạn nói rõ "nghĩ kỹ nhất có thể" | Đầu ra có cấu trúc, việc không nặng suy luận; thử trước khi dùng rộng |
 
 - **Một lượt cần nghĩ sâu mà không muốn đổi effort cả phiên:** thêm từ `ultrathink` vào prompt (Claude Code 2.1.203 trở lên). Các cụm "think hard", "nghĩ kỹ" không phải từ khóa.
-- **Haiku 4.5 không có tham số effort.** Trong bảng ghi `haiku` không kèm mức.
+- **Luôn dùng model mới nhất.** Kiểm ngày 08/10/2026 bằng `claude` 2.1.285: alias `sonnet` ra Sonnet 5.5, `opus` ra Opus 5.5, `fable` ra Fable 5.1, nhưng `haiku` vẫn ra **Haiku 4.5**. Vì vậy bảng ghi `claude-haiku-5-5` (ID đầy đủ); router đọc ánh xạ này từ mục `model_ids` của `rules.json`, và ba subagent rẻ (`explore-lite`, `test-runner`, `oc-worker`) đặt `model: claude-haiku-5-5`, `effort: low`.
+- **Haiku 5.5 có effort** `low` tới `max`, mặc định `medium` (Haiku 4.5 thì không). CLI 2.1.285 chưa biết giá Haiku 5.5 (`costBasis: unknown`) nên tính theo giá Opus 5.5, gấp 40 lần giá thật; con số chi phí và `--max-budget-usd` với model này sai cho tới khi CLI cập nhật.
 - **Đặt effort:** `/effort <mức>` hay `/effort` (thanh trượt), `/effort auto` để xóa mức đã lưu, `claude --effort <mức>` cho một phiên, `CLAUDE_CODE_EFFORT_LEVEL`, `effortLevel` hay `modelSettings` trong settings, trường `effort` trong frontmatter của skill hay subagent. Đổi effort hay model giữa chừng làm mất prompt cache, nên đổi ở ranh giới giữa hai việc.
 
 ## 2. Thang leo thang
 
-Đi từ trên xuống. Giá token (USD mỗi triệu token vào/ra): Haiku 4.5 1/5, Sonnet 5.5 2/10, Opus 5.5 4/20, Fable 5.1 10/50.
+Đi từ trên xuống. Giá token (USD mỗi triệu token vào/ra): Haiku 5.5 0,1/0,5 (0,5/2,5 khi prompt trên 100K token), Sonnet 5.5 2/10, Opus 5.5 4/20, Fable 5.1 10/50.
 
 | Bậc | Cấu hình | Dùng cho | Căn cứ |
 |---:|---|---|---|
-| 0 | `haiku` | Việc cơ học có test hay diff kiểm được | A: Haiku cho khối lượng lớn có đầu ra kiểm được. E: việc khó chỉ đạt 4/12 và còn đắt hơn Sonnet |
+| 0 | `claude-haiku-5-5 · low` | Việc cơ học có test hay diff kiểm được; subagent chỉ đọc | A: Haiku cho worker và khối lượng lớn có đầu ra kiểm được; Haiku 5.5 rẻ hơn Sonnet 5.5 khoảng 20 lần. E: Haiku 4.5 chỉ đạt 4/12 việc khó; Haiku 5.5 chưa có số đo hợp lệ (mục 8) |
 | 1 | `sonnet · low` | Hỏi nhanh, sửa nhỏ, tra cứu, ghi chép | A |
 | 2 | `sonnet · medium` | Mặc định cho việc rõ ràng | E: 24/24 việc nhỏ, 12/12 việc khó, rẻ nhất |
 | 3 | `sonnet · high` | Việc khó hơn mà vẫn rõ đặc tả; review diff nhỏ; phản biện; văn bản dài | A: Sonnet 5.5 chuyển sang `high` cho việc khó hay dài hơn |
@@ -61,7 +62,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Tìm vị trí code, nơi dùng một hàm | giữ nguyên | — | agent-stack:explore-lite (haiku) hoặc Explore | — | P: chỉ đọc, kết quả kiểm được |
+| Tìm vị trí code, nơi dùng một hàm | giữ nguyên | — | agent-stack:explore-lite (`claude-haiku-5-5 · low`) hoặc Explore | — | P: chỉ đọc, kết quả kiểm được |
 | Đọc hiểu một vùng code lạ | `sonnet · medium` | `opus · medium` | Explore | — | P |
 | Nghiên cứu web, so sánh công cụ | `sonnet · medium` | `opus · medium` (đổi model, không tăng effort) | agent-stack:researcher | reuse-best | A: đường cong effort gần phẳng |
 | Nghiên cứu sâu nhiều nguồn, kết luận đắt nếu sai | `opus · medium` | `fable · low` | agent-stack:researcher | — | A: Fable 5.1 ở `low` hơn Sonnet 5 khoảng 10 điểm trên DeepResearch Bench II, đắt gấp khoảng 4 |
@@ -75,13 +76,13 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
 | Sửa nhỏ mô tả chính xác (vài dòng, chính tả, thông báo) | `sonnet · low`, dặn chạy test | `sonnet · medium` | — | — | A: `low` cho thay đổi nhỏ; ở `low` model dễ bỏ bước tự kiểm |
-| Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `haiku` | `sonnet · low` | agent-stack:oc-worker | — | A, E |
+| Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `claude-haiku-5-5 · low` | `claude-haiku-5-5 · medium`, rồi `sonnet · low` | agent-stack:oc-worker | — | A; P cho Haiku 5.5 |
 | Tính năng thông thường, đặc tả rõ | `sonnet · medium` | `sonnet · high` | — | reuse-best nếu không tầm thường | E: 6/6 |
-| Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · medium` | `sonnet · high`, rồi `opus · medium` | — | tdd | E: cron và diff tối thiểu, sonnet 4/4, haiku 0/4 |
-| Code đồng thời, async, khóa | `sonnet · medium` | `sonnet · high`, rồi `opus · high` | — | tdd | E: race và pool asyncio, sonnet 4/4, opus 4/4 |
+| Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · medium` | `sonnet · high`, rồi `opus · medium` | — | — | E: cron và diff tối thiểu, sonnet 4/4, Haiku 4.5 0/4 |
+| Code đồng thời, async, khóa | `sonnet · medium` | `sonnet · high`, rồi `opus · high` | — | — | E: race và pool asyncio, sonnet 4/4, opus 4/4 |
 | Refactor có test | `sonnet · medium` | `sonnet · high` | — | — | E: 2/2 |
 | Refactor lớn, migration nhiều module, đổi API công khai | `opusplan` (Opus lập kế hoạch, Sonnet thực thi) | `opus · high` | Plan | reuse-best | A: `opusplan`; P |
-| Viết test | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | tdd | E: 2/2 |
+| Viết test | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | — | E: 2/2; `tdd` không giúp thêm (mục 8) |
 | Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | `opus · xhigh` hoặc `/effort ultracode` | `fable · high` | — | — | A: `xhigh` cho việc trên 30 phút. Cách chạy (theo `gnhf`, MIT): đặt điều kiện dừng và trần số vòng hoặc token trước khi đi ngủ, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file; sáng ra chọn commit nào giữ |
 | Việc dài hơi rất khó mà Opus ở `xhigh` vẫn chưa đạt | `fable · high` | `fable · xhigh` | — | — | A |
 
@@ -90,16 +91,16 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
 | Lỗi có traceback, test đỏ rõ | `sonnet · medium` | `sonnet · high` | agent-stack:test-runner | — | E |
-| Lỗi nhiều file, nguyên nhân xa triệu chứng | `opus · medium` | `opus · high` | — | diagnosing-bugs | A: model lớn cho lỗi tinh vi. E: sonnet·medium đạt `debug-multifile` 2/2, có thể thử trước khi đã có test |
-| Race, deadlock, lỗi lúc được lúc không | `opus · medium` | `opus · high` | — | diagnosing-bugs | E: `debug-race` mọi cấu hình trừ haiku đều đạt; P cho lỗi thật |
-| Lỗi chỉ xảy ra trên production, không tái hiện, hồi quy hiệu năng | `opus · high` | `opus · xhigh` | — | diagnosing-bugs | P: không có tín hiệu kiểm nhanh |
-| Đã thử hai lần ở mức cao mà vẫn chưa ra | `opus · xhigh` | `fable · high`, rồi `opus · max` | — | diagnosing-bugs | A |
+| Lỗi nhiều file, nguyên nhân xa triệu chứng | `opus · medium` | `opus · high` | — | — | A: model lớn cho lỗi tinh vi. E: sonnet·medium đạt `debug-multifile` 2/2, có thể thử trước khi đã có test |
+| Race, deadlock, lỗi lúc được lúc không | `opus · medium` | `opus · high` | — | — | E: `debug-race` mọi cấu hình trừ Haiku 4.5 đều đạt; `debug-flaky-rank` (phụ thuộc hash) sonnet·medium 4/4; P cho lỗi thật |
+| Lỗi chỉ xảy ra trên production, không tái hiện, hồi quy hiệu năng | `opus · high` | `opus · xhigh` | — | — | P: không có tín hiệu kiểm nhanh |
+| Đã thử hai lần ở mức cao mà vẫn chưa ra | `opus · xhigh` | `fable · high`, rồi `opus · max` | — | — | A |
 
 ### Review và bảo mật
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao | chot-viec | E: `review-diff` sonnet·medium 2/2, haiku 0/2; P: nâng lên `high` vì lỗi lọt đắt |
+| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao | chot-viec | E: `review-diff` sonnet·medium 2/2, Haiku 4.5 0/2; P: nâng lên `high` vì lỗi lọt đắt |
 | Review PR lớn trước khi merge | `opus · high` | `opus · xhigh` | agent-stack:reviewer | — | P |
 | Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review | P |
 | Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |
@@ -121,9 +122,9 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
 | Tin nhắn, email ngắn | `sonnet · low` | `sonnet · medium` | — | giong-van | A: `low` cho việc không phải code |
-| Viết lại, sửa giọng | `sonnet · medium` | — | — | giong-van, humanizer | E: 2/2 |
+| Viết lại, sửa giọng | `sonnet · medium` | — | — | giong-van | E: 2/2, có hay không `humanizer` đều đạt (mục 8) |
 | Văn bản dài (luận văn, báo cáo, tài liệu kỹ thuật) | `sonnet · high` | `opus · medium` | — | giong-van | P |
-| Dịch tài liệu | `haiku` | `sonnet · low` | agent-stack:oc-worker | — | P |
+| Dịch tài liệu | `claude-haiku-5-5 · low` | `sonnet · low` | agent-stack:oc-worker | — | P |
 
 ### Vận hành
 
@@ -136,13 +137,13 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 ## 4. Số liệu chính thức của Anthropic (đọc ngày 04/10/2026)
 
 - **Trang effort (`platform.claude.com/docs/en/build-with-claude/effort`).** Năm mức `low`, `medium`, `high`, `xhigh`, `max`. Fable 5.1, Opus 5.5 và Sonnet 5.5 hỗ trợ cả năm. Trên API, mặc định là `high`, trừ Opus 5.5 là `medium`. Sonnet 5.5: coding agentic và dùng công cụ nhiều bước thì bắt đầu ở `medium` cho việc có đặc tả rõ, `high` cho việc khó hay dài; chat thì `medium` hay `low`; chỉ dùng `xhigh` hay `max` khi eval thấy lợi. Fable 5.1: bắt đầu ở `high`, lên `xhigh` hay `max` cho việc nhạy với năng lực nhất.
-- **Claude Code (`code.claude.com/docs/en/model-config`).** Mặc định trong Claude Code: Opus 5.5 và Sonnet 5.5 `medium`, Fable 5.1 `high`. Alias `opus` (Opus 5.5), `sonnet` (Sonnet 5.5), `haiku`, `fable` (Fable 5.1), `best` (Fable nếu có), `opusplan` (Opus lúc lập kế hoạch, Sonnet lúc thực thi). Từ khóa `ultrathink` tăng suy nghĩ cho một lượt.
+- **Claude Code (`code.claude.com/docs/en/model-config`).** Mặc định trong Claude Code: Opus 5.5 và Sonnet 5.5 `medium`, Fable 5.1 `high`. Alias `opus` (Opus 5.5), `sonnet` (Sonnet 5.5), `haiku` (vẫn là Haiku 4.5 ở CLI 2.1.285, kiểm 08/10/2026), `fable` (Fable 5.1), `best` (Fable nếu có), `opusplan` (Opus lúc lập kế hoạch, Sonnet lúc thực thi). Từ khóa `ultrathink` tăng suy nghĩ cho một lượt.
 - **Trang chi phí (`.../optimizing-for-cost-and-intelligence`).**
   - Với hầu hết agent, bắt đầu từ Opus 5.5 ở mặc định; dùng Fable 5.1 cho suy luận khó, việc agent dài hơi, hoặc khi Opus ở effort cao vẫn chưa đạt.
   - SWE-bench Pro: Opus 5.5 `medium` 92,8% với khoảng 0,22 USD mỗi bài giải được; Fable 5.1 mặc định 92,3% với 1,19 USD; Opus 5.5 `low` 87,4% với 0,12 USD.
   - Một benchmark coding nội bộ: Opus 5.5 mặc định 86,6% so với Fable 5.1 `medium` 84,2%, chưa tới một phần ba chi phí mỗi lần.
   - "Long-horizon coding" là nơi effort thật sự mua thêm độ chính xác; nghiên cứu thì gần phẳng.
-- **Giá (USD mỗi triệu token vào/ra).** Fable 5.1: 10/50. Opus 5.5: 4/20 (đọc cache 0,05 lần giá vào). Sonnet 5.5: 2/10. Haiku 4.5: 1/5.
+- **Giá (USD mỗi triệu token vào/ra).** Fable 5.1: 10/50. Opus 5.5: 4/20 (đọc cache 0,05 lần giá vào). Sonnet 5.5: 2/10. Haiku 5.5: 0,1/0,5 với prompt tới 100K token, 0,5/2,5 khi dài hơn (đọc từ skill `claude-api`, bảng cập nhật 06/10/2026). Haiku 4.5: 1/5.
 - **Hạn mức gói.** Tài liệu chính thức không công bố hệ số giữa các model trong hạn mức 5 giờ hay hạn mức tuần. Suy luận theo giá token: Opus khoảng 2 lần Sonnet, Fable khoảng 5 lần Sonnet.
 
 ## 5. Kết quả eval của bạn (02/10/2026)
@@ -168,7 +169,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | A: sonnet · medium | 12/12 | 0,116 | 32 |
 | C: opus · medium | 12/12 | 0,254 | 60 |
 | D: opus · low | 12/12 | 0,215 | 40 |
-| H: haiku · medium | 4/12 | 0,191 | 127 |
+| H: Haiku 4.5 (alias `haiku`) | 4/12 | 0,191 | 127 |
 
 - Sonnet · medium, opus · medium và opus · low đều đạt hết, kể cả hai việc "rất khó" (pool asyncio an toàn khi hủy tác vụ, diff tối thiểu khớp `diff -u`). Script chọn **A**: opus tốn gấp khoảng 2 lần mà không đạt thêm việc nào. Việc tự chứa, có đặc tả rõ, chấm được bằng test thì sonnet đủ; muốn tách sonnet với opus cần việc dài hơi (nhiều giờ, codebase lớn, đặc tả mơ hồ).
 - Lần chạy đầu D trượt 2 lượt diff vì grader bắt nhầm chữ "difflib" trong docstring; đã sửa grader (chỉ bắt `import`) và chấm lại mọi lượt bằng `--regrade`.
@@ -179,6 +180,20 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 - `xhigh`, `max` và Fable chưa được đo trên việc của bạn: mọi dòng dùng chúng là A hoặc P. Eval hiện có quá dễ để thấy lợi ích của chúng (sonnet · medium đã đạt hết); cần việc dài hơi trên 30 phút mới đo được.
 - Các dòng `sonnet · high` (review diff nhỏ, phản biện, văn bản dài, kế hoạch vừa) là phán đoán: chưa so với `sonnet · medium`.
 
-- Đặt `Explore` sang haiku (`explore-lite`) có làm giảm chất lượng các việc coding không? Cần so cấu hình E với A.
-- Haiku (cấu hình H) trên việc cơ học: chưa đo. Trên việc khó: 4/12 và đắt hơn sonnet (mục trên).
+- Đặt `Explore` sang Haiku 5.5 (`explore-lite`) có làm giảm chất lượng các việc coding không? Cần so cấu hình E với A.
+- Haiku 4.5 (cấu hình H) trên việc khó: 4/12 và đắt hơn sonnet (mục trên). Haiku 5.5: chưa có số đo hợp lệ (mục 8); trên việc cơ học: chưa đo.
 - Bảng `BASELINE.md` cho thấy 70% chi phí đến từ subagent và workflow. Đây là chỗ đáng đo tiếp.
+
+## 8. Skill vendor và Haiku 5.5 (07–08/10/2026)
+
+**A/B skill vendor.** V = A (sonnet · medium) + plugin vendor (`diagnosing-bugs`, `tdd`, `humanizer`, `grill-me`, `handoff`). 10 việc × 2 lượt mỗi cấu hình: 7 việc chúng nhắm tới, cộng `code-unified-diff` và 2 việc debug rất khó mới thêm (`debug-ttl-cache`: 8 lỗi chồng nhau trong đệm TTL + LRU; `debug-flaky-rank`: bảng xếp hạng đổi theo `PYTHONHASHSEED`).
+
+| Cấu hình | Đạt | USD/việc (TB) | Giây/việc |
+|---|---:|---:|---:|
+| A: sonnet · medium | 20/20 | 0,093 (7 việc) · 0,144 (3 việc khó) | 27 · 45 |
+| V: A + vendor | 20/20 | 0,094 · 0,140 | 25 · 42 |
+
+- V không đạt thêm việc nào, và **không gọi skill vendor ở lượt nào (0/20)**: sonnet tự làm xong. Vì vậy skill vendor **tắt mặc định** (`catalog.json` scope `on-demand`, router không gợi ý). Cài lại khi cần: đổi scope thành `user` rồi chạy `install.sh`. `install.sh` không tự gỡ bản đã cài: trên máy, plugin `agent-stack-vendor` (và 5 symlink trong `~/.config/opencode/skills/`) vẫn bật cho tới khi bạn gỡ.
+- Giới hạn: số đo này không nói skill có giúp khi được gọi hay không; nó chỉ cho thấy với sonnet · medium chúng không được dùng tới.
+
+**Haiku 5.5 · max (08/10/2026).** Lần chạy đầu dùng alias `haiku`, thực ra là Haiku 4.5, nên đã bỏ. Lần chạy lại với `claude-haiku-5-5`: 2 lượt `code-async-pool` đều dừng vì chạm trần chi phí mỗi lượt, rồi cả lượt chạy dừng vì vượt trần tổng 3 USD. **Kết quả này không hợp lệ**: CLI 2.1.285 tính Haiku 5.5 theo giá Opus 5.5 (`costBasis: unknown`), gấp 40 lần giá thật, nên trần 1 USD mỗi lượt thật ra chỉ khoảng 0,025 USD. Chi phí thật mỗi lượt vào khoảng 0,04–0,22 USD (tùy prompt có vượt 100K token không), chưa chắc "đắt hơn sonnet". Muốn đo Haiku 5.5 cần sửa cách `run_eval.py` tính chi phí (tự tính từ token khi `costBasis` là `unknown`) hoặc chờ CLI cập nhật.

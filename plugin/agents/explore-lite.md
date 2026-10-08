@@ -3,7 +3,8 @@ name: explore-lite
 description: Tìm và đọc code diện rộng với model rẻ (Haiku), trả về vị trí chính xác. Dùng cho việc định vị code, liệt kê nơi dùng một hàm, hay tìm cấu hình; không dùng cho phân tích cần suy luận sâu. Chỉ đọc.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit
-model: haiku
+model: claude-haiku-5-5
+effort: low
 maxTurns: 20
 color: cyan
 ---

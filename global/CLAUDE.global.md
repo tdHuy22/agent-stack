@@ -4,21 +4,21 @@
 
 ## Bảng chọn cho dòng ➡️
 
-Model: `sonnet`, `opus`, `haiku`, `fable`; Effort: `low` tới `max`. Bảng dùng khi không có gợi ý `[agent-stack]` hay `[router]` (– nghĩa là ghi `không`; * là chỉ dùng khi đã cài):
+Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.1), `claude-haiku-5-5` (Haiku 5.5; alias `haiku` còn trỏ Haiku 4.5, đừng dùng); Effort: `low` tới `max`, mọi model kể cả Haiku 5.5. Bảng dùng khi không có gợi ý `[agent-stack]` hay `[router]` (– nghĩa là ghi `không`; * là chỉ dùng khi đã cài):
 
 | Việc | Model·Effort | Subagent | Skill |
 |---|---|---|---|
 | Hỏi nhanh, tra cú pháp, sửa vài dòng, tin nhắn ngắn | sonnet·low | – | – (giong-van khi viết tin nhắn) |
 | Xem tiến độ; lưu tiến độ, bàn giao | sonnet·low | – | tien-do; session-keeper |
-| Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite rẻ hơn) | – |
-| Việc cơ học hàng loạt, dịch tài liệu | haiku (không có effort) | oc-worker | – |
+| Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite chạy Haiku 5.5, rẻ hơn) | – |
+| Việc cơ học hàng loạt có kiểm tra tự động, dịch tài liệu | claude-haiku-5-5·low | oc-worker | – |
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
 | Nghiên cứu sâu nhiều nguồn, sai thì đắt | opus·medium | researcher | – |
 | Đọc sâu bài báo; phản biện bài báo | sonnet·medium; sonnet·high | – | paper-anatomy |
-| Tính năng, refactor, viết test, lỗi có traceback rõ | sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường; tdd |
-| Debug nhiều file, race, lỗi lúc được lúc không | opus·medium, chưa ra thì high | – | diagnosing-bugs* |
-| Lỗi chỉ có trên production, không tái hiện được | opus·high | – | diagnosing-bugs* |
-| Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | diagnosing-bugs* |
+| Tính năng, refactor, viết test, lỗi có traceback rõ | sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường |
+| Debug nhiều file, race, lỗi lúc được lúc không | opus·medium, chưa ra thì high | – | – |
+| Lỗi chỉ có trên production, không tái hiện được | opus·high | – | – |
+| Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | – |
 | Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | chot-viec |
 | Review PR lớn; review bảo mật code thường | opus·high | reviewer | differential-review* |
 | Review bảo mật mã hóa, token, thanh toán, sandbox | opus·xhigh | reviewer | differential-review* |

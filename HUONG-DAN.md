@@ -272,7 +272,7 @@ Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn
 4. Đưa về giọng trong `style-card.md`: xưng hô, độ dài câu, mức trang trọng, từ quen dùng.
 5. Đo lại, báo tối đa 5 thay đổi chính và điểm trước/sau.
 
-Văn tiếng Anh dùng thêm skill `humanizer` (đã cài từ vendor).
+Văn tiếng Anh cũng dùng `giong-van` (có nhóm dấu hiệu tiếng Anh trong `tells.py`). Skill `humanizer` của vendor đã tắt mặc định từ 08/10/2026 vì A/B không thấy nó giúp thêm; cài lại khi cần (xem mục eval).
 
 **Bài mẫu.** `tells.py` so bản nháp với bài mẫu cùng ngôn ngữ, chọn theo thứ tự:
 
@@ -358,9 +358,9 @@ Subagent chạy trong context riêng và chỉ trả về kết quả gọn, nê
 |---|---|---|---|
 | `agent-stack:reviewer` | opus · high | Chỉ đọc | Review code và bảo mật trước commit hoặc PR |
 | `agent-stack:researcher` | sonnet · medium | Không sửa file | Tra docs, so sánh công cụ, kiểm chứng một nhận định; trả về có dẫn nguồn |
-| `agent-stack:test-runner` | haiku | Chỉ đọc, chạy lệnh | Chạy test, lint, build và chỉ trả về phần lỗi |
-| `agent-stack:explore-lite` | haiku | Chỉ đọc | Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn `Explore` nhưng không suy luận sâu |
-| `agent-stack:oc-worker` | haiku | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local `tuf/*` trong mạng nhà (mục 7); không tự rơi về model từ xa |
+| `agent-stack:test-runner` | Haiku 5.5 · low | Chỉ đọc, chạy lệnh | Chạy test, lint, build và chỉ trả về phần lỗi |
+| `agent-stack:explore-lite` | Haiku 5.5 · low | Chỉ đọc | Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn `Explore` nhưng không suy luận sâu |
+| `agent-stack:oc-worker` | Haiku 5.5 · low | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local `tuf/*` trong mạng nhà (mục 7); không tự rơi về model từ xa |
 
 Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí đến từ subagent và workflow, nên đừng chia nhỏ việc mà một model làm liền mạch tốt hơn.
 
@@ -509,7 +509,7 @@ Test phải đạt trên cả `/usr/bin/python3` (3.9) và `python3`.
 
 ### Eval chọn cấu hình
 
-`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (haiku, chỉ đo trần dưới), V (A + plugin vendor, để biết skill bên thứ ba có giúp thật không).
+`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), HM (Haiku 5.5 · max), V (A + plugin vendor, để biết skill bên thứ ba có giúp thật không).
 
 ```bash
 python3 evals/run_eval.py --configs A,C,D --repeats 2
@@ -526,6 +526,8 @@ python3 evals/run_eval.py --configs A,V --tasks debug-multifile,debug-race,code-
 ```
 
 Cấu hình có plugin chạy với `stream-json`, nên bảng kết quả có thêm dòng "gọi skill ở n/m lượt". Skill có mà không được gọi thì chênh lệch giữa V và A chỉ là nhiễu. V không hơn A thì cân nhắc tắt skill đó: skill tốn token mỗi lần nạp mô tả, và có skill làm kết quả tệ đi.
+
+**Kết quả 07/10/2026:** A và V cùng đạt 20/20 trên 10 việc (gồm 3 việc debug, diff rất khó), V không gọi skill lượt nào. Skill vendor nên đã tắt mặc định (`catalog.json` scope `on-demand`, router không gợi ý). `install.sh` không tự gỡ bản đã cài; gỡ trên máy: `claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user`. Cài lại: đổi scope thành `user` rồi chạy `install.sh`. Chi tiết ở `routing-table.md` mục 8.
 
 **Kết quả lần chạy ngày 02/10/2026** (72 lượt, khoảng 7,5 USD giá niêm yết): A, C và D đều đạt 24/24; A rẻ nhất (0,063 USD mỗi việc, so với 0,128 và 0,121). Vì cả ba đều đạt hết, bộ việc này chưa phân biệt được các cấu hình: nó chỉ cho thấy sonnet · medium đủ cho việc nhỏ có tín hiệu kiểm tra rõ. Muốn đo debug khó hay review diff thật, cần thêm việc khó hơn vào `evals/tasks/`. Chi tiết và khuyến nghị chính thức của Anthropic nằm ở `routing-table.md`.
 
