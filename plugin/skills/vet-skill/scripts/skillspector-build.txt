@@ -1,0 +1,10 @@
+# Công cụ build của SkillSpector (pyproject của bản đã duyệt 2f93a8624f62: requires = ["hatchling"]), khóa phiên bản
+# và mã băm để lúc cài không tải bản mới nhất chưa kiểm từ PyPI. spector.setup cài file này bằng
+# `uv pip install --require-hashes --no-deps`, rồi đóng gói SkillSpector với --offline --no-build-isolation.
+# Mã băm lấy từ PyPI ngày 09/10/2026, đúng các bản uv đã dùng ở lần cài đầu. Vet lại SkillSpector ở bản mới mà
+# [build-system] đổi thì cập nhật file này.
+hatchling==1.32.4 --hash=sha256:08ecf7548fb48205e7f213d70c71e67b8271b7242093dc3f1da578b42c734a2c
+packaging==26.2 --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e
+pathspec==1.1.1 --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+trove-classifiers==2026.9.21.13 --hash=sha256:8b1ff4f9c191b1040b71c37f1e445ab99732911e3cd91de52838453a854d7a17

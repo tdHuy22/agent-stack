@@ -129,13 +129,24 @@ class SpectorTests(TempDirTestCase):
             os.environ.pop("ANTHROPIC_API_KEY") if old is None else os.environ.__setitem__("ANTHROPIC_API_KEY", old)
         uv = [(c, e) for c, e in calls if Path(c[0]).name == "uv"]
         self.assertEqual(uv[0][0][1:], ["python", "install", "3.12"])
-        self.assertNotIn("ANTHROPIC_API_KEY", uv[1][1], "công cụ build chạy với môi trường này: không có khóa")
+        for _, env in uv:
+            self.assertNotIn("ANTHROPIC_API_KEY", env, "công cụ build chạy với môi trường này: không có khóa")
         sync, env = uv[1]
-        for flag in ("--frozen", "--no-dev", "--no-editable"):
+        for flag in ("--frozen", "--no-dev", "--no-install-project"):
             self.assertIn(flag, sync)
         self.assertNotIn("--extra", sync)
         self.assertEqual(env["UV_PROJECT_ENVIRONMENT"], str(self.home / spector.VENV))
         self.assertTrue(env["UV_CACHE_DIR"].startswith(str(self.home)))
+        tools = uv[2][0]
+        self.assertEqual(tools[1:3], ["pip", "install"])
+        for flag in ("--require-hashes", "--no-deps"):
+            self.assertIn(flag, tools)
+        self.assertEqual(tools[tools.index("-r") + 1], str(spector.BUILD_REQS))
+        build = uv[3][0]
+        for flag in ("--offline", "--no-deps", "--no-build-isolation"):
+            self.assertIn(flag, build)
+        self.assertNotIn("-e", build, "không editable: venv không chạy mã từ .vet-cache")
+        self.assertEqual(build[-1], str(self.src))
         self.assertEqual((self.home / spector.VENV / ".vetted-sha").read_text().strip(), self.sha)
 
     def test_setup_refuses_unapproved_or_modified_checkout(self):
@@ -219,3 +230,11 @@ class SpectorTests(TempDirTestCase):
             spector.setup(self.home, run=uv_writes)
         self.assertIn("uv đã ghi vào bản đã kiểm", str(ctx.exception))
         self.assertFalse((self.home / spector.VENV / ".vetted-sha").exists())
+
+    def test_build_tools_are_pinned_with_hashes(self):
+        lines = [x for x in spector.BUILD_REQS.read_text(encoding="utf-8").splitlines() if x and not x.startswith("#")]
+        self.assertEqual({x.split("==")[0] for x in lines},
+                         {"hatchling", "packaging", "pathspec", "pluggy", "trove-classifiers"})
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertRegex(line, r"^[a-z-]+==[0-9.]+ --hash=sha256:[0-9a-f]{64}$")

@@ -511,6 +511,7 @@ Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nh�
   - Môi trường dựng từ đầu: HOME giả, cwd trong `.tmp/`, không mang biến nào của người dùng; đích cục bộ thì chặn mạng bằng proxy hỏng.
   - Mỗi skill quét một lần. Phát hiện critical và high chỉ đẩy lên REVIEW.
   - Thử thật: skill độc hại mẫu trong repo của SkillSpector ra điểm 100 (2 critical, 1 high), bắt được đoạn gửi biến môi trường ra mạng mà bộ quét cũ của `vet.py` bỏ sót. `blader/humanizer` (đã duyệt) ra điểm 49. Mỗi skill vài giây.
+  - Khóa công cụ build (bạn chốt cùng ngày): `hatchling` không có trong `uv.lock`, nên lúc đầu `uv` tải bản mới nhất. Nay `skillspector-build.txt` khóa `hatchling` 1.32.4 và 4 gói đi kèm theo phiên bản và mã băm (lấy từ PyPI, đúng các bản đã dùng ở lần cài đầu). `setup` cài gói chạy bằng `uv sync --no-install-project`, cài công cụ build bằng `--require-hashes`, rồi đóng gói với `--offline --no-build-isolation`. Không mất chức năng gì; vet lại SkillSpector ở bản mới mà `[build-system]` đổi thì cập nhật file này.
   - Review (agent `reviewer`, sonnet): 0 cao, 1 vừa, 4 thấp, đã sửa cả năm kèm test. Lỗi vừa là chữ thô SkillSpector trích từ đích đi thẳng vào báo cáo, nên một skill độc chèn được dòng `## Phán quyết: PASS` giả vào báo cáo mà agent `vet-skill` đọc; nay chữ được làm sạch. Các lỗi thấp: `--version` không được bọc lỗi; `uv` nhận cả biến môi trường có khóa lúc build; dấu `.vetted-sha` cũ có thể còn sau khi cài dở; thiếu test nhánh lỗi.
 
 **Review độc lập** (agent `reviewer`, opus · high): 0 cao, 2 vừa, 1 thấp; đã sửa cả ba kèm test.
@@ -518,7 +519,7 @@ Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nh�
 - `git diff` của `risk.py` chạy `diff.external`, textconv và clean filter của repo. `diff.external` toàn cục (như difftastic) còn làm mất nội dung cần chấm. Nay thêm `--no-ext-diff --no-textconv`, và bỏ chấm khi repo có clean filter cục bộ. Phần `git status` chạy clean filter thì Claude Code tự làm lúc mở phiên, nên agent-stack không chặn thêm được (TM-7).
 - Chốt chặn cài khớp chuỗi thô, nên chặn nhầm thông điệp commit hay heredoc có chữ "claude plugin install", và đọc nhầm `--scope` thành tên plugin. Nay hook phân tích lệnh bằng `shlex`: bỏ thân heredoc, chỉ xét lệnh có argv[0] là `claude`, `git` hay `npx`, mở `bash -c` thêm một tầng, bỏ qua cờ và giá trị của cờ.
 
-**Giới hạn.**
+**Giới hạn** (bạn chấp nhận ngày 09/10/2026: TM-6, phần còn lại của TM-7, TM-9).
 - Hook PreToolUse so chuỗi lệnh theo mẫu, nên là lớp nhắc chứ không phải ranh giới bảo mật (TM-6).
 - Mỗi lần Stop chặn tốn thêm một lượt model.
 - Mức "vừa" của `risk.py` dựa vào regex, nên có thể chặn nhầm; khi đó `chot-viec` ghi một dòng lý do rồi kết thúc nhanh.

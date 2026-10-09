@@ -2,7 +2,8 @@
 
 Điều kiện (vetted.lock, người dùng duyệt 09/10/2026):
 - venv riêng `.venv-skillspector` chạy Python 3.12 (yara-python chưa có bản dựng sẵn cho 3.11 trên máy này), cài từ
-  đúng bản đã kiểm trong .vet-cache bằng `uv sync --frozen --no-dev` (uv.lock có hash); không extra `mcp`, contrib;
+  đúng bản đã kiểm trong .vet-cache bằng `uv sync --frozen --no-dev` (uv.lock có hash); công cụ build (hatchling)
+  khóa phiên bản và mã băm trong skillspector-build.txt; không extra `mcp`, contrib;
 - luôn `--no-llm`; môi trường tối giản: không khóa API, không biến LangSmith hay LangChain;
 - đích cục bộ (có thể là mã riêng tư) thì chặn mạng: phần kiểm OSV gửi tên và phiên bản gói tới api.osv.dev;
 - kết quả chỉ đẩy lên REVIEW, không tự kết luận FAIL, cho tới khi đo được trên bộ mẫu của mình.
@@ -32,6 +33,7 @@ BLOCKED_PROXY = "http://127.0.0.1:9"  # cổng discard: mọi kết nối qua pr
 NETWORK_VARS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy",
                 "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE")
 FIELD_MAX = 120
+BUILD_REQS = Path(__file__).resolve().parent / "skillspector-build.txt"  # công cụ build, khóa phiên bản và mã băm
 
 
 def clean(value, limit: int = FIELD_MAX) -> str:
@@ -100,13 +102,24 @@ def setup(home: Path, run=subprocess.run) -> str:
     env.update(PATH=f"{Path(uv).parent}:{STD_PATH}", HOME=str(Path.home()), LANG="C.UTF-8",
                UV_CACHE_DIR=str(home / ".cache" / "uv"), UV_PYTHON_INSTALL_DIR=str(home / ".cache" / "uv-python"),
                UV_PROJECT_ENVIRONMENT=str(venv), UV_PYTHON_PREFERENCE="only-managed")
-    for cmd in ([uv, "python", "install", PYTHON],
-                # --frozen: đúng uv.lock (có hash); --no-dev: không gói dev; --no-editable: chép mã vào venv để
-                # venv không chạy mã từ .vet-cache (cache bị sửa về sau không ảnh hưởng); không extra nào.
-                [uv, "sync", "--frozen", "--no-dev", "--no-editable", "--python", PYTHON, "--project", str(src)]):
+    python = str(venv / "bin" / "python")
+    steps = [
+        [uv, "python", "install", PYTHON],
+        # Gói chạy: đúng uv.lock (có hash), không gói dev, không extra; chưa đóng gói SkillSpector ở bước này.
+        [uv, "sync", "--frozen", "--no-dev", "--no-install-project", "--python", PYTHON, "--project", str(src)],
+        # Công cụ build (hatchling, không có trong uv.lock): đúng phiên bản và mã băm đã khóa.
+        [uv, "pip", "install", "--python", python, "--require-hashes", "--no-deps", "-r", str(BUILD_REQS)],
+        # Đóng gói SkillSpector bằng hatchling vừa cài, không tải gì thêm (--offline), chép mã vào venv
+        # (không editable) để venv không chạy mã từ .vet-cache.
+        [uv, "pip", "install", "--python", python, "--offline", "--no-deps", "--no-build-isolation", str(src)],
+    ]
+    for cmd in steps:
         done = run(cmd, capture_output=True, text=True, env=env, timeout=1800)
         if done.returncode != 0:
-            raise ValueError(f"`{' '.join(cmd[:3])}` lỗi ({done.returncode}): {(done.stderr or done.stdout)[-400:]}")
+            hint = (f" Nếu bản đã duyệt đổi [build-system], cập nhật {BUILD_REQS.name} (phiên bản và mã băm)."
+                    if "--no-build-isolation" in cmd or "--require-hashes" in cmd else "")
+            raise ValueError(f"`{' '.join(Path(cmd[0]).name if i == 0 else c for i, c in enumerate(cmd[:3]))}` lỗi "
+                             f"({done.returncode}): {(done.stderr or done.stdout)[-400:]}{hint}")
     after = run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(src), "status", "--porcelain",
                  "--untracked-files=all", "--ignored"], capture_output=True, text=True)
     left = [x[3:] for x in (after.stdout or "").splitlines() if x.strip() and x[3:] != ".vet-complete"]
