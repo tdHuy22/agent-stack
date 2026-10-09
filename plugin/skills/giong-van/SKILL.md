@@ -34,7 +34,7 @@ Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (
 
 Viết bản sửa thành đoạn văn liền mạch, theo đúng định dạng của văn gốc: văn gốc là đoạn văn thì trả về đoạn văn, văn gốc có danh sách thì giữ danh sách. Sau bản sửa, báo ngắn gọn: tối đa 5 thay đổi chính, mỗi thay đổi một dòng; điểm trước và sau; và những chỗ cần người dùng xác nhận.
 
-Với văn tiếng Anh, dùng thêm skill `humanizer` nếu có; nếu không, dựa vào nhóm dấu hiệu tiếng Anh trong `tells.py`.
+Với văn tiếng Anh, dựa vào nhóm dấu hiệu tiếng Anh trong `tells.py`.
 
 ## Chế độ `tao-style-card`
 

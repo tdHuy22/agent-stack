@@ -203,7 +203,7 @@
       "skills": [
         "claude-security"
       ],
-      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng; claude-security chưa bật cho project thì giao reviewer audit từng module, và đề xuất cài nó theo project",
+      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng; claude-security chưa bật thì giao reviewer audit từng module, và đề xuất cài nó",
       "match": [
         "toan bo codebase",
         "toan bo repo",

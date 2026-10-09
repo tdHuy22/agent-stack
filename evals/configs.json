@@ -26,6 +26,12 @@
       "plugin": true,
       "note": "A + plugin agent-stack (subagent rẻ, hook)"
     },
+    "S": {
+      "model": "sonnet",
+      "effort": "medium",
+      "plugins": ["vendor/plugins/superpowers"],
+      "note": "A + superpowers (ghim 5bf4e78 trong vendor/, MIT), đo trước khi bật toàn cục (09/10/2026)"
+    },
     "H": {
       "model": "haiku",
       "effort": "medium",

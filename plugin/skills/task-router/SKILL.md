@@ -31,7 +31,7 @@ Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:
 6. **Leo thang theo thang trong `routing-table.md`:** sonnet · low → medium → high → opus · medium → high → xhigh → fable · high → opus · max hoặc fable · xhigh → fable · max. Hỏng vì bỏ sót thì tăng effort; đủ ngữ cảnh mà vẫn sai thì đổi model lớn hơn.
 7. Fable chỉ dành cho việc mà Opus ở effort cao vẫn chưa đạt: Opus 5.5 mặc định giải ngang Fable 5.1 mặc định với khoảng 1/5 chi phí. Tùy gói, Fable có thể bị tính vào usage credits.
 8. **Luôn dùng model mới nhất**: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.1), và `claude-haiku-5-5` thay cho alias `haiku` (alias này còn trỏ Haiku 4.5, không có effort). Haiku 5.5 có effort `low` tới `max`, mặc định `medium`. Eval 08/10/2026: ở `low` nó đạt 9/9 việc code, debug có test (18/18 lượt, kể cả việc rất khó) với khoảng 1/10 chi phí sonnet · medium, effort cao hơn không đạt thêm; nhưng viết văn tiếng Việt yếu. Nên khuyên `claude-haiku-5-5 · low` cho việc có test hay kiểm tra tự động, kèm đường lên `sonnet · medium` khi test trượt; việc không có cách kiểm tự động, viết văn, review, kiến trúc thì giữ sonnet hay opus. Chỉ cần nghĩ sâu cho một lượt thì khuyên thêm `ultrathink` vào prompt thay vì đổi effort cả phiên.
-9. **Skill vendor** (`tdd`, `diagnosing-bugs`, `humanizer`, `handoff`, `grill-me`) đã tắt mặc định từ 08/10/2026: A/B 20 lượt cho thấy chúng không giúp đạt thêm việc nào và không được gọi lần nào. Đừng gợi ý chúng, trừ khi người dùng hỏi.
+9. **Skill vendor** (`tdd`, `diagnosing-bugs`, `humanizer`, `handoff`, `grill-me`) đã xoá khỏi danh mục ngày 09/10/2026, sau khi A/B 20 lượt cho thấy chúng không giúp đạt thêm việc nào và không được gọi lần nào. Đừng gợi ý chúng.
 
 ## Kết quả trả về
 

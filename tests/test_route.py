@@ -80,16 +80,17 @@ class RouterRules(TempDirTestCase):
         self.assertEqual(review["model"], "opus")  # việc không chấm được bằng test thì giữ nguyên
 
     def test_on_demand_skills_not_suggested(self):
-        # Skill scope on-demand (vendor tắt mặc định 08/10/2026) không được nằm trong luật hay hồ sơ project.
+        # Skill scope on-demand không được nằm trong luật hay hồ sơ project; skill vendor đã xoá (09/10/2026) cũng vậy.
         catalog = json.loads((REPO / "catalog.json").read_text(encoding="utf-8"))
         on_demand = {i["install"].get("name") or i["install"].get("plugin")
                      for i in catalog["items"] if i["scope"] == "on-demand"}
-        self.assertTrue({"tdd", "diagnosing-bugs", "humanizer"} <= on_demand)
+        self.assertIn("webapp-testing", on_demand)
+        removed = {"tdd", "diagnosing-bugs", "humanizer", "grill-me", "handoff"}
         data = route.rules()
         used = {s for r in data["rules"] for s in r.get("skills", [])}
         used |= {s for v in data["markers"].values() for s in v.get("skills", [])}
         used |= {s for k, v in data["profiles"].items() if k != "web" for s in v.get("skills", [])}
-        self.assertEqual(used & on_demand, set())
+        self.assertEqual(used & (on_demand | removed), set())
         # Skill theo loại project (rule_extras) cũng bị lọc khi chỉ cài khi cần.
         hit = route.suggest_for("Viết test cho module đăng nhập này", {"kinds": ["web"], "markers": []})
         self.assertEqual(hit["rule"], "tests")

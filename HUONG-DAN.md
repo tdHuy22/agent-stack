@@ -276,7 +276,7 @@ Kết luận **KHÔNG THẤY GÌ** (mã thoát 0; không có nghĩa là an toàn
 4. Đưa về giọng trong `style-card.md`: xưng hô, độ dài câu, mức trang trọng, từ quen dùng.
 5. Đo lại, báo tối đa 5 thay đổi chính và điểm trước/sau.
 
-Văn tiếng Anh cũng dùng `giong-van` (có nhóm dấu hiệu tiếng Anh trong `tells.py`). Skill `humanizer` của vendor đã gỡ khỏi máy ngày 08/10/2026 vì A/B không thấy nó giúp thêm; cài lại khi cần (xem mục eval).
+Văn tiếng Anh cũng dùng `giong-van` (có nhóm dấu hiệu tiếng Anh trong `tells.py`). Skill `humanizer` của vendor đã gỡ ngày 08/10/2026 vì A/B không thấy nó giúp thêm, và xoá khỏi `catalog.json`, `vetted.lock` ngày 09/10/2026; muốn dùng lại thì phải chạy lại `vet-skill`.
 
 **Bài mẫu.** `tells.py` so bản nháp với bài mẫu cùng ngôn ngữ, chọn theo thứ tự:
 
@@ -362,7 +362,7 @@ python3 plugin/skills/chot-viec/scripts/risk.py
 
 **Làm gì:** đọc ít (chỉ phần code sắp chạm và chốt chặn có sẵn), vẽ luồng 3–6 dòng, hỏi sáu câu STRIDE cho mỗi ranh giới, giữ tối đa 5 mối đe dọa có khả năng cao nhất, mỗi mối kèm actor, surface, asset và chốt chặn phải có (kiểm được trong code hay test). Ghi vào `.agent/threat-model.md` của project với ID `TM-n` và trạng thái `cần làm`, `đã có` hay `chấp nhận rủi ro`. Project có skill threat model riêng (ví dụ `security-whitebox`, nơi bạn tự viết skill khi học) thì dùng skill đó.
 
-**Ba bước bảo mật theo mức rủi ro:** threat model trước khi code (skill này) → review từng thay đổi theo mức rủi ro (`chot-viec`) → audit cả repo một lần trước phát hành (`claude-security`, cài theo project). Không chạy đủ cả ba cho mọi chức năng: phần lớn chi phí của một lần review là cố định, nên chạy cho cả chức năng sửa giao diện thì tốn mà không tìm được gì.
+**Ba bước bảo mật theo mức rủi ro:** threat model trước khi code (skill này) → review từng thay đổi theo mức rủi ro (`chot-viec`) → audit cả repo một lần trước phát hành (`claude-security`, cài toàn cục từ 09/10/2026, chỉ chạy khi bạn gọi `/claude-security`). Không chạy đủ cả ba cho mọi chức năng: phần lớn chi phí của một lần review là cố định, nên chạy cho cả chức năng sửa giao diện thì tốn mà không tìm được gì.
 
 Ý lấy từ skill `threat-model` của `anthropics/defending-code-reference-harness` (Apache-2.0): phép thử "sửa một dòng là hết thì là lỗi, không phải mối đe dọa" và tên cột của bảng. Bản đó mô hình hóa cả codebase bằng nhiều subagent; bản này gọn cho từng chức năng.
 
@@ -528,7 +528,7 @@ Test chạy bằng `python3` (3.11 của pyenv), cũng là Python mà app dùng 
 
 ### Eval chọn cấu hình
 
-`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), H5L, H5M, HM (Haiku 5.5 · low, medium, max).
+`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), H5L, H5M, HM (Haiku 5.5 · low, medium, max), S (A + superpowers chép ở `vendor/plugins/superpowers`, để đo trước khi bật toàn cục).
 
 ```bash
 python3 evals/run_eval.py --configs A,C,D --repeats 2
@@ -540,7 +540,7 @@ Có số liệu rồi thì cập nhật `routing-table.md` và `rules.json`.
 
 Đo lợi ích của một plugin bên thứ ba: thêm vào `evals/configs.json` một cấu hình có `"plugins": ["<thư mục trong repo>"]`, rồi so với A trên các việc plugin đó nhắm tới. Cấu hình có plugin chạy với `stream-json`, nên bảng kết quả có thêm dòng "gọi skill ở n/m lượt". Skill có mà không được gọi thì chênh lệch chỉ là nhiễu. Không hơn A thì đừng bật skill đó: skill tốn token mỗi lần nạp mô tả, và có skill làm kết quả tệ đi.
 
-**Skill vendor, kết quả 07/10/2026:** cấu hình V (A + 5 skill vendor) và A cùng đạt 20/20 trên 10 việc (gồm 3 việc debug, diff rất khó), V không gọi skill lượt nào. Ngày 08/10/2026 đã gỡ hẳn: plugin và marketplace `agent-stack-vendor-local`, 5 symlink OpenCode, thư mục `vendor/` và cấu hình V. Cài lại: đổi scope trong `catalog.json` thành `user` rồi chạy `install.sh`. Chi tiết ở `routing-table.md` mục 8.
+**Skill vendor, kết quả 07/10/2026:** cấu hình V (A + 5 skill vendor) và A cùng đạt 20/20 trên 10 việc (gồm 3 việc debug, diff rất khó), V không gọi skill lượt nào. Ngày 08/10/2026 đã gỡ hẳn: plugin và marketplace `agent-stack-vendor-local`, 5 symlink OpenCode, thư mục `vendor/` và cấu hình V. Ngày 09/10/2026 xoá luôn khỏi `catalog.json` và `vetted.lock`; muốn dùng lại thì chạy lại `vet-skill`. Chi tiết ở `routing-table.md` mục 8.
 
 **Kết quả lần chạy ngày 02/10/2026** (72 lượt, khoảng 7,5 USD giá niêm yết): A, C và D đều đạt 24/24; A rẻ nhất (0,063 USD mỗi việc, so với 0,128 và 0,121). Vì cả ba đều đạt hết, bộ việc này chưa phân biệt được các cấu hình: nó chỉ cho thấy sonnet · medium đủ cho việc nhỏ có tín hiệu kiểm tra rõ. Muốn đo debug khó hay review diff thật, cần thêm việc khó hơn vào `evals/tasks/`. Chi tiết và khuyến nghị chính thức của Anthropic nằm ở `routing-table.md`.
 
