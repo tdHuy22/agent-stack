@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 16:41 09/10/2026 từ commit `bff7d2b` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 17:35 09/10/2026 từ commit `495dd43` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -200,6 +200,17 @@
 | 5 | lệnh brew | `brew install semgrep` |  | `brew uninstall semgrep` |
 | 6 | symlink | ~/.config/opencode/skills/chot-viec | → `~/Documents/Claude/agent-stack/plugin/skills/chot-viec` | `rm ~/.config/opencode/skills/chot-viec` |
 | 7 | symlink | ~/.config/opencode/skills/mo-hinh-de-doa | → `~/Documents/Claude/agent-stack/plugin/skills/mo-hinh-de-doa` | `rm ~/.config/opencode/skills/mo-hinh-de-doa` |
+
+## Lần cài 17:35 09/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261009-173508.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261009-173508`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
 
 ## Gỡ toàn bộ
 
