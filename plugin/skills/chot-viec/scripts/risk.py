@@ -23,6 +23,8 @@ MAX_TEXT = 200_000
 
 # File chỉ dẫn cho agent: đổi nó là đổi hành vi của agent, dù đuôi là .md.
 INSTR_RE = re.compile(r"(^|/)(skill|claude|agents)(\.global)?\.md$|(^|/)agents/[^/]+\.md$")
+DEP_FILES_RE = re.compile(r"(^|/)(requirements[^/]*\.txt|pyproject\.toml|setup\.cfg|package(-lock)?\.json|yarn\.lock|"
+                          r"pnpm-lock\.yaml|poetry\.lock|uv\.lock|cargo\.(toml|lock)|go\.(mod|sum)|gemfile(\.lock)?)$")
 # Luật theo đường dẫn: (mẫu, điểm, lý do). Mỗi luật chỉ cộng điểm một lần dù khớp nhiều file.
 PATH_RULES = [
     (re.compile(r"(^|[/_.-])(auth\w*|oauth|login|passw\w*|credentials?|secrets?|tokens?|crypto\w*|encrypt\w*|"
@@ -32,9 +34,7 @@ PATH_RULES = [
     (re.compile(r"(^|/)hooks?/"), 2, "hook chạy tự động trong mọi phiên"),
     (re.compile(r"(^|/)(install|setup|bootstrap|deploy)[^/]*\.(sh|py|ps1)$|(^|/)\.github/workflows/|"
                 r"(^|/)dockerfile|(^|/)makefile$"), 2, "cài đặt, triển khai hoặc CI"),
-    (re.compile(r"(^|/)(requirements[^/]*\.txt|pyproject\.toml|setup\.cfg|package(-lock)?\.json|yarn\.lock|"
-                r"pnpm-lock\.yaml|poetry\.lock|uv\.lock|cargo\.(toml|lock)|go\.(mod|sum)|gemfile(\.lock)?)$"),
-     2, "đổi phụ thuộc"),
+    (DEP_FILES_RE, 2, "đổi phụ thuộc"),
     (re.compile(r"(^|/)\.env|(^|/)settings(\.local)?\.json$|\.(pem|key)$"), 2, "cấu hình hoặc khóa"),
     (INSTR_RE, 1, "chỉ dẫn cho agent (đổi hành vi của agent)"),
 ]
@@ -55,6 +55,49 @@ CODE_RULES = [
     (re.compile(r"""(?i)execute\(\s*f["']|["']\s*(select|insert|update|delete)\b[^"'\n]*["']\s*(\+|%)"""),
      3, "SQL ghép chuỗi"),
 ]
+
+
+# Ranh giới tin cậy: (tên, mẫu đường dẫn, mẫu nội dung dòng thêm vào ở file code). Đụng ranh giới thì ít nhất mức vừa,
+# và chot-viec cần một mục trong .agent/threat-model.md (skill mo-hinh-de-doa) để reviewer kiểm từng chốt chặn.
+BOUNDARY_RULES = [
+    ("input từ bên ngoài", None,
+     re.compile(r"@(app|router|bp|blueprint|api)\.(get|post|put|patch|delete|route|websocket)\(|"
+                r"\brequest\.(args|form|json|files|get_json|query_params|body|cookies)\b|"
+                r"\b(app|router)\.(get|post|put|patch|delete|all)\(\s*['\"]/|\b(FastAPI|APIRouter|Flask)\(|"
+                r"\bexpress\(\)|\bmulter\(|\bUploadFile\b|BaseHTTPRequestHandler|\bcreateServer\(|"
+                r"\bsocket\.(bind|listen)\(")),
+    ("xác thực, phân quyền", re.compile(r"(^|[/_.-])(auth\w*|oauth|login|passw\w*|permissions?|acl)([/_.-]|$)"),
+     re.compile(r"\b(login|logout|authenticate|authorize|login_required|permission_required|is_authenticated|"
+                r"jwt|oauth2?|set_cookie|verify_password|check_password|bcrypt|passlib|getServerSession)\b|"
+                r"\bsession\[")),
+    ("gọi ra ngoài", None,
+     re.compile(r"\brequests\.(get|post|put|patch|delete|request|Session)\b|\bhttpx\.|\burllib\.request\b|"
+                r"\burlopen\(|\baiohttp\.|(?<![\w.])fetch\(|\baxios\.|\bsmtplib\b|\bboto3\.|"
+                r"\bsocket\.(connect|create_connection)\(")),
+    ("dữ liệu nhạy cảm", re.compile(r"(^|[/_.-])(payments?|billing|secrets?|credentials?|pii)([/_.-]|$)"),
+     re.compile(r"(?i)\b(ssn|credit_?card|card_?number|cvv|iban|cccd|date_of_birth|phone_?number|so_dien_thoai)\b")),
+    ("thêm dependency", DEP_FILES_RE, None),
+    ("chạy mã, lệnh hay đường dẫn từ input", None,
+     re.compile(r"\bsubprocess\.|\bos\.(system|popen|exec\w*)\(|(?<![\w.])(eval|exec)\(|\bpickle\.loads?\(|"
+                r"\byaml\.load\(|\bchild_process\b|\bsend_file\(|\bsend_from_directory\(|\.extractall\(")),
+]
+THREAT_MODEL_REL = ".agent/threat-model.md"
+# Chỉ soi nội dung ranh giới trong file mã nguồn: file dữ liệu (JSON, YAML) hay liệt kê từ khóa như "login" mà không chạy gì.
+SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".php", ".rs", ".c",
+              ".cc", ".cpp", ".h", ".hpp", ".cs", ".swift", ".scala", ".sh", ".bash", ".zsh", ".ps1", ".lua", ".pl"}
+
+
+def boundaries(changes: list) -> list:
+    """[(tên ranh giới, [đường dẫn])]: file đổi khớp đường dẫn, hay file code có dòng thêm vào khớp nội dung."""
+    out = []
+    for name, path_re, text_re in BOUNDARY_RULES:
+        paths = [c["path"] for c in changes
+                 if (path_re and kind(c["path"]) != "test" and path_re.search(c["path"].lower()))
+                 or (text_re and kind(c["path"]) == "code" and Path(c["path"]).suffix.lower() in SOURCE_EXT
+                     and text_re.search(c.get("text") or ""))]
+        if paths:
+            out.append((name, paths))
+    return out
 
 
 class NotARepo(Exception):
@@ -140,6 +183,13 @@ def assess(changes: list) -> dict:
         reasons.append("có file nhị phân, không đọc được nội dung: " + ", ".join(binary[:3]))
 
     level = "cao" if score >= 4 else "vua" if score >= 2 else "thap"
+    crossed = boundaries(changes)
+    if crossed and level == "thap":
+        level = "vua"
+        reasons.append("đụng ranh giới tin cậy: " + ", ".join(name for name, _ in crossed))
+    result.update(boundaries=[{"kind": name, "paths": paths} for name, paths in crossed],
+                  threat_model_updated=any(c["path"] == THREAT_MODEL_REL or c["path"].endswith("/" + THREAT_MODEL_REL)
+                                           for c in changes))
     result.update(level=level, score=score, reasons=reasons, review=review_hint(level),
                   hotspots=[(p, v[1]) for p, v in sorted(hot.items(), key=lambda kv: (-kv[1][0], kv[0]))])
     return result
@@ -233,6 +283,15 @@ def render(r: dict, base: str = "HEAD") -> str:
     if r["hotspots"]:
         lines.append("File nên đọc kỹ:")
         lines += [f"- {p}: {'; '.join(why)}" for p, why in r["hotspots"][:8]]
+    if r.get("boundaries"):
+        lines.append("Ranh giới tin cậy bị đụng:")
+        lines += [f"- {b['kind']}: {', '.join(b['paths'][:3])}" + (f" và {len(b['paths']) - 3} file khác"
+                                                                    if len(b["paths"]) > 3 else "")
+                  for b in r["boundaries"]]
+        lines.append(f"Threat model: {'có mục mới trong' if r.get('threat_model_updated') else 'chưa có mục mới trong'} "
+                     f"`{THREAT_MODEL_REL}`" + ("" if r.get("threat_model_updated") else
+                                                "; nếu chưa có mục cho việc này, chạy skill mo-hinh-de-doa trước bước review")
+                     + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
     lines.append(f"Review đề nghị: {r['review']}")
     return "\n".join(lines)
 

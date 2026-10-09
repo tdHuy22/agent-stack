@@ -135,11 +135,45 @@ def available_skills() -> dict:
             if review != "approved":
                 status[name] = "chờ duyệt"
             else:
-                status[name] = "khi cần" if item.get("scope") == "on-demand" else "đã duyệt"
+                status[name] = {"on-demand": "khi cần", "project": "theo project"}.get(item.get("scope"), "đã duyệt")
     return status
 
 
-def profile_summary(profile: dict) -> tuple:
+def skill_plugin(name: str):
+    """(id plugin "tên@marketplace", mục catalog) của skill do một plugin bên thứ ba cung cấp, hoặc (None, None)."""
+    home = A.home_dir()
+    for item in ((A.read_json(home / "catalog.json", {}) or {}).get("items", []) if home else []):
+        inst = item.get("install") or {}
+        if item.get("kind") in ("claude-plugin", "vendor-plugin") and inst.get("plugin") == name and inst.get("marketplace"):
+            return f"{inst['plugin']}@{inst['marketplace']}", item
+    return None, None
+
+
+def install_hint(plugin: str, item: dict) -> str:
+    """Lệnh để người dùng tự chạy: mục scope user cài qua install.sh (cho mọi project), mục khác cài riêng project."""
+    if item.get("scope") == "user":
+        return "./install.sh --apply --only catalog (trong agent-stack, cài cho mọi project)"
+    verb = "enable" if plugin_installed(plugin) else "install"
+    return f"claude plugin {verb} {plugin} --scope {'local' if verb == 'enable' else 'project'}"
+
+
+def localize(hit: dict, root) -> dict:
+    """Bỏ khỏi gợi ý các skill của plugin chưa bật cho project (hay cho người dùng, khi không có project), thay bằng
+    skill dự phòng (mục skill_fallbacks của rules.json), và ghi lệnh cài vào hit["missing"]. Sửa tại chỗ và trả lại hit."""
+    keep, missing = [], []
+    for name in hit.get("skills") or []:
+        plugin, item = skill_plugin(name)
+        if plugin is None or plugin_enabled(Path(root) if root else None, plugin):
+            keep.append(name)
+            continue
+        missing.append({"skill": name, "install": install_hint(plugin, item)})
+        keep += (rules().get("skill_fallbacks") or {}).get(name, [])
+    hit["skills"] = list(dict.fromkeys(keep))
+    hit["missing"] = missing
+    return hit
+
+
+def profile_summary(profile: dict, root=None) -> tuple:
     """(nhãn hồ sơ, skill dùng được, skill chờ duyệt, subagent) theo mục profiles và markers của rules.json."""
     cfg = rules()
     labels, skills, agents = [], [], []
@@ -155,8 +189,10 @@ def profile_summary(profile: dict) -> tuple:
             agents.append(entry["agent"])
     status = available_skills()
     skills = list(dict.fromkeys(skills))
-    ready = [s for s in skills if status.get(s) in ("có", "đã duyệt")]
-    pending = [s for s in skills if status.get(s) in ("chờ duyệt", "khi cần")]
+    enabled = {s for s in skills if status.get(s) == "theo project" and root
+               and plugin_enabled(Path(root), skill_plugin(s)[0] or "")}
+    ready = [s for s in skills if status.get(s) in ("có", "đã duyệt") or s in enabled]
+    pending = [s for s in skills if status.get(s) in ("chờ duyệt", "khi cần", "theo project") and s not in enabled]
     return labels, ready, pending, list(dict.fromkeys(agents))
 
 
@@ -167,8 +203,10 @@ def claude_config_dir() -> Path:
 def plugin_enabled(root: Path, plugin: str) -> bool:
     """Plugin đang bật cho project này: local đè project, project đè user (như thứ tự settings của Claude Code)."""
     state = False
-    for path in (claude_config_dir() / "settings.json", root / ".claude" / "settings.json",
-                 root / ".claude" / "settings.local.json"):
+    paths = [claude_config_dir() / "settings.json"]
+    if root:
+        paths += [root / ".claude" / "settings.json", root / ".claude" / "settings.local.json"]
+    for path in paths:
         value = ((A.read_json(path, {}) or {}).get("enabledPlugins") or {}).get(plugin)
         if isinstance(value, bool):
             state = value
@@ -261,9 +299,11 @@ def session_hint(root):
     profile = A.project_profile(root)
     if not profile:
         return None
-    labels, ready, pending, agents = profile_summary(profile)
+    labels, ready, pending, agents = profile_summary(profile, root)
     task = next_task(root)
     hit = suggest_for(task, profile) if task else None
+    if hit:
+        localize(hit, root)
     if not (labels or ready or hit):
         return None
     ctx = [f"[agent-stack] Hồ sơ project `{root.name}`: {', '.join(labels) or 'chưa rõ loại'}."]
@@ -336,6 +376,7 @@ def hook_suggestion(prompt: str, data: dict):
     hit = suggest_for(text, A.project_profile(root) if root else None)
     if not hit:
         return None
+    localize(hit, root)
     sid = data.get("session_id", "")
     now_model = current_model(sid)
     now_effort = (data.get("effort") or {}).get("level")
@@ -349,7 +390,11 @@ def hook_suggestion(prompt: str, data: dict):
         parts_ctx.append(f"giao cho subagent {hit['agent']}")
     if hit["skills"]:
         parts_user.append("skill " + ", ".join(hit["skills"]))
-        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]) + " nếu có")
+        parts_ctx.append("dùng skill " + ", ".join(hit["skills"]))
+        parts_ctx += [n for n in ((rules().get("skill_notes") or {}).get(x) for x in hit["skills"]) if n]
+    if hit.get("missing"):
+        parts_ctx.append("chưa bật cho project này: " + "; ".join(f"{m['skill']} (`{m['install']}`)" for m in hit["missing"])
+                         + "; chỉ đề xuất cài với người dùng, đừng tự cài")
     if hit.get("note"):
         parts_ctx.append(hit["note"])
     if not parts_user:
@@ -402,8 +447,9 @@ def main(argv=None) -> int:
         print("\n".join(x["context"] for x in (hint, last) if x))
         return 0
     text = args.text or sys.stdin.read()
-    profile = A.project_profile(A.project_root(Path(args.project).expanduser().resolve())) if args.project else None
-    print(json.dumps(suggest_for(text, profile), ensure_ascii=False, indent=2))
+    root = A.project_root(Path(args.project).expanduser().resolve()) if args.project else None
+    hit = suggest_for(text, A.project_profile(root) if root else None)
+    print(json.dumps(localize(hit, root) if hit else hit, ensure_ascii=False, indent=2))
     return 0
 
 

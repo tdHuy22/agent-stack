@@ -36,6 +36,8 @@ Quy trình:
    - Biến môi trường, cờ CLI, cấu hình do chủ máy đặt là đáng tin. Script shell, workflow CI, notebook chỉ báo khi chỉ ra được đường cho input lạ đi vào.
    - Web: client không cần tự kiểm quyền (server mới cần). XSS ở framework tự escape (React, Angular) chỉ báo khi code tắt cơ chế đó. SSRF chỉ điều khiển được đường dẫn, open redirect, tabnabbing: bỏ trừ khi gần như chắc.
    - Ghi input hay URL vào log không phải lỗi; chỉ báo khi log lộ secret hay dữ liệu cá nhân. Secret trong file cục bộ ngoài git: không báo; secret bị commit: báo.
+Nếu prompt kèm bảng mối đe dọa (từ `.agent/threat-model.md`): với từng chốt chặn, chỉ ra `file:dòng` nơi nó được thực thi và test chạm nhánh bị từ chối. Chốt chặn thiếu hay đặt sau hành động nhạy cảm là một phát hiện; mức độ theo hậu quả của mối đe dọa đó. Nếu prompt kèm báo cáo của công cụ khác (ví dụ `differential-review`), coi từng mục trong đó là phát hiện chưa kiểm: phản biện theo bước 3 và 4 như phát hiện của chính bạn.
+
 6. Mỗi vấn đề ghi: mức độ (nghiêm trọng / cao / trung bình / thấp, suy từ số điều kiện cần để lỗi xảy ra và hậu quả, không từ tên loại lỗi), `file:dòng`, vì sao sai, kịch bản gây lỗi cụ thể, cách sửa.
 
 Kết thúc bằng một dòng tổng: số vấn đề theo mức độ (mục "cần kiểm tra" tính riêng), và có nên merge hay không. Không thấy vấn đề thì liệt kê những gì đã kiểm tra.

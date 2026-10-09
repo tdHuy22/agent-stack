@@ -37,6 +37,7 @@ SOFTWARE.
 - Nguồn: https://github.com/anthropics/defending-code-reference-harness (`docs/prompting.md`, `docs/best-practices.md`).
 - Giấy phép: Apache License 2.0, Copyright 2026 Anthropic PBC (theo LICENSE của repo gốc). Bản đầy đủ: https://www.apache.org/licenses/LICENSE-2.0
 - Việc đã làm: diễn đạt lại ý. Lấy cách mô tả hình dạng lỗi thay vì liệt kê loại lỗi, bước verifier đối kháng tách khỏi bước tìm, và việc suy mức độ từ điều kiện cần để lỗi xảy ra. Không chép code hay văn bản gốc, không dùng tên hay nhãn hiệu của tác giả.
+- `skills/mo-hinh-de-doa/SKILL.md` (09/10/2026): lấy ý từ `.claude/skills/threat-model` của repo này, qua bản tóm tắt của skill `reuse-best`. Hai ý: phép thử "sửa một dòng là hết thì là lỗi, không phải mối đe dọa", và các cột actor, surface, asset, trạng thái của bảng mối đe dọa. Văn bản tự viết bằng tiếng Việt, không chép nguyên văn. Bản gốc mô hình hóa cả codebase bằng nhiều subagent; bản này gọn cho từng chức năng.
 
 ## pr-review-toolkit và code-review (Apache-2.0)
 

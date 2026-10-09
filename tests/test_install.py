@@ -5,7 +5,17 @@ import shutil
 import subprocess
 import sys
 
-from tests._util import REPO, TempDirTestCase
+from tests._util import REPO, TempDirTestCase, git
+
+
+def vetted(cache) -> str:
+    """Biến thư mục cache giả thành checkout git như vet.py tạo (kèm dấu .vet-complete); trả về sha."""
+    git(cache, "init", "-q")
+    git(cache, "add", "-A")
+    git(cache, "commit", "-q", "-m", "vetted")
+    sha = git(cache, "rev-parse", "HEAD").strip()
+    (cache / ".vet-complete").write_text(sha + "\n")
+    return sha
 
 INSTALL = REPO / "tools" / "install.py"
 FAKE_CLAUDE = """#!/usr/bin/env python3
@@ -147,8 +157,10 @@ class InstallTests(TempDirTestCase):
         (cache / "skill").mkdir(parents=True)
         (cache / "skill" / "SKILL.md").write_text("---\nname: demo\n---\n")
         (cache / "skill" / ".claude-plugin").mkdir()
+        (cache / "skill" / ".claude-plugin" / "plugin.json").write_text("{}")
+        sha = vetted(cache)
         self.lock["entries"] = {
-            "o/r:skill": {"verdict": "PASS", "sha": "abcdefabcdef1234", "subpath": "skill",
+            "o/r:skill": {"verdict": "PASS", "sha": sha, "subpath": "skill",
                           "report": "vet-reports/o__r@abcdefabcdef.md", "human_review": {"status": "approved"}},
             "x/y": {"verdict": "REVIEW", "sha": "1", "report": "vet-reports/x__y@1.md",
                     "human_review": {"status": "pending"}},
@@ -175,6 +187,145 @@ class InstallTests(TempDirTestCase):
         self.assertIn(f"plugin marketplace add {self.stack / 'vendor'}", made)
         self.assertIn("plugin install agent-stack-vendor@agent-stack-vendor-local --scope user", made)
         self.assertFalse(any("y@m" in c or "q@m" in c for c in made))
+
+    def test_vendor_plugin_is_pinned_copy_and_project_scope_is_only_copied(self):
+        for stem, name in (("t__s@aaaaaaaaaaaa", "diffrev"), ("t__s@bbbbbbbbbbbb", "creview")):
+            plugin = self.stack / ".vet-cache" / stem / "plugins" / name
+            (plugin / ".claude-plugin").mkdir(parents=True)
+            (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": name}))
+            (plugin / "skills" / name).mkdir(parents=True)
+            (plugin / "skills" / name / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
+        shas = {name: vetted(self.stack / ".vet-cache" / stem)
+                for stem, name in (("t__s@aaaaaaaaaaaa", "diffrev"), ("t__s@bbbbbbbbbbbb", "creview"))}
+        self.lock["entries"] = {
+            f"t/s:plugins/{name}": {"verdict": "REVIEW", "sha": shas[name], "subpath": f"plugins/{name}",
+                                    "report": f"vet-reports/{stem}.md", "human_review": {"status": "approved"}}
+            for stem, name in (("t__s@aaaaaaaaaaaa", "diffrev"), ("t__s@bbbbbbbbbbbb", "creview"))}
+        self.catalog["items"] = [
+            {"key": "t/s:plugins/diffrev", "kind": "vendor-plugin", "scope": "user",
+             "install": {"marketplace": "agent-stack-vendor-local", "plugin": "diffrev"}},
+            {"key": "t/s:plugins/creview", "kind": "vendor-plugin", "scope": "project",
+             "install": {"marketplace": "agent-stack-vendor-local", "plugin": "creview"}},
+        ]
+        self.save()
+        out = self.run_install("--apply", "--only", "catalog")
+        vendor = self.stack / "vendor"
+        for name in ("diffrev", "creview"):
+            self.assertTrue((vendor / "plugins" / name / ".claude-plugin" / "plugin.json").exists(), name)
+            self.assertFalse((vendor / "plugins" / name / ".git").exists())
+        self.assertFalse((vendor / ".claude-plugin" / "plugin.json").exists(), "không có skill vendor thì không có plugin gộp")
+        listed = json.loads((vendor / ".claude-plugin" / "marketplace.json").read_text())["plugins"]
+        self.assertEqual([(p["name"], p["source"]) for p in listed],
+                         [("diffrev", "./plugins/diffrev"), ("creview", "./plugins/creview")])
+        made = self.calls_made()
+        self.assertIn("plugin install diffrev@agent-stack-vendor-local --scope user", made)
+        self.assertFalse(any("creview@" in c for c in made), "scope project: chỉ chép, không cài")
+        self.assertIn("claude plugin install creview@agent-stack-vendor-local --scope project", out)
+        self.assertFalse(any("marketplace add t/s" in c for c in made), "không thêm marketplace GitHub (HEAD chưa kiểm)")
+        self.run_install("--rollback", "--apply")
+        self.assertFalse(vendor.exists())
+        self.assertIn("plugin uninstall diffrev@agent-stack-vendor-local --scope user", self.calls_made())
+
+    def test_vetted_cache_changed_after_vet_or_at_other_commit_is_not_copied(self):
+        cache = self.stack / ".vet-cache" / "t__s@cccccccccccc"
+        plugin = cache / "plugins" / "dr"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+        (plugin / "README.md").write_text("bản đã kiểm\n")
+        sha = vetted(cache)
+        entry = {"verdict": "REVIEW", "sha": sha, "subpath": "plugins/dr", "report": "vet-reports/t__s@cccccccccccc.md",
+                 "human_review": {"status": "approved"}}
+        self.lock["entries"] = {"t/s:plugins/dr": entry}
+        self.catalog["items"] = [{"key": "t/s:plugins/dr", "kind": "vendor-plugin", "scope": "user",
+                                  "install": {"marketplace": "agent-stack-vendor-local", "plugin": "dr"}}]
+        self.save()
+        (plugin / "README.md").write_text("bị sửa sau khi vet\n")
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("file đổi sau khi vet (plugins/dr/README.md)", out)
+        self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+        self.assertFalse(any("dr@" in c for c in self.calls_made()))
+        git(cache, "checkout", "-q", "--", ".")
+        entry["sha"] = "0" * 40
+        self.save()
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("không phải commit đã duyệt 000000000000", out)
+        entry["sha"] = sha
+        self.save()
+        self.run_install("--apply", "--only", "catalog")
+        self.assertTrue((self.stack / "vendor" / "plugins" / "dr" / "README.md").exists())
+
+    def vendor_plugin_fixture(self, stem="t__s@dddddddddddd", name="dr", scope="user"):
+        cache = self.stack / ".vet-cache" / stem
+        plugin = cache / "plugins" / name
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+        (plugin / "README.md").write_text("bản đã kiểm\n")
+        (cache / ".gitignore").write_text("__pycache__/\n")
+        sha = vetted(cache)
+        self.lock["entries"] = {f"t/s:plugins/{name}": {
+            "verdict": "REVIEW", "sha": sha, "subpath": f"plugins/{name}", "report": f"vet-reports/{stem}.md",
+            "human_review": {"status": "approved"}}}
+        self.catalog["items"] = [{"key": f"t/s:plugins/{name}", "kind": "vendor-plugin", "scope": scope,
+                                  "install": {"marketplace": "agent-stack-vendor-local", "plugin": name}}]
+        self.save()
+        return cache, plugin, sha
+
+    def test_ignored_or_hidden_files_in_cache_are_refused_and_never_exported(self):
+        cache, plugin, sha = self.vendor_plugin_fixture()
+        (plugin / "__pycache__").mkdir()
+        (plugin / "__pycache__" / "x.cpython-311.pyc").write_bytes(b"\x00la")
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("file đổi sau khi vet", out)
+        self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+        # Dù có lọt qua bước kiểm, bản xuất chỉ gồm file git ghi nhận ở commit đã duyệt.
+        sys.path.insert(0, str(REPO / "tools"))
+        import install as installer
+        dest = self.tmp / "export"
+        installer.export_vetted(cache, sha, "plugins/dr", dest, installer.SKIP_IN_VENDOR_PLUGIN)
+        self.assertEqual(sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file()),
+                         [".claude-plugin/plugin.json", "README.md"])
+        shutil.rmtree(plugin / "__pycache__")
+        (plugin / "README.md").write_text("sửa rồi giấu đi\n")
+        git(cache, "update-index", "--skip-worktree", "plugins/dr/README.md")
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("bị ẩn khỏi git status (plugins/dr/README.md)", out)
+
+    def test_sparse_checkout_of_vet_skill_is_accepted(self):
+        cache, plugin, sha = self.vendor_plugin_fixture()
+        other = cache / "plugins" / "khac"
+        other.mkdir()
+        (other / "x.md").write_text("plugin khác, chưa duyệt\n")
+        git(cache, "add", "-A")
+        git(cache, "commit", "-q", "-m", "thêm plugin khác")
+        sha = git(cache, "rev-parse", "HEAD").strip()
+        (cache / ".vet-complete").write_text(sha + "\n")
+        git(cache, "sparse-checkout", "set", "plugins/dr")  # như vet.py: file ngoài thư mục con có cờ skip-worktree
+        self.lock["entries"]["t/s:plugins/dr"]["sha"] = sha
+        self.save()
+        self.run_install("--apply", "--only", "catalog")
+        self.assertTrue((self.stack / "vendor" / "plugins" / "dr" / "README.md").exists())
+        self.assertFalse((self.stack / "vendor" / "plugins" / "khac").exists())
+
+    def test_install_older_than_vetted_copy_is_reinstalled(self):
+        self.vendor_plugin_fixture()
+        old = self.home / ".claude" / "plugins" / "cache" / "agent-stack-vendor-local" / "dr" / "1.0.0"
+        (old / ".claude-plugin").mkdir(parents=True)
+        (old / ".claude-plugin" / "plugin.json").write_text("{}")
+        (old / "README.md").write_text("bản cũ\n")
+        pid = "dr@agent-stack-vendor-local"
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {pid: True}}))
+        (self.home / ".claude" / "plugins" / "installed_plugins.json").write_text(json.dumps(
+            {"version": 2, "plugins": {pid: [{"scope": "user", "installPath": str(old)}]}}))
+        out = self.run_install("--apply", "--only", "catalog")
+        self.assertIn("bản đã cài khác bản đã duyệt, cài lại", out)
+        made = self.calls_made()
+        self.assertEqual([c for c in made if pid in c][-2:],
+                         [f"plugin uninstall {pid} --scope user", f"plugin install {pid} --scope user"])
+        (old / "README.md").write_text("bản đã kiểm\n")
+        before = len(self.calls_made())
+        out = self.run_install("--apply", "--only", "catalog")
+        self.assertNotIn("cài lại", out)
+        self.assertFalse(any("uninstall" in c for c in self.calls_made()[before:]), "bản đã khớp thì không cài lại")
 
     def test_failed_command_is_reported_and_exits_1(self):
         out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})
@@ -207,7 +358,8 @@ class InstallTests(TempDirTestCase):
         cache = self.stack / ".vet-cache" / "o__r@abcdefabcdef"
         (cache / "skill").mkdir(parents=True)
         (cache / "skill" / "SKILL.md").write_text("---\nname: demo\n---\n")
-        self.lock["entries"] = {"o/r:skill": {"verdict": "PASS", "sha": "abcdefabcdef1234", "subpath": "skill",
+        sha = vetted(cache)
+        self.lock["entries"] = {"o/r:skill": {"verdict": "PASS", "sha": sha, "subpath": "skill",
                                               "report": "vet-reports/o__r@abcdefabcdef.md",
                                               "human_review": {"status": "approved"}}}
         self.catalog["items"] = [{"key": "o/r:skill", "kind": "vendor-skill", "scope": "user", "install": {"name": "demo"}}]

@@ -78,6 +78,39 @@ class Assess(unittest.TestCase):
         self.assertIn("Mức rủi ro: cao", out)
         self.assertIn("agent-stack:reviewer", out)
 
+    def test_trust_boundary_raises_low_to_medium_and_names_the_boundary(self):
+        r = risk.assess([change("app/avatar.py", 6, 0, "@app.post('/avatar')\ndef up():\n    f = request.files['f']\n"),
+                         change("tests/test_avatar.py", 8)])
+        self.assertEqual(r["level"], "vua", r)
+        self.assertEqual([b["kind"] for b in r["boundaries"]], ["input từ bên ngoài"])
+        self.assertFalse(r["threat_model_updated"])
+        out = risk.render(r)
+        self.assertIn("Ranh giới tin cậy bị đụng:", out)
+        self.assertIn("chạy skill mo-hinh-de-doa", out)
+
+    def test_each_boundary_kind_is_detected(self):
+        cases = {
+            "gọi ra ngoài": change("src/client.py", 2, 0, "resp = requests.post(url, json=body)\n"),
+            "xác thực, phân quyền": change("src/views.py", 2, 0, "@login_required\ndef page(): pass\n"),
+            "dữ liệu nhạy cảm": change("src/profile.py", 1, 0, "phone_number = form['phone_number']\n"),
+            "thêm dependency": change("requirements.txt", 1, 0, "httpx==0.27\n"),
+            "chạy mã, lệnh hay đường dẫn từ input": change("src/run.py", 1, 0, "subprocess.run([tool, name])\n"),
+        }
+        for want, c in cases.items():
+            with self.subTest(want=want):
+                self.assertIn(want, [b["kind"] for b in risk.assess([c])["boundaries"]])
+
+    def test_boundary_in_tests_or_docs_is_ignored_and_threat_model_is_noticed(self):
+        r = risk.assess([change("tests/test_client.py", 2, 0, "requests.get('http://x')\n"),
+                         change("docs/api.md", 2, 0, "requests.get(url)\n"),
+                         change("router/rules.json", 2, 0, '"match": ["login", "subprocess."]\n')])
+        self.assertEqual(r["boundaries"], [])
+        self.assertEqual(r["level"], "thap")
+        r = risk.assess([change("src/client.py", 2, 0, "requests.get(url)\n"), change("tests/test_client.py", 3),
+                         change(".agent/threat-model.md", 12)])
+        self.assertTrue(r["threat_model_updated"])
+        self.assertIn("có mục mới trong", risk.render(r))
+
     def test_render_empty(self):
         self.assertIn("Không có thay đổi", risk.render(risk.assess([])))
 

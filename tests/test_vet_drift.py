@@ -105,6 +105,25 @@ class DriftCheck(TempDirTestCase):
         self.assertEqual(self.result("agent-stack@agent-stack-local")["status"], "own")
         self.assertEqual(self.run_cli("--quiet").returncode, 0)
 
+    def test_vendored_plugin_in_own_marketplace_is_still_checked(self):
+        catalog = json.loads((self.home / "catalog.json").read_text())
+        catalog["items"][0].update(kind="vendor-plugin", install={"marketplace": "agent-stack-vendor-local", "plugin": "demo"})
+        self.write_json(self.home / "catalog.json", catalog)
+        self.install("demo@agent-stack-vendor-local", self.installed)
+        self.assertEqual(self.result("demo@agent-stack-vendor-local")["status"], "match")
+        (self.installed / "README.md").write_text("đã đổi\n")
+        self.assertEqual(self.result("demo@agent-stack-vendor-local")["status"], "drift",
+                         "plugin bên thứ ba trong vendor/ không được coi là của agent-stack")
+        bundle = self.plugins / "cache" / "agent-stack-vendor-local" / "agent-stack-vendor" / "1"
+        bundle.mkdir(parents=True)
+        self.install("agent-stack-vendor@agent-stack-vendor-local", bundle)
+        self.assertEqual(self.result("agent-stack-vendor@agent-stack-vendor-local")["status"], "own")
+        stray = self.plugins / "cache" / "agent-stack-vendor-local" / "da-go-khoi-catalog" / "1"
+        stray.mkdir(parents=True)
+        self.install("da-go-khoi-catalog@agent-stack-vendor-local", stray)
+        self.assertEqual(self.result("da-go-khoi-catalog@agent-stack-vendor-local")["status"], "unvetted",
+                         "plugin bên thứ ba bị xóa khỏi catalog mà chưa gỡ thì vẫn phải bị báo")
+
     def test_missing_snapshot_and_unapproved_entry_are_reported(self):
         import shutil
         shutil.rmtree(self.home / ".vet-cache")

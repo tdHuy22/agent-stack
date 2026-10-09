@@ -82,7 +82,7 @@
 {"prompt": "Viết email ngắn báo sếp mai mình nghỉ", "expect": "write-short"}
 {"prompt": "soan tin nhan slack nhac team hop luc 3h", "expect": "write-short"}
 {"prompt": "Viết lại chương 2 luận văn cho mạch lạc, giữ giọng của mình", "expect": "write-long"}
-{"prompt": "Thêm tính năng đăng nhập OAuth cho trang admin", "expect": "feature"}
+{"prompt": "Thêm tính năng đăng nhập OAuth cho trang admin", "expect": "feature-boundary"}
 {"prompt": "Thêm cột created_at vào schema bảng users", "expect": "feature"}
 {"prompt": "deploy bản mới lên production giúp mình", "expect": "none"}
 {"prompt": "chạy test trước khi commit nhé", "expect": "tests"}
@@ -95,3 +95,9 @@
 {"prompt": "kiểm tra lần cuối bài luận trước khi nộp", "expect": "writing"}
 {"prompt": "eval chạy xong chưa", "expect": "none"}
 {"prompt": "wrap up the meeting notes into a summary", "expect": "none"}
+{"prompt": "làm chức năng upload ảnh đại diện cho người dùng", "expect": "feature-boundary"}
+{"prompt": "tích hợp webhook thanh toán Stripe vào backend", "expect": "feature-boundary"}
+{"prompt": "implement API key cho khách hàng gọi dịch vụ của mình", "expect": "feature-boundary"}
+{"prompt": "thêm tính năng hiển thị số token đã dùng trong statusline", "expect": "feature"}
+{"prompt": "thêm nút đổi màu nền cho trang cài đặt", "expect": "feature"}
+{"prompt": "làm chức năng lưu session khi hết hạn mức", "expect": "feature"}

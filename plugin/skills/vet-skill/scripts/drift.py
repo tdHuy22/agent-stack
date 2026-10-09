@@ -16,7 +16,8 @@ import hashlib
 import json
 from pathlib import Path
 
-OWN_MARKETPLACES = {"agent-stack-local", "agent-stack-vendor-local"}
+# Chỉ đúng hai plugin này là của agent-stack; plugin khác trong marketplace vendor là của bên thứ ba.
+OWN_PLUGINS = {"agent-stack@agent-stack-local", "agent-stack-vendor@agent-stack-vendor-local"}
 # Dấu vết Claude Code hay vet.py để lại, không phải nội dung plugin.
 IGNORED_NAMES = {".in_use", ".orphaned_at", ".git", ".vet-complete"}
 OK_STATUSES = {"match", "own"}
@@ -56,14 +57,14 @@ def check(home: Path, plugins_dir: Path) -> list:
     entries = (_load(home / "vetted.lock") or {}).get("entries", {})
     keys = {f"{i['install']['plugin']}@{i['install']['marketplace']}": i["key"]
             for i in catalog.get("items", [])
-            if i.get("kind") == "claude-plugin" and isinstance(i.get("install"), dict)}
+            if i.get("kind") in ("claude-plugin", "vendor-plugin") and isinstance(i.get("install"), dict)}
     rows = []
     for pid, installs in sorted((installed.get("plugins") or {}).items()):
         for inst in installs or [{}]:
             row = {"plugin": pid, "version": inst.get("version"), "path": inst.get("installPath"),
                    "key": keys.get(pid)}
             rows.append(row)
-            if pid.rpartition("@")[2] in OWN_MARKETPLACES:
+            if pid in OWN_PLUGINS:
                 row["status"] = "own"
                 continue
             entry = entries.get(row["key"]) if row["key"] else None

@@ -8,7 +8,7 @@ Mục lục:
 2. [Kiểm tra đã cài đúng chưa](#2-kiểm-tra-đã-cài-đúng-chưa)
 3. [Một ngày làm việc](#3-một-ngày-làm-việc)
 4. [Những gì tự chạy](#4-những-gì-tự-chạy)
-5. [Bảy skill](#5-bảy-skill)
+5. [Tám skill](#5-tám-skill)
 6. [Subagent](#6-subagent)
 7. [Dùng với OpenCode](#7-dùng-với-opencode)
 8. [Cài, cập nhật, gỡ](#8-cài-cập-nhật-gỡ)
@@ -28,7 +28,7 @@ Bộ này giải quyết bốn chuyện hay gặp khi làm việc với Claude C
 - **Tốn hạn mức vì chọn model quá mạnh** (hoặc quá yếu). Router gợi ý model, effort, subagent và skill cho từng việc; cuối mỗi câu trả lời có dòng ➡️.
 - **Cài đồ bên thứ ba thiếu kiểm tra.** Skill `vet-skill` quét skill, plugin, MCP trước khi cài và ghi kết quả vào `vetted.lock`.
 
-Ngoài ra có ba skill phụ: `giong-van` để chỉnh văn cho đúng giọng mình, `reuse-best` để tìm thứ có sẵn trước khi tự viết, và `chot-viec` để agent tự kiểm trước khi báo xong.
+Ngoài ra có bốn skill phụ: `giong-van` để chỉnh văn cho đúng giọng mình, `reuse-best` để tìm thứ có sẵn trước khi tự viết, `mo-hinh-de-doa` để làm threat model ngắn trước khi code chức năng đụng ranh giới tin cậy, và `chot-viec` để agent tự kiểm trước khi báo xong.
 
 Mọi thứ nằm trong repo này. Các file ngoài repo (`~/.claude/CLAUDE.md`, skill của OpenCode...) chỉ là symlink trỏ về đây, nên sửa trong repo là đủ.
 
@@ -128,7 +128,7 @@ Số liệu hạn mức do statusline ghi, mà statusline chỉ chạy trong ter
 
 ---
 
-## 5. Bảy skill
+## 5. Tám skill
 
 Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng `/agent-stack:<tên> <tham số>`. Script đi kèm cũng chạy tay được; mọi đường dẫn dưới đây tính từ gốc repo.
 
@@ -349,6 +349,20 @@ python3 plugin/skills/chot-viec/scripts/risk.py
 
 Ý tưởng lấy từ pipeline `no-mistakes` của Kun Chen (video "L8 Principal's Agentic Engineering Workflow", MIT). Phần tự push, mở PR và trông CI không lấy.
 
+`risk.py` còn liệt kê **ranh giới tin cậy bị đụng** trong file mã nguồn: input từ bên ngoài (route, `request.files`…), xác thực, gọi ra ngoài (`requests`, `fetch`…), dữ liệu nhạy cảm, dependency mới, chạy lệnh hay đường dẫn từ input. Đụng ranh giới thì ít nhất mức vừa, và `chot-viec` cần một mục trong `.agent/threat-model.md` (xem 5.8) để đưa từng chốt chặn cho reviewer kiểm. Mức cao và đụng phần bảo mật thì chạy thêm `differential-review` (Trail of Bits) trên diff rồi để reviewer lọc dương tính giả.
+
+### 5.8 `mo-hinh-de-doa`: threat model trước khi code
+
+**Khi nào:** sắp làm chức năng đụng ranh giới tin cậy: nhận input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, lưu hay truyền dữ liệu nhạy cảm, thêm dependency, chạy lệnh. Router gợi ý nó (luật `feature-boundary`) khi bạn nhờ làm tính năng đăng nhập, upload, webhook, thanh toán…; luật chung dặn chạy trước khi code. Sửa giao diện, sửa chữ, refactor không đổi luồng dữ liệu thì bỏ qua.
+
+**Gọi:** `/agent-stack:mo-hinh-de-doa` hoặc nói "threat model chức năng này".
+
+**Làm gì:** đọc ít (chỉ phần code sắp chạm và chốt chặn có sẵn), vẽ luồng 3–6 dòng, hỏi sáu câu STRIDE cho mỗi ranh giới, giữ tối đa 5 mối đe dọa có khả năng cao nhất, mỗi mối kèm actor, surface, asset và chốt chặn phải có (kiểm được trong code hay test). Ghi vào `.agent/threat-model.md` của project với ID `TM-n` và trạng thái `cần làm`, `đã có` hay `chấp nhận rủi ro`. Project có skill threat model riêng (ví dụ `security-whitebox`, nơi bạn tự viết skill khi học) thì dùng skill đó.
+
+**Ba bước bảo mật theo mức rủi ro:** threat model trước khi code (skill này) → review từng thay đổi theo mức rủi ro (`chot-viec`) → audit cả repo một lần trước phát hành (`claude-security`, cài theo project). Không chạy đủ cả ba cho mọi chức năng: phần lớn chi phí của một lần review là cố định, nên chạy cho cả chức năng sửa giao diện thì tốn mà không tìm được gì.
+
+Ý lấy từ skill `threat-model` của `anthropics/defending-code-reference-harness` (Apache-2.0): phép thử "sửa một dòng là hết thì là lỗi, không phải mối đe dọa" và tên cột của bảng. Bản đó mô hình hóa cả codebase bằng nhiều subagent; bản này gọn cho từng chức năng.
+
 ---
 
 ## 6. Subagent
@@ -436,7 +450,7 @@ Các bước có thể chọn riêng bằng `--only`, ngăn cách bằng dấu p
 | `plugin` | Marketplace local và plugin `agent-stack` |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
-| `catalog` | Plugin chính thức và skill vendor đã duyệt |
+| `catalog` | Plugin chính thức, plugin và skill bên thứ ba đã duyệt; bên thứ ba được chép đúng commit đã kiểm vào `vendor/` (không theo HEAD), mục scope project chỉ được chép rồi in lệnh cài trong project |
 | `opencode` | Symlink skill và agent cho OpenCode |
 
 Tùy chọn khác: `--replace-existing` thay file hoặc symlink đang có (có sao lưu); `--restore-workflow-warning` bỏ khóa `skipWorkflowUsageWarning`.
@@ -602,6 +616,7 @@ rồi đọc §0 của `PLAN.md`. Muốn quay về trạng thái trước khi c�
 | Kiểm tra skill/plugin trước khi cài | `/agent-stack:vet-skill <owner/repo>` |
 | Sửa văn cho tự nhiên | "sửa đoạn này cho tự nhiên" · `/agent-stack:giong-van` |
 | Tìm thư viện có sẵn | `/agent-stack:reuse-best <nhu cầu>` |
+| Threat model trước khi code | "threat model chức năng này" · `/agent-stack:mo-hinh-de-doa` |
 | Kiểm trước khi báo xong hay commit | "chốt việc", "kiểm lại trước khi commit" · `/agent-stack:chot-viec` |
 | Review trước commit | "review trước khi commit" (subagent `agent-stack:reviewer`) |
 | Chạy test gọn | "giao test-runner chạy test" |

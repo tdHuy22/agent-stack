@@ -30,11 +30,14 @@ Ví dụ:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -44,6 +47,73 @@ MARKETPLACE = "agent-stack-local"
 VENDOR_MARKETPLACE = "agent-stack-vendor-local"
 VENDOR_PLUGIN = "agent-stack-vendor"
 SKIP_IN_VENDOR = {".git", ".vet-complete", ".claude-plugin", ".cursor-plugin", ".codex-plugin"}
+SKIP_IN_VENDOR_PLUGIN = {".git", ".vet-complete"}  # plugin cần giữ .claude-plugin/plugin.json
+DIGEST_IGNORED = {".in_use", ".orphaned_at", ".git", ".vet-complete"}
+
+
+def read_json_file(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def vetted_checkout_problem(cache: Path, sha: str, subpath: str = ""):
+    """Lý do không được chép bản trong .vet-cache, hoặc None. Bản chép phải là checkout git ở đúng commit đã duyệt và
+    không bị sửa sau khi vet (ngoài dấu .vet-complete do vet.py ghi): kiểm lệch so với chính .vet-cache nên không bắt
+    được việc cache bị sửa, phải chặn ở đây."""
+    def git(*args):
+        return subprocess.run(["git", "--no-optional-locks", "-C", str(cache), *args], capture_output=True, text=True,
+                              timeout=30)
+    try:
+        head = git("rev-parse", "HEAD")
+        status = git("status", "--porcelain", "--untracked-files=all", "--ignored")
+        # Sparse checkout của vet.py gắn cờ skip-worktree cho file ngoài thư mục con, nên chỉ xét trong thư mục con.
+        flags = git("ls-files", "-v", "--", subpath or ".")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"không kiểm được {cache.name} bằng git ({exc})"
+    if head.returncode != 0 or status.returncode != 0 or flags.returncode != 0:
+        return f"{cache.name} không phải checkout git"
+    if not sha or head.stdout.strip() != sha:
+        return f"{cache.name} đang ở {head.stdout.strip()[:12]}, không phải commit đã duyệt {sha[:12]}"
+    dirty = [line for line in status.stdout.splitlines() if line.strip() and line[3:] != ".vet-complete"]
+    if dirty:
+        return f"{cache.name} có {len(dirty)} file đổi sau khi vet ({', '.join(x[3:] for x in dirty[:3])})"
+    # Cờ chữ thường (assume-unchanged) hay S (skip-worktree) làm git status không thấy file bị sửa.
+    hidden = [line[2:] for line in flags.stdout.splitlines() if line[:1].islower() or line[:1] == "S"]
+    if hidden:
+        return f"{cache.name} có {len(hidden)} file bị ẩn khỏi git status ({', '.join(hidden[:3])})"
+    return None
+
+
+def export_vetted(cache: Path, sha: str, subpath: str, dest: Path, skip) -> None:
+    """Chép vào dest đúng các file git ghi nhận ở commit sha (git archive), nên file bị ignore, bị ẩn hay bị sửa trong
+    .vet-cache sau khi vet không lọt vào. Giải nén bằng bộ lọc "data" của tarfile: chặn đường dẫn tuyệt đối, "..",
+    và link trỏ ra ngoài."""
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "vetted.tar"
+        with archive.open("wb") as fh:
+            subprocess.run(["git", "--no-optional-locks", "-C", str(cache), "archive", "--format=tar", sha, "--",
+                            subpath or "."], stdout=fh, stderr=subprocess.PIPE, check=True, timeout=300)
+        out = Path(tmp) / "tree"
+        with tarfile.open(archive) as tar:
+            tar.extractall(out, filter="data")
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(out / subpath if subpath else out, dest, symlinks=True,
+                        ignore=lambda d, names: [n for n in names if n in skip])
+
+
+def tree_digests(root: Path) -> dict:
+    """Đường dẫn tương đối → sha256 của mọi file, bỏ dấu vết của Claude Code và git (như kiểm lệch của vet-skill)."""
+    out = {}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if path.is_file() and not any(part in DIGEST_IGNORED for part in rel.parts):
+            out[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
 
 
 class Installer:
@@ -278,7 +348,7 @@ class Installer:
             if entry["verdict"] == "FAIL":
                 self.say(f"  ! bỏ qua (FAIL): {key}")
                 continue
-            if item["kind"] == "vendor-skill":
+            if item["kind"] in ("vendor-skill", "vendor-plugin"):
                 vendored.append((item, entry))
                 continue
             plugin_id = f"{inst['plugin']}@{inst['marketplace']}"
@@ -296,25 +366,34 @@ class Installer:
             self.vendor(vendored)
 
     def vendor(self, vendored: list) -> None:
-        """Chép đúng commit đã kiểm của các skill chỉ-có-chỉ-dẫn vào vendor/skills. vendor/ vừa là plugin
-        agent-stack-vendor vừa là marketplace riêng, nên gỡ thì xóa được cả thư mục mà không đụng file nào trong git."""
+        """Chép đúng commit đã kiểm vào vendor/: skill chỉ-có-chỉ-dẫn vào vendor/skills (gộp thành plugin
+        agent-stack-vendor), plugin bên thứ ba nguyên thư mục vào vendor/plugins/<tên>. vendor/ là marketplace riêng,
+        nên bản cài luôn là bản đã kiểm (không theo HEAD của repo gốc), và gỡ thì xóa được cả thư mục mà không đụng
+        file nào trong git. Plugin scope project chỉ được chép sẵn; người dùng tự cài trong project cần dùng."""
         vendor_root = HOME_STACK / "vendor"
-        record = {}
-        planned = []
+        record, skills, plugins, exports = {}, [], [], {}
         for item, entry in vendored:
-            name = item["install"]["name"]
+            is_plugin = item["kind"] == "vendor-plugin"
+            name = item["install"]["plugin" if is_plugin else "name"]
             cache = HOME_STACK / ".vet-cache" / Path(entry["report"]).stem
             src = cache / entry["subpath"] if entry.get("subpath") else cache
-            if item["scope"] != "user":
+            if not is_plugin and item["scope"] != "user":
                 self.say(f"  · {item['scope']}: {name} không chép mặc định; khi cần, đổi scope trong catalog.json thành user rồi chạy lại")
                 continue
-            if not (src / "SKILL.md").exists():
+            if not (src / (".claude-plugin/plugin.json" if is_plugin else "SKILL.md")).exists():
                 self.say(f"  ! thiếu bản đã kiểm trong cache cho {name}: chạy lại vet.py scan {item['key']}")
                 self.failures.append(f"{item['key']}: đã duyệt nhưng thiếu bản đã kiểm trong .vet-cache")
                 continue
-            self.say(f"  + vendor: {name} @ {entry['sha'][:12]} -> vendor/skills/{name}")
-            record[name] = {"key": item["key"], "sha": entry["sha"]}
-            planned.append((name, src))
+            problem = vetted_checkout_problem(cache, entry.get("sha", ""), entry.get("subpath") or "")
+            if problem:
+                self.say(f"  ! không chép {name}: {problem}; xóa thư mục đó rồi chạy lại vet.py scan {item['key']}")
+                self.failures.append(f"{item['key']}: {problem}")
+                continue
+            dest = f"plugins/{name}" if is_plugin else f"skills/{name}"
+            self.say(f"  + vendor: {name} @ {entry['sha'][:12]} -> vendor/{dest}")
+            record[name] = {"key": item["key"], "sha": entry["sha"], "kind": item["kind"]}
+            exports[name] = (cache, entry["sha"], entry.get("subpath") or "")
+            (plugins if is_plugin else skills).append((name, src, item["scope"]))
         if not record:
             return
         if self.apply:
@@ -326,30 +405,62 @@ class Installer:
             if not existed:
                 vendor_root.mkdir()
                 self.record(type="vendor-dir", path=str(vendor_root))
-            for name, src in planned:
-                dest = vendor_root / "skills" / name
-                if dest.exists():
-                    shutil.rmtree(dest)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(src, dest, ignore=lambda d, names: [n for n in names if n in SKIP_IN_VENDOR])
+            for group, items, skip in (("skills", skills, SKIP_IN_VENDOR), ("plugins", plugins, SKIP_IN_VENDOR_PLUGIN)):
+                for name, src, _ in items:
+                    meta_src = exports[name]
+                    try:
+                        export_vetted(*meta_src, vendor_root / group / name, skip)
+                    except (OSError, subprocess.SubprocessError, tarfile.TarError) as exc:
+                        self.say(f"  ! không chép được {name} từ commit đã duyệt: {exc}")
+                        self.failures.append(f"{record.pop(name)['key']}: không xuất được bản đã duyệt ({exc})")
+            skills = [x for x in skills if x[0] in record]
+            plugins = [x for x in plugins if x[0] in record]
+            if not record:
+                return
             meta = vendor_root / ".claude-plugin"
             meta.mkdir(exist_ok=True)
-            (meta / "plugin.json").write_text(json.dumps({
-                "name": VENDOR_PLUGIN, "version": time.strftime("%Y.%m.%d"),
-                "description": "Skill của bên thứ ba, chép đúng commit đã kiểm duyệt bằng vet-skill.",
-                "author": {"name": "tdHuy22"}}, ensure_ascii=False, indent=2) + "\n")
+            listed = []
+            if skills:
+                (meta / "plugin.json").write_text(json.dumps({
+                    "name": VENDOR_PLUGIN, "version": time.strftime("%Y.%m.%d"),
+                    "description": "Skill của bên thứ ba, chép đúng commit đã kiểm duyệt bằng vet-skill.",
+                    "author": {"name": "tdHuy22"}}, ensure_ascii=False, indent=2) + "\n")
+                listed.append({"name": VENDOR_PLUGIN, "source": "./",
+                               "description": "Skill của bên thứ ba đã kiểm duyệt, ghim commit."})
+            listed += [{"name": name, "source": f"./plugins/{name}",
+                        "description": f"Plugin bên thứ ba, ghim commit đã kiểm {record[name]['sha'][:12]}."}
+                       for name, _, _ in plugins]
             (meta / "marketplace.json").write_text(json.dumps({
                 "name": VENDOR_MARKETPLACE, "owner": {"name": "tdHuy22"},
-                "description": "Marketplace cục bộ cho skill bên thứ ba đã kiểm duyệt (do install.py tạo).",
-                "plugins": [{"name": VENDOR_PLUGIN, "source": "./",
-                             "description": "Skill của bên thứ ba đã kiểm duyệt, ghim commit."}]},
-                ensure_ascii=False, indent=2) + "\n")
+                "description": "Marketplace cục bộ cho skill và plugin bên thứ ba đã kiểm duyệt (do install.py tạo).",
+                "plugins": listed}, ensure_ascii=False, indent=2) + "\n")
             (vendor_root / "VENDORED.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
         self.run([self.claude_bin, "plugin", "marketplace", "add", str(vendor_root)],
                  undo=[self.claude_bin, "plugin", "marketplace", "remove", VENDOR_MARKETPLACE], ok_if="already")
-        self.run([self.claude_bin, "plugin", "install", f"{VENDOR_PLUGIN}@{VENDOR_MARKETPLACE}", "--scope", "user"],
-                 undo=[self.claude_bin, "plugin", "uninstall", f"{VENDOR_PLUGIN}@{VENDOR_MARKETPLACE}", "--scope", "user"],
-                 ok_if="already")
+        installs = ([VENDOR_PLUGIN] if skills else []) + [name for name, _, scope in plugins if scope == "user"]
+        for name in installs:
+            pid = f"{name}@{VENDOR_MARKETPLACE}"
+            self.run([self.claude_bin, "plugin", "install", pid, "--scope", "user"],
+                     undo=[self.claude_bin, "plugin", "uninstall", pid, "--scope", "user"], ok_if="already")
+            if name != VENDOR_PLUGIN and self.stale_install(pid, vendor_root / "plugins" / name if self.apply else
+                                                            next(src for n, src, _ in plugins if n == name)):
+                # `claude plugin update` báo "đã là bản mới nhất" khi version không đổi (đã thử 09/10/2026), nên sau
+                # khi vet lại ở commit mới phải gỡ rồi cài lại để bản trong cache khớp bản đã duyệt.
+                self.say(f"  ~ {pid}: bản đã cài khác bản đã duyệt, cài lại")
+                self.run([self.claude_bin, "plugin", "uninstall", pid, "--scope", "user"],
+                         undo=[self.claude_bin, "plugin", "install", pid, "--scope", "user"])
+                self.run([self.claude_bin, "plugin", "install", pid, "--scope", "user"],
+                         undo=[self.claude_bin, "plugin", "uninstall", pid, "--scope", "user"])
+        for name, _, scope in plugins:
+            if scope != "user":
+                self.say(f"  · {scope}: {name} đã ghim trong vendor/; trong project cần dùng: "
+                         f"claude plugin install {name}@{VENDOR_MARKETPLACE} --scope project")
+
+    def stale_install(self, pid: str, expected: Path) -> bool:
+        """Bản cài của pid (installPath trong installed_plugins.json) khác nội dung expected. Không đọc được thì False."""
+        entries = (read_json_file(self.claude_dir / "plugins" / "installed_plugins.json").get("plugins") or {}).get(pid) or []
+        paths = [Path(e["installPath"]) for e in entries if isinstance(e, dict) and e.get("installPath")]
+        return any(path.is_dir() and expected.is_dir() and tree_digests(path) != tree_digests(expected) for path in paths)
 
     def step_opencode(self) -> None:
         self.say("[opencode] skill và agent cho OpenCode")
@@ -425,7 +536,7 @@ def describe_action(action: dict) -> tuple:
     if kind == "mkdir":
         return "thư mục mới", short(action["path"]), "", f"`rmdir {short(action['path'])}` (khi đã trống)"
     if kind == "vendor-dir":
-        return "thư mục mới", short(action["path"]), "skill bên thứ ba, ghim commit (xem `VENDORED.json`)", \
+        return "thư mục mới", short(action["path"]), "skill và plugin bên thứ ba, ghim commit (xem `VENDORED.json`)", \
             f"`rm -rf {short(action['path'])}`"
     if kind == "cmd":
         undo = f"`claude {' '.join(action['undo'][1:])}`" if action.get("undo") else "—"

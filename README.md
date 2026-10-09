@@ -12,7 +12,8 @@ Bộ công cụ cá nhân cho Claude Code và OpenCode. Cách dùng hằng ngày
 | `task-router` | `plugin/skills/task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (loại code, test, CI, code nhạy cảm) và việc tiếp theo trong §0; `route.py --session` cho công cụ không có hook như OpenCode |
 | `giong-van` | `plugin/skills/giong-van` | Chỉnh văn theo giọng người viết, bỏ dấu hiệu văn AI (`tells.py`) |
 | `reuse-best` | `plugin/skills/reuse-best` | Trước khi build: đọc ràng buộc của project, tìm thứ có sẵn tốt nhất trên GitHub và trong nghiên cứu SOTA (`scout.py`), kiểm từng tiêu chí bằng bằng chứng, rồi quyết định dùng lại hay tự làm và nêu phần còn phải làm |
-| `chot-viec` | `plugin/skills/chot-viec` | Cổng kiểm trước khi báo xong hay commit: ý định, mức rủi ro của diff (`risk.py`), kiểm chứng có biên nhận, review ở context mới theo mức rủi ro, rà tài liệu, báo cáo kèm phần bạn nên đọc |
+| `mo-hinh-de-doa` | `plugin/skills/mo-hinh-de-doa` | Threat model ngắn trước khi code, chỉ khi chức năng đụng ranh giới tin cậy; ghi tối đa 5 mối đe dọa kèm chốt chặn vào `.agent/threat-model.md` để reviewer kiểm lúc chốt việc |
+| `chot-viec` | `plugin/skills/chot-viec` | Cổng kiểm trước khi báo xong hay commit: ý định, mức rủi ro của diff (`risk.py`, cả ranh giới tin cậy bị đụng), kiểm chứng có biên nhận, review ở context mới theo mức rủi ro, rà tài liệu, báo cáo kèm phần bạn nên đọc |
 | Hook | `plugin/hooks` | SessionStart nạp §0 và lượt cuối; UserPromptSubmit cảnh báo hạn mức, gợi ý router, lưu yêu cầu gần nhất và lúc bắt đầu lượt; SubagentStart đưa yêu cầu đó và việc tiếp theo cho subagent; PreCompact; Stop ghi `.agent/LAST-TURN.md` sau mỗi lượt và nhờ Claude cập nhật §0 khi lượt có đổi file; SessionEnd |
 | Agent | `plugin/agents` | reviewer, researcher, test-runner, explore-lite, oc-worker (tên có tiền tố `agent-stack:`) |
 | Agent OpenCode | `opencode/agents/worker.md` | Worker chạy model local, chỉ được chạy lệnh kiểm tra |

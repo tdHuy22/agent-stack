@@ -16,6 +16,7 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
 1. **Ý định.** Viết 2–4 dòng: người dùng muốn gì (dựa trên lời của họ trong hội thoại), thay đổi này làm gì, và tiêu chí xong. Hội thoại không đủ rõ để viết thì hỏi người dùng, đừng đoán.
 2. **Phạm vi.** Chạy `git status --short`. Tách file thuộc việc này khỏi file đã đổi từ trước hoặc do người khác đổi. Không sửa, không commit file không thuộc việc này; nêu chúng trong báo cáo.
 3. **Mức rủi ro.** Chạy `python3 <risk.py>` (thêm `--base <ref>` nếu `$ARGUMENTS` có). Mức thấp, vừa hay cao quyết độ sâu ở bước 5. Lý do của script chỉ là gợi ý thô: nếu nó báo nhầm (ví dụ secret giả trong test), ghi một dòng vì sao bỏ qua.
+   - Script báo **ranh giới tin cậy bị đụng** (input từ ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh): mở `.agent/threat-model.md` của project. Chưa có mục cho việc này thì chạy skill `mo-hinh-de-doa` ngay (muộn còn hơn không), rồi làm các chốt chặn còn `cần làm` trước khi đi tiếp. Báo nhầm (ví dụ `subprocess` chạy lệnh cố định, không có input từ ngoài) thì ghi một dòng lý do và bỏ qua.
 4. **Kiểm chứng có biên nhận.** Chạy qua `python3 <receipt.py> run -- <lệnh>`:
    - mốc kiểm tra của project, lấy từ `CLAUDE.md`, `AGENTS.md` hoặc mục "Mốc kiểm tra" trong §0 của `PLAN.md`;
    - **tái hiện như người dùng sẽ dùng**: chạy đúng lệnh, script hay hook mà người dùng sẽ chạy, với đầu vào thật, rồi xem kết quả có khớp tiêu chí xong không. Với bản sửa lỗi, chạy lại đúng bước đã tái hiện lỗi. Test đơn vị không thay được bước này.
@@ -25,6 +26,8 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
    - vừa: giao `agent-stack:reviewer`, chọn model `sonnet`.
    - cao: giao `agent-stack:reviewer` với model mặc định của nó (opus · high).
    - Reviewer không thấy hội thoại. Prompt giao việc phải tự đủ: ý định và tiêu chí xong (bước 1), danh sách file thuộc việc này, lệnh xem diff, mức rủi ro kèm lý do, và yêu cầu trả về từng lỗi kèm `file:dòng` và kịch bản gây lỗi.
+   - Có mục threat model cho việc này (bước 3): chép bảng mối đe dọa vào prompt, yêu cầu reviewer chỉ ra `file:dòng` thực thi từng chốt chặn và test chạm nhánh bị từ chối. Reviewer xác nhận xong thì sửa trạng thái trong `.agent/threat-model.md` thành `đã có` kèm `file:dòng`.
+   - Mức cao và đụng phần bảo mật (xác thực, mã hóa, input, chạy lệnh), khi skill `differential-review` (Trail of Bits) có trong phiên: chạy nó trước trên diff đã xuất ra file, gồm cả phần đã stage và file mới chưa track thuộc việc này: `git diff HEAD` (hay `git diff <ref>` khi có `--base`), nối thêm `git diff --no-index /dev/null <file>` cho từng file mới, ghi vào `.tmp/chot-viec.diff` (hoặc thư mục tạm của hệ điều hành nếu project không có `.tmp/`). Dặn nó không `git checkout` (dùng `git show <ref>:<file>`), và ghi báo cáo vào cùng thư mục tạm. Sau đó đưa báo cáo của nó cho reviewer phản biện: skill đó không lọc dương tính giả, reviewer thì có.
    - Xử lý từng phát hiện:
      - lỗi máy móc, sửa đúng một cách rõ ràng và không đổi hành vi người dùng thấy: tự sửa rồi quay lại bước 4;
      - lỗi đụng tới ý định, phạm vi hay một đánh đổi: không tự quyết; đưa vào mục "cần bạn quyết" của báo cáo, kèm các lựa chọn;
@@ -36,6 +39,7 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
    Ý định: …
    Đã đổi: n file (liệt kê ngắn); không đụng: …
    Kiểm chứng: <lệnh> → <kết quả> (có biên nhận); tái hiện: <lệnh> → <thấy gì>
+   Threat model: n mối đe dọa, n chốt chặn đã có, n còn thiếu (hoặc "không đụng ranh giới tin cậy")
    Review: tìm n, đã sửa n, bác bỏ n
    Cần bạn quyết: … (hoặc "không")
    Rủi ro: thấp | vừa | cao — nên đọc: file:dòng … (mức thấp: "không cần đọc diff")

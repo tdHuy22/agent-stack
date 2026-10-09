@@ -455,6 +455,33 @@ Bạn chốt: phương án B, lưu trong project, phiên mới tự nạp, có l
 - SessionStart nạp bản rút gọn (khoảng 500 ký tự) vào phiên mới, trừ khi resume lại đúng phiên đã ghi. `route.py --session` in cùng nội dung cho OpenCode.
 - Giới hạn: Stop không chạy khi người dùng bấm dừng giữa chừng hay app tắt giữa lượt, nên lượt đó không được ghi; file đổi do phiên khác cùng repo trong lúc lượt chạy cũng bị tính là của lượt này; OpenCode không có hook Stop nên lượt làm trong OpenCode không được ghi.
 
+
+### 6.18 Quy trình bảo mật theo mức rủi ro và plugin bảo mật đã duyệt (09/10/2026)
+
+Bạn hỏi nên chạy threat model và review bảo mật cho mỗi chức năng, hay làm xong hết rồi mới review. Mình trả lời là cả hai cách đều kém hơn làm theo mức rủi ro. Chạy đủ cho mọi chức năng tốn nhiều nhất: một lần review opus · high cho diff khoảng 140 dòng tốn khoảng 54 nghìn token, phần lớn là chi phí cố định. Làm xong mới review thì diff lớn nên review sót nhiều, và lỗi thiết kế phải sửa muộn. Bạn bảo làm, và thêm luôn những skill đã duyệt giúp được cho bảo mật. Review độc lập (agent `reviewer`, opus · high) tìm 0 cao, 3 vừa, 2 thấp, đã sửa cả năm kèm test. Có ba bước:
+
+1. **Threat model trước khi code**, chỉ khi chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh). Skill mới `mo-hinh-de-doa`: đọc ít, sáu câu STRIDE, tối đa 5 mối đe dọa, mỗi mối có chốt chặn kiểm được, ghi vào `.agent/threat-model.md`. `reuse-best` không tìm được thứ dùng lại được: skill `threat-model` của `anthropics/defending-code-reference-harness` chạy nhiều subagent cho cả codebase, không có điều kiện kích hoạt và chưa vet; `fr33d3m0n/threat-modeling` cần Python 3.10+ và là cả một pipeline; `stride-gpt` là app Streamlit. Vì vậy mình tự viết, lấy ý từ harness (phép thử lỗi và mối đe dọa, tên cột của bảng). Trigger có ba lớp: luật `feature-boundary` của router (khi xin làm tính năng đăng nhập, upload, webhook…), một dòng trong luật chung, và `risk.py` làm lưới cuối.
+2. **Review từng thay đổi theo rủi ro.** `risk.py` liệt kê ranh giới bị đụng trong file mã nguồn và nâng mức thấp lên vừa. `chot-viec` đưa bảng mối đe dọa cho reviewer kiểm từng chốt chặn. Ở mức cao có đụng phần bảo mật, `differential-review` (Trail of Bits) chạy trên diff, rồi reviewer lọc dương tính giả, vì skill đó không lọc.
+3. **Audit cả repo trước phát hành** bằng `claude-security`, cài theo project và gọi tay. Đây là công cụ duy nhất có threat model cho từng component. `/security-review` chỉ xem diff của nhánh nên không thay được.
+
+Đánh giá các mục đã duyệt (subagent đọc bản ghim trong `.vet-cache`):
+- `differential-review`: rẻ, không có hook, chỉ chạy khi được gọi, nên cài cho mọi phiên. Phần riêng của nó là blame code bị xóa, lỗi cũ tái phát, blast radius.
+- `static-analysis`: cài theo project, cần `brew install semgrep` (máy chưa có). Chỉ dùng phần Semgrep; bỏ CodeQL.
+- `c-review`: theo project, chỉ cho C/C++ userspace. Catalog cũ ghi "firmware, bán dẫn" là sai.
+- `audit-context-building`: theo project, khi cần, vì tốn tới 40 agent. Không bật chung vì tự kích khi nghe "threat model".
+- `claude-security`: theo project, gọi tay. Ghi chú cũ trong `vetted.lock` nói hook chạy ở mỗi lần sửa file là sai: hook chỉ chạy với script của chính plugin, `git push` và `gh pr create`.
+- `hookify`, `superpowers`, `webapp-testing`, các skill của Matt Pocock: không giúp gì cho bảo mật.
+
+**Ghim commit.** `install.py` cũ cài plugin Trail of Bits bằng `marketplace add trailofbits/skills`, tức theo HEAD, không phải bản `82fe822` đã duyệt, và làm khoảng 45 plugin chưa duyệt hiện ra là cài được. Loại catalog mới `vendor-plugin` chép nguyên plugin từ `.vet-cache` vào `vendor/plugins/<tên>`, dùng marketplace cục bộ có sẵn `agent-stack-vendor-local`. Đây là TM-1 trong `.agent/threat-model.md`: kiểm lệch so với chính `.vet-cache`, nên không bắt được việc cache bị sửa. Chốt chặn gồm hai lớp. Trước khi chép, bộ cài kiểm `HEAD` bằng sha đã duyệt, cây sạch kể cả file bị ignore, và không có file bị ẩn khỏi `git status` trong thư mục con; cờ skip-worktree mà sparse checkout của `vet.py` đặt ngoài thư mục con là bình thường. Sau đó chỉ xuất file git ghi nhận ở sha đó, bằng `git archive` và `tarfile` với bộ lọc `data`. Kiểm lệch nay so cả plugin trong `vendor/`, và chỉ bỏ qua đúng hai plugin của agent-stack. Bộ cài so bản đã cài với bản đã duyệt, khác thì gỡ rồi cài lại, vì đã thử thấy `claude plugin update` không chép lại khi version không đổi.
+
+**Router** chỉ gợi ý skill của plugin đang bật cho project (đọc `enabledPlugins` theo thứ tự user, project, local). Plugin chưa bật thì dùng skill dự phòng (`differential-review` → `/security-review`) và nêu lệnh cài, kèm dặn chỉ đề xuất với người dùng. Lỗ hổng cũ là mọi câu về bảo mật đều được gợi ý `differential-review` dù chưa cài ở đâu.
+
+**Giới hạn và việc chưa làm.**
+- Chưa có số đo cho thấy bước threat model làm review bắt được nhiều lỗi hơn. Harness của Anthropic cũng không công bố số liệu. Muốn biết thì đo bằng eval.
+- Regex của `risk.py` có thể báo nhầm (ví dụ `subprocess` chạy lệnh cố định) hoặc bỏ sót; báo nhầm thì `chot-viec` ghi một dòng lý do rồi bỏ qua.
+- TM-3 và TM-4 (`git checkout` baseline, ghi báo cáo vào thư mục project) có chốt chặn khi `differential-review` được gọi qua router hay `chot-viec`: lời dặn đi kèm gợi ý (`skill_notes` trong `rules.json`). Khi skill tự kích theo description của nó, không qua router, thì chưa có.
+- `semgrep` chưa cài nên `static-analysis` chưa dùng được.
+
 ---
 
 ## 7. Thiết kế chi tiết

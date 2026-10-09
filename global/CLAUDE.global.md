@@ -20,10 +20,11 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Debug nhiều file, race, lỗi lúc được lúc không | opus·medium, chưa ra thì high | – | – |
 | Lỗi chỉ có trên production, không tái hiện được | opus·high | – | – |
 | Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | – |
+| Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán) | sonnet·medium | – | mo-hinh-de-doa trước khi code; reuse-best |
 | Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | chot-viec |
 | Review PR lớn; review bảo mật code thường | opus·high | reviewer | differential-review* |
 | Review bảo mật mã hóa, token, thanh toán, sandbox | opus·xhigh | reviewer | differential-review* |
-| Audit bảo mật cả repo trước phát hành | opus·max | reviewer | security-review |
+| Audit bảo mật cả repo trước phát hành | opus·max | reviewer | claude-security* |
 | Kế hoạch việc vừa; văn bản dài | sonnet·high | Plan khi lập kế hoạch | reuse-best; giong-van |
 | Thiết kế kiến trúc; refactor lớn nhiều module | opus·high (hoặc opusplan) | Plan | reuse-best |
 | Quyết định khó đảo ngược (schema dữ liệu thật, giao thức) | opus·xhigh | Plan | reuse-best |

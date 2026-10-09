@@ -106,6 +106,14 @@
       ]
     }
   },
+  "skill_fallbacks": {
+    "differential-review": [
+      "security-review"
+    ]
+  },
+  "skill_notes": {
+    "differential-review": "khi dùng differential-review: ghi báo cáo vào .tmp/ hay thư mục tạm của hệ điều hành, đừng để ở gốc repo; không git checkout (dùng git show <ref>:<file>); đưa báo cáo cho agent-stack:reviewer lọc dương tính giả"
+  },
   "rules": [
     {
       "id": "vet-third-party",
@@ -193,9 +201,9 @@
       "effort": "max",
       "agent": "agent-stack:reviewer",
       "skills": [
-        "security-review"
+        "claude-security"
       ],
-      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng",
+      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng; claude-security chưa bật cho project thì giao reviewer audit từng module, và đề xuất cài nó theo project",
       "match": [
         "toan bo codebase",
         "toan bo repo",
@@ -644,6 +652,53 @@
         "effort": "low",
         "note": "project có test: claude-haiku-5-5 · low đạt 9/9 việc code, debug có test (18/18 lượt, eval 08/10/2026) với khoảng 1/10 chi phí sonnet"
       }
+    },
+    {
+      "id": "feature-boundary",
+      "refines": "feature",
+      "only_refine": true,
+      "skills": [
+        "mo-hinh-de-doa",
+        "reuse-best"
+      ],
+      "note": "chức năng đụng ranh giới tin cậy: trước khi code, chạy mo-hinh-de-doa (threat model ngắn); chốt chặn của nó được reviewer kiểm lúc chốt việc",
+      "model": "sonnet",
+      "effort": "medium",
+      "match": [
+        "dang nhap",
+        "dang ky tai khoan",
+        "xac thuc",
+        "phan quyen",
+        "mat khau",
+        "oauth",
+        "jwt",
+        "cookie",
+        "login",
+        "signup",
+        "auth",
+        "upload",
+        "tai len",
+        "webhook",
+        "thanh toan",
+        "payment",
+        "goi api",
+        "api ben ngoai",
+        "du lieu ca nhan",
+        "gui email",
+        "chay lenh",
+        "subprocess",
+        "admin",
+        "quyen truy cap",
+        "file nguoi dung",
+        "them thu vien",
+        "dependency",
+        "api key",
+        "access token",
+        "refresh token",
+        "token dang nhap",
+        "api token",
+        "phien dang nhap"
+      ]
     },
     {
       "id": "docs-lookup",

@@ -16,6 +16,7 @@
 
 - Chưa chạy kiểm chứng (test, lint, build) và đưa kết quả thì không nói "xong". Mã thoát khác 0 không bao giờ là thành công; kết quả đạt cũ không chứng minh cho code sửa sau đó.
 - Kiểm chứng qua `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận gắn với nội dung code lúc chạy.
+- Trước khi code chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, dữ liệu nhạy cảm, dependency mới, chạy lệnh), chạy skill `mo-hinh-de-doa`: threat model ngắn, ghi chốt chặn phải có vào `.agent/threat-model.md`. Chức năng không đụng ranh giới thì bỏ qua.
 - Xong thay đổi không tầm thường trong repo thì chạy skill `chot-viec` trước khi báo xong hay commit.
 - Sửa lỗi: tái hiện trước, càng giống cách người dùng gặp càng tốt (lệnh, script, hook thật), sửa xong chạy lại đúng bước đó; test đơn vị thêm sau, không thay bước này. Không tái hiện được hay tốn hạn mức thì nói rõ, nêu giả thuyết và cách kiểm trước khi sửa.
 - Chọn giải pháp theo chất lượng, độ bền, độ dễ bảo trì, không theo công làm (model hay ước công theo tốc độ người viết code nên thổi phồng nó, rồi chọn cách rẻ mà kém).
@@ -39,7 +40,7 @@
 - Skill hay subagent chạy context riêng, không thấy hội thoại: giao việc bằng prompt tự đủ (yêu cầu gốc của người dùng, mục tiêu, ràng buộc, file hay đường dẫn liên quan, tiêu chí xong, định dạng trả về).
 - Trước khi tự làm công cụ, tính năng, thuật toán không tầm thường, dùng skill `reuse-best` tìm thứ có sẵn tốt nhất, rồi ghi quyết định dùng lại hay tự làm kèm nguồn. Phần nhu cầu mà thứ dùng lại chưa đáp ứng vẫn phải làm, hoặc hỏi người dùng; không lặng lẽ bỏ.
 - Không cài skill, plugin, MCP chưa qua `vet-skill` và chưa được người dùng duyệt trong `vetted.lock`. Nhiều sao không chứng minh skill giúp được agent: skill hứa làm agent giỏi hơn cần số liệu eval trước khi bật lâu dài.
-- Chưa thấy skill của agent-stack (OpenCode, hay plugin Claude Code chưa cập nhật) thì đọc thẳng `~/Documents/Claude/agent-stack/plugin/skills/<tên>/SKILL.md` rồi làm theo: `session-keeper` (lưu, tiếp tục, bàn giao), `tien-do` (tiến độ), `vet-skill` (kiểm duyệt đồ bên thứ ba), `reuse-best` (tìm thứ có sẵn), `chot-viec` (cổng kiểm trước khi báo xong).
+- Chưa thấy skill của agent-stack (OpenCode, hay plugin Claude Code chưa cập nhật) thì đọc thẳng `~/Documents/Claude/agent-stack/plugin/skills/<tên>/SKILL.md` rồi làm theo: `session-keeper` (lưu, tiếp tục, bàn giao), `tien-do` (tiến độ), `vet-skill` (kiểm duyệt đồ bên thứ ba), `reuse-best` (tìm thứ có sẵn), `chot-viec` (cổng kiểm trước khi báo xong), `mo-hinh-de-doa` (threat model trước khi code).
 
 # Riêng OpenCode và công cụ không có hook của agent-stack
 

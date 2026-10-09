@@ -164,8 +164,14 @@ class ProjectFixtures(TempDirTestCase):
 
     def setUp(self):
         super().setUp()
-        os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")
-        self.addCleanup(os.environ.pop, "AGENT_STACK_STATE", None)
+        # Cấu hình Claude Code giả và trống: kết quả không phụ thuộc plugin đang bật trên máy thật.
+        empty = self.tmp / "empty-claude-config"
+        (empty / "plugins").mkdir(parents=True)
+        for key, value in (("AGENT_STACK_STATE", str(self.tmp / "state")), ("CLAUDE_CONFIG_DIR", str(empty)),
+                           ("AGENT_STACK_PLUGINS_DIR", str(empty / "plugins"))):
+            old = os.environ.get(key)
+            os.environ[key] = value
+            self.addCleanup(lambda k=key, o=old: os.environ.pop(k, None) if o is None else os.environ.__setitem__(k, o))
 
     def repo(self, name, files, plan_next=None):
         from tests._util import git
@@ -297,7 +303,29 @@ class ProjectAware(ProjectFixtures):
     def test_project_type_adds_skills_to_a_rule(self):
         root = self.repo("c2", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
         hit = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", {"session_id": "c3", "cwd": str(root)})
-        self.assertIn("c-review", hit["user"])
+        # Plugin chưa bật cho project: không gợi ý như thể dùng được, mà nêu lệnh cài và dùng skill dự phòng.
+        self.assertNotIn("c-review", hit["user"])
+        self.assertIn("skill security-review", hit["user"])
+        self.assertIn("chưa bật cho project này: differential-review (`./install.sh --apply --only catalog", hit["context"])
+        self.assertIn("`claude plugin install c-review@agent-stack-vendor-local --scope project`", hit["context"])
+        self.assertIn("đừng tự cài", hit["context"])
+        self.write("c2/.claude/settings.local.json", json.dumps({"enabledPlugins": {
+            "c-review@agent-stack-vendor-local": True, "differential-review@agent-stack-vendor-local": True}}))
+        hit = route.hook_suggestion("Review bảo mật hàm xác thực khác giúp mình", {"session_id": "c3b", "cwd": str(root)})
+        self.assertIn("skill differential-review, c-review", hit["user"])
+        self.assertNotIn("chưa bật", hit["context"])
+        # Gọi thẳng differential-review (không qua chot-viec) vẫn mang theo chốt chặn TM-3, TM-4.
+        self.assertIn("không git checkout", hit["context"])
+        self.assertIn("đừng để ở gốc repo", hit["context"])
+
+    def test_feature_touching_trust_boundary_asks_for_threat_model_first(self):
+        root = self.python_repo()
+        hit = route.hook_suggestion("Thêm tính năng upload ảnh đại diện cho người dùng", {"session_id": "f1", "cwd": str(root)})
+        self.assertIn("feature-boundary", hit["context"])
+        self.assertIn("mo-hinh-de-doa", hit["context"])
+        self.assertIn("trước khi code", hit["context"])
+        plain = route.hook_suggestion("Thêm tính năng xuất CSV cho trang báo cáo", {"session_id": "f2", "cwd": str(root)})
+        self.assertNotIn("mo-hinh-de-doa", plain["context"])
 
     def test_session_start_hook_speaks_for_git_repo_without_plan(self):
         root = self.python_repo()
@@ -337,7 +365,8 @@ class SessionCliForToolsWithoutHooks(ProjectFixtures):
     def test_project_flag_adds_skills_by_project_type(self):
         root = self.repo("c3", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
         data = json.loads(self.run_cli("review bảo mật hàm đăng nhập", "--project", str(root)).stdout)
-        self.assertIn("c-review", data["skills"])
+        self.assertIn("c-review", [m["skill"] for m in data["missing"]], "C project: c-review được nêu, kèm lệnh cài")
+        self.assertNotIn("c-review", data["skills"])
 
     def test_opencode_rules_tell_tools_without_hooks_to_run_it(self):
         # OpenCode đọc AGENTS.global.md, file ghép từ SHARED.global.md và OPENCODE.global.md

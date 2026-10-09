@@ -78,6 +78,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Sửa nhỏ mô tả chính xác (vài dòng, chính tả, thông báo) | `sonnet · low`, dặn chạy test | `sonnet · medium` | — | — | A: `low` cho thay đổi nhỏ; ở `low` model dễ bỏ bước tự kiểm |
 | Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `claude-haiku-5-5 · low` | `claude-haiku-5-5 · medium`, rồi `sonnet · low` | agent-stack:oc-worker | — | A; P cho Haiku 5.5 |
 | Tính năng thông thường, đặc tả rõ | `sonnet · medium`; project có test: `claude-haiku-5-5 · low` | `sonnet · medium`, rồi `sonnet · high` | — | reuse-best nếu không tầm thường | E: sonnet 6/6; Haiku 5.5 · low 9/9 việc có test, 18/18 lượt (mục 8) |
+| Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán, chạy lệnh) | `sonnet · medium` | `sonnet · high` | — | mo-hinh-de-doa trước khi code; reuse-best | P: tìm lỗi thiết kế khi còn rẻ; luật `feature-boundary` của router (09/10/2026), chưa đo |
 | Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · medium` | `sonnet · high`, rồi `opus · medium` | — | — | E: cron và diff tối thiểu, sonnet 4/4, Haiku 4.5 0/4 |
 | Code đồng thời, async, khóa | `sonnet · medium` | `sonnet · high`, rồi `opus · high` | — | — | E: race và pool asyncio, sonnet 4/4, opus 4/4 |
 | Refactor có test | `sonnet · medium` | `sonnet · high` | — | — | E: 2/2 |
@@ -102,9 +103,9 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 |---|---|---|---|---|---|
 | Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao | chot-viec | E: `review-diff` sonnet·medium 2/2, Haiku 4.5 0/2; P: nâng lên `high` vì lỗi lọt đắt |
 | Review PR lớn trước khi merge | `opus · high` | `opus · xhigh` | agent-stack:reviewer | — | P |
-| Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review | P |
-| Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |
-| Audit bảo mật cả repo, săn lỗ hổng trước phát hành | `opus · max` | `fable · max` | agent-stack:reviewer | security-review | A: ví dụ chính thức của `max` |
+| Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | P |
+| Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |
+| Audit bảo mật cả repo, săn lỗ hổng trước phát hành | `opus · max` | `fable · max` | agent-stack:reviewer | claude-security (cài theo project; chưa có thì reviewer audit từng module). `/security-review` chỉ xem diff của nhánh nên không dùng cho việc này | A: ví dụ chính thức của `max` |
 | Kiểm duyệt skill, plugin, MCP bên thứ ba | `opus · high` | `opus · xhigh` khi có dấu hiệu lạ | — | vet-skill | P: không có kiểm tra tự động |
 
 ### Kế hoạch và kiến trúc
