@@ -233,7 +233,7 @@ python3 plugin/skills/task-router/scripts/route.py --session ~/Documents/Claude/
 /agent-stack:vet-skill ~/Downloads/mot-skill
 ```
 
-**Skill làm gì:** tải đúng commit vào `.vet-cache/` (không chạy mã của đích), quét dấu hiệu độc hại (tải-rồi-chạy, đọc khóa và token, prompt injection, ký tự ẩn, hook tự chạy), chạy `skill-scanner`, rồi đọc tay từng file đáng ngờ. Skill chạy ở effort high, trong context riêng, và không được sửa file.
+**Skill làm gì:** tải đúng commit vào `.vet-cache/` (không chạy mã của đích), quét dấu hiệu độc hại (tải-rồi-chạy, đọc khóa và token, prompt injection, ký tự ẩn, hook tự chạy), chạy `skill-scanner` và `SkillSpector` (máy quét thứ hai, chỉ đẩy lên REVIEW; cài một lần bằng `python3 plugin/skills/vet-skill/scripts/vet.py spector --setup`), rồi đọc tay từng file đáng ngờ. Skill chạy ở effort high, trong context riêng, và không được sửa file.
 
 **Kết quả:** phán quyết của script (PASS / REVIEW / FAIL), khuyến nghị (cài, có điều kiện, thử trong 1 project, không cài), những gì sẽ chạy trên máy nếu cài, rủi ro còn lại, và lệnh duyệt để **bạn tự chạy**:
 

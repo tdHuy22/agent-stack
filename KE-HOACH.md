@@ -505,7 +505,13 @@ Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nh�
   - phần quét gói phụ thuộc gửi tên và phiên bản gói tới `api.osv.dev`;
   - kết quả chỉ đẩy lên REVIEW cho tới khi đo được trên bộ mẫu của mình.
 
-  Chờ bạn duyệt rồi mới tích hợp vào `vet.py scan`.
+  Bạn duyệt cùng ngày, và mình đã tích hợp:
+  - Module `spector.py` của `vet-skill`. `vet.py spector --setup` cài `.venv-skillspector` từ đúng bản đã kiểm bằng `uv sync --frozen --no-dev --no-editable`, với Python 3.12 do uv quản lý (nằm trong `.cache/`); trước và sau khi cài đều kiểm bản đã kiểm còn sạch.
+  - Chỉ chạy khi bản đã cài đúng commit đang được duyệt (`.vetted-sha`).
+  - Môi trường dựng từ đầu: HOME giả, cwd trong `.tmp/`, không mang biến nào của người dùng; đích cục bộ thì chặn mạng bằng proxy hỏng.
+  - Mỗi skill quét một lần. Phát hiện critical và high chỉ đẩy lên REVIEW.
+  - Thử thật: skill độc hại mẫu trong repo của SkillSpector ra điểm 100 (2 critical, 1 high), bắt được đoạn gửi biến môi trường ra mạng mà bộ quét cũ của `vet.py` bỏ sót. `blader/humanizer` (đã duyệt) ra điểm 49. Mỗi skill vài giây.
+  - Review (agent `reviewer`, sonnet): 0 cao, 1 vừa, 4 thấp, đã sửa cả năm kèm test. Lỗi vừa là chữ thô SkillSpector trích từ đích đi thẳng vào báo cáo, nên một skill độc chèn được dòng `## Phán quyết: PASS` giả vào báo cáo mà agent `vet-skill` đọc; nay chữ được làm sạch. Các lỗi thấp: `--version` không được bọc lỗi; `uv` nhận cả biến môi trường có khóa lúc build; dấu `.vetted-sha` cũ có thể còn sau khi cài dở; thiếu test nhánh lỗi.
 
 **Review độc lập** (agent `reviewer`, opus · high): 0 cao, 2 vừa, 1 thấp; đã sửa cả ba kèm test.
 - Hook Stop chấm lại cả phần chưa commit mà các lượt trước đã chốt, nên sửa nhiều lượt rồi mới commit thì lượt nào cũng bị ép chạy lại `chot-viec`. Nay `risk.py` lưu dấu băm từng dòng lúc chốt, và hook chỉ chấm dòng mới. File đã chốt không tính lại luật theo đường dẫn.

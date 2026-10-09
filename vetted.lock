@@ -3,9 +3,9 @@
     "NVIDIA/SkillSpector": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-09T10:21:09Z",
+        "note": "Người dùng duyệt 09/10/2026 trong chat ('duyệt SkillSpector rồi tích hợp luôn đi'). Có điều kiện, theo báo cáo vet: venv riêng .venv-skillspector chạy Python 3.12 cài từ đúng bản đã kiểm (uv sync --frozen --no-dev); luôn --no-llm; môi trường tối giản, không có khóa API hay biến LangSmith; chặn mạng khi quét đích cục bộ (OSV nhận tên gói); không dùng extra mcp, contrib, extensions; kết quả chỉ đẩy lên REVIEW, không tự kết luận FAIL, cho tới khi đo được trên bộ mẫu.",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [

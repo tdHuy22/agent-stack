@@ -31,6 +31,7 @@ Bạn không thấy hội thoại với người dùng và không thấy task c�
    ```
    Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi chạy trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/vet-skill/scripts/vet.py`.
    Mã thoát: 0 = PASS, 1 = REVIEW, 2 = FAIL, 3 = lỗi.
+   Script chạy hai máy quét: `skill-scanner` và `SkillSpector` (NVIDIA, máy quét thứ hai, duyệt có điều kiện ngày 09/10/2026). SkillSpector chạy với `--no-llm`, môi trường không có khóa API, và bị chặn mạng khi đích là thư mục cục bộ. Phát hiện của nó chỉ đẩy lên REVIEW, không bao giờ tự kết luận FAIL. Báo cáo có mục riêng cho nó. Chưa cài thì báo cáo ghi "chưa cài"; cài một lần bằng `vet.py spector --setup` (venv riêng `.venv-skillspector`, Python 3.12, đúng bản đã duyệt). Tắt bằng `--no-spector`.
 2. Đọc báo cáo mà script in ra đường dẫn (nằm trong `vet-reports/`).
 3. Đọc lần lượt **từng file** trong mục "Cần đọc tay" của báo cáo. Với mỗi file, trả lời bốn câu:
    - Nó làm gì, và có khớp với `description` mà skill khai báo không?

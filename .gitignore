@@ -18,3 +18,4 @@ plugin/skills/giong-van/samples/*
 !plugin/skills/giong-van/samples/kinh-dien/
 vendor/
 plugin/.agent-stack-home
+.venv-skillspector/

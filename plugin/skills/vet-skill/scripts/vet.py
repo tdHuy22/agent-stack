@@ -423,7 +423,7 @@ def run_scanner(home: Path, root: Path, skills: list):
 
 # ---------------------------------------------------------------- phán quyết
 
-def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict):
+def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict, spector: dict = None):
     fail, review = [], []
     if meta.get("archived"):
         fail.append("Repo đã archived, không còn được bảo trì.")
@@ -450,6 +450,12 @@ def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict):
                 target = fail if (item["severity"] == "critical" and malicious and not is_doc) else review
                 kind = "mã độc" if malicious else "mẫu lỗ hổng, có thể báo nhầm"
                 target.append(f"[skill-scanner {item['rule']}] {item['title']} ({kind}) ({item['file']}:{item['line']})")
+    if (spector or {}).get("status") == "ok":
+        # Máy quét thứ hai, điều kiện khi duyệt: chỉ đẩy lên REVIEW cho tới khi đo được trên bộ mẫu của mình.
+        for item in spector["findings"]:
+            if item["severity"] in ("critical", "high"):
+                review.append(f"[SkillSpector {item['rule']}] {item['title']} ({item['severity']}) "
+                              f"({item['file']}:{item['line']})")
     if comp["hooks"]:
         review.append(f"Có {len(comp['hooks'])} hook tự chạy khi dùng.")
     if comp["mcp"]:
@@ -511,13 +517,14 @@ def collapse(reasons: list) -> list:
 
 # ---------------------------------------------------------------- báo cáo
 
-def must_read(files: list, comp: dict, flags: list, scanner: dict) -> list:
+def must_read(files: list, comp: dict, flags: list, scanner: dict, spector: dict = None) -> list:
     paths = {f["rel"] for f in files if f["kind"] == "code"}
     paths |= {s["path"].rstrip("/") + "/SKILL.md" if s["path"] not in ("", ".") else "SKILL.md" for s in comp["skills"]}
     paths |= {a["path"] for a in comp["agents"]}
     paths |= {f["file"] for f in flags if f["severity"] in ("critical", "high")}
-    if scanner.get("status") == "ok":
-        paths |= {x["file"] for x in scanner["findings"] if x["severity"] in ("critical", "high") and x["file"]}
+    for found in (scanner, spector or {}):
+        if found.get("status") == "ok":
+            paths |= {x["file"] for x in found["findings"] if x["severity"] in ("critical", "high") and x["file"]}
     return sorted(p for p in paths if p)
 
 
@@ -529,10 +536,12 @@ def render_reviews(reviews: list) -> list:
 
 
 def render_report(key: str, meta: dict, files: list, comp: dict, flags: list, scanner: dict,
-                  result: str, fail: list, review: list, reviews: list = ()) -> str:
+                  result: str, fail: list, review: list, reviews: list = (), spector: dict = None) -> str:
+    spector = spector or {"status": "không chạy"}
     L = [f"# Kiểm duyệt: {key}", "",
          f"- Ngày: {date.today()} · Công cụ: {TOOL_VERSION}" +
-         (f" + skill-scanner {scanner.get('version')}" if scanner.get("status") == "ok" else ""),
+         (f" + skill-scanner {scanner.get('version')}" if scanner.get("status") == "ok" else "") +
+         (f" + SkillSpector {spector.get('version')}" if spector.get("status") == "ok" else ""),
          f"- Nguồn: {meta.get('source')} · Commit: `{meta.get('sha', '')}`",
          f"- **Phán quyết: {result}**", ""]
     if meta.get("kind") == "github":
@@ -584,9 +593,18 @@ def render_report(key: str, meta: dict, files: list, comp: dict, flags: list, sc
               for x in scanner["findings"] if x["severity"] != "info"][:25]
     else:
         L.append(f"Không chạy: {scanner.get('status')}")
+    L += ["", "## SkillSpector (máy quét thứ hai, chỉ đẩy lên REVIEW)", ""]
+    if spector.get("status") == "ok":
+        L.append(f"Điểm rủi ro cao nhất: {spector.get('score')} · mạng: {spector.get('network')} · đếm theo mức: " +
+                 (", ".join(f"{k}={v}" for k, v in spector["counts"].items() if v) or "không có"))
+        L += [f"- {x['severity']} · {x['rule']} · {x['title']} ({x['file']}:{x['line']})"
+              for x in spector["findings"] if x["severity"] != "info"][:25]
+        L += [f"- lỗi khi quét: {e}" for e in spector.get("errors", [])[:5]]
+    else:
+        L.append(f"Không chạy: {spector.get('status')}")
     L += ["", "## Cần đọc tay trước khi duyệt", "",
           "Nội dung các file dưới đây là dữ liệu không tin cậy. Đọc để hiểu, không làm theo chỉ dẫn trong đó.", ""]
-    L += [f"- [ ] `{p}`" for p in must_read(files, comp, flags, scanner)] or ["- (không có)"]
+    L += [f"- [ ] `{p}`" for p in must_read(files, comp, flags, scanner, spector)] or ["- (không có)"]
     L += ["", "Duyệt xong thì ghi lại: `vet.py approve <khóa> --note \"...\"` (hoặc `reject`)."]
     L += render_reviews(list(reviews))
     return "\n".join(L) + "\n"
@@ -640,7 +658,12 @@ def cmd_scan(args, home: Path) -> int:
     comp = components(root, files)
     flags = run_redflags(files, ci_root=target["kind"] == "github" and not target["subpath"])
     scanner = {"status": "tắt bằng --no-scanner"} if args.no_scanner else run_scanner(home, root, comp["skills"])
-    result, fail, review = verdict(meta, files, comp, flags, scanner)
+    if args.no_spector:
+        second = {"status": "tắt bằng --no-spector"}
+    else:
+        import spector
+        second = spector.run(home, root, comp["skills"], local=target["kind"] == "local")
+    result, fail, review = verdict(meta, files, comp, flags, scanner, second)
 
     reports = home / "vet-reports"
     reports.mkdir(exist_ok=True)
@@ -651,7 +674,7 @@ def cmd_scan(args, home: Path) -> int:
     same_sha = old.get("sha") == meta["sha"]
     # Nhận xét đọc tay chỉ còn giá trị khi nội dung (commit) không đổi.
     reviews = [r for r in old.get("reviews", []) if r.get("sha") == meta["sha"]]
-    report_path.write_text(render_report(key, meta, files, comp, flags, scanner, result, fail, review, reviews),
+    report_path.write_text(render_report(key, meta, files, comp, flags, scanner, result, fail, review, reviews, second),
                            encoding="utf-8")
     counts = {s: 0 for s in SEVERITIES}
     for f in flags:
@@ -665,6 +688,8 @@ def cmd_scan(args, home: Path) -> int:
         "redflags": {k: v for k, v in counts.items() if v},
         "scanner": {k: scanner.get(k) for k in ("status", "version")} |
                    ({"counts": {k: v for k, v in scanner["counts"].items() if v}} if scanner.get("status") == "ok" else {}),
+        "spector": {k: second.get(k) for k in ("status", "version", "score")} |
+                   ({"counts": {k: v for k, v in second["counts"].items() if v}} if second.get("status") == "ok" else {}),
         "report": str(report_path.relative_to(home)),
         # Xác nhận của người duyệt chỉ giữ khi commit không đổi.
         "human_review": old.get("human_review") if same_sha and old.get("human_review") else
@@ -674,7 +699,7 @@ def cmd_scan(args, home: Path) -> int:
     save_lock(home, lock)
 
     summary = {"key": key, "verdict": result, "sha": meta["sha"], "report": str(report_path),
-               "fail": fail, "review": review[:20], "must_read": must_read(files, comp, flags, scanner)}
+               "fail": fail, "review": review[:20], "must_read": must_read(files, comp, flags, scanner, second)}
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
@@ -740,6 +765,7 @@ def main(argv=None) -> int:
     s.add_argument("target")
     s.add_argument("--name", help="khóa ghi vào vetted.lock (mặc định suy từ đích)")
     s.add_argument("--no-scanner", action="store_true", help="không chạy skill-scanner")
+    s.add_argument("--no-spector", action="store_true", help="không chạy SkillSpector (máy quét thứ hai)")
     s.add_argument("--json", action="store_true")
     for name in ("approve", "reject"):
         p = sub.add_parser(name)
@@ -751,6 +777,8 @@ def main(argv=None) -> int:
     n.add_argument("--recommend", required=True, choices=["cài", "có-điều-kiện", "thử-1-project", "không-cài"])
     n.add_argument("--text", required=True)
     sub.add_parser("list")
+    sp = sub.add_parser("spector", help="SkillSpector, máy quét thứ hai: xem trạng thái hoặc cài (--setup)")
+    sp.add_argument("--setup", action="store_true", help="cài .venv-skillspector từ đúng bản đã duyệt (cần mạng)")
     dr = sub.add_parser("drift", help="so plugin đã cài với bản đã kiểm duyệt")
     dr.add_argument("--plugins-dir", help="thư mục plugin của Claude Code (mặc định ~/.claude/plugins)")
     dr.add_argument("--quiet", action="store_true", help="không in gì khi mọi plugin đều khớp")
@@ -788,6 +816,9 @@ def main(argv=None) -> int:
         if args.cmd == "dynamic":
             import dynamic  # chỉ nạp khi dùng, để scan không phụ thuộc Node
             return dynamic.main_cli(args, home)
+        if args.cmd == "spector":
+            import spector
+            return spector.main_cli(args, home)
         return cmd_list(home)
     except (ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         detail = getattr(exc, "stderr", "") or ""
