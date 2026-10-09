@@ -12,7 +12,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 
 ## Code
 
-- Python chỉ dùng thư viện chuẩn, và phải chạy được trên Python 3.9 (`/usr/bin/python3` của macOS). Hook có thể được gọi bằng Python này.
+- Python chỉ dùng thư viện chuẩn, chạy bằng `python3` (Python 3.11 của pyenv). App gọi hook bằng chính `python3` này: mọi bản plugin đã cài chỉ có `cpython-311.pyc` (kiểm 09/10/2026). Không chạy hay kiểm trên `/usr/bin/python3` (3.9 của hệ thống macOS).
 - Hook phải nhanh và không bao giờ làm kẹt phiên: bắt mọi lỗi, thoát mã 0, không in gì khi không có việc cần báo.
 - File tạm nằm trong `.tmp/`. Trạng thái chạy nằm trong `state/`. Cả hai không đưa vào git.
 - Ngoại lệ:
@@ -27,7 +27,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 
 ## Mốc kiểm tra
 
-- `python3 -m unittest discover -s tests -t .` phải đạt, trên cả `/usr/bin/python3` (3.9) và `python3`.
+- `python3 -m unittest discover -s tests -t .` phải đạt (Python 3.11).
 - `claude plugin validate plugin` phải ra `Validation passed`.
 
 ## Git

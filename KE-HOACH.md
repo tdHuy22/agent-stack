@@ -476,7 +476,7 @@ Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc pl
 │   ├── .claude-plugin/plugin.json
 │   ├── skills/   vet-skill/ session-keeper/ tien-do/ task-router/ giong-van/
 │   ├── agents/   reviewer · researcher · test-runner · oc-worker · explore-lite
-│   ├── hooks/    hooks.json + script Python (stdlib, chạy được trên Python 3.9)
+│   ├── hooks/    hooks.json + script Python (stdlib, chạy bằng `python3` 3.11)
 │   └── lib/      thư viện dùng chung: đọc §0/checkbox, git chỉ đọc, thư mục state
 ├── global/                              # SHARED (chung), CLAUDE (riêng Claude Code), OPENCODE (riêng OpenCode), AGENTS (file ghép cho OpenCode); chỉ link khi cài
 ├── opencode/agents/worker.md            # agent OpenCode

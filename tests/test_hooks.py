@@ -9,7 +9,7 @@ from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
 from tests.test_agentstack_lib import PLAN, secret_samples
 
 HOOKS = PLUGIN / "hooks"
-PYTHONS = [p for p in ("/usr/bin/python3",) if os.path.exists(p)] + ["python3"]
+PYTHONS = ["python3"]  # Python mà app dùng để gọi hook (3.11 của pyenv); không kiểm 3.9 của hệ thống
 
 # Hai câu cố định của hook SubagentStart (đúng nguyên văn trong yêu cầu thiết kế).
 SUBAGENT_INTRO = "Bạn chạy trong context riêng, không thấy hội thoại với người dùng; đây là bối cảnh từ phiên chính."

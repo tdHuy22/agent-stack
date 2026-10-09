@@ -491,7 +491,7 @@ python3 tools/usage_snapshot.py --days 7
 ### Mốc kiểm tra của repo
 
 ```bash
-python3 plugin/skills/session-keeper/scripts/receipt.py run -- /usr/bin/python3 -m unittest discover -s tests -t .
+python3 plugin/skills/session-keeper/scripts/receipt.py run -- python3 -m unittest discover -s tests -t .
 ```
 
 ```bash
@@ -506,7 +506,7 @@ python3 evals/run_eval.py --self-test
 python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl
 ```
 
-Test phải đạt trên cả `/usr/bin/python3` (3.9) và `python3`.
+Test chạy bằng `python3` (3.11 của pyenv), cũng là Python mà app dùng để gọi hook. Không chạy trên `/usr/bin/python3` (3.9 của hệ thống macOS).
 
 ### Eval chọn cấu hình
 
