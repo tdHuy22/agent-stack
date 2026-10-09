@@ -9,6 +9,8 @@ argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao]"
 
 Nguyên tắc: **trạng thái nằm trên đĩa, không nằm trong context.** Nguồn sự thật là mục §0 của file kế hoạch, thường là `PLAN.md` ở gốc project hoặc `.agent/PLAN.md`. Hook SessionStart của agent-stack tự nạp lại §0 mỗi khi mở phiên, resume, `/clear` hoặc sau compact.
 
+Ngoài §0, hook Stop tự ghi `.agent/LAST-TURN.md` sau mỗi lượt (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi) và hook SessionStart nạp nó vào phiên mới. Đây là bản máy ghi, không thay §0: đừng sửa tay, đừng chép nó vào §0. Khi lượt có đổi file mà §0 chưa đổi, hook Stop nhờ cập nhật §0 trước khi kết thúc lượt; lúc đó chỉ sửa §0 cho khớp việc vừa làm, ngắn gọn, rồi dừng.
+
 Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ (`receipt.py show` để xem). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
 
 Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời người dùng.

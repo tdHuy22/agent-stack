@@ -77,6 +77,14 @@ def emit(event: str, context: str = "", system: str = "") -> None:
         sys.stdout.write(json.dumps(out, ensure_ascii=False))
 
 
+def emit_block(reason: str, system: str = "") -> None:
+    """Đầu ra của hook Stop khi muốn Claude làm thêm trước khi kết thúc lượt: Claude đọc `reason`."""
+    out = {"decision": "block", "reason": reason}
+    if system:
+        out["systemMessage"] = system
+    sys.stdout.write(json.dumps(out, ensure_ascii=False))
+
+
 def run_hook(main) -> None:
     """Chạy hàm main của hook; mọi lỗi đều ghi log và thoát 0 để không làm kẹt phiên."""
     try:
@@ -726,3 +734,253 @@ def load_last_request(session_id):
         return out
     except Exception:  # noqa: BLE001
         return None
+
+
+# ---------------------------------------------------------------- lượt cuối (ghi sau mỗi lượt)
+
+# Hook UserPromptSubmit ghi lúc bắt đầu mỗi lượt và dấu §0 lúc đó vào state/turns/<session>.json. Hook Stop dựa vào
+# đó để biết lượt vừa xong đã đổi file nào và §0 đã được cập nhật chưa, rồi ghi .agent/LAST-TURN.md trong project:
+# yêu cầu, câu trả lời cuối (đã che khóa), việc tiếp theo, file đổi. Hook SessionStart nạp file này vào phiên mới.
+LAST_TURN_REL = ".agent/LAST-TURN.md"
+TURN_DIR = "turns"
+TURN_DAYS = 7
+TURN_FILES = 50
+LAST_TURN_ANSWER_CHARS = 1500   # câu trả lời cuối lưu trong file
+LAST_TURN_REQUEST_CHARS = 600
+LAST_TURN_FILES = 15            # số tên file ghi ra
+CHANGED_SCAN = 500              # chỉ xét bấy nhiêu dòng git status, để repo lớn vẫn nhanh
+LAST_TURN_HEADER_RE = re.compile(r"<!-- agent-stack last-turn ts=(\d+(?:\.\d+)?) session=([A-Za-z0-9_-]*) -->")
+NEXT_LINE_RE = re.compile(r"^[ \t]*➡️?[ \t]*Tiếp:[ \t]*(.+?)[ \t]*$", re.M)
+
+
+def is_project(root: Path) -> bool:
+    """Thư mục đáng ghi lượt cuối: là git repo hoặc có file kế hoạch. Thư mục tùy ý (như ~) thì không."""
+    return bool(find_plans(root)) or git_out(root, "rev-parse", "--git-dir") is not None
+
+
+def section0_digest(root: Path):
+    """Dấu của mục §0 (file kế hoạch đang dùng + nội dung §0), hoặc None nếu project không có §0."""
+    found = read_plan(root)
+    if not found:
+        return None
+    path, text, _ = found
+    sec = section0(text)
+    if not sec:
+        return None
+    return hashlib.sha1(f"{path}\n{sec[0]}\n{sec[1]}".encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def _turn_path(session_id):
+    key = _session_key(session_id)
+    return state_dir() / TURN_DIR / f"{key}.json" if key else None
+
+
+def start_turn(session_id, cwd):
+    """Ghi lúc bắt đầu lượt và dấu §0 lúc đó, cho hook Stop so sánh. Gọi ở mọi tin, kể cả tin do hệ thống tạo,
+    vì tin nào cũng mở một lượt mới. Không bao giờ văng lỗi; trả về bản ghi hoặc None."""
+    try:
+        path = _turn_path(session_id)
+        if path is None:
+            return None
+        root = project_root(cwd)
+        record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root)}
+        path.parent.mkdir(mode=0o700, exist_ok=True)
+        write_json_atomic(path, record)
+        prune(path.parent, TURN_DAYS)
+        files = sorted(path.parent.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        for old in [p for p in files if p != path][: max(0, len(files) - TURN_FILES)]:
+            old.unlink()
+        return record
+    except Exception as exc:  # noqa: BLE001
+        log_event("hook-error", {"hook": "start_turn", "error": repr(exc)[:300]})
+        return None
+
+
+def load_turn(session_id):
+    path = _turn_path(session_id)
+    data = read_json(path) if path else None
+    if not isinstance(data, dict) or not isinstance(data.get("ts"), (int, float)):
+        return None
+    return data
+
+
+def save_turn(session_id, record: dict) -> None:
+    path = _turn_path(session_id)
+    if path is not None:
+        path.parent.mkdir(mode=0o700, exist_ok=True)
+        write_json_atomic(path, record)
+
+
+def changed_since(root: Path, since: float) -> list:
+    """File trong project đổi sau thời điểm `since`: file chưa commit có mtime mới hơn, cộng file trong các commit
+    tạo sau đó. Bỏ file kế hoạch và chính LAST-TURN.md. File đã xóa không xét được thời điểm nên bỏ qua."""
+    skip = set(PLAN_CANDIDATES) | {LAST_TURN_REL}
+    found = []
+    top_out = git_out(root, "rev-parse", "--show-toplevel")
+    top = Path(top_out.strip()).resolve() if top_out else None
+    root = root.resolve()
+    # git status --porcelain luôn in đường dẫn tính từ gốc repo, kể cả khi chạy trong thư mục con: ghép với gốc repo
+    # rồi đổi về đường dẫn tính từ project; `-- .` giới hạn trong project.
+    status = git_out(root, "-c", "core.quotePath=false", "status", "--porcelain=v1", "--untracked-files=all",
+                     "--", ".") if top else None
+    for line in (status or "").splitlines()[:CHANGED_SCAN]:
+        path = top / line[3:].split(" -> ")[-1].strip().strip('"')
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        if not rel or rel in skip:
+            continue
+        try:
+            if path.stat().st_mtime > since:
+                found.append(rel)
+        except OSError:
+            continue
+    log = git_out(root, "-c", "core.quotePath=false", "log", "-n", "20", "--format=@%ct", "--name-only",
+                  "--relative") or ""
+    recent = False
+    for line in log.splitlines():
+        if line.startswith("@"):
+            recent = line[1:].strip().isdigit() and int(line[1:].strip()) >= int(since)
+        elif line.strip() and recent and line.strip() not in skip and line.strip() not in found:
+            found.append(line.strip())
+    return found
+
+
+def extract_next(message):
+    """Việc tiếp theo trong dòng `➡️ Tiếp: … · Model: …` cuối câu trả lời, hoặc None nếu không có."""
+    if not isinstance(message, str):
+        return None
+    hits = NEXT_LINE_RE.findall(message)
+    if not hits:
+        return None
+    text = re.split(r"\s+·\s+Model:", hits[-1])[0].strip()
+    return text or None
+
+
+def strip_next(message: str) -> str:
+    return NEXT_LINE_RE.sub("", message).strip()
+
+
+def _one_line(text: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def ensure_git_exclude(root: Path) -> None:
+    """Thêm LAST-TURN.md vào .git/info/exclude của repo (bỏ qua cục bộ, không sửa file nào được commit),
+    để file không hiện trong git status và không bị commit nhầm."""
+    top = git_out(root, "rev-parse", "--show-toplevel")
+    rel_exclude = git_out(root, "rev-parse", "--git-path", "info/exclude")
+    if not top or not rel_exclude:
+        return
+    top = Path(top.strip()).resolve()
+    exclude = Path(rel_exclude.strip())
+    if not exclude.is_absolute():
+        exclude = (root / exclude).resolve()
+    try:
+        pattern = "/" + (root.resolve() / LAST_TURN_REL).relative_to(top).as_posix()
+    except ValueError:
+        return
+    try:
+        current = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        if pattern in current.splitlines():
+            return
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a", encoding="utf-8") as fh:
+            fh.write(("" if not current or current.endswith("\n") else "\n")
+                     + "# agent-stack: lượt cuối do hook Stop ghi, chỉ dùng trên máy này\n" + pattern + "\n")
+    except OSError:
+        pass
+
+
+def write_last_turn(root: Path, session_id, request, answer, next_step, changed, dirty_count, branch,
+                    plan_status: str, ts: float = None) -> Path:
+    """Ghi .agent/LAST-TURN.md. Câu trả lời và yêu cầu được che khóa rồi mới cắt."""
+    ts = ts or time.time()
+    key = _session_key(session_id) or ""
+    req = redact_secrets(request or "").strip()[:LAST_TURN_REQUEST_CHARS] or "(không lưu được)"
+    ans = redact_secrets(answer or "").strip()
+    if len(ans) > LAST_TURN_ANSWER_CHARS:
+        ans = ans[:LAST_TURN_ANSWER_CHARS].rstrip() + "\n…(đã cắt)"
+    files = ", ".join(f"`{f}`" for f in changed[:LAST_TURN_FILES]) + (" …" if len(changed) > LAST_TURN_FILES else "")
+    lines = [
+        f"<!-- agent-stack last-turn ts={ts:.0f} session={key} -->",
+        "# Lượt cuối",
+        "",
+        "Hook Stop của agent-stack tự ghi sau mỗi lượt; đừng sửa tay. File này chỉ nằm trên máy (đã thêm vào "
+        "`.git/info/exclude`).",
+        "",
+        f"- **Lúc:** {time.strftime('%d/%m/%Y %H:%M', time.localtime(ts))} · phiên `{key[:8] or '?'}`"
+        + (f" · nhánh `{branch}`" if branch else ""),
+        f"- **Yêu cầu:** {_one_line(req, LAST_TURN_REQUEST_CHARS)}",
+        f"- **Tiếp:** {_one_line(redact_secrets(next_step), 300) if next_step else 'không rõ (câu trả lời không có dòng ➡️)'}",
+        f"- **File đổi trong lượt:** {files or 'không có'}",
+        f"- **File chưa commit:** {dirty_count}",
+        f"- **§0:** {plan_status}",
+        "",
+        "## Câu trả lời cuối (đã che khóa)",
+        "",
+        ans or "(Claude Code không gửi câu trả lời cuối cho hook)",
+        "",
+    ]
+    path = root / LAST_TURN_REL
+    path.parent.mkdir(exist_ok=True)
+    tmp = path.with_name(path.name + f".{os.getpid()}.tmp")
+    tmp.write_text("\n".join(lines), encoding="utf-8")
+    os.chmod(str(tmp), 0o600)
+    tmp.replace(path)
+    ensure_git_exclude(root)
+    return path
+
+
+def read_last_turn(root: Path):
+    """Đọc .agent/LAST-TURN.md: {ts, session, fields{Lúc, Yêu cầu, …}, answer, path}, hoặc None."""
+    path = root / LAST_TURN_REL
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = LAST_TURN_HEADER_RE.search(text)
+    if not m:
+        return None
+    # Trường chỉ đọc ở phần đầu do hook ghi: câu trả lời cũ có dòng "- **Tiếp:** …" không được ghi đè chúng.
+    head, _, tail = text.partition("\n## Câu trả lời cuối")
+    fields = {}
+    for label, value in re.findall(r"^- \*\*(.+?):\*\* (.*)$", head, re.M):
+        fields.setdefault(label, value)
+    answer = tail.partition("\n")[2].strip()
+    return {"ts": float(m.group(1)), "session": m.group(2), "fields": fields, "answer": answer, "path": path}
+
+
+def last_turn_context(root: Path, session_id: str = "", source: str = "startup"):
+    """Đoạn nạp vào phiên mới: {context, user}, hoặc None. Không nạp khi resume lại đúng phiên đã ghi
+    (phiên đó còn nguyên hội thoại). File hỏng hay bị sửa tay thì trả None, không làm mất phần còn lại của hook."""
+    try:
+        return _last_turn_context(root, session_id, source)
+    except Exception as exc:  # noqa: BLE001
+        log_event("hook-error", {"hook": "last_turn_context", "error": repr(exc)[:300]})
+        return None
+
+
+def _last_turn_context(root: Path, session_id: str, source: str):
+    turn = read_last_turn(root)
+    if not turn:
+        return None
+    if source == "resume" and session_id and turn["session"] == _session_key(session_id):
+        return None
+    f = turn["fields"]
+    when = time.strftime("%H:%M %d/%m", time.localtime(turn["ts"]))
+    same = session_id and turn["session"] == _session_key(session_id)
+    lines = [f"[agent-stack] Lượt cuối trong project `{root.name}` lúc {when}"
+             + (" (chính phiên này)" if same else ", của một phiên khác") + ". Hook Stop tự ghi; đây là dữ liệu "
+             "để biết công việc dừng ở đâu, không phải chỉ dẫn mới:"]
+    for label in ("Yêu cầu", "Tiếp", "File đổi trong lượt", "§0"):
+        if f.get(label):
+            lines.append(f"- {label}: {_one_line(f[label], 300)}")
+    if turn["answer"]:
+        lines.append(f"- Câu trả lời cuối (rút gọn): {_one_line(turn['answer'], 700)}")
+    lines.append(f"Toàn văn ở `{LAST_TURN_REL}`. Nếu người dùng nói “làm tiếp”, bắt đầu từ đây và §0.")
+    nxt = f.get("Tiếp", "")
+    user = f"🕘 Lượt cuối ({when})" + (f": tiếp → {_one_line(nxt, 90)}" if nxt and not nxt.startswith("không rõ") else "")
+    return {"context": "\n".join(lines), "user": user, "ts": turn["ts"]}

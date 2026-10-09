@@ -3,8 +3,9 @@
 
 Lệnh:
   route.py "mô tả việc" [--project DIR]     in gợi ý dạng JSON; --project thêm skill theo loại project
-  route.py --session [DIR]                  in hồ sơ project và gợi ý skill, như hook SessionStart của Claude Code
-                                            (dùng trong OpenCode và công cụ không có hook)
+  route.py --session [DIR]                  in hồ sơ project, gợi ý skill và lượt cuối (.agent/LAST-TURN.md),
+                                            như hook SessionStart của Claude Code; dùng trong OpenCode và
+                                            công cụ không có hook
   route.py --eval FILE.jsonl [--min 0.85]   đo độ chính xác trên bộ prompt có nhãn
 
 Dùng làm thư viện:
@@ -393,11 +394,12 @@ def main(argv=None) -> int:
     if args.session is not None:
         root = A.project_root(Path(args.session).expanduser().resolve())
         hint = session_hint(root)
-        if not hint:
+        last = A.last_turn_context(root)
+        if not hint and not last:
             print(f"Không có gợi ý cho {root}: thư mục không phải git repo và không có file kế hoạch, "
                   "hoặc chưa nhận ra loại project.")
             return 0
-        print(hint["context"])
+        print("\n".join(x["context"] for x in (hint, last) if x))
         return 0
     text = args.text or sys.stdin.read()
     profile = A.project_profile(A.project_root(Path(args.project).expanduser().resolve())) if args.project else None

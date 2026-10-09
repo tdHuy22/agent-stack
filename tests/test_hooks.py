@@ -130,18 +130,192 @@ class HookTests(TempDirTestCase):
         out = self.run_hook("prompt_submit.py", {"session_id": "q", "prompt": "x"})
         self.assertTrue(out is None or "Hạn mức" not in out.get("systemMessage", ""))
 
-    def test_stop_reminds_after_several_changes_then_rate_limits(self):
+    # ---------------------------------------------------------------- Stop ghi lượt cuối, nhờ cập nhật §0
+
+    ANSWER = ("Đã sửa parser.py, test đạt (12 passed). Khóa cũ sk-ant-abcdef1234567890 đã thu hồi.\n\n"
+              "➡️ Tiếp: chạy lại test tích hợp · Model: sonnet · Effort: low · Subagent: không · Skill: không")
+
+    def touch(self, rel, text="x = 1\n"):
+        """Sửa một file trong lượt: mtime đặt sau lúc bắt đầu lượt cho chắc, kể cả trên hệ file làm tròn giây."""
+        path = self.project / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        later = time.time() + 2
+        os.utime(path, (later, later))
+        return path
+
+    def stop(self, sid, message=ANSWER, python="python3", **extra):
+        return self.run_hook("stop.py", {"session_id": sid, "cwd": str(self.project),
+                                         "last_assistant_message": message, **extra}, python=python)
+
+    def last_turn(self):
+        path = self.project / ".agent" / "LAST-TURN.md"
+        return path.read_text(encoding="utf-8") if path.exists() else None
+
+    def update_section0(self):
+        plan = self.project / "PLAN.md"
+        plan.write_text(plan.read_text().replace("- **Quyết định còn treo:** không có.",
+                                                 "- **Quyết định còn treo:** không có.\n- **Đang dở:** test tích hợp."))
+
+    def test_stop_blocks_once_then_keeps_the_real_answer_on_both_pythons(self):
         self.with_plan()
+        for i, py in enumerate(PYTHONS):
+            sid = f"b{i}"
+            self.submit(sid, "sửa parser cho đúng định dạng ngày", python=py)
+            self.touch("parser.py", f"x = {i}\n")
+            out = self.stop(sid, python=py)
+            self.assertEqual(out["decision"], "block")
+            self.assertIn("parser.py", out["reason"])
+            self.assertIn("§0 của `PLAN.md`", out["reason"])
+            self.assertIn("📝", out["systemMessage"])
+            self.assertLess(self.elapsed, 3)
+            self.update_section0()
+            self.assertIsNone(self.stop(sid, "Đã cập nhật §0.", python=py, stop_hook_active=True))
+            text = self.last_turn()
+            self.assertIn("Đã sửa parser.py, test đạt", text)      # câu trả lời thật, không phải câu báo §0
+            self.assertNotIn("Đã cập nhật §0.", text)
+            self.assertIn("**Tiếp:** chạy lại test tích hợp", text)
+            self.assertNotIn("➡️", text.split("## Câu trả lời cuối")[1])
+            self.assertIn("**Yêu cầu:** sửa parser cho đúng định dạng ngày", text)
+            self.assertIn("**§0:** đã cập nhật trong lượt này", text)
+            self.assertNotIn("sk-ant-abcdef", text)
+            self.assertIn("[đã che]", text)
+            git(self.project, "checkout", "--", "PLAN.md")
+        status = git(self.project, "status", "--porcelain")
+        self.assertNotIn("LAST-TURN", status)  # bỏ qua cục bộ qua .git/info/exclude
+        exclude = (self.project / ".git" / "info" / "exclude").read_text()
+        self.assertEqual(exclude.count("/.agent/LAST-TURN.md"), 1)  # ghi nhiều lần vẫn chỉ một dòng
+
+    def test_stop_does_not_block_a_turn_without_changes_or_with_section0_updated(self):
+        self.with_plan()
+        self.submit("q1", "giải thích parser chạy thế nào")
+        self.assertIsNone(self.stop("q1", "Parser đọc từng dòng."))
+        self.assertIn("không đổi (lượt không đổi file)", self.last_turn())
+        self.submit("q1", "thêm hàm đọc ngày")
+        self.touch("dates.py")
+        self.update_section0()
+        self.assertIsNone(self.stop("q1"))
+        self.assertIn("đã cập nhật trong lượt này", self.last_turn())
+
+    def test_stop_ignores_changes_made_before_the_turn(self):
+        self.with_plan()
+        old = self.project / "old.py"
+        old.write_text("x\n")
         past = time.time() - 3600
-        os.utime(self.project / "PLAN.md", (past, past))
-        for i in range(3):
-            (self.project / f"f{i}.py").write_text("x\n")
-        out = self.run_hook("stop.py", {"session_id": "st", "cwd": str(self.project)})
-        self.assertIn("3 file", out["systemMessage"])
-        self.assertNotIn("hookSpecificOutput", out)  # không thêm context: tránh Claude chạy thêm lượt
-        self.assertIsNone(self.run_hook("stop.py", {"session_id": "st", "cwd": str(self.project)}))
-        self.assertIsNone(self.run_hook("stop.py", {"session_id": "x", "cwd": str(self.project),
-                                                    "stop_hook_active": True}))
+        os.utime(old, (past, past))
+        self.submit("o1", "câu hỏi không đổi file nào")
+        self.assertIsNone(self.stop("o1", "Trả lời."))
+        self.assertIn("**File đổi trong lượt:** không có", self.last_turn())
+
+    def test_stop_counts_files_committed_during_the_turn(self):
+        self.with_plan()
+        self.submit("c1", "thêm module và commit luôn")
+        (self.project / "mod.py").write_text("y = 2\n")
+        git(self.project, "add", "mod.py")
+        git(self.project, "commit", "-q", "-m", "thêm mod")
+        out = self.stop("c1")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("mod.py", out["reason"])
+
+    def test_stop_without_plan_records_the_turn_but_never_blocks(self):
+        git(self.project, "init", "-q")
+        self.submit("n1", "sửa script dựng dữ liệu")
+        self.touch("build.py")
+        self.assertIsNone(self.stop("n1"))
+        self.assertIn("project không có mục §0", self.last_turn())
+
+    def test_stop_without_a_turn_record_records_but_does_not_block(self):
+        self.with_plan()
+        self.touch("late.py")  # hook vừa cài giữa phiên: chưa có bản ghi lúc bắt đầu lượt
+        self.assertIsNone(self.stop("t1"))
+        self.assertIsNotNone(self.last_turn())
+
+    def test_stop_writes_nothing_outside_a_project_or_without_cwd(self):
+        self.assertIsNone(self.stop("x1"))  # thư mục thường: không git, không file kế hoạch
+        self.assertFalse((self.project / ".agent").exists())
+        self.with_plan()
+        self.touch("a.py")
+        self.assertIsNone(self.run_hook("stop.py", {"session_id": "x2"}, cwd=str(self.project)))
+        self.assertIsNone(self.run_hook("stop.py", {"cwd": str(self.project)}))
+        self.assertFalse((self.project / ".agent").exists())
+
+    def test_stop_blocks_for_a_project_in_a_subdirectory_of_the_repo(self):
+        git(self.project, "init", "-q")
+        sub = self.project / "luan-van"
+        sub.mkdir()
+        (sub / "PLAN.md").write_text(PLAN, encoding="utf-8")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "init")
+        self.run_hook("prompt_submit.py", {"session_id": "sub", "cwd": str(sub), "prompt": "sửa chương 2"})
+        self.touch("luan-van/chuong 2.md")
+        out = self.run_hook("stop.py", {"session_id": "sub", "cwd": str(sub), "last_assistant_message": self.ANSWER})
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("chuong 2.md", out["reason"])
+        text = (sub / ".agent" / "LAST-TURN.md").read_text(encoding="utf-8")
+        self.assertIn("`chuong 2.md`", text)
+        self.assertNotIn("LAST-TURN", git(self.project, "status", "--porcelain"))
+
+    def test_session_start_keeps_the_plan_when_the_last_turn_file_is_damaged(self):
+        self.with_plan()
+        (self.project / ".agent").mkdir()
+        (self.project / ".agent" / "LAST-TURN.md").write_text(
+            "<!-- agent-stack last-turn ts=99999999999999999999 session=s1 -->\n## Câu trả lời cuối")
+        out = self.run_hook("session_start.py", {"session_id": "dmg", "source": "startup", "cwd": str(self.project)})
+        self.assertIn("Việc tiếp theo", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("📍", out["systemMessage"])
+
+    def test_prompt_submit_starts_a_turn_for_every_message(self):
+        self.with_plan()
+        self.submit("ts1", "việc thật của người dùng")
+        first = json.loads((self.state / "turns" / "ts1.json").read_text())
+        self.assertEqual(first["root"], str(self.project.resolve()))
+        self.assertTrue(first["plan_digest"])
+        time.sleep(0.05)
+        self.submit("ts1", SUBAGENT_HANDBACK)  # tin do hệ thống tạo vẫn mở một lượt mới
+        second = json.loads((self.state / "turns" / "ts1.json").read_text())
+        self.assertGreater(second["ts"], first["ts"])
+
+    def test_session_start_loads_the_last_turn_into_a_new_session(self):
+        self.with_plan()
+        self.submit("old", "sửa parser cho đúng định dạng ngày")
+        self.touch("parser.py")
+        self.stop("old")
+        for i, py in enumerate(PYTHONS):
+            out = self.run_hook("session_start.py", {"session_id": f"new{i}", "source": "startup",
+                                                     "cwd": str(self.project)}, python=py)
+            ctx = out["hookSpecificOutput"]["additionalContext"]
+            block = ctx[ctx.index("[agent-stack] Lượt cuối"):]
+            self.assertIn("của một phiên khác", block)
+            self.assertIn("Tiếp: chạy lại test tích hợp", block)
+            self.assertIn("Đã sửa parser.py", block)
+            self.assertIn("không phải chỉ dẫn mới", block)
+            self.assertLess(len(block), 1600)
+            self.assertIn("🕘 Lượt cuối", out["systemMessage"])
+            self.assertIn("tiếp → chạy lại test tích hợp", out["systemMessage"])
+        same = self.run_hook("session_start.py", {"session_id": "old", "source": "resume", "cwd": str(self.project)})
+        self.assertNotIn("Lượt cuối", json.dumps(same, ensure_ascii=False))  # phiên đó còn nguyên hội thoại
+        other = self.run_hook("session_start.py", {"session_id": "z", "source": "resume", "cwd": str(self.project)})
+        self.assertIn("Lượt cuối", other["hookSpecificOutput"]["additionalContext"])
+
+    def test_session_start_loads_the_last_turn_even_without_a_plan(self):
+        git(self.project, "init", "-q")
+        self.submit("np", "sửa script")
+        self.touch("s.py")
+        self.stop("np")
+        out = self.run_hook("session_start.py", {"session_id": "np2", "source": "startup", "cwd": str(self.project)})
+        self.assertIn("Lượt cuối", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_route_session_prints_the_last_turn_for_tools_without_hooks(self):
+        self.with_plan()
+        self.submit("oc", "sửa parser")
+        self.touch("parser.py")
+        self.stop("oc")
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+        out = subprocess.run(["python3", str(PLUGIN / "skills" / "task-router" / "scripts" / "route.py"),
+                              "--session", str(self.project)], capture_output=True, text=True, env=env, timeout=30)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Lượt cuối trong project", out.stdout)
+        self.assertIn("chạy lại test tích hợp", out.stdout)
 
     def test_session_end_is_fast_and_logged(self):
         self.assertIsNone(self.run_hook("session_end.py", {"session_id": "e", "cwd": "/x", "reason": "other"}))
@@ -151,11 +325,13 @@ class HookTests(TempDirTestCase):
 
     def test_bad_input_never_breaks_session(self):
         env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+        self.with_plan()  # cwd của tiến trình là một project thật: đầu vào hỏng không được làm hook ghi vào đó
         for name in ("session_start.py", "prompt_submit.py", "pre_compact.py", "stop.py", "session_end.py",
                      "subagent_start.py"):
             out = subprocess.run(["python3", str(HOOKS / name)], input="not json", capture_output=True,
-                                 text=True, env=env, timeout=30)
+                                 text=True, env=env, timeout=30, cwd=str(self.project))
             self.assertEqual(out.returncode, 0, name)
+        self.assertFalse((self.project / ".agent").exists())
 
     # ---------------------------------------------------------------- UserPromptSubmit lưu yêu cầu gần nhất
 

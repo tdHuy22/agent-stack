@@ -444,6 +444,17 @@ Phiên đó (GĐ12, GĐ13, đã commit) để lại một ý chưa áp dụng: n
 
 **Kết quả** (cấu hình E, 12 lượt; bảng ở `evals/README.md`): đạt 12/12; 0,198 USD và 46 giây mỗi lượt, tức rẻ hơn bản 0.5.1 (0,218 USD, 55 giây) và ngang bản cũ (0,203 USD, 45 giây); 0 lệnh bị chặn, 0 lần tìm ra rỗng; vẫn kiểm 2,2 repo mỗi lượt nhưng chỉ bằng 0,9 lần gọi (0.5.1: 2,6 repo, 2,7 lần gọi); chỗ "chưa kiểm" còn 1,0. Một lượt ban đầu bị chấm trượt là grader chấm oan (câu quyết định nói "bằng thư viện chuẩn", chữ SHA-256 nằm xa); đã sửa grader, đưa câu đó vào test, chấm lại cả năm đợt: không lượt nào khác đổi. Review độc lập (sonnet): không lỗi nào đạt ngưỡng, ba nhận xét nhỏ đã sửa. Chi phí đợt này 2,38 USD.
 
+### 6.17 Tự lưu sau mỗi lượt (09/10/2026)
+
+Yêu cầu của bạn: sau mỗi yêu cầu xong, luôn mở được phiên mới để làm tiếp. Trước đó §0 chỉ được cập nhật khi Claude nhớ, nên phiên mới có thể thấy §0 cũ (ví dụ thật: §0 ghi `context7` đang bật nhiều ngày sau khi bạn tắt). `reuse-best` không thấy thứ có sẵn đáp ứng đủ: claude-mem cần worker nền và SQLite, chưa vet; skill handoff chỉ chạy khi được gọi. Tài liệu hook chính thức cho hook Stop trường `last_assistant_message`, nên chỉ cần mở rộng hook của repo. Trang so sánh: https://claude.ai/artifact/X7wMhJyxe6QXMNLoccs1Qe.
+
+Bạn chốt: phương án B, lưu trong project, phiên mới tự nạp, có lưu câu trả lời cuối.
+- UserPromptSubmit ghi lúc bắt đầu lượt và dấu §0 lúc đó (`state/turns/<phiên>.json`), ở mọi tin, kể cả tin do hệ thống tạo.
+- Stop ghi `.agent/LAST-TURN.md` sau mỗi lượt trọn vẹn: yêu cầu (đã che khóa), câu trả lời cuối (che khóa, cắt 1.500 ký tự), việc tiếp theo lấy từ dòng ➡️ (thiếu thì ghi "không rõ", không đoán), file đổi trong lượt (mtime sau lúc bắt đầu lượt, cộng file trong commit tạo trong lượt), §0 đã cập nhật chưa. File quyền 0600; hook thêm nó vào `.git/info/exclude` (cục bộ, không sửa file nào được commit) để không hiện trong `git status`.
+- Lượt có đổi file mà dấu §0 không đổi thì Stop trả `decision: block` một lần; lần dừng thứ hai (`stop_hook_active`) không chặn và giữ câu trả lời của lần đầu. Lời nhắn cho Claude có lối ra: file do phiên khác đổi hay thay đổi quá nhỏ thì trả lời một câu và không sửa gì.
+- SessionStart nạp bản rút gọn (khoảng 500 ký tự) vào phiên mới, trừ khi resume lại đúng phiên đã ghi. `route.py --session` in cùng nội dung cho OpenCode.
+- Giới hạn: Stop không chạy khi người dùng bấm dừng giữa chừng hay app tắt giữa lượt, nên lượt đó không được ghi; file đổi do phiên khác cùng repo trong lúc lượt chạy cũng bị tính là của lượt này; OpenCode không có hook Stop nên lượt làm trong OpenCode không được ghi.
+
 ---
 
 ## 7. Thiết kế chi tiết

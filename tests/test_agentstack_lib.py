@@ -409,5 +409,111 @@ class LastRequest(TempDirTestCase):
         self.assertEqual(stat.S_IMODE(self.dir.stat().st_mode) & 0o077, 0)
 
 
+
+class LastTurn(TempDirTestCase):
+    """Lượt cuối do hook Stop ghi vào .agent/LAST-TURN.md."""
+
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "proj"
+        self.root.mkdir()
+
+    def test_next_step_is_taken_from_the_arrow_line(self):
+        msg = "Xong.\n\n➡️ Tiếp: chạy test tích hợp · Model: sonnet · Effort: low · Subagent: không · Skill: không"
+        self.assertEqual(A.extract_next(msg), "chạy test tích hợp")
+        self.assertEqual(A.strip_next(msg), "Xong.")
+        self.assertEqual(A.extract_next("➡ Tiếp: không có biến thể emoji"), "không có biến thể emoji")  # thiếu U+FE0F
+        self.assertEqual(A.extract_next("➡️ Tiếp: cũ\n...\n➡️ Tiếp: mới · Model: x"), "mới")
+        self.assertIsNone(A.extract_next("Câu trả lời không có dòng tiếp theo."))
+        self.assertIsNone(A.extract_next(None))
+
+    def test_write_then_read_round_trip_redacts_and_clips(self):
+        answer = "Đầu. " + "chữ " * 600 + " token ghp_" + "a" * 36
+        A.write_last_turn(self.root, "sess-1", "yêu cầu có sk-ant-abcdef1234567890", answer, "bước kế",
+                          ["a.py", "b.py"], 3, "main", "đã cập nhật trong lượt này", ts=1791500000)
+        text = (self.root / ".agent" / "LAST-TURN.md").read_text(encoding="utf-8")
+        self.assertNotIn("sk-ant-abcdef", text)
+        self.assertIn("…(đã cắt)", text)
+        self.assertEqual(stat.S_IMODE((self.root / ".agent" / "LAST-TURN.md").stat().st_mode), 0o600)
+        turn = A.read_last_turn(self.root)
+        self.assertEqual(turn["session"], "sess-1")
+        self.assertEqual(turn["ts"], 1791500000)
+        self.assertEqual(turn["fields"]["Tiếp"], "bước kế")
+        self.assertEqual(turn["fields"]["File đổi trong lượt"], "`a.py`, `b.py`")
+        self.assertTrue(turn["answer"].startswith("Đầu."))
+
+    def test_context_skips_the_same_session_on_resume_only(self):
+        A.write_last_turn(self.root, "s1", "việc", "xong", "tiếp", [], 0, None, "không đổi")
+        self.assertIsNone(A.last_turn_context(self.root, "s1", "resume"))
+        self.assertIn("chính phiên này", A.last_turn_context(self.root, "s1", "compact")["context"])
+        self.assertIn("của một phiên khác", A.last_turn_context(self.root, "s2", "resume")["context"])
+        self.assertIsNone(A.last_turn_context(self.tmp / "khong-co", "s1"))
+
+    def test_exclude_is_added_once_and_relative_to_the_repo_top(self):
+        git(self.root, "init", "-q")
+        sub = self.root / "docs" / "luan-van"
+        sub.mkdir(parents=True)
+        for _ in range(2):
+            A.ensure_git_exclude(sub)
+        exclude = (self.root / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+        self.assertEqual(exclude.count("/docs/luan-van/.agent/LAST-TURN.md"), 1)
+
+    def test_changed_since_sees_new_and_committed_files_but_not_the_plan(self):
+        git(self.root, "init", "-q")
+        (self.root / "PLAN.md").write_text("# P\n")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "init")
+        since = time.time()
+        later = since + 2
+        for rel in ("mới.py", "PLAN.md", ".agent/LAST-TURN.md", "thư mục/sâu.txt"):
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x")
+            os.utime(path, (later, later))
+        self.assertEqual(sorted(A.changed_since(self.root, since)), ["mới.py", "thư mục/sâu.txt"])
+
+    def test_changed_since_in_a_project_that_is_a_subdirectory_of_the_repo(self):
+        git(self.root, "init", "-q")
+        sub = self.root / "luan-van"
+        sub.mkdir()
+        (sub / "PLAN.md").write_text("# P\n")
+        (sub / "code.py").write_text("a\n")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "init")
+        since = time.time()
+        later = since + 2
+        for rel in ("luan-van/code.py", "luan-van/tệp mới é.txt", "ngoai.py"):
+            path = self.root / rel
+            path.write_text("b\n")
+            os.utime(path, (later, later))
+        self.assertEqual(sorted(A.changed_since(sub, since)), ["code.py", "tệp mới é.txt"])
+
+    def test_fields_come_from_the_header_not_from_the_old_answer(self):
+        answer = "Bàn về tính năng:\n- **Tiếp:** viết lại module X (đã bỏ)\n- **§0:** chưa có"
+        A.write_last_turn(self.root, "s1", "việc", answer, "chạy test GĐ18", [], 0, None, "đã cập nhật trong lượt này")
+        turn = A.read_last_turn(self.root)
+        self.assertEqual(turn["fields"]["Tiếp"], "chạy test GĐ18")
+        self.assertEqual(turn["fields"]["§0"], "đã cập nhật trong lượt này")
+        ctx = A.last_turn_context(self.root, "s2")
+        self.assertIn("- Tiếp: chạy test GĐ18", ctx["context"])
+        self.assertIn("tiếp → chạy test GĐ18", ctx["user"])
+
+    def test_a_damaged_file_gives_no_context_instead_of_an_error(self):
+        os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")
+        self.addCleanup(os.environ.pop, "AGENT_STACK_STATE", None)
+        path = self.root / ".agent" / "LAST-TURN.md"
+        path.parent.mkdir()
+        for text in ("<!-- agent-stack last-turn ts=1791500000 session=s1 -->\n## Câu trả lời cuối",
+                     "<!-- agent-stack last-turn ts=99999999999999999999 session=s1 -->\n- **Tiếp:** x\n",
+                     "không có header"):
+            path.write_text(text, encoding="utf-8")
+            result = A.last_turn_context(self.root, "s2")
+            self.assertTrue(result is None or "Lượt cuối" in result["context"], text)
+
+    def test_turn_record_survives_bad_session_ids(self):
+        self.assertIsNone(A.start_turn("../thoát", str(self.root)))
+        self.assertIsNone(A.load_turn("../thoát"))
+
+
 if __name__ == "__main__":
     unittest.main()

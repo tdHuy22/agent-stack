@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Hook SessionStart: nạp lại trạng thái project từ đĩa khi mở, resume, clear hoặc sau compact,
-kèm gợi ý skill hợp với project và cách làm việc tiếp theo trong §0 (router).
+kèm gợi ý skill hợp với project và cách làm việc tiếp theo trong §0 (router), và lượt cuối do hook Stop ghi ở
+.agent/LAST-TURN.md (trừ khi resume lại đúng phiên đã ghi lượt đó).
 
 Thư mục không phải git repo và không có file kế hoạch (PLAN.md §0, .agent/HANDOFF.md...) thì hook im lặng.
 """
@@ -49,9 +50,10 @@ def main():
     except ImportError:
         pass
     drift_note, drift_user = plugin_drift() if source == "startup" else ("", "")
-    if not info and not hint and not drift_note:
+    last = A.last_turn_context(root, sid, source)
+    if not info and not hint and not drift_note and not last:
         return
-    if not info and not hint:
+    if not info and not hint and not last:
         A.emit("SessionStart", drift_note, drift_user)
         return
     context, user = (info["context"], info["user"]) if info else ("", "")
@@ -63,6 +65,9 @@ def main():
     if hint:
         context = (context + "\n" + hint["context"]).strip()
         user = f"{user} · {hint['user']}" if user else hint["user"]
+    if last:
+        context = (context + "\n" + last["context"]).strip()
+        user = f"{user}\n{last['user']}" if user else last["user"]
     if drift_note:
         context = drift_note + "\n" + context
         user = f"{drift_user} · {user}"

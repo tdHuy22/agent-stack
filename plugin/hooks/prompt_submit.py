@@ -7,6 +7,9 @@ Mỗi ngưỡng chỉ nhắc một lần cho mỗi phiên và mỗi chu kỳ res
 Hook cũng lưu yêu cầu gần nhất của người dùng theo từng phiên (state/last-request/), để hook SubagentStart
 đưa cho subagent chạy context riêng. Tin do hệ thống tạo (thông báo nền, báo cáo của subagent quay về phiên chính)
 không được ghi đè yêu cầu thật và không được router gợi ý; khóa và token được che.
+
+Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook ghi lúc bắt đầu lượt và dấu §0 lúc đó (state/turns/),
+để hook Stop biết lượt vừa xong đổi file nào và §0 đã được cập nhật chưa.
 """
 import hashlib
 import os
@@ -79,6 +82,8 @@ def main():
         A.emit("UserPromptSubmit", "\n".join(context), " ".join(user))
     finally:
         remember_request(sid, data.get("cwd"), prompt)  # ghi sau khi xử lý như cũ, kể cả khi bước trên lỗi
+        if sid and data.get("cwd"):
+            A.start_turn(sid, data.get("cwd"))  # tự bắt lỗi, không bao giờ văng
 
 
 if __name__ == "__main__":

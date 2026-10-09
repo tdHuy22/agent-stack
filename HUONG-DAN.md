@@ -39,9 +39,10 @@ Mọi thứ nằm trong repo này. Các file ngoài repo (`~/.claude/CLAUDE.md`,
 Mở một phiên Claude Code mới trong thư mục có `PLAN.md` (ví dụ chính repo này). Đầu phiên phải thấy:
 
 - dòng **📍** `<tên project>: tiếp theo → <việc đầu tiên trong §0>`;
-- dòng **🧭** hồ sơ project, ví dụ `🧭 tài liệu, Python, có test`.
+- dòng **🧭** hồ sơ project, ví dụ `🧭 tài liệu, Python, có test`;
+- dòng **🕘** `Lượt cuối (<giờ ngày>): tiếp → <việc tiếp theo>`, khi project đã có lượt cuối do hook Stop ghi (mục 4).
 
-Hai dòng này do hook SessionStart in ra. Phần đầy đủ (§0, quyết định còn treo, mốc kiểm tra, trạng thái git, skill và subagent nên dùng) được nạp vào context của Claude, bạn không thấy trực tiếp. Nếu không thấy hai dòng trên:
+Các dòng này do hook SessionStart in ra. Phần đầy đủ (§0, quyết định còn treo, mốc kiểm tra, trạng thái git, skill và subagent nên dùng) được nạp vào context của Claude, bạn không thấy trực tiếp. Nếu không thấy hai dòng trên:
 
 ```bash
 claude plugin list
@@ -107,11 +108,11 @@ Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo s�
 
 | Thành phần | Khi nào | Làm gì |
 |---|---|---|
-| Hook SessionStart | Mở phiên, resume, `/clear`, sau compact | Nạp §0 và hồ sơ project vào context; in dòng 📍 và 🧭 |
-| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp; không gợi ý cho tin do hệ thống tạo như báo cáo của subagent); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo, kể cả báo cáo của subagent quay về phiên chính; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart |
+| Hook SessionStart | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project và lượt cuối (`.agent/LAST-TURN.md`, rút gọn khoảng 500 ký tự) vào context; in dòng 📍, 🧭 và 🕘. Resume lại đúng phiên đã ghi lượt cuối thì không nạp lượt cuối, vì phiên đó còn nguyên hội thoại |
+| Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp; không gợi ý cho tin do hệ thống tạo như báo cáo của subagent); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo, kể cả báo cáo của subagent quay về phiên chính; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart; ghi lúc bắt đầu lượt và dấu của §0 lúc đó vào `state/turns/` cho hook Stop (mọi tin, kể cả tin do hệ thống tạo) |
 | Hook SubagentStart | Mỗi khi sinh subagent hoặc chạy skill `context: fork` | Đưa vào đầu context của chúng yêu cầu gần nhất của bạn và 1 đến 2 việc đầu trong §0 (tối đa khoảng 1500 ký tự), vì chúng không thấy hội thoại |
 | Hook PreCompact | Trước khi compact | Ghi sự kiện; nhắc nếu §0 đã lâu chưa cập nhật. Không chặn compact |
-| Hook Stop | Cuối mỗi lượt trả lời | Nhắc cập nhật §0 khi đã có từ 3 file đổi sau lần cập nhật §0 gần nhất; nhắc tối đa 30 phút một lần |
+| Hook Stop | Cuối mỗi lượt trả lời trọn vẹn (không chạy khi bạn bấm dừng giữa chừng) | Ghi `.agent/LAST-TURN.md` trong project: yêu cầu, câu trả lời cuối (đã che khóa, tối đa 1.500 ký tự), việc tiếp theo lấy từ dòng ➡️, file đổi trong lượt, §0 đã cập nhật chưa. File chỉ nằm trên máy: hook thêm nó vào `.git/info/exclude` nên không hiện trong `git status`. Nếu lượt có đổi file mà §0 vẫn như lúc bắt đầu lượt, hook chặn một lần để Claude cập nhật §0 rồi mới kết thúc (tốn thêm một lượt model); lần dừng thứ hai không chặn nữa. Thư mục không phải git repo và không có file kế hoạch thì hook không ghi gì |
 | Hook SessionEnd | Đóng phiên | Ghi một dòng vào `state/sessions.jsonl`, để `tien-do` gợi ý `claude --resume` |
 | Statusline | Liên tục, chỉ trong terminal | Hiện model, effort, ctx, 5h, 7d; ghi `state/limits.json` cho hook cảnh báo |
 | Luật chung | Mọi phiên | `~/.claude/CLAUDE.md` trỏ về `global/CLAUDE.global.md`, file này import `global/SHARED.global.md`: trả lời tiếng Việt, đọc §0 trước, không nói "xong" khi chưa kiểm chứng, dòng ➡️ |
@@ -385,7 +386,7 @@ OpenCode không có hook, nên đầu phiên Claude (hoặc model trong OpenCode
 python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py --session .
 ```
 
-Phần riêng OpenCode của luật (`OPENCODE.global.md`) đã dặn việc này, nên thường không cần nhắc.
+Lệnh này in hồ sơ project, gợi ý skill và lượt cuối (`.agent/LAST-TURN.md`) do hook Stop của Claude Code ghi. Phần riêng OpenCode của luật (`OPENCODE.global.md`) đã dặn việc này, nên thường không cần nhắc. OpenCode không có hook Stop, nên lượt làm trong OpenCode không được ghi lại.
 
 ### Agent `worker`
 
