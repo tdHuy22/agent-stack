@@ -52,6 +52,10 @@
   3. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Quyết định còn treo:**
   - **Đề xuất bảo mật từ phiên "Skill/plugin security hiện tại" (05/10/2026), chưa làm gì:** vet `cloudflare/security-audit-skill` (MIT, audit cả repo, để scope project) và `NVIDIA/SkillSpector` (máy quét skill thứ hai cho `vet-skill`); vet thêm `constant-time-analysis`, `zeroize-audit`, `variant-analysis` của Trail of Bits (tránh `fp-check` vì hook Stop gọi LLM). Hai lỗ hổng phiên đó nêu: router gợi ý `differential-review` cho việc bảo mật dù chưa cài ở đâu; dòng "Audit bảo mật cả repo" trong `routing-table.md` trỏ `/security-review`, lệnh chỉ xem diff của nhánh.
+  - **Bộ duyệt web, chờ bạn chốt** (07/10/2026; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Chưa cài gì.
+    - Tìm kiếm, khuyến nghị A2: thêm Exa (`https://mcp.exa.ai/mcp`), Parallel (`https://search.parallel.ai/mcp`) và DeepWiki; giữ Tavily cho crawl, map, research. Exa 74 và Parallel 73–75 so với Tavily basic 66 trên Artificial Analysis Search Index (28/09/2026). Đã gọi thử không key: Exa 3 kết quả, 10.346 ký tự, 1,4 giây; Parallel 22.611 ký tự, định nghĩa tool 14.228 ký tự.
+    - Trình duyệt: B1 giữ nguyên nếu chỉ dùng app desktop; B2 thêm `@playwright/cli@0.1.22` và `chrome-devtools-mcp@1.10.1 --slim --no-usage-statistics --no-performance-crux` nếu chạy `claude` ngoài app hoặc debug frontend.
+    - Sau khi chốt: `vet-skill` từng mục, ghi `vetted.lock` và `catalog.json`, cài bằng `install.sh`, thêm luật chọn công cụ tìm web vào luật chung.
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
     - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
     - quyết định có nạp 10 USD không (mức 1.000 request mỗi ngày, so với 50 khi chưa nạp);

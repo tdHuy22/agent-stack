@@ -52,7 +52,7 @@ Lộ trình ban đầu: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoản
 | Skill, agent, hook cá nhân | Trống (`~/.claude/skills`, `agents`, `hooks` chưa tồn tại) | Nền sạch, thuận lợi. |
 | Plugin | Đã thêm marketplace chính thức `claude-plugins-official` (314 plugin), chưa cài plugin nào. | |
 | Skill đồng bộ từ claude.ai | skill-creator, pdf/docx/xlsx/pptx, paper-anatomy (của bạn), consolidate-memory… | Tận dụng, không cài trùng. |
-| OpenCode | v2.0.12 (cask `opencode-v2`). Model mặc định `opencode/muse-spark-1.3-contributor-free`. Provider `tuf` (llama-server trong LAN, 192.168.1.13) có gpt-oss 20B, Coder 4B/9B, Qwen3.5 4B/9B, Phi-4-mini. | Worker miễn phí tốt cho việc cơ học, nhưng chỉ dùng được khi ở mạng nhà. |
+| OpenCode | v2.0.12 (cask `opencode-v2`). Model mặc định `opencode/muse-spark-1.3-contributor-free`. Provider `tuf` (llama-server trong LAN, 192.168.1.13) có gpt-oss 20B, Coder 4B/9B, Qwen3.5 4B/9B (Phi-4-mini đã gỡ ngày 05/10/2026). | Worker miễn phí tốt cho việc cơ học, nhưng chỉ dùng được khi ở mạng nhà. |
 | Khối `providers` → `openai-oauth` trong `opencode.jsonc` | Đã kiểm chứng bằng `opencode debug config`: OpenCode v2 nhận cả khối này lẫn khối `provider` kiểu v1 (tự chuyển sang `providers`). | Không cần sửa. Nhận định ban đầu (khối bị bỏ qua) là sai, vì docs mình đọc lúc đầu là của v1. |
 | jcode v0.86.0 | Harness dùng OAuth của Claude Max/ChatGPT Pro, có hook SessionStart. | ⚠️ Rủi ro điều khoản dịch vụ (mục 9). |
 | Ollama 0.34.2, `gh` (đã đăng nhập), uv, Node 24, Python 3.11 | | Đủ công cụ cho mọi giai đoạn. |
@@ -599,7 +599,7 @@ Gồm năm tầng, từ có sẵn đến tự làm:
 | Tầng | Cách làm | Chi phí | Khi nào dùng |
 |---|---|---|---|
 | A. Luật | Hook `UserPromptSubmit` đọc `router-rules.json`, so khớp từ khóa tiếng Việt (đã chuẩn hóa bỏ dấu) và tiếng Anh. | 0 token, dưới 50 ms | Luôn luôn |
-| B. Model local | Ollama hoặc tuf (Qwen3.5 4B, Phi-4-mini), trả về JSON theo schema. | Miễn phí, riêng tư, 1–3 giây | Khi tầng A không khớp và prompt dài |
+| B. Model local | Ollama hoặc tuf (Qwen3.5 4B), trả về JSON theo schema. | Miễn phí, riêng tư, 1–3 giây | Khi tầng A không khớp và prompt dài |
 
 Hook trả về hai thứ: `additionalContext` để Claude biết gợi ý, và `systemMessage` để **bạn** thấy gợi ý ngay trên màn hình. Ví dụ:
 
