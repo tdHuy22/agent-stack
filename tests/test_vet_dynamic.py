@@ -231,7 +231,12 @@ class RunWithFakeRunner(TempDirTestCase):
         self.assertEqual(seen["cmd"][sep + 1:sep + 4], ["/usr/bin/env", "-u", "SANDBOX_RUNTIME"],
                          "bỏ biến báo hiệu sandbox để mã bị kiểm khó nhận ra")
         self.assertTrue(seen["cmd"][sep + 4].startswith("TMPDIR="), "TMPDIR phải được đặt lại vì srt tự đặt /tmp/claude")
-        self.assertEqual(seen["cmd"][sep + 5:], ["/usr/bin/python3", "a.py"], "lệnh được đổi thành đường dẫn tuyệt đối")
+        py = dynamic.user_python("python3") or "/usr/bin/python3"
+        self.assertEqual(seen["cmd"][sep + 5:], [py, "a.py"], "lệnh được đổi thành đường dẫn tuyệt đối của Python người dùng")
+        first, _ = dynamic.python_first()
+        if first:
+            child_path = json.loads(seen["env"]["VET_CHILD_ENV"])["PATH"]
+            self.assertTrue(child_path.startswith(first[0] + ":"), "python3 bên trong sandbox cũng là Python người dùng")
         self.assertNotIn("ANTHROPIC_API_KEY", seen["env"])
         self.assertIn("VET_MARKERS", seen["env"])
         self.assertEqual(list((home / ".tmp").iterdir()), [], "bản chép tạm phải bị xóa")
@@ -273,7 +278,7 @@ class RealSandbox(TempDirTestCase):
         tree.mkdir(exist_ok=True)
         (tree / "probe.py").write_text(code, encoding="utf-8")
         try:
-            return dynamic.run(REPO, str(tree), ["/usr/bin/python3", "probe.py"], timeout=40, **kw)
+            return dynamic.run(REPO, str(tree), ["python3", "probe.py"], timeout=40, **kw)
         except (ValueError, subprocess.SubprocessError) as exc:
             self.skipTest(f"không chạy được sandbox ở đây: {exc}")
 
@@ -403,6 +408,36 @@ class RealSandbox(TempDirTestCase):
         res = self.run_probe("print(1)\n", real_home=True)
         self.assertTrue(res["realHome"])
         self.assertEqual((res["groups"]["decoys"], res["groups"]["leaks"]), ([], []))
+
+    def test_python_inside_sandbox_is_the_users_python(self):
+        py = dynamic.user_python("python3")
+        if not py or py.startswith("/usr/bin/"):
+            self.skipTest("máy này không có Python riêng ngoài /usr/bin")
+        res = self.run_probe(
+            "import subprocess, sys\n"
+            "print('EXE=' + sys.executable)\n"
+            "sub = subprocess.run(['python3', '-c', 'import sys; print(sys.executable)'], capture_output=True, text=True)\n"
+            "print('SUB=' + sub.stdout.strip())\n")
+        if res["exit"] != 0:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertIn("EXE=" + py, res["stdout"])
+        self.assertIn("SUB=" + py, res["stdout"], "python3 gọi từ bên trong cũng phải là Python người dùng")
+        # log của macOS có thể mất sự kiện nên không đòi nhãn sạch; nhưng hễ có đường dẫn bị chặn là lỗi thật
+        self.assertEqual((res["groups"]["reads"], res["groups"]["sensitive_reads"]), ([], []), res["reasons"])
+
+    def test_python_from_a_venv_on_path_keeps_the_venv_without_false_reads(self):
+        py = dynamic.user_python("python3")
+        if not py:
+            self.skipTest("không có python3 trên PATH")
+        venv = self.tmp / "venv"  # nằm trong HOME (.tmp của repo), giống venv của project người dùng
+        subprocess.run([py, "-m", "venv", "--without-pip", str(venv)], check=True, capture_output=True)
+        path = f"{venv / 'bin'}:{os.environ.get('PATH', '')}"
+        with mock.patch.dict(os.environ, {"PATH": path}):
+            res = self.run_probe("import sys\nprint('PREFIX=' + sys.prefix)\n")
+        if res["exit"] != 0:
+            self.skipTest(f"sandbox không chạy được lệnh: {res['stderr'][:200]}")
+        self.assertIn("PREFIX=" + str(venv), res["stdout"], "site-packages của venv phải được dùng (đọc được pyvenv.cfg)")
+        self.assertEqual((res["groups"]["reads"], res["groups"]["sensitive_reads"]), ([], []), res["reasons"])
 
 
 class Decoys(TempDirTestCase):
@@ -572,8 +607,10 @@ class Hardening(TempDirTestCase):
         self.assertTrue(all(p.startswith(str(Path.home().resolve())) for p in dynamic.srt_home_write_dirs()))
 
     def test_resolve_command_prefers_standard_path_and_adds_user_dirs(self):
-        argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
-        self.assertEqual((argv, extra, reads), (["/usr/bin/python3", "a.py"], [], []), "không dùng shim của pyenv")
+        with mock.patch.object(dynamic, "user_python", return_value=None):
+            argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
+        self.assertEqual((argv, extra, reads), (["/usr/bin/python3", "a.py"], [], []),
+                         "không hỏi được Python của người dùng thì dùng PATH chuẩn")
         self.assertEqual(dynamic.resolve_command(["./run.sh"])[0], ["./run.sh"], "script tương đối giữ nguyên")
         self.assertEqual(dynamic.resolve_command(["lenh-khong-ton-tai-xyz"])[0], ["lenh-khong-ton-tai-xyz"])
         fake = Path.home() / ".nvm" / "versions" / "node" / "v9" / "bin" / "node"
@@ -588,6 +625,71 @@ class Hardening(TempDirTestCase):
         argv, extra, reads = dynamic.resolve_command([str(script), "x"])
         self.assertEqual((argv, extra, reads), ([str(script), "x"], [], [script]),
                          "script tuyệt đối trong HOME: không thêm HOME vào PATH, chỉ cho đọc đúng file")
+
+    def test_python_names_use_the_users_python_not_the_shim(self):
+        for name in ("python", "python3", "python3.11"):
+            self.assertTrue(dynamic.PYTHON_NAME_RE.fullmatch(name), name)
+        for name in ("python3-config", "pythonw", "ipython", "python2"):
+            self.assertFalse(dynamic.PYTHON_NAME_RE.fullmatch(name), name)
+        py = dynamic.user_python("python3")
+        if not py:
+            self.skipTest("không có python3 trên PATH")
+        self.assertNotIn("/shims/", py, "shim của pyenv không chạy được trong sandbox")
+        argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
+        self.assertEqual(argv, [py, "a.py"])
+        for item in dynamic.interpreter_reads(Path(py)):
+            self.assertIn(item, reads, "cho đọc phần cần của Python người dùng (pyenv: bin và lib)")
+
+    def test_interpreter_reads_adds_only_pyvenv_cfg_for_a_venv(self):
+        venv = self.tmp / "proj" / ".venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "lib").mkdir()
+        (venv / "pyvenv.cfg").write_text("home = /x\n", encoding="utf-8")
+        exe = venv / "bin" / "python3"
+        self.assertEqual(dynamic.interpreter_reads(exe), [venv / "bin", venv / "lib", venv / "pyvenv.cfg"])
+        (venv / "pyvenv.cfg").unlink()
+        self.assertEqual(dynamic.interpreter_reads(exe), [venv / "bin", venv / "lib"], "không phải venv: không thêm gì")
+
+    def test_user_python_asks_the_interpreter_outside_the_tree(self):
+        real = Path(sys.executable)
+        seen = {}
+
+        def fake(cmd, **kw):
+            seen["cmd"], seen["cwd"] = cmd, kw.get("cwd")
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{real}\n", stderr="")
+
+        with mock.patch.object(dynamic.shutil, "which", return_value="/x/shims/python3"):
+            self.assertEqual(dynamic.user_python("python3", run=fake), str(real))
+        self.assertEqual(seen["cmd"][:2], ["/x/shims/python3", "-I"])
+        self.assertEqual(seen["cwd"], str(Path.home()), "không chạy trong cây mã bị kiểm")
+        bad = [lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, stdout=f"{real}\n", stderr=""),
+               lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="python3\n", stderr=""),
+               lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="/khong/co/python\n", stderr="")]
+        def boom(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, 15)
+        for run in (*bad, boom):
+            with mock.patch.object(dynamic.shutil, "which", return_value="/x/shims/python3"):
+                self.assertIsNone(dynamic.user_python("python3", run=run))
+        with mock.patch.object(dynamic.shutil, "which", return_value=None):
+            self.assertIsNone(dynamic.user_python("python3", run=fake))
+
+    def test_python_first_only_when_whole_dir_is_readable(self):
+        home = Path.home().resolve()
+        pyenv_bin = home / ".pyenv" / "versions" / "3.11.15" / "bin"
+        cases = [
+            (([], [str(pyenv_bin)], [pyenv_bin, pyenv_bin.parent / "lib"]), [str(pyenv_bin)]),
+            (([], [str(home / ".local" / "bin")], [home / ".local" / "bin" / "python3"]), []),
+            (([], ["/opt/homebrew/opt/python@3.11/bin"], []), ["/opt/homebrew/opt/python@3.11/bin"]),
+            (([], [], []), []),
+        ]
+        for resolved, want in cases:
+            with self.subTest(want=want), mock.patch.object(dynamic, "resolve_command", return_value=resolved):
+                first, reads = dynamic.python_first()
+                self.assertEqual(first, want)
+                self.assertEqual(reads, resolved[2] if want else [])
+        path = dynamic.safe_env(self.tmp, extra_path=[str(pyenv_bin)], first_path=[str(pyenv_bin)])["PATH"]
+        self.assertEqual(path.split(":")[0], str(pyenv_bin))
+        self.assertEqual(path.split(":").count(str(pyenv_bin)), 1)
 
     def test_leftover_pids_parses_lsof_and_never_lists_itself(self):
         fake = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout=f"123\n{os.getpid()}\nabc\n456\n", stderr="")

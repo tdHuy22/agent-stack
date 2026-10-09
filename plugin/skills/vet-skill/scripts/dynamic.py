@@ -36,6 +36,7 @@ SRT_VERSION = "0.0.78"
 RUN_TIMEOUT_S = 60
 MAX_TREE_BYTES = 100 * 1024 * 1024  # bản chép tạm tối đa 100 MB
 STD_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+PYTHON_NAME_RE = re.compile(r"python(?:3(?:\.\d+)?)?")  # tên lệnh được đổi sang Python của người dùng
 
 # Đường dẫn đọc bị chặn mặc định: cả HOME thật, ổ gắn ngoài và keychain hệ thống.
 EXTRA_DENY_READ = ["/Volumes", "/Library/Keychains"]
@@ -159,16 +160,17 @@ def build_settings(workdir: Path, extra_read=(), allow_domains=(), deny_write=()
     }
 
 
-def safe_env(workdir: Path, real_home: bool = False, extra_path=()) -> dict:
+def safe_env(workdir: Path, real_home: bool = False, extra_path=(), first_path=()) -> dict:
     """Môi trường sạch: không token, không biến của người dùng.
 
     Mặc định HOME là thư mục giả trong bản chép tạm, đã rải file mồi (xem `make_decoys`). `real_home` giữ HOME thật,
     khi đó mọi lần đọc `~` đều đụng vùng bị chặn nhưng chỉ còn log (không chắc chắn) để phát hiện.
-    `extra_path` là thư mục của trình thông dịch nằm ngoài PATH chuẩn (nvm, Homebrew...), thêm vào cuối PATH."""
+    `extra_path` là thư mục của trình thông dịch nằm ngoài PATH chuẩn (nvm, Homebrew...), thêm vào cuối PATH.
+    `first_path` đặt lên ĐẦU PATH: thư mục Python của người dùng (xem `python_first`)."""
     home, tmp = workdir / "home", workdir / "tmp"
     home.mkdir(parents=True, exist_ok=True)
     tmp.mkdir(parents=True, exist_ok=True)
-    path = ":".join(dict.fromkeys([*STD_PATH.split(":"), *map(str, extra_path)]))
+    path = ":".join(dict.fromkeys([*map(str, first_path), *STD_PATH.split(":"), *map(str, extra_path)]))
     return {"PATH": path, "HOME": str(Path.home() if real_home else home),
             "TMPDIR": str(tmp), "LANG": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
 
@@ -186,7 +188,9 @@ def interpreter_reads(real: Path) -> list:
 
     Chỉ khi file nằm trong một thư mục tên `bin` và thư mục gốc của nó sâu ít nhất cấp hai dưới HOME. Mọi trường hợp
     khác (script ở gốc HOME, `~/Documents/proj/run.sh`, `~/.cargo/bin/x`) chỉ cho đọc đúng file đó: cho đọc cả thư mục cha
-    sẽ để lộ `.ssh`, `.env`, và mở lại vùng ghi mà srt tự thêm (`~/.claude/debug`, `~/.npm/_logs`)."""
+    sẽ để lộ `.ssh`, `.env`, và mở lại vùng ghi mà srt tự thêm (`~/.claude/debug`, `~/.npm/_logs`).
+    Với venv thêm đúng file `pyvenv.cfg` ở thư mục gốc: Python đọc nó lúc khởi động, thiếu thì sinh vi phạm giả và bỏ
+    site-packages của venv."""
     home = Path.home().resolve()
     try:
         real.relative_to(home)
@@ -195,20 +199,42 @@ def interpreter_reads(real: Path) -> list:
     if real.parent.name == "bin":
         prefix = real.parent.parent
         if prefix != home and prefix.parent != home:
-            return [p for p in (real.parent, prefix / "lib") if p.exists()]
+            reads = [p for p in (real.parent, prefix / "lib") if p.exists()]
+            cfg = prefix / "pyvenv.cfg"
+            return reads + [cfg] if cfg.is_file() else reads
     return [real]
+
+
+def user_python(name: str = "python3", run=subprocess.run):
+    """Đường dẫn thật của Python mà người dùng gọi bằng `name` (ở máy này là 3.11 của pyenv), hoặc None.
+
+    Shim của pyenv là script bash cần đọc ~/.pyenv nên không chạy được trong sandbox; vì vậy hỏi chính trình thông dịch
+    đó `sys.executable`. Lệnh hỏi chạy NGOÀI sandbox, với -I và cwd là HOME: không chạm mã bị kiểm, và
+    `.python-version` trong mã bị kiểm không đổi được bản Python."""
+    found = shutil.which(name)
+    if not found:
+        return None
+    try:
+        done = run([found, "-I", "-c", "import sys; print(sys.executable)"], capture_output=True, text=True,
+                   timeout=15, cwd=str(Path.home()))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    real = (done.stdout or "").strip()
+    return real if done.returncode == 0 and os.path.isabs(real) and os.access(real, os.X_OK) else None
 
 
 def resolve_command(command: list) -> tuple:
     """(argv, thư mục thêm vào PATH, đường dẫn cho phép đọc thêm).
 
     Lệnh không có dấu "/" được dò trước bằng PATH chuẩn của lệnh con rồi mới tới PATH của người dùng, và đổi thành đường
-    dẫn tuyệt đối: nếu không, `node` ở ~/.nvm hay /opt/homebrew sẽ không chạy được trong môi trường sạch."""
+    dẫn tuyệt đối: nếu không, `node` ở ~/.nvm hay /opt/homebrew sẽ không chạy được trong môi trường sạch. Riêng `python`,
+    `python3`, `python3.X` dùng Python của người dùng (`user_python`), không dùng /usr/bin/python3 (3.9 của macOS)."""
     argv, extra_path, reads = list(command), [], []
     first = argv[0]
     found = first if os.path.isabs(first) else None
     if os.sep not in first:
-        found = shutil.which(first, path=STD_PATH) or shutil.which(first)
+        found = (user_python(first) if PYTHON_NAME_RE.fullmatch(first) else None) \
+            or shutil.which(first, path=STD_PATH) or shutil.which(first)
         if found:
             argv[0] = found
     if found:
@@ -220,6 +246,16 @@ def resolve_command(command: list) -> tuple:
                 if item not in reads:
                     reads.append(item)
     return argv, extra_path, reads
+
+
+def python_first() -> tuple:
+    """(thư mục đặt đầu PATH, đường dẫn cho đọc thêm) để `python3` gọi từ BÊN TRONG sandbox (subprocess, shebang
+    `env python3`, script shell) cũng là Python của người dùng. Chỉ đặt lên đầu khi thư mục đó nằm ngoài HOME hoặc được
+    đọc cả thư mục (pyenv, nvm): nếu không, mỗi lần dò lệnh khác qua nó sẽ sinh vi phạm giả."""
+    _, extra, reads = resolve_command(["python3"])
+    home = Path.home().resolve()
+    first = [d for d in extra if Path(d) in reads or not Path(d).resolve().is_relative_to(home)]
+    return first, (reads if first else [])
 
 
 # ---------------------------------------------------------------- file mồi
@@ -625,8 +661,9 @@ def run(home: Path, key: str, command: list, *, timeout: int = RUN_TIMEOUT_S, ex
         shutil.copytree(tree, src, symlinks=True, ignore=shutil.ignore_patterns(".git", ".vet-complete"))
         before = list_files(src)
         argv, extra_path, reads = resolve_command(command)
-        reads = [*map(Path, extra_read), *reads]
-        env = safe_env(work, real_home, extra_path)  # tạo HOME giả và TMPDIR
+        first_path, py_reads = python_first()
+        reads = [*map(Path, extra_read), *reads, *(p for p in py_reads if p not in reads)]
+        env = safe_env(work, real_home, extra_path, first_path)  # tạo HOME giả và TMPDIR
         decoy_monitor, baseline, deny_write = None, {}, []
         if not real_home:
             make_decoys(work / "home", marker)
