@@ -239,6 +239,11 @@ def frontmatter(text: str) -> dict:
     return data
 
 
+# Khóa trong settings.json khiến Claude Code tự chạy một lệnh (statusline, lấy khóa API, lấy credential...).
+COMMAND_SETTINGS = ("statusLine", "subagentStatusLine", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport",
+                    "otelHeadersHelper", "fileSuggestion")
+
+
 def load_json(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))
@@ -300,8 +305,11 @@ def components(root: Path, files: list) -> dict:
                     mon = (data.get("experimental") or {}).get("monitors") or data.get("monitors")
                     if mon:
                         comp["monitors"].append({"file": str(rel), "spec": json.dumps(mon)[:200]})
-                if name == "settings.json" and data.get("subagentStatusLine"):
-                    comp["statusline"].append({"file": str(rel), "spec": json.dumps(data["subagentStatusLine"])[:200]})
+                if name == "settings.json":
+                    for key in COMMAND_SETTINGS:
+                        if data.get(key):
+                            comp["statusline"].append({"file": str(rel), "key": key,
+                                                       "spec": json.dumps(data[key])[:200]})
         elif name == ".mcp.json":
             data = load_json(path) or {}
             servers = data.get("mcpServers", data) if isinstance(data, dict) else {}
@@ -449,7 +457,8 @@ def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict):
     if comp["monitors"]:
         review.append("Có monitor chạy nền suốt phiên.")
     if comp["statusline"]:
-        review.append("Có subagentStatusLine (lệnh chạy định kỳ).")
+        keys = ", ".join(sorted({s.get("key", "subagentStatusLine") for s in comp["statusline"]}))
+        review.append(f"settings.json có khóa tự chạy lệnh ({keys}); đọc lệnh trước khi duyệt.")
     if comp["lifecycle"]:
         review.append("package.json có script tự chạy khi cài.")
     if comp["marketplace_sources"]:

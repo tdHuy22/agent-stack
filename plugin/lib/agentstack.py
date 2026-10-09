@@ -334,9 +334,11 @@ def checkbox_progress(text: str) -> dict:
 # ---------------------------------------------------------------- git (chỉ đọc)
 
 def git_out(cwd: Path, *args: str, timeout: float = 3.0):
-    """Chạy git chỉ đọc. --no-optional-locks để không ghi .git/index của project khác."""
+    """Chạy git chỉ đọc. --no-optional-locks để không ghi .git/index của project khác; tắt core.fsmonitor vì repo lạ
+    có thể đặt nó thành một lệnh bất kỳ mà `git status` sẽ chạy."""
     try:
-        out = subprocess.run(["git", "--no-optional-locks", "-C", str(cwd), *args], capture_output=True,
+        out = subprocess.run(["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(cwd), *args],
+                             capture_output=True,
                              text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -775,15 +777,18 @@ def _turn_path(session_id):
     return state_dir() / TURN_DIR / f"{key}.json" if key else None
 
 
-def start_turn(session_id, cwd):
-    """Ghi lúc bắt đầu lượt và dấu §0 lúc đó, cho hook Stop so sánh. Gọi ở mọi tin, kể cả tin do hệ thống tạo,
-    vì tin nào cũng mở một lượt mới. Không bao giờ văng lỗi; trả về bản ghi hoặc None."""
+def start_turn(session_id, cwd, extra=None):
+    """Ghi lúc bắt đầu lượt, dấu §0 và HEAD lúc đó, cho hook Stop so sánh. Gọi ở mọi tin, kể cả tin do hệ thống tạo,
+    vì tin nào cũng mở một lượt mới. `extra` thêm cờ của lượt (ví dụ threat_model: router thấy chức năng đụng ranh
+    giới tin cậy). Không bao giờ văng lỗi; trả về bản ghi hoặc None."""
     try:
         path = _turn_path(session_id)
         if path is None:
             return None
         root = project_root(cwd)
-        record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root)}
+        record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root),
+                  "head": (git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip() or None}
+        record.update(extra or {})
         path.parent.mkdir(mode=0o700, exist_ok=True)
         write_json_atomic(path, record)
         prune(path.parent, TURN_DAYS)
@@ -794,6 +799,33 @@ def start_turn(session_id, cwd):
     except Exception as exc:  # noqa: BLE001
         log_event("hook-error", {"hook": "start_turn", "error": repr(exc)[:300]})
         return None
+
+
+CHOT_VIEC_DIR = "chot-viec"
+
+
+def _chot_viec_path(root: Path) -> Path:
+    return state_dir() / CHOT_VIEC_DIR / (hashlib.sha1(str(Path(root).resolve()).encode()).hexdigest()[:16] + ".json")
+
+
+def mark_chot_viec(root, files=None) -> None:
+    """risk.py (bước 3 của chot-viec) ghi lúc nó chạy cho project này, và dấu băm các dòng thêm vào lúc đó theo từng
+    file, để hook Stop biết lượt đã chốt việc chưa và ở lượt sau chỉ chấm phần mới."""
+    try:
+        path = _chot_viec_path(project_root(root))
+        path.parent.mkdir(mode=0o700, exist_ok=True)
+        write_json_atomic(path, {"ts": time.time(), "root": str(project_root(root)), "files": files or {}})
+    except Exception as exc:  # noqa: BLE001
+        log_event("hook-error", {"hook": "mark_chot_viec", "error": repr(exc)[:300]})
+
+
+def chot_viec_mark(root) -> dict:
+    data = read_json(_chot_viec_path(root)) or {}
+    return data if isinstance(data, dict) and isinstance(data.get("ts"), (int, float)) else {}
+
+
+def chot_viec_ran_since(root, since: float) -> bool:
+    return chot_viec_mark(root).get("ts", 0) >= since
 
 
 def load_turn(session_id):

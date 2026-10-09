@@ -1,5 +1,51 @@
 {
   "entries": {
+    "NVIDIA/SkillSpector": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-10-09",
+      "redflags": {
+        "critical": 105,
+        "high": 164,
+        "medium": 38
+      },
+      "ref": "main",
+      "report": "vet-reports/NVIDIA__SkillSpector@2f93a8624f62.md",
+      "reviews": [
+        {
+          "at": "2026-10-09T09:16:41Z",
+          "by": "Claude (Opus 5.5)",
+          "recommend": "có-điều-kiện",
+          "sha": "2f93a8624f62ad8c9f641580ea52d68ac20cd3f2",
+          "text": "Đọc tay (có chọn lọc theo rủi ro: 79k dòng src, 218 file test) tại 2f93a862. Kết luận: FAIL là báo nhầm của một máy quét bảo mật; không thấy mã độc trong phần sẽ cài.\n\nVì sao FAIL không đáng lo:\n- Mọi cờ critical nằm ở tests/ (chuỗi mẫu tấn công, ví dụ tests/unit/test_agent_cli.py:66, tests/unit/test_patterns.py:1573,1592), tests/fixtures/* (skill độc hại cố ý làm mẫu, ví dụ tests/fixtures/malicious_skill/scripts/helper.py gửi biến môi trường tới api.skill-metrics.io: KHÔNG được chạy) và docs/B.3.2-mcp-tool-poisoning.md:102,140 (ví dụ ký tự ẩn minh họa luật TP1/TP2). Wheel chỉ đóng gói src/skillspector (pyproject: packages = [\"src/skillspector\"]), không có tests/contrib/docs.\n- Trong src: webshells.yar:30 là chữ ký YARA; malware.yar.b64 chỉ là luật YARA mã hóa base64 (7 rule: reverse_shell, backdoor_persistence...), giải mã ở static_yara.py:460 rồi đưa vào yara.compile, không exec. skills/skill-inspector/SKILL.md:78,81 là danh mục câu hỏi review, không phải lệnh.\n- Không hook, MCP, bin/, script cài đặt; build bằng hatchling, không có build hook.\n\nMạng và dữ liệu (src):\n- --no-llm tắt mọi gọi LLM (use_llm kiểm ở semantic_*, mcp_tool_poisoning.py:1904, meta_analyzer.py:780). Mặc định LLM BẬT, provider mặc định nv_build; OPENAI_API_KEY là phương án dự phòng nên phải luôn truyền --no-llm.\n- SC4 luôn gửi tên và phiên bản gói phụ thuộc tới api.osv.dev (osv_client.py:42), kể cả --no-llm; không có cờ tắt, chỉ rơi về danh sách tĩnh khi mất mạng.\n- LangSmith: nếu môi trường có LANGCHAIN_*/LANGSMITH_* bật tracing, trạng thái graph (gồm nội dung file) có thể bị gửi đi dù --no-llm; chính .opencode/tools/skillspector_scan_lib.ts:342 của họ cũng lọc các biến này.\n- Chỉ tải mạng khác khi đích là URL (git clone cô lập HOME/gitconfig/hook, input_handler.py:1160-1205), --transitive (mặc định tắt) hoặc --mcp-registry. Không đọc .env (chỉ contrib/batch_scan đọc .env với override=True: không dùng). Không telemetry, không tự cập nhật.\n- Đọc file: không theo symlink ra ngoài thư mục đích (build_context.py:685), YAML dùng SafeLoader, thư mục tạm chỉ xóa khi do chính nó tạo (prefix skillspector_). Baseline do tác giả skill để sẵn bị bỏ qua mặc định (--use-shipped-baseline tắt).\n\nĐiều kiện nếu duyệt làm máy quét thứ hai:\n1. Venv riêng .venv-skillspector trong repo (không dùng chung .venv 3.11 vì cần Python >=3.12,<3.15; yara-python 4.5.4 chỉ có wheel cp312/cp313 cho macOS arm64, nên dùng 3.12 hoặc 3.13, không dùng python3.14 của Homebrew). Python lấy bằng uv python install với UV_PYTHON_INSTALL_DIR trong .cache/. Cài từ đúng bản đã kiểm trong .vet-cache bằng uv sync --frozen --no-dev (uv.lock có hash; 69 gói runtime, wheel khoảng 45 MB), UV_CACHE_DIR=.cache/uv. Không uv tool install, không extra [mcp], không dùng .opencode/, extensions/, contrib/.\n2. vet.py gọi với env tối giản (PATH, HOME, TMPDIR, LANG; bỏ mọi *_API_KEY, ANTHROPIC_*, OPENAI_*, LANGCHAIN_*, LANGSMITH_*, SKILLSPECTOR_*), luôn --no-llm --format json, không --transitive, không --use-shipped-baseline.\n3. Đích riêng tư: chặn OSV bằng HTTPS_PROXY=http://127.0.0.1:9 hoặc chạy trong sandbox không mạng, chấp nhận SC4 chỉ dùng danh sách tĩnh.\n4. Phát hiện của SkillSpector chỉ đẩy lên REVIEW, chưa cho tự FAIL, tới khi có số đo trên bộ mẫu của mình (chưa có benchmark độc lập nào đo SkillSpector).\n5. Ghim sha; muốn lên bản mới (v2.12.0 = c7958a32 hoặc main sau này) thì vet lại."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "critical": 5,
+          "high": 7,
+          "info": 34,
+          "medium": 13
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "2f93a8624f62ad8c9f641580ea52d68ac20cd3f2",
+      "source": "github:NVIDIA/SkillSpector",
+      "stars": 19745,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "FAIL",
+      "vetted_at": "2026-10-09"
+    },
     "OthmanAdi/planning-with-files": {
       "archived": false,
       "human_review": {

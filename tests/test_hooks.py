@@ -593,6 +593,8 @@ class HooksConfig(unittest.TestCase):
         hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))["hooks"]
         for kept in ("SessionStart", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd"):
             self.assertIn(kept, hooks)  # các hook cũ giữ nguyên
+        (guard,) = hooks["PreToolUse"]
+        self.assertEqual(set(guard["matcher"].split("|")), {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"})
         (group,) = hooks["SubagentStart"]
         self.assertNotIn("matcher", group)  # không matcher: khớp mọi subagent, kể cả skill chạy context: fork
         (hook,) = group["hooks"]

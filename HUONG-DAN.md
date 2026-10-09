@@ -110,13 +110,16 @@ Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo s�
 |---|---|---|
 | Hook SessionStart | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project và lượt cuối (`.agent/LAST-TURN.md`, rút gọn khoảng 500 ký tự) vào context; in dòng 📍, 🧭 và 🕘. Resume lại đúng phiên đã ghi lượt cuối thì không nạp lượt cuối, vì phiên đó còn nguyên hội thoại |
 | Hook UserPromptSubmit | Mỗi tin nhắn | Gợi ý `[router]` cho việc trong tin nhắn (bạn thấy dòng `🧭 router: ...` khi có luật khớp; không gợi ý cho tin do hệ thống tạo như báo cáo của subagent); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh `/ ! #` và tin do hệ thống tạo, kể cả báo cáo của subagent quay về phiên chính; sau một tin quá ngắn như "ok" vẫn nhớ yêu cầu đầy đủ trước đó) vào `state/last-request/` cho hook SubagentStart; ghi lúc bắt đầu lượt và dấu của §0 lúc đó vào `state/turns/` cho hook Stop (mọi tin, kể cả tin do hệ thống tạo) |
+| Hook PreToolUse | Trước mỗi lệnh Bash và mỗi lần ghi, sửa file (khoảng 20 ms) | Chặn cài plugin, skill, MCP chưa qua `vet-skill` và chưa được duyệt trong `vetted.lock` (nhắc Claude chạy `vet-skill`); hỏi bạn trước khi thêm marketplace lạ; hỏi bạn trước `git checkout` hay `git switch` làm đổi HEAD hoặc ghi đè file khi cây có thay đổi chưa commit; chặn ghi báo cáo `*DIFFERENTIAL_REVIEW*.md` vào chỗ git không bỏ qua; khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa file mã nguồn đầu tiên để Claude chạy `mo-hinh-de-doa` trước (chỉ một lần mỗi lượt) |
 | Hook SubagentStart | Mỗi khi sinh subagent hoặc chạy skill `context: fork` | Đưa vào đầu context của chúng yêu cầu gần nhất của bạn và 1 đến 2 việc đầu trong §0 (tối đa khoảng 1500 ký tự), vì chúng không thấy hội thoại |
 | Hook PreCompact | Trước khi compact | Ghi sự kiện; nhắc nếu §0 đã lâu chưa cập nhật. Không chặn compact |
-| Hook Stop | Cuối mỗi lượt trả lời trọn vẹn (không chạy khi bạn bấm dừng giữa chừng) | Ghi `.agent/LAST-TURN.md` trong project: yêu cầu, câu trả lời cuối (đã che khóa, tối đa 1.500 ký tự), việc tiếp theo lấy từ dòng ➡️, file đổi trong lượt, §0 đã cập nhật chưa. File chỉ nằm trên máy: hook thêm nó vào `.git/info/exclude` nên không hiện trong `git status`. Nếu lượt có đổi file mà §0 vẫn như lúc bắt đầu lượt, hook chặn một lần để Claude cập nhật §0 rồi mới kết thúc (tốn thêm một lượt model); lần dừng thứ hai không chặn nữa. Thư mục không phải git repo và không có file kế hoạch thì hook không ghi gì |
+| Hook Stop | Cuối mỗi lượt trả lời trọn vẹn (không chạy khi bạn bấm dừng giữa chừng) | Ghi `.agent/LAST-TURN.md` trong project: yêu cầu, câu trả lời cuối (đã che khóa, tối đa 1.500 ký tự), việc tiếp theo lấy từ dòng ➡️, file đổi trong lượt, §0 đã cập nhật chưa. File chỉ nằm trên máy: hook thêm nó vào `.git/info/exclude` nên không hiện trong `git status`. Nếu lượt đổi code có mức rủi ro từ vừa trở lên (chấm bằng `risk.py` của `chot-viec`, chỉ trên file lượt này đổi, kể cả file đã commit trong lượt) mà chưa chạy `chot-viec`, hook chặn một lần để Claude chạy `chot-viec`. `chot-viec` lo luôn threat model, review theo mức rủi ro và §0. Còn lại, nếu lượt có đổi file mà §0 vẫn như lúc bắt đầu lượt, hook chặn một lần để Claude cập nhật §0 rồi mới kết thúc. Mỗi lần chặn tốn thêm một lượt model; lần dừng thứ hai không chặn nữa. Thư mục không phải git repo và không có file kế hoạch thì hook không ghi gì |
 | Hook SessionEnd | Đóng phiên | Ghi một dòng vào `state/sessions.jsonl`, để `tien-do` gợi ý `claude --resume` |
 | Statusline | Liên tục, chỉ trong terminal | Hiện model, effort, ctx, 5h, 7d; ghi `state/limits.json` cho hook cảnh báo |
 | Luật chung | Mọi phiên | `~/.claude/CLAUDE.md` trỏ về `global/CLAUDE.global.md`, file này import `global/SHARED.global.md`: trả lời tiếng Việt, đọc §0 trước, không nói "xong" khi chưa kiểm chứng, dòng ➡️ |
 | `autoContinueAtUsageLimit` | Khi chạm hạn mức | Claude Code tự làm tiếp khi hạn mức reset |
+
+**Giới hạn của hook PreToolUse.** Hook so chuỗi lệnh với mẫu, nên nó là lớp nhắc cho Claude chứ không phải ranh giới bảo mật. Lệnh viết vòng (qua biến, script trung gian) vẫn lọt; ngược lại, một lệnh chỉ in ra chuỗi giống lệnh cài (ví dụ `echo "claude plugin install ..."`) cũng bị chặn. Ranh giới thật là quyền của Claude Code, việc bạn duyệt, và bước kiểm lệch lúc mở phiên: plugin cài ngoài catalog bị báo là chưa qua vet. Hook không chặn lệnh bạn tự gõ trong terminal.
 
 ### Cảnh báo hạn mức
 
@@ -333,7 +336,7 @@ Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`.
 
 ### 5.7 `chot-viec`: cổng kiểm trước khi báo xong
 
-**Khi nào:** vừa xong một tính năng, bản sửa lỗi hay refactor; "chốt việc", "kiểm lại trước khi commit", "sẵn sàng commit chưa". Câu hỏi tiến độ kiểu "xong chưa" không kích hoạt nó. Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường.
+**Khi nào:** vừa xong một tính năng, bản sửa lỗi hay refactor; "chốt việc", "kiểm lại trước khi commit", "sẵn sàng commit chưa". Câu hỏi tiến độ kiểu "xong chưa" không kích hoạt nó. Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường, và hook Stop buộc chạy nó khi lượt đổi code có mức rủi ro từ vừa trở lên mà Claude quên (xem mục 4).
 
 **Gọi:** `/agent-stack:chot-viec` (thêm `--base main` để so với nhánh khác thay vì HEAD).
 
@@ -353,7 +356,7 @@ python3 plugin/skills/chot-viec/scripts/risk.py
 
 ### 5.8 `mo-hinh-de-doa`: threat model trước khi code
 
-**Khi nào:** sắp làm chức năng đụng ranh giới tin cậy: nhận input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, lưu hay truyền dữ liệu nhạy cảm, thêm dependency, chạy lệnh. Router gợi ý nó (luật `feature-boundary`) khi bạn nhờ làm tính năng đăng nhập, upload, webhook, thanh toán…; luật chung dặn chạy trước khi code. Sửa giao diện, sửa chữ, refactor không đổi luồng dữ liệu thì bỏ qua.
+**Khi nào:** sắp làm chức năng đụng ranh giới tin cậy: nhận input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, lưu hay truyền dữ liệu nhạy cảm, thêm dependency, chạy lệnh. Router gợi ý nó (luật `feature-boundary`) khi bạn nhờ làm tính năng đăng nhập, upload, webhook, thanh toán…; luật chung dặn chạy trước khi code; nếu Claude vẫn bắt đầu sửa file mã nguồn mà chưa có threat model, hook PreToolUse chặn lần sửa đầu tiên và nhắc chạy skill này. Sửa giao diện, sửa chữ, refactor không đổi luồng dữ liệu thì bỏ qua.
 
 **Gọi:** `/agent-stack:mo-hinh-de-doa` hoặc nói "threat model chức năng này".
 
@@ -450,6 +453,7 @@ Các bước có thể chọn riêng bằng `--only`, ngăn cách bằng dấu p
 | `plugin` | Marketplace local và plugin `agent-stack` |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
+| `tools` | Công cụ dòng lệnh mà mục đã duyệt cần (khóa `brew` trong `catalog.json`, hiện là `semgrep` cho `static-analysis`), cài bằng Homebrew; gỡ được bằng `--rollback` |
 | `catalog` | Plugin chính thức, plugin và skill bên thứ ba đã duyệt; bên thứ ba được chép đúng commit đã kiểm vào `vendor/` (không theo HEAD), mục scope project chỉ được chép rồi in lệnh cài trong project |
 | `opencode` | Symlink skill và agent cho OpenCode |
 

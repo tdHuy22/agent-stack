@@ -418,6 +418,29 @@ class LastTurn(TempDirTestCase):
         self.root = self.tmp / "proj"
         self.root.mkdir()
 
+    def test_turn_records_head_and_flags_and_chot_viec_marker_is_per_project(self):
+        import os
+        from tests._util import git
+        old = os.environ.get("AGENT_STACK_STATE")
+        os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")
+        self.addCleanup(lambda: os.environ.pop("AGENT_STACK_STATE") if old is None
+                        else os.environ.__setitem__("AGENT_STACK_STATE", old))
+        (self.root / "a.txt").write_text("x\n")
+        git(self.root, "init", "-q")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "init")
+        head = git(self.root, "rev-parse", "HEAD").strip()
+        record = A.start_turn("sid-flags", str(self.root), {"threat_model": True})
+        self.assertEqual((record["head"], record["threat_model"]), (head, True))
+        self.assertEqual(A.load_turn("sid-flags")["head"], head)
+        other = self.tmp / "other"
+        other.mkdir()
+        self.assertIsNone(A.start_turn("sid-plain", str(other))["head"], "không phải git repo: không có HEAD")
+        self.assertFalse(A.chot_viec_ran_since(self.root, record["ts"]))
+        A.mark_chot_viec(self.root)
+        self.assertTrue(A.chot_viec_ran_since(self.root, record["ts"]))
+        self.assertFalse(A.chot_viec_ran_since(other, record["ts"]), "dấu theo từng project")
+
     def test_next_step_is_taken_from_the_arrow_line(self):
         msg = "Xong.\n\n➡️ Tiếp: chạy test tích hợp · Model: sonnet · Effort: low · Subagent: không · Skill: không"
         self.assertEqual(A.extract_next(msg), "chạy test tích hợp")

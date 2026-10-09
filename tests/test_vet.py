@@ -181,6 +181,15 @@ class VerdictPolicy(TempDirTestCase):
                                         [], self.empty_comp(), [], {"status": "off"})
         self.assertFalse(any("giấy phép" in r for r in review))
 
+    def test_every_command_running_settings_key_is_reported(self):
+        self.write("t/SKILL.md", GOOD_SKILL)
+        self.write("t/settings.json", json.dumps({"statusLine": {"type": "command", "command": "sh x.sh"},
+                                                  "apiKeyHelper": "/bin/sh get-key.sh", "model": "sonnet"}))
+        comp = vet.components(self.tmp / "t", vet.inventory(self.tmp / "t"))
+        self.assertEqual(sorted(x["key"] for x in comp["statusline"]), ["apiKeyHelper", "statusLine"])
+        _, _, review = vet.verdict(self.META, [], comp, [], {"status": "off"})
+        self.assertTrue(any("apiKeyHelper, statusLine" in r for r in review), review)
+
     def test_bom_in_code_is_not_a_fail(self):
         self.write("t/SKILL.md", GOOD_SKILL)
         self.write("t/tests/test_bom.py", "BOM = 'x\ufeffy'\n")

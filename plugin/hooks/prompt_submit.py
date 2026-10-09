@@ -8,8 +8,9 @@ Hook cũng lưu yêu cầu gần nhất của người dùng theo từng phiên 
 đưa cho subagent chạy context riêng. Tin do hệ thống tạo (thông báo nền, báo cáo của subagent quay về phiên chính)
 không được ghi đè yêu cầu thật và không được router gợi ý; khóa và token được che.
 
-Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook ghi lúc bắt đầu lượt và dấu §0 lúc đó (state/turns/),
-để hook Stop biết lượt vừa xong đổi file nào và §0 đã được cập nhật chưa.
+Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook ghi lúc bắt đầu lượt, dấu §0 và HEAD lúc đó
+(state/turns/), để hook Stop biết lượt vừa xong đổi file nào, §0 đã được cập nhật chưa và có cần chốt việc không.
+Khi router thấy việc là chức năng đụng ranh giới tin cậy, lượt được đánh dấu threat_model cho hook PreToolUse.
 """
 import hashlib
 import os
@@ -68,11 +69,13 @@ def main():
     digest = hashlib.sha1(prompt.encode("utf-8", "replace")).hexdigest()[:12]
     if sid and not A.once(f"prompt-{sid}-{digest}", 5):
         return  # hook bị đăng ký hai lần
+    flags = {}
     try:
         context, user = limit_notes(sid)
         try:  # router (GĐ5): gợi ý skill, model, effort, subagent
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
             import route  # noqa: E402
+            flags = route.turn_flags(prompt, data.get("cwd"))
             suggestion = route.hook_suggestion(prompt, data)
             if suggestion:
                 context.append(suggestion["context"])
@@ -83,7 +86,7 @@ def main():
     finally:
         remember_request(sid, data.get("cwd"), prompt)  # ghi sau khi xử lý như cũ, kể cả khi bước trên lỗi
         if sid and data.get("cwd"):
-            A.start_turn(sid, data.get("cwd"))  # tự bắt lỗi, không bao giờ văng
+            A.start_turn(sid, data.get("cwd"), flags)  # tự bắt lỗi, không bao giờ văng
 
 
 if __name__ == "__main__":

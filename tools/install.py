@@ -12,6 +12,7 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
               terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh
+  tools       công cụ dòng lệnh mà mục đã duyệt cần (khóa "brew" trong catalog.json), cài bằng Homebrew
   opencode    symlink skill (agent-stack + vendor) vào ~/.config/opencode/skills/, agent vào ~/.config/opencode/agents/
 
 Mã thoát: 0 = cài đủ; 1 = có bước lỗi; 2 = không lỗi nhưng có mục bị bỏ qua (cài chưa đủ).
@@ -42,7 +43,7 @@ import time
 from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
-STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "opencode")
+STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "tools", "opencode")
 MARKETPLACE = "agent-stack-local"
 VENDOR_MARKETPLACE = "agent-stack-vendor-local"
 VENDOR_PLUGIN = "agent-stack-vendor"
@@ -462,6 +463,32 @@ class Installer:
         paths = [Path(e["installPath"]) for e in entries if isinstance(e, dict) and e.get("installPath")]
         return any(path.is_dir() and expected.is_dir() and tree_digests(path) != tree_digests(expected) for path in paths)
 
+    def step_tools(self) -> None:
+        """Công cụ dòng lệnh cho các mục đã duyệt (khóa "brew" của mục trong catalog.json), kể cả mục scope project:
+        plugin cài theo project vẫn cần công cụ trên máy. Đã có trên PATH thì bỏ qua."""
+        self.say("[tools] công cụ dòng lệnh cho các mục đã duyệt")
+        catalog = json.loads((HOME_STACK / "catalog.json").read_text(encoding="utf-8"))
+        approved = self.approved()
+        wanted = {}
+        for item in catalog["items"]:
+            entry = approved.get(item["key"])
+            if entry and entry.get("verdict") != "FAIL":
+                for name in item.get("brew") or []:
+                    wanted.setdefault(name, item["key"])
+        if not wanted:
+            self.say("  = không mục nào cần công cụ ngoài")
+            return
+        brew = os.environ.get("AGENT_STACK_BREW_BIN") or shutil.which("brew")
+        for name, key in wanted.items():
+            if shutil.which(name):
+                self.say(f"  = {name} đã có ({shutil.which(name)})")
+                continue
+            if not brew:
+                self.say(f"  ! không có Homebrew nên không cài được {name} (cho {key})")
+                self.skipped.append(f"{name}: cần Homebrew")
+                continue
+            self.run([brew, "install", name], undo=[brew, "uninstall", name])
+
     def step_opencode(self) -> None:
         self.say("[opencode] skill và agent cho OpenCode")
         # OpenCode v2 theo dõi ~/.config/opencode/skills; glob của nó đi theo symlink.
@@ -539,9 +566,19 @@ def describe_action(action: dict) -> tuple:
         return "thư mục mới", short(action["path"]), "skill và plugin bên thứ ba, ghim commit (xem `VENDORED.json`)", \
             f"`rm -rf {short(action['path'])}`"
     if kind == "cmd":
-        undo = f"`claude {' '.join(action['undo'][1:])}`" if action.get("undo") else "—"
-        return "lệnh claude", f"`claude {' '.join(action['cmd'][1:])}`", "", undo
+        undo = f"`{cmd_text(action['undo'])}`" if action.get("undo") else "—"
+        label = "lệnh claude" if is_claude(action["cmd"]) else "lệnh " + Path(action["cmd"][0]).name
+        return label, f"`{cmd_text(action['cmd'])}`", "", undo
     return kind, short(action.get("path", "")), "", "—"
+
+
+def is_claude(cmd: list) -> bool:
+    return Path(cmd[0]).name in ("claude", Path(os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude")).name)
+
+
+def cmd_text(cmd: list) -> str:
+    """Lệnh để in ra: `claude ...` cho CLI của Claude (kể cả bản giả trong test), tên chương trình cho lệnh khác."""
+    return ("claude" if is_claude(cmd) else Path(cmd[0]).name) + " " + " ".join(cmd[1:])
 
 
 def git_head() -> str:
@@ -782,15 +819,15 @@ def undo_actions(data: dict, apply: bool) -> tuple:
                 else:
                     Path(action["path"]).unlink(missing_ok=True)
         elif kind == "cmd" and action.get("undo"):
-            print(f"  $ claude {' '.join(action['undo'][1:])}")
+            print(f"  $ {cmd_text(action['undo'])}")
             if apply:
                 try:
                     out = subprocess.run(action["undo"], capture_output=True, text=True)
                     text = (out.stdout + out.stderr).lower()
                     if out.returncode != 0 and not any(w in text for w in ("not found", "not installed", "no such")):
-                        errors.append(f"claude {' '.join(action['undo'][1:])}: mã {out.returncode}: {text.strip()[:160]}")
+                        errors.append(f"{cmd_text(action['undo'])}: mã {out.returncode}: {text.strip()[:160]}")
                 except OSError as exc:
-                    errors.append(f"claude {' '.join(action['undo'][1:])}: {exc}")
+                    errors.append(f"{cmd_text(action['undo'])}: {exc}")
         elif kind == "vendor-dir":
             path = Path(action["path"])
             print(f"  - xóa {short(str(path))}")

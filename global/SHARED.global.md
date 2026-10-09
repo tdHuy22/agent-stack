@@ -14,8 +14,8 @@
 
 - Chưa chạy kiểm chứng (test, lint, build) và đưa kết quả thì không nói "xong". Mã thoát khác 0 không bao giờ là thành công; kết quả đạt cũ không chứng minh cho code sửa sau đó.
 - Kiểm chứng qua `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận gắn với nội dung code lúc chạy.
-- Trước khi code chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, dữ liệu nhạy cảm, dependency mới, chạy lệnh), chạy skill `mo-hinh-de-doa`: threat model ngắn, ghi chốt chặn phải có vào `.agent/threat-model.md`. Chức năng không đụng ranh giới thì bỏ qua.
-- Xong thay đổi không tầm thường trong repo thì chạy skill `chot-viec` trước khi báo xong hay commit.
+- Trước khi code chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, dữ liệu nhạy cảm, dependency mới, chạy lệnh), chạy skill `mo-hinh-de-doa`: threat model ngắn, ghi chốt chặn phải có vào `.agent/threat-model.md`. Chức năng không đụng ranh giới thì bỏ qua. Hook PreToolUse của agent-stack nhắc một lần nếu quên.
+- Xong thay đổi không tầm thường trong repo thì chạy skill `chot-viec` trước khi báo xong hay commit. Hook Stop của agent-stack buộc chạy nó khi lượt đổi code có mức rủi ro từ vừa trở lên mà chưa chạy.
 - Sửa lỗi: tái hiện trước, càng giống cách người dùng gặp càng tốt (lệnh, script, hook thật), sửa xong chạy lại đúng bước đó; test đơn vị thêm sau, không thay bước này. Không tái hiện được hay tốn hạn mức thì nói rõ, nêu giả thuyết và cách kiểm trước khi sửa.
 - Chọn giải pháp theo chất lượng, độ bền, độ dễ bảo trì, không theo công làm (model hay ước công theo tốc độ người viết code nên thổi phồng nó, rồi chọn cách rẻ mà kém).
 - Chỉ dùng model rẻ hơn hay effort thấp hơn khi có kiểm tra tự động; kiểm tra trượt thì làm lại ở mức cao hơn.

@@ -361,6 +361,19 @@ def needs_model_switch(wanted: str, now: str) -> bool:
     return target != wanted and target not in now
 
 
+def turn_flags(prompt: str, cwd) -> dict:
+    """Cờ của lượt cho các hook khác: threat_model khi việc là chức năng đụng ranh giới tin cậy (luật
+    feature-boundary), để hook PreToolUse nhắc chạy mo-hinh-de-doa trước khi code. Không phụ thuộc việc gợi ý
+    có bị ẩn vì đã nhắc trong giờ qua hay không."""
+    prompt = (prompt or "").strip()
+    if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
+        return {}
+    root = A.project_root(cwd) if cwd else None
+    text = (next_task(root) or prompt) if root and CONTINUE_RE.match(A.fold(prompt)) else prompt
+    hit = suggest(text)
+    return {"threat_model": True} if hit and hit["rule"] == "feature-boundary" else {}
+
+
 def hook_suggestion(prompt: str, data: dict):
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):

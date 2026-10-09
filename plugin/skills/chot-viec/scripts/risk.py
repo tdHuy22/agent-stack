@@ -87,12 +87,14 @@ SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb",
               ".cc", ".cpp", ".h", ".hpp", ".cs", ".swift", ".scala", ".sh", ".bash", ".zsh", ".ps1", ".lua", ".pl"}
 
 
-def boundaries(changes: list) -> list:
-    """[(tên ranh giới, [đường dẫn])]: file đổi khớp đường dẫn, hay file code có dòng thêm vào khớp nội dung."""
+def boundaries(changes: list, reviewed=frozenset()) -> list:
+    """[(tên ranh giới, [đường dẫn])]: file đổi khớp đường dẫn, hay file code có dòng thêm vào khớp nội dung.
+    File trong `reviewed` (đã qua chốt việc) chỉ xét nội dung dòng mới, không xét đường dẫn."""
     out = []
     for name, path_re, text_re in BOUNDARY_RULES:
         paths = [c["path"] for c in changes
-                 if (path_re and kind(c["path"]) != "test" and path_re.search(c["path"].lower()))
+                 if (path_re and c["path"] not in reviewed and kind(c["path"]) != "test"
+                     and path_re.search(c["path"].lower()))
                  or (text_re and kind(c["path"]) == "code" and Path(c["path"]).suffix.lower() in SOURCE_EXT
                      and text_re.search(c.get("text") or ""))]
         if paths:
@@ -121,8 +123,9 @@ def kind(path: str) -> str:
     return "code"
 
 
-def assess(changes: list) -> dict:
-    """Chấm điểm từ danh sách {path, added, deleted, text}. added là None với file nhị phân."""
+def assess(changes: list, reviewed=frozenset()) -> dict:
+    """Chấm điểm từ danh sách {path, added, deleted, text}. added là None với file nhị phân. File trong `reviewed`
+    đã qua chốt việc, `text` chỉ còn dòng mới: bỏ luật theo đường dẫn cho chúng (hook Stop dùng)."""
     result = {"level": "thap", "score": 0, "files": len(changes), "added": 0, "deleted": 0,
               "by_kind": {k: 0 for k in KIND_NAMES}, "reasons": [], "hotspots": [], "empty": not changes}
     if not changes:
@@ -151,7 +154,7 @@ def assess(changes: list) -> dict:
             test_add, test_del = test_add + added, test_del + deleted
 
     for pattern, points, reason in PATH_RULES:
-        paths = [c["path"] for c in changes if pattern.search(c["path"].lower())]
+        paths = [c["path"] for c in changes if c["path"] not in reviewed and pattern.search(c["path"].lower())]
         if paths:
             hit(points, reason, paths)
     secret_paths = [c["path"] for c in changes if any(r.search(c.get("text") or "") for r in SECRET_RULES)]
@@ -183,7 +186,7 @@ def assess(changes: list) -> dict:
         reasons.append("có file nhị phân, không đọc được nội dung: " + ", ".join(binary[:3]))
 
     level = "cao" if score >= 4 else "vua" if score >= 2 else "thap"
-    crossed = boundaries(changes)
+    crossed = boundaries(changes, reviewed)
     if crossed and level == "thap":
         level = "vua"
         reasons.append("đụng ranh giới tin cậy: " + ", ".join(name for name, _ in crossed))
@@ -206,7 +209,9 @@ def review_hint(level: str) -> str:
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "--no-optional-locks", "-c", "core.quotePath=false", "-C", str(root), *args],
+    # core.fsmonitor=false: repo lạ có thể đặt nó thành lệnh bất kỳ mà git diff, git status sẽ chạy (hook Stop gọi hàm này).
+    return subprocess.run(["git", "--no-optional-locks", "-c", "core.quotePath=false", "-c", "core.fsmonitor=false",
+                           "-C", str(root), *args],
                           capture_output=True, text=True, errors="replace")
 
 
@@ -243,8 +248,11 @@ def collect(root, base: str = None) -> list:
     else:
         # Repo chưa có commit: so cây làm việc với cây rỗng, gồm cả phần đã add lẫn phần sửa sau đó.
         ref = checked(root, "hash-object", "-t", "tree", "/dev/null").strip()
-    numstat = checked(root, "diff", ref, "--numstat", "--no-renames", "-z")
-    texts = added_text(checked(root, "diff", ref, "-U0", "--no-color", "--no-renames"))
+    # --no-ext-diff, --no-textconv: không chạy lệnh diff ngoài hay textconv do config đặt (repo lạ có thể đặt lệnh
+    # bất kỳ; diff.external toàn cục như difftastic còn làm mất các dòng thêm vào cần chấm).
+    numstat = checked(root, "diff", ref, "--numstat", "--no-renames", "--no-ext-diff", "--no-textconv", "-z")
+    texts = added_text(checked(root, "diff", ref, "-U0", "--no-color", "--no-renames", "--no-ext-diff",
+                               "--no-textconv"))
     changes = []
     for record in numstat.split("\0"):
         parts = record.split("\t", 2)
@@ -303,18 +311,38 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     try:
-        result = assess(collect(args.root, args.base))
+        changes = collect(args.root, args.base)
+        result = assess(changes)
     except NotARepo:
         print(f"Không phải git repo: {args.root}. Script cần git để đọc thay đổi.")
         return 2
     except GitError as exc:
         print(f"Không chấm được: {exc}. Kiểm lại --base hoặc trạng thái repo.")
         return 2
+    mark_ran(args.root, changes)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=1))
     else:
         print(render(result, args.base or "HEAD"))
     return 0
+
+
+def line_hashes(text: str) -> list:
+    """Dấu băm ngắn của từng dòng thêm vào (bỏ khoảng trắng hai đầu), để biết dòng nào đã qua chốt việc."""
+    import hashlib
+    return sorted({hashlib.sha1(line.strip().encode("utf-8", "replace")).hexdigest()[:12]
+                   for line in text.splitlines() if line.strip()})
+
+
+def mark_ran(root, changes=()) -> None:
+    """Ghi dấu "đã chốt việc" cho project, kèm dấu băm các dòng thêm vào lúc đó theo từng file, để hook Stop chỉ
+    chấm phần mới ở lượt sau. Thiếu thư viện agent-stack thì bỏ qua."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+        import agentstack
+        agentstack.mark_chot_viec(Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes})
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":

@@ -327,6 +327,32 @@ class InstallTests(TempDirTestCase):
         self.assertNotIn("cài lại", out)
         self.assertFalse(any("uninstall" in c for c in self.calls_made()[before:]), "bản đã khớp thì không cài lại")
 
+    def test_tools_step_installs_brew_tools_of_approved_items_and_rolls_back(self):
+        brew_log = self.tmp / "brew.log"
+        brew = self.tmp / "fake-brew"
+        brew.write_text(f"#!/bin/sh\necho \"$@\" >> {brew_log}\n")
+        brew.chmod(0o755)
+        self.lock["entries"] = {"a/b": {"verdict": "REVIEW", "sha": "1", "report": "vet-reports/a__b@1.md",
+                                        "human_review": {"status": "approved"}},
+                                "c/d": {"verdict": "REVIEW", "sha": "2", "report": "vet-reports/c__d@2.md",
+                                        "human_review": {"status": "pending"}}}
+        self.catalog["items"] = [
+            {"key": "a/b", "kind": "vendor-plugin", "scope": "project", "brew": ["cong-cu-xyz-chua-co"],
+             "install": {"marketplace": "agent-stack-vendor-local", "plugin": "b"}},
+            {"key": "c/d", "kind": "claude-plugin", "scope": "user", "brew": ["cong-cu-cho-duyet"],
+             "install": {"marketplace": "m", "plugin": "d"}}]
+        self.save()
+        env = {"AGENT_STACK_BREW_BIN": str(brew)}
+        self.assertIn(f"$ {brew} install cong-cu-xyz-chua-co", self.run_install("--only", "tools", extra_env=env))
+        self.assertFalse(brew_log.exists(), "xem trước không chạy gì")
+        self.run_install("--apply", "--only", "tools", extra_env=env)
+        self.assertEqual(brew_log.read_text().splitlines(), ["install cong-cu-xyz-chua-co"], "mục chờ duyệt không được cài")
+        manifest = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        self.assertIn("| lệnh fake-brew | `fake-brew install cong-cu-xyz-chua-co`", manifest)
+        self.assertIn("`fake-brew uninstall cong-cu-xyz-chua-co`", manifest)
+        self.run_install("--rollback", "--apply", extra_env=env)
+        self.assertEqual(brew_log.read_text().splitlines()[-1], "uninstall cong-cu-xyz-chua-co")
+
     def test_failed_command_is_reported_and_exits_1(self):
         out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})
         self.assertIn("0 mục bị bỏ qua, 3 lỗi", out)  # marketplace add, plugin install và plugin update đều lỗi

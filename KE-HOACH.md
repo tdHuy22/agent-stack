@@ -482,6 +482,41 @@ Bạn hỏi nên chạy threat model và review bảo mật cho mỗi chức nă
 - TM-3 và TM-4 (`git checkout` baseline, ghi báo cáo vào thư mục project) có chốt chặn khi `differential-review` được gọi qua router hay `chot-viec`: lời dặn đi kèm gợi ý (`skill_notes` trong `rules.json`). Khi skill tự kích theo description của nó, không qua router, thì chưa có.
 - `semgrep` chưa cài nên `static-analysis` chưa dùng được.
 
+
+### 6.19 Skill cần thiết tự chạy (09/10/2026)
+
+Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nhắc, và bảo làm hết các việc còn treo của GĐ19. Trước đó, việc chạy `chot-viec`, `mo-hinh-de-doa` và `vet-skill` chỉ dựa vào luật chung và gợi ý của router: Claude nhớ thì chạy, quên thì thôi. Nay có hai chốt chặn bằng hook, nên không còn phụ thuộc vào trí nhớ của model:
+
+- **Hook Stop buộc chạy `chot-viec`** khi lượt đổi code có mức rủi ro từ vừa trở lên mà chưa chạy nó. Mức rủi ro do `risk.py` chấm, chỉ trên file lượt này đổi, so với HEAD lúc bắt đầu lượt, nên file đã commit trong lượt vẫn được tính. `risk.py` ghi dấu "đã chốt việc" theo từng project. `chot-viec` kéo theo `mo-hinh-de-doa` khi đụng ranh giới tin cậy, `differential-review` ở mức cao, và cập nhật §0. Mức thấp (tài liệu, sửa nhỏ có test) không bị chặn, để không tốn thêm lượt model vô ích.
+- **Hook PreToolUse mới:**
+  - từ chối cài plugin, skill hay MCP chưa duyệt, nên Claude phải chạy `vet-skill` trước;
+  - hỏi bạn trước khi thêm marketplace lạ;
+  - hỏi bạn trước `git checkout` hay `git switch` khi cây có thay đổi chưa commit (TM-3);
+  - từ chối ghi báo cáo `differential-review` vào chỗ git không bỏ qua (TM-4), kể cả khi skill tự kích, không qua router;
+  - khi router đánh dấu lượt là chức năng đụng ranh giới tin cậy mà chưa có threat model, từ chối một lần lần sửa file mã nguồn đầu tiên, nên `mo-hinh-de-doa` chạy trước khi code.
+  
+  Lệnh thường chỉ tốn khoảng 20 ms.
+- **Bước `tools` của `install.sh`** cài công cụ mà mục đã duyệt cần (khóa `brew` trong catalog; hiện là `semgrep` cho `static-analysis`), có ghi nhật ký và gỡ được.
+- **Phát hiện khi tự chạy threat model cho GĐ20 (TM-7):** `git status` trong repo lạ chạy lệnh mà repo đặt ở `core.fsmonitor`. Mình đã tái hiện. Mọi lệnh git chỉ đọc của agent-stack, kể cả `risk.py` mà hook Stop gọi, nay đặt `-c core.fsmonitor=false`.
+- **Phát hiện khi vet SkillSpector:** `vet.py` chỉ báo `subagentStatusLine` trong `settings.json` của plugin, bỏ sót `statusLine`, `apiKeyHelper` và các khóa khác tự chạy lệnh. Đã sửa.
+- **SkillSpector** đã vet (khóa `NVIDIA/SkillSpector`, sha `2f93a86`). Khuyến nghị có điều kiện:
+  - dùng venv riêng chạy Python 3.12 (`yara-python` chưa có bản dựng sẵn cho 3.11 trên máy này);
+  - luôn chạy với `--no-llm` và môi trường đã lọc khóa API;
+  - phần quét gói phụ thuộc gửi tên và phiên bản gói tới `api.osv.dev`;
+  - kết quả chỉ đẩy lên REVIEW cho tới khi đo được trên bộ mẫu của mình.
+
+  Chờ bạn duyệt rồi mới tích hợp vào `vet.py scan`.
+
+**Review độc lập** (agent `reviewer`, opus · high): 0 cao, 2 vừa, 1 thấp; đã sửa cả ba kèm test.
+- Hook Stop chấm lại cả phần chưa commit mà các lượt trước đã chốt, nên sửa nhiều lượt rồi mới commit thì lượt nào cũng bị ép chạy lại `chot-viec`. Nay `risk.py` lưu dấu băm từng dòng lúc chốt, và hook chỉ chấm dòng mới. File đã chốt không tính lại luật theo đường dẫn.
+- `git diff` của `risk.py` chạy `diff.external`, textconv và clean filter của repo. `diff.external` toàn cục (như difftastic) còn làm mất nội dung cần chấm. Nay thêm `--no-ext-diff --no-textconv`, và bỏ chấm khi repo có clean filter cục bộ. Phần `git status` chạy clean filter thì Claude Code tự làm lúc mở phiên, nên agent-stack không chặn thêm được (TM-7).
+- Chốt chặn cài khớp chuỗi thô, nên chặn nhầm thông điệp commit hay heredoc có chữ "claude plugin install", và đọc nhầm `--scope` thành tên plugin. Nay hook phân tích lệnh bằng `shlex`: bỏ thân heredoc, chỉ xét lệnh có argv[0] là `claude`, `git` hay `npx`, mở `bash -c` thêm một tầng, bỏ qua cờ và giá trị của cờ.
+
+**Giới hạn.**
+- Hook PreToolUse so chuỗi lệnh theo mẫu, nên là lớp nhắc chứ không phải ranh giới bảo mật (TM-6).
+- Mỗi lần Stop chặn tốn thêm một lượt model.
+- Mức "vừa" của `risk.py` dựa vào regex, nên có thể chặn nhầm; khi đó `chot-viec` ghi một dòng lý do rồi kết thúc nhanh.
+
 ---
 
 ## 7. Thiết kế chi tiết
