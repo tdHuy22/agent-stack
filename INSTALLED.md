@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 12:41 09/10/2026 từ commit `e941caa` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 16:41 09/10/2026 từ commit `bff7d2b` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -22,7 +22,7 @@
 | 9 | lệnh claude | `claude plugin install claude-code-setup@claude-plugins-official --scope user` |  | `claude plugin uninstall claude-code-setup@claude-plugins-official --scope user` |
 | 10 | lệnh claude | `claude plugin install claude-md-management@claude-plugins-official --scope user` |  | `claude plugin uninstall claude-md-management@claude-plugins-official --scope user` |
 | 11 | lệnh claude | `claude plugin install session-report@claude-plugins-official --scope user` |  | `claude plugin uninstall session-report@claude-plugins-official --scope user` |
-| 12 | thư mục mới | ~/Documents/Claude/agent-stack/vendor | skill bên thứ ba, ghim commit (xem `VENDORED.json`) | `rm -rf ~/Documents/Claude/agent-stack/vendor` |
+| 12 | thư mục mới | ~/Documents/Claude/agent-stack/vendor | skill và plugin bên thứ ba, ghim commit (xem `VENDORED.json`) | `rm -rf ~/Documents/Claude/agent-stack/vendor` |
 | 13 | lệnh claude | `claude plugin marketplace add /Users/macos/Documents/Claude/agent-stack/vendor` |  | `claude plugin marketplace remove agent-stack-vendor-local` |
 | 14 | lệnh claude | `claude plugin install agent-stack-vendor@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user` |
 | 15 | thư mục mới | ~/.config/opencode/skills |  | `rmdir ~/.config/opencode/skills` (khi đã trống) |
@@ -183,6 +183,23 @@
 | # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
 |---:|---|---|---|---|
 | 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 16:41 09/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261009-164052.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261009-164052`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog, tools, opencode
+- Kết quả: 7 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+| 2 | thư mục mới | ~/Documents/Claude/agent-stack/vendor | skill và plugin bên thứ ba, ghim commit (xem `VENDORED.json`) | `rm -rf ~/Documents/Claude/agent-stack/vendor` |
+| 3 | lệnh claude | `claude plugin marketplace add /Users/macos/Documents/Claude/agent-stack/vendor` |  | `claude plugin marketplace remove agent-stack-vendor-local` |
+| 4 | lệnh claude | `claude plugin install differential-review@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall differential-review@agent-stack-vendor-local --scope user` |
+| 5 | lệnh brew | `brew install semgrep` |  | `brew uninstall semgrep` |
+| 6 | symlink | ~/.config/opencode/skills/chot-viec | → `~/Documents/Claude/agent-stack/plugin/skills/chot-viec` | `rm ~/.config/opencode/skills/chot-viec` |
+| 7 | symlink | ~/.config/opencode/skills/mo-hinh-de-doa | → `~/Documents/Claude/agent-stack/plugin/skills/mo-hinh-de-doa` | `rm ~/.config/opencode/skills/mo-hinh-de-doa` |
 
 ## Gỡ toàn bộ
 
