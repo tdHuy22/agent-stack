@@ -307,29 +307,40 @@ class ProjectAware(ProjectFixtures):
 
     def test_project_type_adds_skills_to_a_rule(self):
         # Luật thật không còn skill theo loại project cho C (c-review đã xoá 10/10/2026); thử cơ chế bằng một
-        # plugin scope project có thật trong catalog (static-analysis).
+        # plugin scope project có thật trong catalog (superpowers).
         from unittest import mock
         data = dict(route.rules())  # bản sao nông, không đụng bản rules() đã nạp
-        data["rule_extras"] = {**data["rule_extras"], "c_cpp": {"security-review": ["static-analysis"]}}
+        data["rule_extras"] = {**data["rule_extras"], "c_cpp": {"security-review": ["superpowers"]}}
         root = self.repo("c2", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
         patch = mock.patch.object(route, "rules", return_value=data)
         patch.start()
         self.addCleanup(patch.stop)
         hit = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", {"session_id": "c3", "cwd": str(root)})
         # Plugin chưa bật cho project: không gợi ý như thể dùng được, mà nêu lệnh cài và dùng skill dự phòng.
-        self.assertNotIn("static-analysis", hit["user"])
+        self.assertNotIn("superpowers", hit["user"])
         self.assertIn("skill security-review", hit["user"])
         self.assertIn("chưa bật cho project này: differential-review (`./install.sh --apply --only catalog", hit["context"])
-        self.assertIn("`claude plugin install static-analysis@agent-stack-vendor-local --scope project`", hit["context"])
+        self.assertIn("`claude plugin install superpowers@agent-stack-vendor-local --scope project`", hit["context"])
         self.assertIn("đừng tự cài", hit["context"])
         self.write("c2/.claude/settings.local.json", json.dumps({"enabledPlugins": {
-            "static-analysis@agent-stack-vendor-local": True, "differential-review@agent-stack-vendor-local": True}}))
+            "superpowers@agent-stack-vendor-local": True, "differential-review@agent-stack-vendor-local": True}}))
         hit = route.hook_suggestion("Review bảo mật hàm xác thực khác giúp mình", {"session_id": "c3b", "cwd": str(root)})
-        self.assertIn("skill differential-review, static-analysis", hit["user"])
+        self.assertIn("skill differential-review, superpowers", hit["user"])
         self.assertNotIn("chưa bật", hit["context"])
         # Gọi thẳng differential-review (không qua chot-viec) vẫn mang theo chốt chặn TM-3, TM-4.
         self.assertIn("không git checkout", hit["context"])
         self.assertIn("đừng để ở gốc repo", hit["context"])
+
+    def test_repo_audit_runs_semgrep_before_claude_security(self):
+        # static-analysis cài toàn cục ngày 10/10/2026: audit cả repo quét Semgrep trước, kèm lời dặn không dùng CodeQL.
+        root = self.python_repo()
+        self.write("py/.claude/settings.local.json", json.dumps({"enabledPlugins": {
+            "static-analysis@agent-stack-vendor-local": True, "claude-security@claude-plugins-official": True}}))
+        hit = route.hook_suggestion("Audit bảo mật toàn bộ codebase trước khi phát hành", {"session_id": "a1", "cwd": str(root)})
+        self.assertIn("skill static-analysis, claude-security", hit["user"])
+        self.assertIn("static-analysis:semgrep", hit["context"])
+        self.assertIn("không dùng static-analysis:codeql", hit["context"])
+        self.assertIn("static_analysis_semgrep_N ở gốc repo", hit["context"])
 
     def test_feature_touching_trust_boundary_asks_for_threat_model_first(self):
         root = self.python_repo()

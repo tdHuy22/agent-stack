@@ -252,6 +252,31 @@ class RefinedRules(TempDirTestCase):
 
 
 class ReviewNotes(TempDirTestCase):
+    def test_local_patches_kept_on_same_commit_and_flagged_when_dropped(self):
+        home = self.tmp / "home"
+        home.mkdir()
+        env = {"AGENT_STACK_HOME": str(home)}
+        self.write("p/SKILL.md", GOOD_SKILL)
+        run_script(VET, "scan", str(self.tmp / "p"), "--name", "k", "--no-scanner", env=env)
+        lock_file = home / "vetted.lock"
+        lock = json.loads(lock_file.read_text())
+        patch = {"path": "patches/k/fix.patch", "sha256": "a" * 64, "files": {"SKILL.md": "b" * 64},
+                 "why": "sửa lỗi mẫu.", "upstream": "o/r#1"}
+        lock["entries"]["k"]["local_patches"] = [patch]
+        lock_file.write_text(json.dumps(lock))
+        run_script(VET, "scan", str(self.tmp / "p"), "--name", "k", "--no-scanner", env=env)
+        entry = json.loads(lock_file.read_text())["entries"]["k"]
+        self.assertEqual(entry["local_patches"], [patch])  # cùng commit: giữ
+        self.write("p/SKILL.md", GOOD_SKILL + "\nbản mới\n")
+        out = run_script(VET, "scan", str(self.tmp / "p"), "--name", "k", "--no-scanner", env=env)
+        self.assertIn("Bỏ bản vá cục bộ patches/k/fix.patch vì commit đổi (o/r#1)", out.stdout)
+        entry = json.loads(lock_file.read_text())["entries"]["k"]
+        self.assertNotIn("local_patches", entry)
+        self.assertEqual(entry["dropped_patches"], [{"path": "patches/k/fix.patch", "why": "sửa lỗi mẫu.", "upstream": "o/r#1"}])
+        self.assertIn("## Bản vá cục bộ bị bỏ khi đổi commit", (home / entry["report"]).read_text())
+        out = run_script(VET, "approve", "k", "--note", "thử", env=env)
+        self.assertIn("không còn bản vá cục bộ patches/k/fix.patch", out.stdout)
+
     def test_notes_survive_rescan_and_drop_when_content_changes(self):
         home = self.tmp / "home"
         home.mkdir()

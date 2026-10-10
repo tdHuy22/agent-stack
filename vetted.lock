@@ -528,12 +528,24 @@
       "archived": false,
       "human_review": {
         "at": "2026-10-02T15:09:28Z",
-        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: cờ scanner nằm trong file test (pytest tmp_path.glob, eval trong test_shell_blocks), đã đối chiếu là báo nhầm; Bash không giới hạn.",
+        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: cờ scanner nằm trong file test (pytest tmp_path.glob, eval trong test_shell_blocks), đã đối chiếu là báo nhầm; Bash không giới hạn. 10/10/2026: bạn bảo cài luôn; cài toàn cục (scope user) từ bản chép đúng commit trong vendor/.",
         "status": "approved"
       },
       "license": "CC-BY-SA-4.0",
       "license_files": [
         "LICENSE: CC"
+      ],
+      "local_patches": [
+        {
+          "approved": "Bạn chọn 'Vá cục bộ' trong chat ngày 10/10/2026. Bỏ bản vá khi upstream gộp bản sửa: vet commit mới.",
+          "files": {
+            "skills/semgrep/scripts/run-scans.sh": "131316a6da20ebec6173b4794aa32f2eeb64f0b83a2277c6c65c00498175de99"
+          },
+          "path": "patches/static-analysis/include-glob.patch",
+          "sha256": "910fac03583c7cff83c183e8035f4400344677a944bbc81bc0f54441d2163ce7",
+          "upstream": "https://github.com/trailofbits/skills/issues/297 · PR https://github.com/trailofbits/skills/pull/352 (chưa gộp, kẹt CLA)",
+          "why": "run-scans.sh mở rộng glob --include theo thư mục đang đứng: gốc repo có setup.py thì Semgrep chỉ quét file tên setup.py mà vẫn báo thành công. Sửa giống PR #352 (tách bằng read, không mở rộng không nháy), tự viết lại."
+        }
       ],
       "pushed_at": "2026-09-28",
       "redflags": {},

@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 20:41 10/10/2026 từ commit `f757348` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 21:13 10/10/2026 từ commit `0ffbdbf` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -250,6 +250,64 @@
 
 - Nhật ký máy đọc: `state/install-logs/20261010-204131.json`
 - Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-204131`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 20:48 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-204754.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-204754`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog
+- Kết quả: 2 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+| 2 | lệnh claude | `claude plugin install static-analysis@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall static-analysis@agent-stack-vendor-local --scope user` |
+
+## Lần cài 21:00 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-210019.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-210019`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog
+- Kết quả: 3 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+| 2 | lệnh claude | `claude plugin uninstall static-analysis@agent-stack-vendor-local --scope user` |  | `claude plugin install static-analysis@agent-stack-vendor-local --scope user` |
+| 3 | lệnh claude | `claude plugin install static-analysis@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall static-analysis@agent-stack-vendor-local --scope user` |
+
+## Lần cài 21:01 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-210136.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-210136`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 21:11 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-211132.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-211132`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 21:13 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-211339.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-211339`, gồm bản chụp `pristine/` của cấu hình trước khi cài
 - Bước đã chạy: plugin, catalog
 - Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
 

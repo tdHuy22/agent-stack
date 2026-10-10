@@ -91,7 +91,8 @@
     ]
   },
   "skill_notes": {
-    "differential-review": "khi dùng differential-review: ghi báo cáo vào .tmp/ hay thư mục tạm của hệ điều hành, đừng để ở gốc repo; không git checkout (dùng git show <ref>:<file>); đưa báo cáo cho agent-stack:reviewer lọc dương tính giả"
+    "differential-review": "khi dùng differential-review: ghi báo cáo vào .tmp/ hay thư mục tạm của hệ điều hành, đừng để ở gốc repo; không git checkout (dùng git show <ref>:<file>); đưa báo cáo cho agent-stack:reviewer lọc dương tính giả",
+    "static-analysis": "khi dùng static-analysis: gọi skill static-analysis:semgrep, không dùng static-analysis:codeql (chưa cài CodeQL CLI; giấy phép CodeQL chỉ miễn phí cho mã nguồn mở và nghiên cứu); để skill trình kế hoạch quét cho người dùng duyệt; nêu rõ thư mục kết quả trong .tmp/ hay thư mục tạm của hệ điều hành (mặc định của skill là static_analysis_semgrep_N ở gốc repo); đưa phát hiện cho agent-stack:reviewer lọc dương tính giả"
   },
   "rules": [
     {
@@ -180,9 +181,10 @@
       "effort": "max",
       "agent": "agent-stack:reviewer",
       "skills": [
+        "static-analysis",
         "claude-security"
       ],
-      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng; claude-security chưa bật thì giao reviewer audit từng module, và đề xuất cài nó",
+      "note": "max có lợi ích giảm dần và dễ nghĩ quá đà; chỉ cho đợt săn lỗ hổng tự chạy tới cùng; quét Semgrep trước (rẻ, cho cùng kết quả mỗi lần), rồi claude-security tìm phần Semgrep bỏ sót; claude-security chưa bật thì giao reviewer audit từng module, và đề xuất cài nó",
       "match": [
         "toan bo codebase",
         "toan bo repo",

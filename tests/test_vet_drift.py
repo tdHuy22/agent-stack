@@ -91,6 +91,40 @@ class DriftCheck(TempDirTestCase):
         self.assertIn("demo@mk", out.stdout)
         self.assertIn("hooks.json", out.stdout)
 
+    def patch_readme(self, digest):
+        lock = json.loads((self.home / "vetted.lock").read_text())
+        lock["entries"][KEY]["local_patches"] = [{"path": "patches/demo/fix.patch", "sha256": "x",
+                                                  "files": {"README.md": digest}}]
+        self.write_json(self.home / "vetted.lock", lock)
+
+    def test_approved_patch_matches_only_the_recorded_digest(self):
+        import hashlib
+        (self.installed / "README.md").write_text("đã vá\n")
+        self.assertEqual(self.result()["status"], "drift")  # chưa ghi bản vá trong lock: là lệch
+        self.patch_readme(hashlib.sha256("đã vá\n".encode()).hexdigest())
+        self.assertEqual(self.result()["status"], "match")
+        # Bản cài chưa vá (đúng bản đã kiểm) hay bị sửa thêm sau khi vá đều là lệch.
+        (self.installed / "README.md").write_text("đọc tôi\n")
+        self.assertEqual(self.result()["changed"], ["README.md"])
+        (self.installed / "README.md").write_text("đã vá, rồi sửa thêm\n")
+        self.assertEqual(self.result()["status"], "drift")
+        # Bản vá xóa file: thiếu file đó là khớp, còn file đó là thừa.
+        self.patch_readme(None)
+        (self.installed / "README.md").unlink()
+        self.assertEqual(self.result()["status"], "match")
+        (self.installed / "README.md").write_text("đọc tôi\n")
+        self.assertEqual(self.result()["added"], ["README.md"])
+
+    def test_malformed_local_patches_flag_that_plugin_without_breaking_the_check(self):
+        lock = json.loads((self.home / "vetted.lock").read_text())
+        for bad in ({"files": {}}, ["x"], [{"files": ["README.md"]}], [{"files": {"README.md": "ngắn"}}]):
+            lock["entries"][KEY]["local_patches"] = bad
+            self.write_json(self.home / "vetted.lock", lock)
+            self.assertEqual(self.result()["status"], "bad-lock", bad)
+        out = self.run_cli("--quiet")
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("sai dạng", out.stdout)
+
     def test_plugin_missing_from_catalog_is_unvetted(self):
         other = self.plugins / "cache" / "mk" / "other" / "2"
         other.mkdir(parents=True)

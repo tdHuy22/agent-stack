@@ -50,6 +50,7 @@ VENDOR_PLUGIN = "agent-stack-vendor"
 SKIP_IN_VENDOR = {".git", ".vet-complete", ".claude-plugin", ".cursor-plugin", ".codex-plugin"}
 SKIP_IN_VENDOR_PLUGIN = {".git", ".vet-complete"}  # plugin cần giữ .claude-plugin/plugin.json
 DIGEST_IGNORED = {".in_use", ".orphaned_at", ".git", ".vet-complete"}
+PATCH_DIR = "patches"  # bản vá cục bộ đã duyệt cho đồ bên thứ ba (mục local_patches của vetted.lock)
 
 
 def read_json_file(path: Path) -> dict:
@@ -115,6 +116,87 @@ def tree_digests(root: Path) -> dict:
         if path.is_file() and not any(part in DIGEST_IGNORED for part in rel.parts):
             out[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return out
+
+
+def patches_format_problem(patches) -> str | None:
+    """Lý do mục local_patches của vetted.lock sai dạng, hoặc None."""
+    def digest(value):
+        return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+    if not isinstance(patches, list):
+        return "local_patches không phải danh sách"
+    for patch in patches:
+        if not (isinstance(patch, dict) and isinstance(patch.get("path"), str) and digest(patch.get("sha256"))
+                and isinstance(patch.get("files"), dict) and patch["files"]
+                and all(isinstance(k, str) and k and (v is None or digest(v)) for k, v in patch["files"].items())):
+            return "local_patches có bản vá thiếu hay sai path, sha256, files"
+    return None
+
+
+def read_patch(stack: Path, patch: dict):
+    """(bytes của file vá, None), hoặc (None, lý do không được áp). File vá phải nằm trong patches/ của agent-stack và
+    khớp sha256 bạn đã duyệt. Đọc một lần rồi dùng đúng bytes đó để áp, không đọc lại theo đường dẫn."""
+    rel = str(patch.get("path") or "")
+    path = (stack / rel).resolve()
+    if not rel or (stack / PATCH_DIR).resolve() not in path.parents or not path.is_file():
+        return None, f"bản vá {rel or '?'} không phải file trong {PATCH_DIR}/"
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != patch.get("sha256"):
+        return None, f"bản vá {rel} khác bản đã duyệt (sha256)"
+    return data, None
+
+
+def patch_file_problem(stack: Path, patch: dict):
+    return read_patch(stack, patch)[1]
+
+
+def patch_shape_problem(data: bytes, cwd: Path, env: dict):
+    """Lý do bản vá có thay đổi mà phép so sha256 nội dung không thấy được, hoặc None. Chỉ cho sửa nội dung file văn bản,
+    tạo file thường (100644) và xóa file; chặn symlink, đổi quyền, đổi tên, chép, file nhị phân, và đường dẫn có phần
+    bị bỏ qua khi băm (DIGEST_IGNORED)."""
+    out = subprocess.run(["git", "apply", "--numstat", "--summary", "-"], input=data, cwd=cwd, env=env,
+                         capture_output=True, timeout=60)
+    if out.returncode != 0:
+        return (out.stderr or out.stdout).decode("utf-8", "replace").strip()[:200]
+    for line in out.stdout.decode("utf-8", "replace").splitlines():
+        cols = line.split("\t")
+        if len(cols) == 3:  # numstat: thêm, bớt, đường dẫn; file nhị phân ghi "-"
+            if "-" in cols[:2]:
+                return f"đụng file nhị phân {cols[2]}"
+            if any(part in DIGEST_IGNORED for part in Path(cols[2]).parts):
+                return f"đụng đường dẫn không được băm {cols[2]}"
+            continue
+        line = line.strip()
+        if line and not line.startswith(("create mode 100644 ", "delete mode 100644 ", "delete mode 100755 ")):
+            return f"có thay đổi không cho phép ({line[:80]})"
+    return None
+
+
+def apply_patches(stack: Path, dest: Path, patches: list):
+    """Áp các bản vá đã duyệt vào bản vừa xuất ở dest; trả về lý do lỗi, hoặc None. Tập file bị đổi và sha256 sau khi vá
+    phải đúng bằng mục files của bản vá trong lock (đường dẫn → sha256, null là file bị xóa)."""
+    # Chặn dò repo ở dest.parent để git apply chạy như patch thường, không đọc cấu hình hay .gitattributes của repo
+    # agent-stack bao ngoài. Trong hay ngoài repo, git apply đều từ chối đường dẫn tuyệt đối, ".." và ghi qua symlink
+    # (đã thử 10/10/2026); tập file bị đổi còn được so với lock ở dưới.
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
+    env["GIT_CEILING_DIRECTORIES"] = str(dest.parent.resolve())
+    for patch in patches:
+        data, problem = read_patch(stack, patch)
+        if problem:
+            return problem
+        shape = patch_shape_problem(data, dest, env)
+        if shape:
+            return f"không áp bản vá {patch['path']}: {shape}"
+        before = tree_digests(dest)
+        out = subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], input=data, cwd=dest, env=env,
+                             capture_output=True, timeout=60)
+        if out.returncode != 0:
+            err = (out.stderr or out.stdout).decode("utf-8", "replace").strip()[:200]
+            return f"không áp được bản vá {patch['path']}: {err}"
+        after = tree_digests(dest)
+        changed = {k: after.get(k) for k in before.keys() | after.keys() if before.get(k) != after.get(k)}
+        if changed != (patch.get("files") or {}):
+            return f"bản vá {patch['path']} đổi file khác với bản đã duyệt"
+    return None
 
 
 class Installer:
@@ -372,7 +454,7 @@ class Installer:
         nên bản cài luôn là bản đã kiểm (không theo HEAD của repo gốc), và gỡ thì xóa được cả thư mục mà không đụng
         file nào trong git. Plugin scope project chỉ được chép sẵn; người dùng tự cài trong project cần dùng."""
         vendor_root = HOME_STACK / "vendor"
-        record, skills, plugins, exports = {}, [], [], {}
+        record, skills, plugins, exports, patch_lists = {}, [], [], {}, {}
         for item, entry in vendored:
             is_plugin = item["kind"] == "vendor-plugin"
             name = item["install"]["plugin" if is_plugin else "name"]
@@ -390,10 +472,22 @@ class Installer:
                 self.say(f"  ! không chép {name}: {problem}; xóa thư mục đó rồi chạy lại vet.py scan {item['key']}")
                 self.failures.append(f"{item['key']}: {problem}")
                 continue
+            patches = entry.get("local_patches") or []
+            problem = patches_format_problem(patches) or next(
+                (x for x in (patch_file_problem(HOME_STACK, p) for p in patches) if x), None)
+            if problem:
+                self.say(f"  ! không chép {name}: {problem}")
+                self.failures.append(f"{item['key']}: {problem}")
+                continue
             dest = f"plugins/{name}" if is_plugin else f"skills/{name}"
-            self.say(f"  + vendor: {name} @ {entry['sha'][:12]} -> vendor/{dest}")
+            patched = "".join(f" + vá {p['path']} (sha256 {p['sha256'][:12]}, đổi {', '.join(sorted(p['files']))})"
+                              for p in patches)
+            self.say(f"  + vendor: {name} @ {entry['sha'][:12]}{patched} -> vendor/{dest}")
             record[name] = {"key": item["key"], "sha": entry["sha"], "kind": item["kind"]}
+            if patches:
+                record[name]["patches"] = [p["path"] for p in patches]
             exports[name] = (cache, entry["sha"], entry.get("subpath") or "")
+            patch_lists[name] = patches
             (plugins if is_plugin else skills).append((name, src, item["scope"]))
         if not record:
             return
@@ -405,15 +499,25 @@ class Installer:
                 return
             if not existed:
                 vendor_root.mkdir()
+                # Đánh dấu ngay là của agent-stack: mọi mục đều hỏng thì lần chạy sau không coi đây là thư mục lạ.
+                (vendor_root / "VENDORED.json").write_text("{}\n")
                 self.record(type="vendor-dir", path=str(vendor_root))
             for group, items, skip in (("skills", skills, SKIP_IN_VENDOR), ("plugins", plugins, SKIP_IN_VENDOR_PLUGIN)):
                 for name, src, _ in items:
                     meta_src = exports[name]
                     try:
                         export_vetted(*meta_src, vendor_root / group / name, skip)
+                        problem = apply_patches(HOME_STACK, vendor_root / group / name, patch_lists[name])
                     except (OSError, subprocess.SubprocessError, tarfile.TarError) as exc:
+                        shutil.rmtree(vendor_root / group / name, ignore_errors=True)
                         self.say(f"  ! không chép được {name} từ commit đã duyệt: {exc}")
                         self.failures.append(f"{record.pop(name)['key']}: không xuất được bản đã duyệt ({exc})")
+                        continue
+                    if problem:
+                        # Bản chưa vá hay vá sai không được nằm lại trong vendor/, kẻo lần sau bị cài nhầm.
+                        shutil.rmtree(vendor_root / group / name, ignore_errors=True)
+                        self.say(f"  ! không chép {name}: {problem}")
+                        self.failures.append(f"{record.pop(name)['key']}: {problem}")
             skills = [x for x in skills if x[0] in record]
             plugins = [x for x in plugins if x[0] in record]
             if not record:
@@ -443,8 +547,9 @@ class Installer:
             pid = f"{name}@{VENDOR_MARKETPLACE}"
             self.run([self.claude_bin, "plugin", "install", pid, "--scope", "user"],
                      undo=[self.claude_bin, "plugin", "uninstall", pid, "--scope", "user"], ok_if="already")
-            if name != VENDOR_PLUGIN and self.stale_install(pid, vendor_root / "plugins" / name if self.apply else
-                                                            next(src for n, src, _ in plugins if n == name)):
+            # Xem trước thì chưa có bản đã vá để so, nên plugin có bản vá chỉ được so khi chạy thật.
+            if name != VENDOR_PLUGIN and (self.apply or not patch_lists.get(name)) and self.stale_install(
+                    pid, vendor_root / "plugins" / name if self.apply else next(src for n, src, _ in plugins if n == name)):
                 # `claude plugin update` báo "đã là bản mới nhất" khi version không đổi (đã thử 09/10/2026), nên sau
                 # khi vet lại ở commit mới phải gỡ rồi cài lại để bản trong cache khớp bản đã duyệt.
                 self.say(f"  ~ {pid}: bản đã cài khác bản đã duyệt, cài lại")

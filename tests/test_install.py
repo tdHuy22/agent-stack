@@ -327,6 +327,92 @@ class InstallTests(TempDirTestCase):
         self.assertNotIn("cài lại", out)
         self.assertFalse(any("uninstall" in c for c in self.calls_made()[before:]), "bản đã khớp thì không cài lại")
 
+    def approved_patch(self, body=None, rel="patches/dr/fix.patch", files=None):
+        """Ghi một bản vá cho README.md của fixture vendor_plugin_fixture và duyệt nó trong lock."""
+        import hashlib
+        body = body or ("--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-bản đã kiểm\n+bản đã kiểm, đã vá\n")
+        path = self.stack / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+        patch = {"path": rel, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                 "files": files if files is not None else
+                 {"README.md": hashlib.sha256("bản đã kiểm, đã vá\n".encode()).hexdigest()}}
+        self.lock["entries"]["t/s:plugins/dr"]["local_patches"] = [patch]
+        self.save()
+        return path
+
+    def test_approved_local_patch_is_applied_to_the_vendored_copy(self):
+        self.vendor_plugin_fixture()
+        git(self.stack, "init", "-q")  # agent-stack thật là repo git, vendor/ nằm trong đó
+        self.approved_patch()
+        out = self.run_install("--apply", "--only", "catalog")
+        self.assertIn("+ vá patches/dr/fix.patch", out)
+        vendor = self.stack / "vendor"
+        self.assertEqual((vendor / "plugins" / "dr" / "README.md").read_text(), "bản đã kiểm, đã vá\n")
+        self.assertEqual(json.loads((vendor / "VENDORED.json").read_text())["dr"]["patches"], ["patches/dr/fix.patch"])
+        self.assertIn("plugin install dr@agent-stack-vendor-local --scope user", self.calls_made())
+        # Bản đã cài đúng bằng bản đã vá thì lần chạy sau không cài lại.
+        cached = self.home / ".claude" / "plugins" / "cache" / "agent-stack-vendor-local" / "dr" / "1.0.0"
+        shutil.copytree(vendor / "plugins" / "dr", cached, dirs_exist_ok=True)
+        (self.home / ".claude" / "plugins" / "installed_plugins.json").write_text(json.dumps(
+            {"version": 2, "plugins": {"dr@agent-stack-vendor-local": [{"scope": "user", "installPath": str(cached)}]}}))
+        self.assertNotIn("cài lại", self.run_install("--apply", "--only", "catalog"))
+
+    def test_patch_changed_after_approval_or_changing_other_files_is_refused(self):
+        self.vendor_plugin_fixture()
+        path = self.approved_patch()
+        path.write_text(path.read_text().replace("đã vá", "đã vá, thêm lệnh lạ"), encoding="utf-8")
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("bản vá patches/dr/fix.patch khác bản đã duyệt (sha256)", out)
+        self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+        self.assertFalse(any("dr@" in c for c in self.calls_made()))
+        # Áp được nhưng kết quả khác bản đã duyệt: không để lại bản chép, không cài.
+        self.approved_patch(files={"README.md": "0" * 64})
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("đổi file khác với bản đã duyệt", out)
+        self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+        self.assertFalse(any("dr@" in c for c in self.calls_made()))
+
+    def test_patch_outside_patches_dir_or_escaping_the_plugin_is_refused(self):
+        self.vendor_plugin_fixture()
+        self.approved_patch(rel="other/fix.patch")
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("không phải file trong patches/", out)
+        escape = "--- a/../escape.txt\n+++ b/../escape.txt\n@@ -0,0 +1 @@\n+lọt ra ngoài\n"
+        self.approved_patch(body=escape, files={"../escape.txt": "0" * 64})
+        out = self.run_install("--apply", "--only", "catalog", expect=1)
+        self.assertIn("không áp bản vá patches/dr/fix.patch", out)
+        self.assertFalse((self.stack / "vendor" / "plugins" / "escape.txt").exists())
+        self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+
+    def test_malformed_local_patches_are_refused_without_crashing(self):
+        self.vendor_plugin_fixture()
+        for bad in (["patches/dr/fix.patch"], {"path": "x"}, [{"path": "patches/dr/fix.patch", "sha256": "0" * 64,
+                                                                  "files": ["README.md"]}]):
+            self.lock["entries"]["t/s:plugins/dr"]["local_patches"] = bad
+            self.save()
+            out = self.run_install("--apply", "--only", "catalog", expect=1)
+            self.assertIn("local_patches", out, bad)
+            self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists())
+            self.assertIn("Tổng kết:", out)  # trình cài không dừng giữa chừng
+
+    def test_patch_shapes_the_digest_check_cannot_see_are_refused(self):
+        # Symlink, đổi quyền chạy, đường dẫn bị bỏ qua khi băm: sha256 nội dung không thấy, nên chặn trước khi áp.
+        self.vendor_plugin_fixture()
+        shapes = {
+            "symlink": ("diff --git a/skills/evil b/skills/evil\nnew file mode 120000\n--- /dev/null\n+++ b/skills/evil\n"
+                        "@@ -0,0 +1 @@\n+/Users\n\\ No newline at end of file\n", "create mode 120000"),
+            "mode": ("diff --git a/README.md b/README.md\nold mode 100644\nnew mode 100755\n", "mode change"),
+            "ignored": ("diff --git a/.in_use/x.sh b/.in_use/x.sh\nnew file mode 100644\n--- /dev/null\n+++ b/.in_use/x.sh\n"
+                        "@@ -0,0 +1 @@\n+echo lot\n", "không được băm .in_use/x.sh"),
+        }
+        for name, (body, message) in shapes.items():
+            self.approved_patch(body=body, files={"README.md": "0" * 64})
+            out = self.run_install("--apply", "--only", "catalog", expect=1)
+            self.assertIn(message, out, name)
+            self.assertFalse((self.stack / "vendor" / "plugins" / "dr").exists(), name)
+            self.assertFalse(any("dr@" in c for c in self.calls_made()), name)
+
     def test_tools_step_installs_brew_tools_of_approved_items_and_rolls_back(self):
         brew_log = self.tmp / "brew.log"
         brew = self.tmp / "fake-brew"

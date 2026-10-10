@@ -696,10 +696,26 @@ def cmd_scan(args, home: Path) -> int:
                         {"status": "pending", "at": None, "note": None},
         "reviews": reviews,
     }
+    # Bản vá cục bộ đã duyệt gắn với đúng commit này: vet lại cùng commit thì giữ. Commit khác thì bỏ, và ghi lại
+    # (lock, báo cáo, tóm tắt) để người duyệt kiểm upstream đã sửa chưa, kẻo lỗi cũ quay lại mà không ai biết.
+    dropped = []
+    if same_sha:
+        for field in ("local_patches", "dropped_patches"):
+            if old.get(field):
+                lock["entries"][key][field] = old[field]
+    elif old.get("local_patches"):
+        dropped = [{k: p.get(k) for k in ("path", "why", "upstream")} for p in old["local_patches"]]
+        lock["entries"][key]["dropped_patches"] = dropped
+        with report_path.open("a", encoding="utf-8") as fh:
+            fh.write("\n## Bản vá cục bộ bị bỏ khi đổi commit\n\n" + "".join(
+                f"- `{d['path']}`: {d['why']} Upstream: {d['upstream']}\n" for d in dropped) +
+                "\nKiểm upstream đã sửa lỗi này ở commit mới chưa; chưa thì làm lại bản vá cho commit mới và duyệt lại.\n")
     save_lock(home, lock)
 
     summary = {"key": key, "verdict": result, "sha": meta["sha"], "report": str(report_path),
                "fail": fail, "review": review[:20], "must_read": must_read(files, comp, flags, scanner, second)}
+    if dropped:
+        summary["dropped_patches"] = dropped
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
@@ -710,6 +726,9 @@ def cmd_scan(args, home: Path) -> int:
             print(f"  ⚠️  {x}")
         if len(review) > 12:
             print(f"  … và {len(review) - 12} lý do khác trong báo cáo")
+        for d in dropped:
+            print(f"  ⚠️  Bỏ bản vá cục bộ {d['path']} vì commit đổi ({d['upstream']}): kiểm upstream đã sửa chưa, "
+                  "chưa thì làm lại bản vá rồi duyệt lại")
         print(f"  Báo cáo: {report_path}")
     return {"PASS": 0, "REVIEW": 1, "FAIL": 2}[result]
 
@@ -723,6 +742,9 @@ def cmd_review(args, home: Path, status: str) -> int:
         "status": status, "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "note": args.note}
     save_lock(home, lock)
     print(f"Đã ghi {status} cho {args.key}.")
+    for d in lock["entries"][args.key].get("dropped_patches") or []:
+        print(f"⚠️  Commit này không còn bản vá cục bộ {d.get('path')} ({d.get('upstream')}); "
+              "nếu upstream chưa sửa thì lỗi cũ quay lại.")
     return 0
 
 

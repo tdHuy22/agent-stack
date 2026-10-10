@@ -62,6 +62,8 @@ Marketplace chính thức tự cập nhật, nên plugin đã cài có thể chu
 python3 "${CLAUDE_SKILL_DIR}/scripts/vet.py" drift            # --quiet: im lặng khi ổn; --json
 ```
 
+Plugin có bản vá cục bộ đã duyệt (`local_patches` trong `vetted.lock`, `install.sh` áp lúc chép vào `vendor/`): file đã vá chỉ khớp khi sha256 đúng bằng giá trị trong lock. Thêm hay đổi bản vá cần người dùng duyệt như duyệt một bản mới.
+
 Khi lệch: báo người dùng, đề nghị tắt plugin (`claude plugin disable <id>`) và chạy lại `scan` cho khóa đó, rồi chờ người dùng duyệt. Giới hạn: plugin `strict: false` lấy cấu hình (ví dụ lệnh LSP) từ `marketplace.json`, phần đó không được so.
 
 ## Kết quả trả về cho người dùng

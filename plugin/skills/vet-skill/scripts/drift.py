@@ -7,6 +7,9 @@ Trạng thái: match (giống hệt), drift (có file đổi, thêm, mất), unv
 hoặc vetted.lock), unapproved (chưa được người dùng duyệt), no-snapshot (thiếu bản đã kiểm trong
 .vet-cache), missing (thư mục cài không còn), own (plugin của chính agent-stack, bỏ qua).
 
+Bản vá cục bộ đã duyệt (mục local_patches của vetted.lock, install.py áp lúc chép vào vendor/): file bị vá chỉ khớp
+khi sha256 đúng bằng giá trị ghi trong lock; mọi file khác vẫn so với bản đã kiểm.
+
 Giới hạn: plugin `strict: false` lấy cấu hình (ví dụ lệnh LSP) từ marketplace.json của marketplace;
 phần đó không nằm trong thư mục plugin nên không được so ở đây.
 """
@@ -41,8 +44,33 @@ def _digests(root: Path) -> dict:
     return out
 
 
-def compare(snapshot: Path, installed: Path) -> dict:
+def _is_digest(value) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
+def patched_files(entry: dict) -> dict:
+    """Đường dẫn → sha256 sau khi vá (None là file bị bản vá xóa), gộp từ mọi bản vá của mục trong lock.
+    Mục local_patches sai dạng thì ném ValueError, để plugin đó bị báo lỗi thay vì làm hỏng cả lượt kiểm."""
+    patches = entry.get("local_patches") or []
+    if not isinstance(patches, list):
+        raise ValueError("local_patches không phải danh sách")
+    out = {}
+    for patch in patches:
+        files = patch.get("files") if isinstance(patch, dict) else None
+        if not isinstance(files, dict) or not all(
+                isinstance(k, str) and k and (v is None or _is_digest(v)) for k, v in files.items()):
+            raise ValueError("local_patches có bản vá thiếu hay sai mục files")
+        out.update(files)
+    return out
+
+
+def compare(snapshot: Path, installed: Path, patched=None) -> dict:
     want, have = _digests(snapshot), _digests(installed)
+    for name, digest in (patched or {}).items():
+        if digest is None:
+            want.pop(name, None)
+        else:
+            want[name] = digest
     return {
         "changed": sorted(k for k in want.keys() & have.keys() if want[k] != have[k]),
         "added": sorted(have.keys() - want.keys()),
@@ -85,7 +113,12 @@ def check(home: Path, plugins_dir: Path) -> list:
             if not entry.get("report") or not snapshot.is_dir():
                 row["status"] = "no-snapshot"
                 continue
-            diff = compare(snapshot, path)
+            try:
+                patched = patched_files(entry)
+            except ValueError as exc:
+                row["status"], row["error"] = "bad-lock", str(exc)
+                continue
+            diff = compare(snapshot, path, patched)
             row.update(diff)
             row["status"] = "drift" if any(diff.values()) else "match"
     return rows
@@ -99,6 +132,7 @@ LABELS = {
     "no-snapshot": "thiếu bản đã kiểm trong .vet-cache (chạy lại vet.py scan)",
     "missing": "thư mục cài không còn",
     "own": "plugin của agent-stack, bỏ qua",
+    "bad-lock": "mục trong vetted.lock sai dạng (local_patches); sửa lock rồi kiểm lại",
 }
 
 
