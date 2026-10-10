@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import unittest
+from pathlib import Path
 
 from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
 from tests.test_agentstack_lib import PLAN, secret_samples
@@ -82,6 +83,34 @@ class HookTests(TempDirTestCase):
             self.assertIn("demo@mk", ctx)
             self.assertIn("hooks.json", ctx)
             self.assertIn("demo@mk", out["systemMessage"])
+
+    def test_session_start_reports_mcp_drift_saved_by_the_background_check(self):
+        env = self.drift_env(drifted=False)
+        home, url, sha = Path(env["AGENT_STACK_HOME"]), "https://mcp.exa.ai/mcp", "90f51c5b65f2" + "0" * 52
+        catalog = json.loads((home / "catalog.json").read_text())
+        catalog["items"].append({"key": "mcp:mcp.exa.ai/mcp", "kind": "mcp-remote", "scope": "user",
+                                 "install": {"name": "exa", "url": url}})
+        (home / "catalog.json").write_text(json.dumps(catalog))
+        lock = json.loads((home / "vetted.lock").read_text())
+        lock["entries"]["mcp:mcp.exa.ai/mcp"] = {"source": "mcp:" + url, "kind": "mcp-remote", "sha": sha,
+                                                 "human_review": {"status": "approved"}}
+        (home / "vetted.lock").write_text(json.dumps(lock))
+        config = self.tmp / "claude-config"
+        config.mkdir()
+        (config / ".claude.json").write_text(json.dumps({"mcpServers": {"exa": {"type": "http", "url": url}}}))
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / "mcp-drift.json").write_text(json.dumps({"checked_at": time.time(), "rows": [
+            {"plugin": "MCP exa", "name": "exa", "key": "mcp:mcp.exa.ai/mcp", "status": "drift",
+             "vetted_sha": sha[:12], "changed": ["web_search_exa"]}]}))
+        env["CLAUDE_CONFIG_DIR"] = str(config)
+        out = self.run_hook("session_start.py", {"session_id": "mcpd", "source": "startup", "cwd": str(self.project)},
+                            env_extra=env)
+        self.assertIn("MCP exa", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("web_search_exa", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("MCP exa", out["systemMessage"])
+        (config / ".claude.json").write_text(json.dumps({"mcpServers": {}}))  # đã gỡ: không báo nữa
+        self.assertIsNone(self.run_hook("session_start.py", {"session_id": "mcpe", "source": "startup",
+                                                             "cwd": str(self.project)}, env_extra=env))
 
     def test_session_start_drift_check_silent_when_matching_or_not_startup(self):
         self.assertIsNone(self.run_hook("session_start.py", {"session_id": "m", "source": "startup",

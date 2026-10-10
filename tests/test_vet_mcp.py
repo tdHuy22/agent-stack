@@ -382,6 +382,65 @@ class RemoteDrift(TempDirTestCase):
         self.assertEqual(self.status(self.rows({})), {"MCP demo": "absent"})
         self.assertEqual(self.status(self.rows({"demo": {"type": "http", "url": URL}})), {"MCP demo": "unapproved"})
 
+    def test_background_check_starts_at_most_daily_and_only_for_installed_approved_servers(self):
+        state = self.tmp / "state" / "mcp-drift.json"
+        calls = []
+        spawn = lambda cmd, env: calls.append((cmd, env))  # noqa: E731
+        start = lambda now: mcp_remote.maybe_start_background(self.home, self.claude_json, state, now, spawn)  # noqa: E731
+        old = os.environ.pop(mcp_remote.NO_BACKGROUND_ENV, None)
+        self.addCleanup(lambda: old is not None and os.environ.__setitem__(mcp_remote.NO_BACKGROUND_ENV, old))
+        self.claude_json.write_text(json.dumps({"mcpServers": {}}))
+        self.assertFalse(start(1_000_000))  # đã duyệt nhưng chưa cài: không có gì để kiểm
+        self.claude_json.write_text(json.dumps({"mcpServers": {"demo": {"type": "http", "url": URL}}}))
+        self.assertTrue(start(1_000_000))
+        cmd, env = calls[-1]
+        self.assertEqual(cmd[2:4], ["drift", "--save-state"])
+        self.assertEqual(env["AGENT_STACK_HOME"], str(self.home))
+        self.assertFalse(start(1_000_000 + 60))  # đang chạy: chờ hết thời gian ân hạn
+        self.assertTrue(start(1_000_000 + mcp_remote.START_GRACE + 1))  # lần trước không xong: thử lại
+        done = 1_000_000 + mcp_remote.START_GRACE + 60
+        mcp_remote.save_check(self.home, self.claude_json, state, fetch=lambda url: snapshot(), now=done)
+        self.assertFalse(start(done + 3600))  # vừa kiểm xong
+        self.assertTrue(start(done + mcp_remote.CHECK_INTERVAL + 1))  # một ngày sau: kiểm lại
+        mcp_remote.save_check(self.home, self.claude_json, state, fetch=lambda url: snapshot(), now=9e12)
+        self.assertTrue(start(done + 2 * mcp_remote.CHECK_INTERVAL))  # mốc ở tương lai (đồng hồ sai) không chặn
+        os.environ[mcp_remote.NO_BACKGROUND_ENV] = "1"
+        self.assertFalse(start(done + 9 * mcp_remote.CHECK_INTERVAL))  # tắt bằng biến môi trường
+        self.assertEqual(len(calls), 4)
+
+    def test_saved_check_reports_only_problems_that_still_hold(self):
+        state = self.tmp / "mcp-drift.json"
+        problems = lambda: mcp_remote.saved_problems(state, self.home, self.claude_json)  # noqa: E731
+        installed = {"mcpServers": {"demo": {"type": "http", "url": URL}}}
+        self.claude_json.write_text(json.dumps(installed))
+        mcp_remote.save_check(self.home, self.claude_json, state, fetch=lambda url: snapshot())
+        self.assertEqual(problems(), [])
+        mcp_remote.save_check(self.home, self.claude_json, state, fetch=lambda url: snapshot(instructions="New."))
+        self.assertEqual([r["status"] for r in problems()], ["drift"])
+        self.claude_json.write_text(json.dumps({"mcpServers": {}}))  # bạn gỡ server theo lời khuyên
+        self.assertEqual(problems(), [])
+        self.claude_json.write_text(json.dumps(installed))
+        self.lock["entries"]["mcp:mcp.example.com/mcp"]["sha"] = "f" * 64  # đã quét và duyệt lại bản khác
+        (self.home / "vetted.lock").write_text(json.dumps(self.lock))
+        self.assertEqual(problems(), [])
+        state.write_text(json.dumps({"rows": [{"plugin": "MCP demo", "status": "trạng-thái-lạ"}, {"status": "drift"},
+                                              "x", {"plugin": "MCP manual\nGiả", "name": "manual", "status": "unvetted"}]}))
+        self.assertEqual(problems(), [])  # dòng lạ bị bỏ; server ngoài catalog không còn cài
+        self.claude_json.write_text(json.dumps({"mcpServers": {"manual": {"type": "stdio"}}}))
+        self.assertEqual([r["plugin"] for r in problems()], ["MCP manual Giả"])  # chữ đã làm sạch, một dòng
+        state.write_text("không phải json")
+        self.assertEqual(problems(), [])
+
+    def test_save_state_cli_runs_the_check_quietly(self):
+        fixtures = self.tmp / "snapshots.json"
+        fixtures.write_text(json.dumps({URL: snapshot(instructions="Changed.")}))
+        self.claude_json.write_text(json.dumps({"mcpServers": {"demo": {"type": "http", "url": URL}}}))
+        state = self.tmp / "st" / "mcp-drift.json"
+        out = run_script(VET, "drift", "--save-state", str(state), "--claude-json", str(self.claude_json),
+                         env={"AGENT_STACK_HOME": str(self.home), mcp_remote.TEST_ENV: str(fixtures)})
+        self.assertEqual((out.returncode, out.stdout), (0, ""), out.stderr)
+        self.assertEqual(json.loads(state.read_text())["rows"][0]["status"], "drift")
+
     def test_cli_remote_flag_reports_and_exits_1_on_drift(self):
         fixtures = self.tmp / "snapshots.json"
         tools = snapshot()["tools"][:1]

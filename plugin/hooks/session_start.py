@@ -87,13 +87,25 @@ def plugin_drift():
         rows = [r for r in drift.check(home, plugins) if r["status"] not in drift.OK_STATUSES]
     except Exception:  # kiểm phụ: lỗi ở đây không được làm mất phần còn lại của hook
         return "", ""
+    try:  # MCP từ xa: đọc kết quả lần kiểm nền trước, và khởi lần mới nếu đã quá một ngày (không chờ)
+        import mcp_remote  # noqa: E402
+        saved = A.state_dir() / "mcp-drift.json"
+        claude_json = mcp_remote.claude_json_path()
+        rows += mcp_remote.saved_problems(saved, home, claude_json)
+        mcp_remote.maybe_start_background(home, claude_json, saved)
+    except Exception:
+        pass
     if not rows:
         return "", ""
-    names = ", ".join(r["plugin"] for r in rows[:5])
-    detail = drift.render(rows, quiet=True).strip()
-    context = (f"[agent-stack] Plugin lệch hoặc chưa qua bản đã kiểm duyệt: {names}. Báo cho người dùng "
-               f"trước khi dùng các plugin này; kiểm lại bằng `vet.py drift`.\n{A.clip(detail, 1200)}")
-    return context, f"⚠️ Plugin lệch bản đã kiểm duyệt: {names}"
+    try:
+        names = ", ".join(r["plugin"] for r in rows[:5])
+        detail = drift.render(rows, quiet=True).strip()
+    except Exception:  # dòng lạ không được làm mất §0 và phần còn lại của hook
+        return "", ""
+    context = (f"[agent-stack] Plugin hay MCP lệch hoặc chưa qua bản đã kiểm duyệt: {names}. Báo cho người dùng "
+               f"trước khi dùng chúng; kiểm lại bằng `vet.py drift` (MCP từ xa: `vet.py drift --remote`)."
+               f"\n{A.clip(detail, 1200)}")
+    return context, f"⚠️ Lệch bản đã kiểm duyệt: {names}"
 
 
 if __name__ == "__main__":

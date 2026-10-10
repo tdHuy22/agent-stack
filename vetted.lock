@@ -430,9 +430,9 @@
     },
     "mcp:mcp.exa.ai/mcp": {
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-10T15:53:11Z",
+        "note": "Bạn duyệt trong chat 10/10/2026 sau khi đọc tóm tắt báo cáo: REVIEW, không dấu hiệu tool poisoning, không có instructions, định nghĩa tool 2.372 ký tự; câu tìm kiếm và URL gửi tới Exa (đã chấp nhận khi chọn A2).",
+        "status": "approved"
       },
       "instructions_sha": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
       "kind": "mcp-remote",

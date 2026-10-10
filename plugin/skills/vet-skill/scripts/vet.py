@@ -817,6 +817,7 @@ def main(argv=None) -> int:
     dr.add_argument("--remote", action="store_true",
                     help="kiểm cả MCP từ xa trong catalog: lấy lại định nghĩa tool qua mạng, so với hash đã duyệt")
     dr.add_argument("--claude-json", help="cấu hình MCP scope user (mặc định ~/.claude.json)")
+    dr.add_argument("--save-state", metavar="FILE", help=argparse.SUPPRESS)  # lượt kiểm nền của hook SessionStart
     d = sub.add_parser("dynamic", help="chạy một lệnh của đối tượng trong sandbox (tùy chọn)")
     d.add_argument("key", nargs="?", help="khóa trong vetted.lock hoặc thư mục cục bộ")
     d.add_argument("--setup", action="store_true", help="cài sandbox-runtime vào .cache/srt")

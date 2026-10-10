@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,8 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+# Không để hook SessionStart chạy trong test khởi lượt kiểm MCP thật qua mạng (máy có MCP đã cài).
+os.environ.setdefault("AGENT_STACK_NO_BACKGROUND", "1")
 TMP_ROOT = REPO / ".tmp"
 PLUGIN = REPO / "plugin"
 

@@ -79,6 +79,7 @@
       - Exa: có 1 resource và 1 prompt, vô hại.
     - **Review:** `differential-review` (5 vừa, 6 thấp) rồi `agent-stack:reviewer` opus · high (1 vừa, 2 thấp). Đã sửa tất cả trừ 4 điểm ghi là chấp nhận rủi ro trong TM-15, TM-16, TM-17. Gỡ thử hai chốt chặn của `install.py` thì test trượt.
     - **Kiểm chứng (có biên nhận):** xem mục Mốc kiểm tra; `./install.sh --only catalog` (xem trước) báo 3 mục "chờ duyệt"; `vet.py drift --remote` báo "chưa cài".
+    - **Bạn chọn trong chat (10/10/2026):** duyệt Exa (đã ghi `approve`); kiểm lệch MCP tự động mỗi ngày. Plugin 0.8.15: hook SessionStart báo kết quả lần kiểm nền trước (chỉ khi còn đúng: server còn cài, chưa duyệt bản khác) và mỗi ngày khởi một lượt `vet.py drift --save-state` chạy tách phiên, không chờ; tắt bằng `AGENT_STACK_NO_BACKGROUND=1` (test luôn đặt). Review `agent-stack:reviewer` lượt hai: 1 vừa (cảnh báo cũ không tự hết), 1 thấp (dòng lạ làm mất output của hook), đã sửa kèm test.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   - Duyệt từng MCP sau khi đọc báo cáo trong `vet-reports/mcp__*.md` (Exa; Parallel và DeepWiki có lưu ý ở mục Xong), bằng `python3 plugin/skills/vet-skill/scripts/vet.py approve "<khóa>" --note "..."` hoặc nói trong chat. Sau đó chạy `./install.sh --apply --only plugin,catalog`: lệnh này cài lại plugin 0.8.14 (bản 0.8.13 cài lúc 22:32 ngày 10/10/2026, nhật ký `state/install-logs/20261010-223227.json`, chép cả phần `vet-skill` lúc chưa commit) và thêm các MCP đã duyệt. Rồi mở phiên mới.
@@ -90,9 +91,9 @@
 - **Quyết định còn treo:**
   - **Còn treo sau GĐ19, GĐ20** (09/10/2026): 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: vet khi có code mã hóa hay C cần soi. Các rủi ro đã chốt theo đề xuất ngày 09/10/2026: chấp nhận TM-6, phần còn lại của TM-7 và TM-9; khóa `hatchling` cho TM-8 (xem `.agent/threat-model.md`).
   - **Đề xuất bảo mật từ phiên "Skill/plugin security hiện tại" (05/10/2026):** đã làm ở GĐ19 và GĐ20: router không còn gợi ý `differential-review` khi chưa cài; dòng "Audit bảo mật cả repo" trỏ `claude-security`; đã vet `NVIDIA/SkillSpector`. Phần còn lại nằm ở mục "Còn treo sau GĐ19, GĐ20" ở trên.
-  - **Bộ duyệt web** (chốt 10/10/2026: A2, B1, cài qua `install.sh`; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Còn chờ bạn:
-    - Duyệt từng server (xem "Việc tiếp theo"). Sau khi duyệt, mình thêm vào luật chung một dòng chọn công cụ tìm web theo các server được duyệt: tìm qua Exa hay Parallel, crawl, map và research qua Tavily, WebSearch làm dự phòng.
-    - Server đổi tool sau khi cài (TM-15) chỉ bị phát hiện khi chạy `vet.py drift --remote`. Hai lựa chọn: chạy tự động định kỳ (ví dụ mỗi ngày một lần, nền, báo ở phiên sau), hoặc chấp nhận và chạy tay.
+  - **Bộ duyệt web** (chốt 10/10/2026: A2, B1, cài qua `install.sh`; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Exa đã duyệt; kiểm lệch tự động mỗi ngày đã làm. Còn chờ bạn:
+    - Parallel và DeepWiki: bạn muốn giữ để Claude tự dùng khi việc hợp. Hai cách: (1) duyệt và cài ở scope user (Claude tự gọi; `instructions` khoảng 5.000 ký tự nạp vào mọi phiên; Parallel nhận mã phiên cố định), hoặc (2) không cài, làm skill nhỏ gọi chúng qua script khi việc hợp (không tốn context ở phiên thường, phải viết thêm skill và test).
+    - Sau khi cài: thêm vào luật chung một dòng chọn công cụ tìm web (tìm qua Exa, crawl, map, research qua Tavily, WebSearch dự phòng).
     - Tùy chọn: thêm Cisco `mcp-scanner` (`--analyzers yara`, cục bộ) làm lớp quét thứ hai. Phải vet trước, và nó kéo theo nhiều dependency.
     - Trình duyệt: giữ nguyên (B1). Khi cần chạy `claude` ngoài app desktop thì xem lại `@playwright/cli` và `chrome-devtools-mcp`.
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:

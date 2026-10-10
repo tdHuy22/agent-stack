@@ -38,6 +38,11 @@ MAX_PAGES = 20
 # Không nhận query string, fragment hay thông tin đăng nhập trong URL: khóa API không được nằm trong lock hay catalog.
 URL_RE = re.compile(r"^https://[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?(?:/[A-Za-z0-9._~/-]*)?$")
 TEST_ENV = "AGENT_STACK_TEST_MCP_SNAPSHOTS"
+# Kiểm lệch nền (hook SessionStart): tối đa một lần mỗi ngày; một lần đang chạy thì 15 phút sau mới thử lại.
+CHECK_INTERVAL, START_GRACE = 24 * 3600, 15 * 60
+NO_BACKGROUND_ENV = "AGENT_STACK_NO_BACKGROUND"  # đặt bằng 1 để tắt việc kiểm nền (test luôn đặt)
+OK_DRIFT = {"match", "absent"}
+PROBLEM_DRIFT = {"drift", "unvetted", "unapproved", "url-mismatch", "unreachable"}
 # Trường chắc chắn không đi vào context của model. `_meta` vẫn được ghim vì không chắc client có đọc nó không.
 UNPINNED_TOOL_FIELDS = {"icons"}
 # Tên tool theo đặc tả MCP; tên khác (xuống dòng, mã ANSI, ký tự ẩn) có thể giả dòng trong báo cáo hay terminal.
@@ -510,6 +515,116 @@ def user_servers(claude_json: Path) -> dict:
     return servers if isinstance(servers, dict) else {}
 
 
+def watched(home: Path, claude_json: Path) -> list:
+    """Tên các MCP từ xa đã duyệt và đang cài đúng URL: thứ cần kiểm lệch định kỳ. Không gọi mạng."""
+    try:
+        catalog = json.loads((home / "catalog.json").read_text(encoding="utf-8"))
+        entries = json.loads((home / "vetted.lock").read_text(encoding="utf-8")).get("entries", {})
+    except (OSError, ValueError):
+        return []
+    configured, out = user_servers(claude_json), []
+    for item in catalog.get("items", []):
+        inst = item.get("install") if isinstance(item.get("install"), dict) else {}
+        entry = entries.get(item.get("key")) or {}
+        have = configured.get(inst.get("name"))
+        if (item.get("kind") == "mcp-remote" and (entry.get("human_review") or {}).get("status") == "approved"
+                and isinstance(have, dict) and have.get("url") == inst.get("url")):
+            out.append(str(inst.get("name")))
+    return out
+
+
+def _read_state(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_state(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")  # nhiều phiên mở cùng lúc không ghi chung một file tạm
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def save_check(home: Path, claude_json: Path, path: Path, fetch=None, now: float = None) -> list:
+    """Chạy drift_rows (có mạng) rồi lưu kết quả cho hook SessionStart đọc ở phiên sau."""
+    rows = drift_rows(home, claude_json, fetch or fetch_snapshot)
+    _write_state(path, {"checked_at": time.time() if now is None else now, "rows": rows})
+    return rows
+
+
+def _safe_row(row: dict) -> dict:
+    """Chép lại một dòng đã lưu, chỉ các trường biết, chữ đã làm sạch: file trạng thái có thể bị sửa tay."""
+    out = {"plugin": clean(row["plugin"], 80), "status": row["status"], "key": row.get("key")}
+    if re.fullmatch(r"[0-9a-f]{12}", str(row.get("vetted_sha") or "")):
+        out["vetted_sha"] = row["vetted_sha"]
+    if row.get("version"):
+        out["version"] = clean(row["version"], 40)
+    for k in ("changed", "added", "removed"):
+        if isinstance(row.get(k), list):
+            out[k] = [clean(x, 60) for x in row[k][:20]]
+    if row.get("error"):
+        out["error"] = clean(row["error"], 160)
+    return out
+
+
+def saved_problems(path: Path, home: Path, claude_json: Path) -> list:
+    """Dòng có vấn đề trong lần kiểm nền gần nhất, chỉ khi còn đúng với hiện tại (không gọi mạng): MCP đã gỡ, hay
+    đã quét và duyệt lại (sha khác), thì cảnh báo cũ không còn được báo."""
+    rows = _read_state(path).get("rows")
+    if not isinstance(rows, list):
+        return []
+    try:
+        entries = json.loads((home / "vetted.lock").read_text(encoding="utf-8")).get("entries", {})
+    except (OSError, ValueError):
+        entries = {}
+    current, configured, out = set(watched(home, claude_json)), user_servers(claude_json), []
+    for row in rows:
+        if not (isinstance(row, dict) and isinstance(row.get("plugin"), str) and row.get("status") in PROBLEM_DRIFT):
+            continue
+        name = row.get("name")
+        if row.get("key"):  # mục của catalog: chỉ còn đúng khi vẫn đang cài, đã duyệt, và chưa duyệt bản khác
+            sha = ((entries.get(row["key"]) or {}).get("sha") or "")[:12]
+            if row["status"] == "drift" and (name not in current or row.get("vetted_sha") != sha):
+                continue
+            if row["status"] != "drift" and name not in configured:
+                continue
+        elif name not in configured:  # server ngoài catalog đã gỡ
+            continue
+        out.append(_safe_row(row))
+    return out
+
+
+def _spawn(cmd: list, env: dict) -> None:
+    subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True, close_fds=True)
+
+
+def maybe_start_background(home: Path, claude_json: Path, path: Path, now: float = None, spawn=None) -> bool:
+    """Khởi lần kiểm lệch nền nếu có MCP đã duyệt đang cài và lần kiểm trước đã quá CHECK_INTERVAL. Trả về ngay:
+    tiến trình con tách phiên, không chờ, nên hook không chậm. Lượt kiểm chỉ gửi initialize và tools/list tới
+    đúng các server đã duyệt, không gửi dữ liệu của bạn."""
+    if os.environ.get(NO_BACKGROUND_ENV) or not watched(home, claude_json):
+        return False
+    now = time.time() if now is None else now
+    data = _read_state(path)
+    try:
+        checked, started = float(data.get("checked_at") or 0), float(data.get("started_at") or 0)
+    except (TypeError, ValueError):
+        checked = started = 0.0
+    # Mốc ở tương lai (đồng hồ máy từng chạy sai) không được chặn việc kiểm.
+    if 0 <= now - checked < CHECK_INTERVAL or 0 <= now - started < START_GRACE:
+        return False
+    data["started_at"] = now
+    _write_state(path, data)
+    cmd = [sys.executable, str(Path(__file__).with_name("vet.py")), "drift", "--save-state", str(path),
+           "--claude-json", str(claude_json)]
+    (spawn or _spawn)(cmd, dict(os.environ, AGENT_STACK_HOME=str(home)))
+    return True
+
+
 def drift_rows(home: Path, claude_json: Path, fetch=fetch_snapshot) -> list:
     """Một dòng cho mỗi mục mcp-remote của catalog và mỗi MCP scope user không qua catalog. Có gọi mạng."""
     try:
@@ -525,7 +640,7 @@ def drift_rows(home: Path, claude_json: Path, fetch=fetch_snapshot) -> list:
             continue
         name, url = str(inst.get("name", "")), str(inst.get("url", ""))
         known.add(name)
-        row = {"plugin": f"MCP {name}", "key": item.get("key"), "version": None}
+        row = {"plugin": f"MCP {clean(name, 60)}", "name": name, "key": item.get("key"), "version": None}
         rows.append(row)
         entry = entries.get(item.get("key"))
         row["vetted_sha"] = (entry.get("sha") or "")[:12] if entry else None
@@ -552,5 +667,6 @@ def drift_rows(home: Path, claude_json: Path, fetch=fetch_snapshot) -> list:
         row.update(change)
         row["status"] = "drift" if any(change.values()) else "match"
     for name in sorted(set(configured) - known):
-        rows.append({"plugin": f"MCP {clean(name, 60)}", "key": None, "version": None, "status": "unvetted"})
+        rows.append({"plugin": f"MCP {clean(name, 60)}", "name": name, "key": None, "version": None,
+                     "status": "unvetted"})
     return rows

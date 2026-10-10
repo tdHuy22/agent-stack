@@ -167,6 +167,11 @@ def render(rows: list, quiet: bool) -> str:
 
 
 def main_cli(args, home: Path) -> int:
+    if getattr(args, "save_state", None):  # lượt kiểm nền do hook SessionStart khởi: chỉ MCP từ xa, không in gì
+        import mcp_remote
+        claude_json = Path(args.claude_json).expanduser() if args.claude_json else mcp_remote.claude_json_path()
+        mcp_remote.save_check(home, claude_json, Path(args.save_state).expanduser())
+        return 0
     plugins_dir = Path(args.plugins_dir).expanduser() if args.plugins_dir else Path("~/.claude/plugins").expanduser()
     rows = check(home, plugins_dir)
     if getattr(args, "remote", False):
