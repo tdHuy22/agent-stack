@@ -24,7 +24,7 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | chot-viec |
 | Review PR lớn; review bảo mật code thường | opus·high | reviewer | differential-review* |
 | Review bảo mật mã hóa, token, thanh toán, sandbox | opus·xhigh | reviewer | differential-review* |
-| Audit bảo mật cả repo trước phát hành | opus·max | reviewer | claude-security* |
+| Audit bảo mật cả repo trước phát hành | opus·max | reviewer | static-analysis* (Semgrep) rồi claude-security* |
 | Kế hoạch việc vừa; văn bản dài | sonnet·high | Plan khi lập kế hoạch | reuse-best; giong-van |
 | Thiết kế kiến trúc; refactor lớn nhiều module | opus·high (hoặc opusplan) | Plan | reuse-best |
 | Quyết định khó đảo ngược (schema dữ liệu thật, giao thức) | opus·xhigh | Plan | reuse-best |

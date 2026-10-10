@@ -105,7 +105,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Review PR lớn trước khi merge | `opus · high` | `opus · xhigh` | agent-stack:reviewer | — | P |
 | Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | P |
 | Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |
-| Audit bảo mật cả repo, săn lỗ hổng trước phát hành | `opus · max` | `fable · max` | agent-stack:reviewer | claude-security (cài toàn cục từ 09/10/2026, gọi tay; chưa có thì reviewer audit từng module). `/security-review` chỉ xem diff của nhánh nên không dùng cho việc này | A: ví dụ chính thức của `max` |
+| Audit bảo mật cả repo, săn lỗ hổng trước phát hành | `opus · max` | `fable · max` | agent-stack:reviewer | static-analysis (Semgrep, quét trước), rồi claude-security; cả hai cài toàn cục từ 10/10/2026, gọi tay; chưa có thì reviewer audit từng module. `/security-review` chỉ xem diff của nhánh nên không dùng cho việc này | A: ví dụ chính thức của `max` |
 | Kiểm duyệt skill, plugin, MCP bên thứ ba | `opus · high` | `opus · xhigh` khi có dấu hiệu lạ | — | vet-skill | P: không có kiểm tra tự động |
 
 ### Kế hoạch và kiến trúc
