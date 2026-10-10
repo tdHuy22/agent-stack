@@ -54,8 +54,11 @@ class GuardBase(TempDirTestCase):
         return (out["hookSpecificOutput"]["permissionDecision"], out["hookSpecificOutput"]["permissionDecisionReason"]) \
             if out else None
 
-    def bash(self, command):
-        return self.guard("Bash", {"command": command})
+    def bash(self, command, sid="g1"):
+        return self.guard("Bash", {"command": command}, sid)
+
+    def start(self, prompt, sid):
+        self.hook("prompt_submit.py", {"session_id": sid, "cwd": str(self.project), "prompt": prompt})
 
 
 class InstallGuard(GuardBase):
@@ -119,7 +122,7 @@ class CheckoutGuard(GuardBase):
 
 
 class WriteGuard(GuardBase):
-    def test_creating_a_tag_or_release_asks_about_the_repo_audit(self):
+    def test_creating_a_tag_or_release_is_stopped_once_with_the_audit_reminder(self):
         cases = {"git tag v1.0": "`v1.0`", 'git tag -a v1.0 -m "phát hành v1"': "`v1.0`",
                  'git tag -m "release v2" v2.0 HEAD~1': "`v2.0`", "git -C proj tag -f v3": "`v3`",
                  "cd proj && git tag v4 && git push --tags": "`v4`",
@@ -127,18 +130,61 @@ class WriteGuard(GuardBase):
                  'git tag -am "Release 1" v1.0': "`v1.0`", 'git tag -sm "x" v1.1': "`v1.1`", "git tag -fam x v1.2": "`v1.2`",
                  "git tag -mxong v1.3": "`v1.3`", "git tag --message=x v1.4 2>&1": "`v1.4`",
                  "gh -R o/r release create v5": "`v5`"}
-        for cmd, name in cases.items():
+        for i, (cmd, name) in enumerate(cases.items()):
             with self.subTest(cmd=cmd):
-                decision, reason = self.bash(cmd)
-                self.assertEqual(decision, "ask")
+                self.start("Phát hành bản mới cho repo này", f"rel{i}")
+                decision, reason = self.bash(cmd, f"rel{i}")
+                self.assertEqual(decision, "deny", "từ chối thì lời nhắc mới tới được Claude")
                 self.assertIn(name, reason)
                 self.assertIn("/static-analysis:semgrep", reason)
                 self.assertIn("/claude-security", reason)
+                self.assertIn("hỏi họ đã audit", reason)
 
-    def test_a_blocked_command_is_not_hidden_behind_a_tag_question(self):
-        decision, reason = self.bash("git tag v1 && claude plugin install evil@x")
-        self.assertEqual(decision, "deny")
-        self.assertIn("vet-skill", reason)
+    def test_release_passes_only_after_the_user_replies(self):
+        self.start("Gắn tag v1.0 cho bản này", "rel")
+        self.assertEqual(self.bash("git tag v1.0", "rel")[0], "deny")
+        self.assertEqual(self.bash('git tag -a v1.0 -m "lần hai"', "rel")[0], "deny", "chạy lại trong cùng lượt vẫn bị chặn")
+        self.start("<task-notification>agent nền xong</task-notification>", "rel")
+        self.assertEqual(self.bash("git tag v1.0", "rel")[0], "deny", "tin hệ thống không phải câu trả lời của người dùng")
+        self.start("Đã audit rồi, tạo tag đi", "rel")
+        self.assertIsNone(self.bash("git tag v1.0", "rel"))
+        self.assertIsNone(self.bash("git tag -f v1.0 && git push origin v1.0", "rel"))
+        self.assertEqual(self.bash("git tag v2.0", "rel")[0], "deny", "tag khác phải được nhắc riêng")
+        self.assertEqual(self.bash("git -C /khac tag v1.0", "rel")[0], "deny", "repo khác phải được nhắc riêng")
+        self.assertEqual(self.bash("git tag v1.0", "phien-khac")[0], "deny", "phiên khác không dùng chung mốc chặn")
+
+    def test_slash_command_counts_as_the_users_reply(self):
+        self.start("/loop 5m /tien-do", "sl")
+        self.assertEqual(self.bash("git tag v1.0", "sl")[0], "deny", "phiên mở bằng lệnh slash vẫn bị chặn, không rơi về ask")
+        self.start("/claude-security", "sl")
+        self.assertIsNone(self.bash("git tag v1.0", "sl"))
+
+    def test_gate_follows_cd_and_repo_root(self):
+        other = self.tmp / "other"
+        other.mkdir()
+        git(other, "init", "-q")
+        self.start("Gắn tag v1.0", "cd")
+        self.assertEqual(self.bash("git tag v1.0", "cd")[0], "deny")
+        self.start("Đã audit, tạo đi", "cd")
+        self.assertIsNone(self.bash("cd app && git tag v1.0", "cd"), "thư mục con của cùng repo không bị nhắc lại")
+        self.assertIsNone(self.bash("git -C app tag v1.0", "cd"))
+        self.assertEqual(self.bash(f"cd {other} && git tag v1.0", "cd")[0], "deny", "cd sang repo khác phải được nhắc riêng")
+
+    def test_untracked_session_falls_back_to_asking_the_user(self):
+        for sid in ("", "../thoat"):
+            with self.subTest(sid=sid):
+                decision, reason = self.bash("git tag v1.0", sid)
+                self.assertEqual(decision, "ask")
+                self.assertIn("`v1.0`", reason)
+                self.assertIn("/claude-security", reason)
+
+    def test_a_blocked_command_is_not_hidden_behind_a_tag_reminder(self):
+        self.start("Gắn tag rồi cài plugin", "mix")
+        for sid in ("mix", "g1"):
+            with self.subTest(sid=sid):
+                decision, reason = self.bash("git tag v1 && claude plugin install evil@x", sid)
+                self.assertEqual(decision, "deny")
+                self.assertIn("vet-skill", reason)
 
     def test_listing_deleting_or_mentioning_tags_passes_silently(self):
         for cmd in ("git tag", "git tag -l 'v1.*'", "git tag -n5", "git tag -d v1", "git tag --contains HEAD",
@@ -161,9 +207,6 @@ class WriteGuard(GuardBase):
         import tempfile
         self.assertIsNone(self.guard("Write", {"file_path": str(Path(tempfile.gettempdir()) / "X_DIFFERENTIAL_REVIEW.md")}))
         self.assertIsNone(self.guard("Write", {"file_path": str(self.project / "README.md"), "content": "x"}))
-
-    def start(self, prompt, sid):
-        self.hook("prompt_submit.py", {"session_id": sid, "cwd": str(self.project), "prompt": prompt})
 
     def test_threat_model_nudge_once_before_first_source_edit(self):
         self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "tm1")

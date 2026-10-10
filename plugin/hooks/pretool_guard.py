@@ -9,8 +9,9 @@
   vá bị commit lẫn).
 - Sửa file mã nguồn khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model: từ chối
   một lần, nhắc chạy mo-hinh-de-doa trước khi code.
-- Tạo tag git hay `gh release create` (sắp phát hành): hỏi người dùng, nhắc bước 3 của quy trình bảo mật là audit cả
-  repo (Semgrep qua static-analysis, rồi claude-security). Chỉ nhắc, người dùng đồng ý là chạy tiếp.
+- Tạo tag git hay `gh release create` (sắp phát hành): nhắc bước 3 của quy trình bảo mật là audit cả repo (Semgrep
+  qua static-analysis, rồi claude-security). Lần đầu thì từ chối để lời nhắc tới Claude, Claude hỏi người dùng; lệnh
+  chỉ qua khi người dùng đã nhắn sau lần từ chối đó. Không theo dõi được phiên thì hỏi người dùng như cũ.
 
 Lệnh không khớp mẫu nào thì thoát ngay, không in gì. Mọi lỗi đều bỏ qua: hook không bao giờ được làm kẹt phiên.
 """
@@ -106,11 +107,23 @@ def positional(args: list, with_value=FLAGS_WITH_VALUE) -> list:
     return out
 
 
-def check_bash(command: str, cwd: str):
-    """(quyết định, lý do) hoặc None, xét mọi lệnh đơn trong chuỗi. Từ chối đứng trước hỏi: một lệnh cần hỏi (tạo tag)
-    không được che lệnh bị chặn đứng sau nó, vì người dùng đồng ý là cả chuỗi chạy."""
-    results = [r for r in (check_argv(argv, cwd) for argv in simple_commands(command)) if r]
-    return next((r for r in results if r[0] == "deny"), results[0] if results else None)
+def check_bash(command: str, cwd: str, session_id: str = ""):
+    """(quyết định, lý do) hoặc None, xét mọi lệnh đơn trong chuỗi. Từ chối đứng trước nhắc audit, nhắc audit đứng
+    trước hỏi: lời nhắc tạo tag không được che lệnh bị chặn đứng sau nó, vì qua cổng là cả chuỗi chạy."""
+    results = []
+    for argv in simple_commands(command):
+        if Path(argv[0]).name == "cd":  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
+            if len(argv) == 2 and argv[1] != "-":
+                cwd = str(Path(cwd or ".") / Path(argv[1]).expanduser())
+            continue
+        result = check_argv(argv, cwd)
+        if result:
+            results.append(result)
+    denied = [r for r in results if r[0] == "deny"]
+    if denied:
+        return denied[0]
+    audits = [r for r in results if r[0] == "audit"]
+    return (gate_release(audits, session_id) if audits else None) or next((r for r in results if r[0] == "ask"), None)
 
 
 def check_argv(argv: list, cwd: str):
@@ -137,7 +150,7 @@ def check_argv(argv: list, cwd: str):
     gh_words = positional(args, GH_RELEASE_FLAGS_WITH_VALUE) if prog == "gh" else []
     if gh_words[:2] == ["release", "create"]:  # -R/--repo có thể đứng trước release
         names = gh_words[2:]
-        return audit_reminder(f"tạo bản phát hành `{names[0]}`" if names else "tạo bản phát hành")
+        return audit_reminder(f"tạo bản phát hành `{names[0]}`" if names else "tạo bản phát hành", Path(cwd or "."))
     if prog == "git":
         where = Path(cwd or ".")
         while args and args[0].startswith("-"):  # tùy chọn chung của git: -C <thư mục>, -c <khóa=giá trị>, --no-pager
@@ -150,7 +163,7 @@ def check_argv(argv: list, cwd: str):
         if args[:1] in (["checkout"], ["switch"]):
             return check_checkout(args[0], args[1:], where)
         if args[:1] == ["tag"]:
-            return check_tag(args[1:])
+            return check_tag(args[1:], where)
     return None
 
 
@@ -183,16 +196,35 @@ def tag_names(args: list):
     return names
 
 
-def check_tag(args: list):
+def check_tag(args: list, where: Path):
     """`git tag <tên> [commit]` (kể cả -a, -s, -f, -m): tạo tag, tức là sắp phát hành. Liệt kê, xóa, kiểm tag thì bỏ qua."""
     names = tag_names(args)
-    return audit_reminder(f"tạo tag `{names[0]}`") if names else None
+    return audit_reminder(f"tạo tag `{names[0]}`", where) if names else None
 
 
-def audit_reminder(action: str):
-    return "ask", (f"agent-stack: sắp {action}, tức là sắp phát hành. Bước 3 của quy trình bảo mật là audit cả repo "
-                   "trước phát hành: quét Semgrep (`/static-analysis:semgrep`), rồi `/claude-security` tìm phần Semgrep "
-                   "bỏ sót. Đã audit commit này rồi thì đồng ý để chạy tiếp; chưa thì từ chối và audit trước.")
+def audit_reminder(action: str, where: Path):
+    """("audit", việc, khóa): khóa gồm gốc repo (hay chính thư mục, nếu không phải repo) và việc, để cổng nhớ riêng từng
+    tag của từng repo, và thư mục con của cùng repo không bị nhắc lại."""
+    top = (lib().git_out(where.expanduser(), "rev-parse", "--show-toplevel") or "").strip()
+    return "audit", action, f"{top or where.expanduser().resolve()} {action}"
+
+
+def gate_release(audits: list, session_id: str):
+    """Cổng trước khi phát hành. Lần đầu thì từ chối, vì lý do kèm từ chối tới được Claude còn lý do kèm "ask" thì không,
+    và auto mode có thể duyệt "ask" mà không ai đọc. Người dùng đã nhắn sau lần từ chối thì cho qua (None). Không theo
+    dõi được phiên (session_id lạ, không ghi được state) thì hỏi người dùng."""
+    action = ", ".join(dict.fromkeys(r[1] for r in audits))
+    step = ("Bước 3 của quy trình bảo mật là audit cả repo trước phát hành: quét Semgrep (`/static-analysis:semgrep`), "
+            "rồi `/claude-security` tìm phần Semgrep bỏ sót.")
+    gate = lib().release_gate(session_id, [r[2] for r in audits])
+    if gate == "pass":
+        return None
+    if gate == "nudge":
+        return "deny", (f"agent-stack: sắp {action}, tức là sắp phát hành. {step} Dừng ở đây, đừng chạy lại lệnh trong "
+                        "lượt này: báo người dùng lời nhắc này và hỏi họ đã audit commit sắp phát hành chưa. Người dùng "
+                        "trả lời xong mà vẫn muốn phát hành thì chạy lại đúng lệnh này, hook sẽ cho qua.")
+    return "ask", (f"agent-stack: sắp {action}, tức là sắp phát hành. {step} Đã audit commit này rồi thì đồng ý để chạy "
+                   "tiếp; chưa thì từ chối và audit trước.")
 
 
 def check_checkout(verb: str, args: list, where: Path):
@@ -274,7 +306,7 @@ def main():
         return
     cwd = data.get("cwd") or ""
     if tool == "Bash":
-        result = check_bash(str(tool_input.get("command") or ""), cwd)
+        result = check_bash(str(tool_input.get("command") or ""), cwd, data.get("session_id") or "")
     elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
         result = check_write(tool_input, cwd, data.get("session_id") or "")
     else:

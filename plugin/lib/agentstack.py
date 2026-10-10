@@ -738,6 +738,61 @@ def load_last_request(session_id):
         return None
 
 
+# ---------------------------------------------------------------- cổng nhắc audit trước phát hành
+
+# Hook PreToolUse chặn lần đầu Claude tạo tag hay bản phát hành, để lời nhắc audit tới được Claude: lý do kèm "ask" chỉ
+# hiện cho người dùng, và ở auto mode câu hỏi có thể được duyệt mà không ai đọc (kiểm 10/10/2026, Claude Code 2.1.295).
+# Lệnh chỉ qua khi người dùng đã nhắn sau lần chặn. Mốc chặn lưu ở state/audit-nudge/<session_id>.json: {khóa: ts};
+# lúc người dùng nhắn gần nhất ở state/user-msg/<session_id>.json: {ts}. Mốc này tính cả lệnh slash (`/claude-security`
+# là câu trả lời tự nhiên cho lời nhắc), khác state/last-request vốn bỏ lệnh. Khóa đã qua thì cả phiên không nhắc lại.
+AUDIT_NUDGE_DIR = "audit-nudge"
+USER_MSG_DIR = "user-msg"
+AUDIT_NUDGE_DAYS = 7
+
+
+def mark_user_message(session_id, prompt) -> None:
+    """Ghi lúc người dùng nhắn, gồm cả lệnh slash, `!`, `#`; bỏ tin rỗng và tin do hệ thống hay agent khác tạo. Không
+    bao giờ văng lỗi."""
+    try:
+        key = _session_key(session_id)
+        if key is None or not isinstance(prompt, str) or not prompt.strip() or is_automated_prompt(prompt):
+            return
+        directory = state_dir() / USER_MSG_DIR
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_json_atomic(directory / f"{key}.json", {"ts": time.time()})
+        prune(directory, AUDIT_NUDGE_DAYS)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def release_gate(session_id, keys: list):
+    """"pass" khi người dùng đã nhắn (tin thật, không phải tin hệ thống) sau lần chặn của mọi khóa; "nudge" khi phải chặn,
+    sau khi ghi mốc chặn cho các khóa chưa qua; None khi không theo dõi được phiên (session_id lạ, không ghi được
+    state). Phiên chưa ghi tin nào của người dùng thì vẫn chặn. Không bao giờ văng lỗi."""
+    try:
+        key = _session_key(session_id)
+        if key is None:
+            return None
+        spoke = (read_json(state_dir() / USER_MSG_DIR / f"{key}.json", {}) or {})
+        spoke = spoke.get("ts") if isinstance(spoke, dict) else None
+        spoke = spoke if isinstance(spoke, (int, float)) and not isinstance(spoke, bool) else None
+        directory = state_dir() / AUDIT_NUDGE_DIR
+        path = directory / f"{key}.json"
+        nudges = read_json(path, {})
+        nudges = nudges if isinstance(nudges, dict) else {}
+        pending = [k for k in keys
+                   if not (spoke is not None and isinstance(nudges.get(k), (int, float)) and nudges[k] < spoke)]
+        if not pending:
+            return "pass"
+        nudges.update({k: time.time() for k in pending})
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_json_atomic(path, nudges)
+        prune(directory, AUDIT_NUDGE_DAYS)
+        return "nudge"
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # ---------------------------------------------------------------- lượt cuối (ghi sau mỗi lượt)
 
 # Hook UserPromptSubmit ghi lúc bắt đầu mỗi lượt và dấu §0 lúc đó vào state/turns/<session>.json. Hook Stop dựa vào
