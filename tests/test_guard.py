@@ -119,6 +119,35 @@ class CheckoutGuard(GuardBase):
 
 
 class WriteGuard(GuardBase):
+    def test_creating_a_tag_or_release_asks_about_the_repo_audit(self):
+        cases = {"git tag v1.0": "`v1.0`", 'git tag -a v1.0 -m "phát hành v1"': "`v1.0`",
+                 'git tag -m "release v2" v2.0 HEAD~1': "`v2.0`", "git -C proj tag -f v3": "`v3`",
+                 "cd proj && git tag v4 && git push --tags": "`v4`",
+                 'gh release create --notes "bản đầu" v1.0': "`v1.0`", "gh release create v2.0 -t Tên": "`v2.0`",
+                 'git tag -am "Release 1" v1.0': "`v1.0`", 'git tag -sm "x" v1.1': "`v1.1`", "git tag -fam x v1.2": "`v1.2`",
+                 "git tag -mxong v1.3": "`v1.3`", "git tag --message=x v1.4 2>&1": "`v1.4`",
+                 "gh -R o/r release create v5": "`v5`"}
+        for cmd, name in cases.items():
+            with self.subTest(cmd=cmd):
+                decision, reason = self.bash(cmd)
+                self.assertEqual(decision, "ask")
+                self.assertIn(name, reason)
+                self.assertIn("/static-analysis:semgrep", reason)
+                self.assertIn("/claude-security", reason)
+
+    def test_a_blocked_command_is_not_hidden_behind_a_tag_question(self):
+        decision, reason = self.bash("git tag v1 && claude plugin install evil@x")
+        self.assertEqual(decision, "deny")
+        self.assertIn("vet-skill", reason)
+
+    def test_listing_deleting_or_mentioning_tags_passes_silently(self):
+        for cmd in ("git tag", "git tag -l 'v1.*'", "git tag -n5", "git tag -d v1", "git tag --contains HEAD",
+                    "git tag --sort=-v:refname", "git tag --list --format='%(refname)'", "gh release list",
+                    'echo "git tag v1"', 'git commit -m "chuẩn bị git tag v1.0"', "git tag 2>/dev/null",
+                    "git tag > tags.txt", 'git tag -li "v1*"', "git tag -ln3 | sort"):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(self.bash(cmd))
+
     def test_vulnerability_report_must_not_land_in_project(self):
         decision, reason = self.guard("Write", {"file_path": str(self.project / "PROJ_DIFFERENTIAL_REVIEW_2026-10-09.md"),
                                                 "content": "x"})

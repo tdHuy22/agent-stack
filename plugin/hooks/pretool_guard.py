@@ -9,6 +9,8 @@
   vá bị commit lẫn).
 - Sửa file mã nguồn khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model: từ chối
   một lần, nhắc chạy mo-hinh-de-doa trước khi code.
+- Tạo tag git hay `gh release create` (sắp phát hành): hỏi người dùng, nhắc bước 3 của quy trình bảo mật là audit cả
+  repo (Semgrep qua static-analysis, rồi claude-security). Chỉ nhắc, người dùng đồng ý là chạy tiếp.
 
 Lệnh không khớp mẫu nào thì thoát ngay, không in gì. Mọi lỗi đều bỏ qua: hook không bao giờ được làm kẹt phiên.
 """
@@ -24,6 +26,12 @@ ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 PREFIXES = {"sudo", "env", "command", "exec", "time", "nohup", "nice", "!"}
 SHELLS = {"sh", "bash", "zsh", "dash"}
 FLAGS_WITH_VALUE = {"--scope", "-s", "--transport", "-t", "--env", "-e", "--header", "-H", "--sparse"}
+# git tag: cờ chỉ xem, xóa hay kiểm tag (không tạo tag mới), và cờ cần giá trị (giá trị không phải tên tag).
+TAG_READ_FLAGS = {"-l", "--list", "-d", "--delete", "-v", "--verify", "--contains", "--no-contains", "--points-at",
+                  "--merged", "--no-merged", "--column", "--no-column", "--sort", "--format", "-h", "--help"}
+TAG_FLAGS_WITH_VALUE = {"-m", "--message", "-F", "--file", "-u", "--local-user", "--cleanup", "--trailer"}
+GH_RELEASE_FLAGS_WITH_VALUE = {"-n", "--notes", "-F", "--notes-file", "-t", "--title", "--target", "-R", "--repo",
+                               "--discussion-category", "--notes-start-tag"}
 REPORT_RE = re.compile(r"differential[_-]?review", re.I)
 OS_TEMP = ("/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/")
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".php", ".rs", ".c",
@@ -99,12 +107,10 @@ def positional(args: list, with_value=FLAGS_WITH_VALUE) -> list:
 
 
 def check_bash(command: str, cwd: str):
-    """(quyết định, lý do) hoặc None, xét từng lệnh đơn trong chuỗi."""
-    for argv in simple_commands(command):
-        result = check_argv(argv, cwd)
-        if result:
-            return result
-    return None
+    """(quyết định, lý do) hoặc None, xét mọi lệnh đơn trong chuỗi. Từ chối đứng trước hỏi: một lệnh cần hỏi (tạo tag)
+    không được che lệnh bị chặn đứng sau nó, vì người dùng đồng ý là cả chuỗi chạy."""
+    results = [r for r in (check_argv(argv, cwd) for argv in simple_commands(command)) if r]
+    return next((r for r in results if r[0] == "deny"), results[0] if results else None)
 
 
 def check_argv(argv: list, cwd: str):
@@ -128,6 +134,10 @@ def check_argv(argv: list, cwd: str):
         return "deny", f"agent-stack: thêm MCP server phải qua vet-skill trước. {vet_hint}"
     if prog == "npx" and "add" in words and any(w == "skills" or w.startswith("skills@") for w in words):
         return "deny", f"agent-stack: cài skill bên thứ ba phải qua vet-skill trước. {vet_hint}"
+    gh_words = positional(args, GH_RELEASE_FLAGS_WITH_VALUE) if prog == "gh" else []
+    if gh_words[:2] == ["release", "create"]:  # -R/--repo có thể đứng trước release
+        names = gh_words[2:]
+        return audit_reminder(f"tạo bản phát hành `{names[0]}`" if names else "tạo bản phát hành")
     if prog == "git":
         where = Path(cwd or ".")
         while args and args[0].startswith("-"):  # tùy chọn chung của git: -C <thư mục>, -c <khóa=giá trị>, --no-pager
@@ -139,7 +149,50 @@ def check_argv(argv: list, cwd: str):
                 args = args[1:]
         if args[:1] in (["checkout"], ["switch"]):
             return check_checkout(args[0], args[1:], where)
+        if args[:1] == ["tag"]:
+            return check_tag(args[1:])
     return None
+
+
+def tag_names(args: list):
+    """Tên tag mà `git tag <args>` sẽ tạo, hoặc [] nếu lệnh chỉ liệt kê, xóa, kiểm tag. Hiểu cờ ngắn gộp (-am "msg",
+    -li), cờ có giá trị dính liền (-mmsg, --message=x) và bỏ chuyển hướng (2>/dev/null, > file)."""
+    names, skip, rest = [], False, False
+    for arg in args:
+        if skip:
+            skip = False
+        elif rest:
+            names.append(arg)
+        elif arg == "--":
+            rest = True
+        elif re.match(r"^\d*(>>?|<)", arg):
+            skip = re.fullmatch(r"\d*(>>?|<)", arg) is not None  # toán tử đứng riêng: bỏ cả đích theo sau
+        elif arg.startswith("--"):
+            if arg.split("=")[0] in TAG_READ_FLAGS:
+                return []
+            skip = arg in TAG_FLAGS_WITH_VALUE
+        elif arg.startswith("-") and len(arg) > 1:
+            for i, flag in enumerate(arg[1:]):
+                if flag in "ldvn":
+                    return []
+                if flag in "mFu":  # cờ cần giá trị: phần còn lại là giá trị, hoặc đối số kế tiếp
+                    skip = i == len(arg) - 2
+                    break
+        else:
+            names.append(arg)
+    return names
+
+
+def check_tag(args: list):
+    """`git tag <tên> [commit]` (kể cả -a, -s, -f, -m): tạo tag, tức là sắp phát hành. Liệt kê, xóa, kiểm tag thì bỏ qua."""
+    names = tag_names(args)
+    return audit_reminder(f"tạo tag `{names[0]}`") if names else None
+
+
+def audit_reminder(action: str):
+    return "ask", (f"agent-stack: sắp {action}, tức là sắp phát hành. Bước 3 của quy trình bảo mật là audit cả repo "
+                   "trước phát hành: quét Semgrep (`/static-analysis:semgrep`), rồi `/claude-security` tìm phần Semgrep "
+                   "bỏ sót. Đã audit commit này rồi thì đồng ý để chạy tiếp; chưa thì từ chối và audit trước.")
 
 
 def check_checkout(verb: str, args: list, where: Path):
