@@ -28,20 +28,7 @@
     },
     "c_cpp": {
       "label": "C/C++",
-      "skills": [
-        "c-review"
-      ],
-      "lsp": {
-        "plugin": "clangd-lsp@claude-plugins-official",
-        "binary": "clangd",
-        "binary_install": "xcode-select --install",
-        "min_files": 30,
-        "signals": [
-          "compile_commands.json",
-          "CMakeLists.txt",
-          "meson.build"
-        ]
-      }
+      "skills": []
     },
     "hdl": {
       "label": "Verilog/VHDL",
@@ -92,14 +79,6 @@
     }
   },
   "rule_extras": {
-    "c_cpp": {
-      "security-review": [
-        "c-review"
-      ],
-      "code-review": [
-        "c-review"
-      ]
-    },
     "web": {
       "tests": [
         "webapp-testing"

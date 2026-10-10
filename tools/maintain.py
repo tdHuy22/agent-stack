@@ -34,8 +34,8 @@ RECOMMENDED_CLI = (
     ("gitleaks", "brew install gitleaks", "quét secret trước khi commit"),
     ("osv-scanner", "brew install osv-scanner", "quét lỗ hổng đã biết trong thư viện"),
 )
-# pyright và clangd chỉ cần trong project bật LSP riêng; router đề xuất lúc mở phiên ở project đủ lớn.
-LSP_NOTE = ("- `pyright`, `clangd`: chỉ cần khi bật LSP theo project (pyright-lsp, clangd-lsp); "
+# pyright chỉ cần trong project bật LSP riêng; router đề xuất lúc mở phiên ở project đủ lớn.
+LSP_NOTE = ("- `pyright`: chỉ cần khi bật LSP theo project (pyright-lsp); "
             "hồ sơ project lúc mở phiên sẽ đề xuất ở project cần, kèm lệnh cài.")
 
 

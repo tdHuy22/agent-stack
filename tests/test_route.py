@@ -85,12 +85,15 @@ class RouterRules(TempDirTestCase):
         on_demand = {i["install"].get("name") or i["install"].get("plugin")
                      for i in catalog["items"] if i["scope"] == "on-demand"}
         self.assertIn("webapp-testing", on_demand)
-        removed = {"tdd", "diagnosing-bugs", "humanizer", "grill-me", "handoff"}
+        removed = {"tdd", "diagnosing-bugs", "humanizer", "grill-me", "handoff", "c-review", "audit-context-building"}
         data = route.rules()
         used = {s for r in data["rules"] for s in r.get("skills", [])}
         used |= {s for v in data["markers"].values() for s in v.get("skills", [])}
         used |= {s for k, v in data["profiles"].items() if k != "web" for s in v.get("skills", [])}
         self.assertEqual(used & (on_demand | removed), set())
+        extras = {s for v in data["rule_extras"].values() for names in v.values() for s in names}
+        self.assertEqual(extras & removed, set())
+        self.assertNotIn("lsp", data["profiles"]["c_cpp"])  # clangd-lsp đã xoá 10/10/2026
         # Skill theo loại project (rule_extras) cũng bị lọc khi chỉ cài khi cần.
         hit = route.suggest_for("Viết test cho module đăng nhập này", {"kinds": ["web"], "markers": []})
         self.assertEqual(hit["rule"], "tests")
@@ -195,7 +198,7 @@ class ProjectFixtures(TempDirTestCase):
 
 
 class LspSuggestion(ProjectFixtures):
-    """Đề xuất LSP (pyright-lsp, clangd-lsp) riêng cho project cần nó, không cài toàn cục."""
+    """Đề xuất LSP (pyright-lsp) riêng cho project cần nó, không cài toàn cục."""
 
     def setUp(self):
         super().setUp()
@@ -259,11 +262,12 @@ class LspSuggestion(ProjectFixtures):
         self.assertIn("`brew install pyright`", ctx)
         self.assertIn("claude plugin install pyright-lsp@claude-plugins-official --scope local", ctx)
 
-    def test_c_project_with_cmake_gets_clangd(self):
+    def test_c_project_gets_no_lsp(self):
+        # clangd-lsp đã xoá khỏi danh mục ngày 10/10/2026: project C không còn được đề xuất LSP.
         root = self.repo("cproj", {"src/a.c": "\n", "src/b.c": "\n", "src/c.h": "\n", "CMakeLists.txt": "project(x)\n"})
         hint = route.session_hint(root)
-        self.assertIn("clangd-lsp", hint["context"])
-        self.assertIn("CMakeLists.txt", hint["context"])
+        self.assertNotIn("clangd", hint["context"])
+        self.assertNotIn("lsp", hint["user"].lower())
 
 
 class ProjectAware(ProjectFixtures):
@@ -302,18 +306,26 @@ class ProjectAware(ProjectFixtures):
         self.assertIsNone(route.hook_suggestion("ok", {"session_id": "c2", "cwd": str(root)}))
 
     def test_project_type_adds_skills_to_a_rule(self):
+        # Luật thật không còn skill theo loại project cho C (c-review đã xoá 10/10/2026); thử cơ chế bằng một
+        # plugin scope project có thật trong catalog (static-analysis).
+        from unittest import mock
+        data = dict(route.rules())  # bản sao nông, không đụng bản rules() đã nạp
+        data["rule_extras"] = {**data["rule_extras"], "c_cpp": {"security-review": ["static-analysis"]}}
         root = self.repo("c2", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
+        patch = mock.patch.object(route, "rules", return_value=data)
+        patch.start()
+        self.addCleanup(patch.stop)
         hit = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", {"session_id": "c3", "cwd": str(root)})
         # Plugin chưa bật cho project: không gợi ý như thể dùng được, mà nêu lệnh cài và dùng skill dự phòng.
-        self.assertNotIn("c-review", hit["user"])
+        self.assertNotIn("static-analysis", hit["user"])
         self.assertIn("skill security-review", hit["user"])
         self.assertIn("chưa bật cho project này: differential-review (`./install.sh --apply --only catalog", hit["context"])
-        self.assertIn("`claude plugin install c-review@agent-stack-vendor-local --scope project`", hit["context"])
+        self.assertIn("`claude plugin install static-analysis@agent-stack-vendor-local --scope project`", hit["context"])
         self.assertIn("đừng tự cài", hit["context"])
         self.write("c2/.claude/settings.local.json", json.dumps({"enabledPlugins": {
-            "c-review@agent-stack-vendor-local": True, "differential-review@agent-stack-vendor-local": True}}))
+            "static-analysis@agent-stack-vendor-local": True, "differential-review@agent-stack-vendor-local": True}}))
         hit = route.hook_suggestion("Review bảo mật hàm xác thực khác giúp mình", {"session_id": "c3b", "cwd": str(root)})
-        self.assertIn("skill differential-review, c-review", hit["user"])
+        self.assertIn("skill differential-review, static-analysis", hit["user"])
         self.assertNotIn("chưa bật", hit["context"])
         # Gọi thẳng differential-review (không qua chot-viec) vẫn mang theo chốt chặn TM-3, TM-4.
         self.assertIn("không git checkout", hit["context"])
@@ -363,11 +375,14 @@ class SessionCliForToolsWithoutHooks(ProjectFixtures):
         plain.mkdir()
         self.assertIn("Không có gợi ý", self.run_cli("--session", str(plain)).stdout)
 
-    def test_project_flag_adds_skills_by_project_type(self):
+    def test_project_flag_localizes_skills(self):
+        # Plugin chưa bật cho project (cấu hình Claude Code cách ly trong ProjectFixtures): nêu lệnh cài, dùng skill dự phòng.
         root = self.repo("c3", {"src/main.c": "\n", "src/io.c": "\n", "src/util.c": "\n"})
         data = json.loads(self.run_cli("review bảo mật hàm đăng nhập", "--project", str(root)).stdout)
-        self.assertIn("c-review", [m["skill"] for m in data["missing"]], "C project: c-review được nêu, kèm lệnh cài")
-        self.assertNotIn("c-review", data["skills"])
+        self.assertIn("differential-review", [m["skill"] for m in data["missing"]])
+        self.assertNotIn("differential-review", data["skills"])
+        self.assertIn("security-review", data["skills"])
+        self.assertNotIn("c-review", json.dumps(data))
 
     def test_opencode_rules_tell_tools_without_hooks_to_run_it(self):
         # OpenCode đọc AGENTS.global.md, file ghép từ SHARED.global.md và OPENCODE.global.md

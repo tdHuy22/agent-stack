@@ -97,7 +97,7 @@ def suggest(text: str):
 
 
 def suggest_for(text: str, profile=None):
-    """Như suggest(), thêm skill theo loại project (ví dụ c-review khi review code C)."""
+    """Như suggest(), thêm skill theo loại project (mục rule_extras của rules.json, ví dụ webapp-testing khi viết test web)."""
     hit = suggest(text)
     if hit and profile and "tests" in (profile.get("markers") or []):
         # Có test để kiểm thì dùng cấu hình rẻ hơn (mục with_tests của luật); test trượt thì lên bậc cũ.

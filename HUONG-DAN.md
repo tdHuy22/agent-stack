@@ -583,7 +583,7 @@ Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch
 | Không có cảnh báo hạn mức | Statusline chỉ chạy trong terminal; số liệu quá 30 phút bị bỏ | Mở `claude` trong terminal, hoặc tự theo dõi `/usage` |
 | `claude -p` báo "OAuth session expired" | CLI hết phiên đăng nhập | `claude /login` trong terminal |
 | Plugin pyright-lsp không chạy trong project đã bật | Chưa có `pyright` | `brew install pyright` |
-| Muốn bật LSP cho một project | LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn | Trong project đó: `claude plugin enable pyright-lsp@claude-plugins-official --scope local` (C/C++: `clangd-lsp`) |
+| Muốn bật LSP cho một project | LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn | Trong project đó: `claude plugin enable pyright-lsp@claude-plugins-official --scope local` (chỉ còn LSP cho Python; `clangd-lsp` cho C/C++ đã xoá ngày 10/10/2026) |
 | `oc-worker` báo không kết nối được | Model local chỉ chạy ở mạng nhà, hoặc service OpenCode chưa chạy | Thêm `--standalone`, hoặc để phiên chính tự làm |
 | `vet.py scan` thoát mã 3 | Lỗi mạng hoặc đích không tồn tại | Kiểm tra lại `owner/repo@ref`, thử `--no-scanner` |
 | §0 lệch với thực tế | Quên lưu trước khi dừng | `/agent-stack:session-keeper tiep-tuc` để so và báo chỗ lệch |

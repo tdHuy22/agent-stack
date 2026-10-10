@@ -163,43 +163,6 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
-    "anthropics/claude-plugins-official:plugins/clangd-lsp": {
-      "archived": false,
-      "human_review": {
-        "at": "2026-10-02T08:19:12Z",
-        "note": "Người dùng đồng ý theo đề xuất trong chat ngày 02/10/2026 (nhóm nên cài); Claude chạy lệnh theo yêu cầu.",
-        "status": "approved"
-      },
-      "license": "Apache-2.0",
-      "license_files": [
-        "LICENSE: Apache-2.0",
-        "LICENSE: Apache-2.0"
-      ],
-      "pushed_at": "2026-09-30",
-      "redflags": {},
-      "ref": "main",
-      "report": "vet-reports/anthropics__claude-plugins-official__plugins-clangd-lsp@ab024cdcfa7c.md",
-      "reviews": [
-        {
-          "at": "2026-10-01T15:22:18Z",
-          "by": "claude",
-          "recommend": "cài",
-          "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
-          "text": "Chỉ khai báo LSP, không có hook, MCP hay script. Cần có `clangd` trên PATH (ví dụ `brew install llvm`)."
-        }
-      ],
-      "scanner": {
-        "status": "bỏ qua (không có SKILL.md)",
-        "version": null
-      },
-      "sha": "ab024cdcfa7ca80be204acd4907656ba5a968589",
-      "source": "github:anthropics/claude-plugins-official",
-      "stars": 37271,
-      "subpath": "plugins/clangd-lsp",
-      "tool": "vet.py/1",
-      "verdict": "PASS",
-      "vetted_at": "2026-10-01"
-    },
     "anthropics/claude-plugins-official:plugins/claude-security": {
       "archived": false,
       "human_review": {
@@ -518,86 +481,6 @@
       "source": "github:semgrep/mcp-marketplace",
       "stars": 14,
       "subpath": "plugin",
-      "tool": "vet.py/1",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-10-01"
-    },
-    "trailofbits/skills:plugins/audit-context-building": {
-      "archived": false,
-      "human_review": {
-        "at": "2026-10-02T08:19:13Z",
-        "note": "Người dùng đồng ý theo đề xuất trong chat ngày 02/10/2026 (nhóm nên cài); Claude chạy lệnh theo yêu cầu.",
-        "status": "approved"
-      },
-      "license": "CC-BY-SA-4.0",
-      "license_files": [
-        "LICENSE: CC"
-      ],
-      "pushed_at": "2026-09-28",
-      "redflags": {
-        "low": 2
-      },
-      "ref": "main",
-      "report": "vet-reports/trailofbits__skills__plugins-audit-context-building@82fe82262526.md",
-      "reviews": [
-        {
-          "at": "2026-10-01T15:22:18Z",
-          "by": "claude",
-          "recommend": "cài",
-          "sha": "82fe8226252622fa807643bdca1710901198553a",
-          "text": "Chỉ có chỉ dẫn và tài liệu tham khảo. Ký tự U+200B đứng trước code fence là mẹo hiển thị, không phải chỉ dẫn ẩn."
-        }
-      ],
-      "scanner": {
-        "counts": {
-          "info": 1
-        },
-        "status": "ok",
-        "version": "2.1.0"
-      },
-      "sha": "82fe8226252622fa807643bdca1710901198553a",
-      "source": "github:trailofbits/skills",
-      "stars": 7323,
-      "subpath": "plugins/audit-context-building",
-      "tool": "vet.py/1",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-10-01"
-    },
-    "trailofbits/skills:plugins/c-review": {
-      "archived": false,
-      "human_review": {
-        "at": "2026-10-02T15:09:28Z",
-        "note": "Người dùng duyệt 02/10/2026 trong chat; mình đã đối chiếu báo cáo: allowed-tools cấp Bash không giới hạn, đúng với việc review C/C++.",
-        "status": "approved"
-      },
-      "license": "CC-BY-SA-4.0",
-      "license_files": [
-        "LICENSE: CC"
-      ],
-      "pushed_at": "2026-09-28",
-      "redflags": {},
-      "ref": "main",
-      "report": "vet-reports/trailofbits__skills__plugins-c-review@82fe82262526.md",
-      "reviews": [
-        {
-          "at": "2026-10-01T15:22:18Z",
-          "by": "claude",
-          "recommend": "có-điều-kiện",
-          "sha": "82fe8226252622fa807643bdca1710901198553a",
-          "text": "Review bảo mật C/C++, hợp với trục bán dẫn và firmware. Bash không giới hạn để chạy công cụ phân tích. Chỉ cài trong project cần dùng."
-        }
-      ],
-      "scanner": {
-        "counts": {
-          "info": 1
-        },
-        "status": "ok",
-        "version": "2.1.0"
-      },
-      "sha": "82fe8226252622fa807643bdca1710901198553a",
-      "source": "github:trailofbits/skills",
-      "stars": 7323,
-      "subpath": "plugins/c-review",
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
