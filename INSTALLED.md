@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 22:04 10/10/2026 từ commit `987f33f` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 23:05 10/10/2026 từ commit `3276a88` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -336,6 +336,29 @@
 | # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
 |---:|---|---|---|---|
 | 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 22:32 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-223227.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-223227`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 23:05 10/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261010-230500.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261010-230500`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin, catalog
+- Kết quả: 2 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+| 2 | lệnh claude | `claude mcp add -s user --transport http exa https://mcp.exa.ai/mcp` |  | `claude mcp remove -s user exa` |
 
 ## Gỡ toàn bộ
 
