@@ -231,6 +231,7 @@ python3 plugin/skills/task-router/scripts/route.py --session ~/Documents/Claude/
 /agent-stack:vet-skill owner/repo
 /agent-stack:vet-skill owner/repo@v1.2.0:skills/ten-skill
 /agent-stack:vet-skill ~/Downloads/mot-skill
+/agent-stack:vet-skill https://mcp.exa.ai/mcp
 ```
 
 **Skill làm gì:** tải đúng commit vào `.vet-cache/` (không chạy mã của đích), quét dấu hiệu độc hại (tải-rồi-chạy, đọc khóa và token, prompt injection, ký tự ẩn, hook tự chạy), chạy `skill-scanner` và `SkillSpector` (máy quét thứ hai, chỉ đẩy lên REVIEW; cài một lần bằng `python3 plugin/skills/vet-skill/scripts/vet.py spector --setup`), rồi đọc tay từng file đáng ngờ. Skill chạy ở effort high, trong context riêng, và không được sửa file.
@@ -252,10 +253,13 @@ Claude không tự duyệt. PASS chỉ có nghĩa là không thấy dấu hiệu
 | `approve <khóa> --note "..."` | Duyệt |
 | `reject <khóa> --note "..."` | Từ chối |
 | `note <khóa> --recommend <cài\|có-điều-kiện\|thử-1-project\|không-cài> --text "..."` | Ghi nhận xét đọc tay; giữ được qua các lần quét lại |
+| `drift [--remote]` | So plugin đã cài với bản đã kiểm (hook SessionStart chạy bản không mạng). `--remote` thêm MCP từ xa: lấy lại định nghĩa tool, so hash đã duyệt, và báo MCP scope user không qua catalog |
 
 Báo cáo đầy đủ nằm trong `vet-reports/`. Sau khi duyệt, chạy `./install.sh --apply` để cài các mục mới (mục 8).
 
 **Bản vá cục bộ** (từ 10/10/2026). Khi plugin đã duyệt có lỗi mà upstream chưa sửa, có thể vá trong agent-stack thay vì chờ. File vá nằm trong `patches/<tên plugin>/`. Mục của plugin trong `vetted.lock` ghi `local_patches`: đường dẫn file vá, sha256 của nó, sha256 từng file sau khi vá, lý do và link upstream. `install.sh` xuất đúng commit đã duyệt vào `vendor/`, kiểm sha256 file vá, áp bằng `git apply`, rồi so tập file bị đổi với lock; lệch chỗ nào thì không chép, không cài. Kiểm lệch chấp nhận file đã vá khi khớp đúng sha256 trong lock. Bản vá chỉ được sửa nội dung file văn bản, tạo file thường hay xóa file; symlink, đổi quyền chạy, đổi tên hay file nhị phân bị từ chối. Vet lại cùng commit thì giữ bản vá; vet commit mới thì bỏ, và `vet.py` cảnh báo trong tóm tắt, báo cáo và lúc duyệt, để bạn kiểm upstream đã sửa chưa; đã sửa thì chỉ cần vet commit đó, chưa thì làm lại bản vá. Hiện có một bản vá: `static-analysis`, lỗi Semgrep bỏ qua file khi gốc repo có file trùng glob (trailofbits/skills#297).
+
+**MCP server từ xa** (từ 10/10/2026). Đích là URL `https://`. Không có mã để đọc, nên `scan` chụp `instructions` và định nghĩa tool (thứ đi vào context của Claude), quét tool poisoning và ký tự ẩn, rồi ghim sha256 vào `vetted.lock`. Kết quả không bao giờ tự PASS, vì câu hỏi và tham số luôn đi tới hãng. Trong `catalog.json`, loại `mcp-remote` được `install.sh` cài bằng `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt, không trùng tên server bạn đã có, và định nghĩa tool lấy lại ngay lúc cài còn khớp hash đã duyệt. Server đổi tool sau khi cài thì chỉ `vet.py drift --remote` phát hiện được; Claude Code không tự ghim.
 
 **Phân tích động (tùy chọn).** `scan` không chạy mã của đích. Khi một script đáng ngờ mà đọc tay chưa kết luận được, `vet.py dynamic` chạy MỘT lệnh bạn chọn trong sandbox-runtime của Anthropic: không mạng, ghi chỉ trong bản chép tạm, đọc được phần lớn hệ thống trừ HOME thật, `/Volumes` và keychain, môi trường sạch (không token). HOME của lệnh là một HOME giả rải sẵn 12 file mồi (khóa SSH, token AWS, GitHub, npm... giả) và chặn ghi vào chúng: file nào bị đọc lộ ra qua atime, mồi bị xóa hay thay lộ qua bản chụp trước/sau, nội dung mồi bị chép ra file hay đầu ra cũng bị phát hiện. Tiến trình nền còn sót bị dò và diệt.
 

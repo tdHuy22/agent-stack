@@ -399,6 +399,91 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "mcp:mcp.deepwiki.com/mcp": {
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "instructions_sha": "3323757204c58f113ea083e7a93fe3367a6f69022e2feed41edb8df37fa7bac0",
+      "kind": "mcp-remote",
+      "redflags": {},
+      "ref": null,
+      "report": "vet-reports/mcp__mcp.deepwiki.com__mcp@9175389e279d.md",
+      "reviews": [],
+      "server": {
+        "name": "DeepWiki",
+        "protocol": "2025-06-18",
+        "version": "2.14.3"
+      },
+      "sha": "9175389e279d76bb4477ba0c80766dbece5ad03fd4e34e7acfb8143d50b2e803",
+      "source": "mcp:https://mcp.deepwiki.com/mcp",
+      "subpath": "",
+      "tool": "vet.py/1",
+      "tools": {
+        "ask_wiki_question": "d9a292d4a04af2afd0545f2a723be7e0d73fe15287ce788870f1ccd71c36230b",
+        "read_wiki_contents": "de70407bb5e6ebc12b7910e26fe351cf7134db6da29dc6dd2fb39cd2c12223d8",
+        "read_wiki_structure": "1bdd3c805d690e49e061a9fd5e565c7efb49d19738e619427e84f0e2ab4d1b01"
+      },
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-10"
+    },
+    "mcp:mcp.exa.ai/mcp": {
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "instructions_sha": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "kind": "mcp-remote",
+      "redflags": {},
+      "ref": null,
+      "report": "vet-reports/mcp__mcp.exa.ai__mcp@90f51c5b65f2.md",
+      "reviews": [],
+      "server": {
+        "name": "exa-search-server",
+        "protocol": "2025-06-18",
+        "version": "3.4.2"
+      },
+      "sha": "90f51c5b65f227bbb61f19d58f729572a257c1650e237cda17ccf69aebc011ed",
+      "source": "mcp:https://mcp.exa.ai/mcp",
+      "subpath": "",
+      "tool": "vet.py/1",
+      "tools": {
+        "web_fetch_exa": "b4ae2a49a95f5441ae0d1e05f035e60aa653b2b033e4027d8a5576a3cc687d00",
+        "web_search_exa": "f2679f78100e92a5ff7d07dbabda6225c6cc960ae881bb84b3021fff4e5834e3"
+      },
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-10"
+    },
+    "mcp:search.parallel.ai/mcp": {
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "instructions_sha": "6ff1160819714320799e1c2f5697dfb6c3e63db97521b960072aa6e7b2c0b316",
+      "kind": "mcp-remote",
+      "redflags": {},
+      "ref": null,
+      "report": "vet-reports/mcp__search.parallel.ai__mcp@5cbcbcc6244e.md",
+      "reviews": [],
+      "server": {
+        "name": "Parallel Web Search MCP Server",
+        "protocol": "2025-06-18",
+        "version": "1.27.0"
+      },
+      "sha": "5cbcbcc6244e2cbf2241460d156e95942222fed9fcfc160ed0a8e2690755dc23",
+      "source": "mcp:https://search.parallel.ai/mcp",
+      "subpath": "",
+      "tool": "vet.py/1",
+      "tools": {
+        "web_fetch": "7de2001e6717a31773c62144743d9c88b09fe73e2793b27ad0b9bb7954e254ea",
+        "web_search": "1828515eca68e29073fb8ff3f140a13b9d73cce59cbe59092117c0f7241574d6"
+      },
+      "verdict": "REVIEW",
+      "vetted_at": "2026-10-10"
+    },
     "obra/superpowers": {
       "archived": false,
       "human_review": {

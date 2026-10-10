@@ -9,13 +9,16 @@ Lệnh:
   vet.py approve <khóa> --note "..."     ghi xác nhận của người duyệt vào vetted.lock
   vet.py reject  <khóa> --note "..."
   vet.py list
-  vet.py drift [--plugins-dir DIR] [--quiet] [--json]
-                                         so plugin đã cài với bản đã kiểm trong .vet-cache (0 = ổn, 1 = có lệch)
+  vet.py drift [--plugins-dir DIR] [--quiet] [--json] [--remote]
+                                         so plugin đã cài với bản đã kiểm trong .vet-cache (0 = ổn, 1 = có lệch);
+                                         --remote: thêm MCP từ xa, lấy lại định nghĩa tool qua mạng và so hash đã duyệt
   vet.py dynamic --setup                 cài cô lập sandbox-runtime (tùy chọn, một lần)
   vet.py dynamic <khóa|thư mục> [--timeout GIÂY] [--allow-read ĐƯỜNG_DẪN] [--keep] [--json] -- <lệnh...>
                                          chạy MỘT lệnh của đối tượng trong sandbox rồi báo nó cố làm gì
 
-<đích> là owner/repo[@ref][:thư/mục/con] trên GitHub, hoặc đường dẫn thư mục cục bộ.
+<đích> là owner/repo[@ref][:thư/mục/con] trên GitHub, đường dẫn thư mục cục bộ, hoặc URL https của một
+MCP server từ xa (streamable HTTP; xem mcp_remote.py: chụp instructions và định nghĩa tool, quét, ghim sha256,
+không bao giờ tự PASS).
 Mã thoát của scan: 0 = PASS, 1 = REVIEW (cần người đọc), 2 = FAIL, 3 = lỗi.
 """
 from __future__ import annotations
@@ -73,12 +76,15 @@ TARGET_RE = re.compile(r"^(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)(?:@(?P<ref>[^:\s]
 
 
 def parse_target(value: str) -> dict:
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", value.strip()):
+        import mcp_remote
+        return {"kind": "mcp-remote", "url": mcp_remote.check_url(value.strip())}
     local = Path(value).expanduser()
     if local.is_dir():
         return {"kind": "local", "path": local.resolve()}
     m = TARGET_RE.match(value.strip())
     if not m:
-        raise ValueError(f"Không hiểu đích '{value}'. Dùng owner/repo[@ref][:thư/mục] hoặc đường dẫn thư mục.")
+        raise ValueError(f"Không hiểu đích '{value}'. Dùng owner/repo[@ref][:thư/mục], đường dẫn thư mục hoặc URL https của MCP từ xa.")
     sub = (m.group("sub") or "").strip("/")
     if ".." in Path(sub).parts:
         raise ValueError("Thư mục con không được chứa '..'.")
@@ -632,6 +638,9 @@ def save_lock(home: Path, data: dict) -> None:
 
 def cmd_scan(args, home: Path) -> int:
     target = parse_target(args.target)
+    if target["kind"] == "mcp-remote":
+        import mcp_remote
+        return mcp_remote.scan_cmd(args, home, target["url"], (load_lock, save_lock, TOOL_VERSION))
     cache = home / ".vet-cache"
     if target["kind"] == "github":
         meta = repo_meta(target["owner"], target["repo"])
@@ -805,6 +814,9 @@ def main(argv=None) -> int:
     dr.add_argument("--plugins-dir", help="thư mục plugin của Claude Code (mặc định ~/.claude/plugins)")
     dr.add_argument("--quiet", action="store_true", help="không in gì khi mọi plugin đều khớp")
     dr.add_argument("--json", action="store_true")
+    dr.add_argument("--remote", action="store_true",
+                    help="kiểm cả MCP từ xa trong catalog: lấy lại định nghĩa tool qua mạng, so với hash đã duyệt")
+    dr.add_argument("--claude-json", help="cấu hình MCP scope user (mặc định ~/.claude.json)")
     d = sub.add_parser("dynamic", help="chạy một lệnh của đối tượng trong sandbox (tùy chọn)")
     d.add_argument("key", nargs="?", help="khóa trong vetted.lock hoặc thư mục cục bộ")
     d.add_argument("--setup", action="store_true", help="cài sandbox-runtime vào .cache/srt")

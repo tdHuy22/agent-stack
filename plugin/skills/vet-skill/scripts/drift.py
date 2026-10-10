@@ -10,6 +10,9 @@ hoặc vetted.lock), unapproved (chưa được người dùng duyệt), no-snap
 Bản vá cục bộ đã duyệt (mục local_patches của vetted.lock, install.py áp lúc chép vào vendor/): file bị vá chỉ khớp
 khi sha256 đúng bằng giá trị ghi trong lock; mọi file khác vẫn so với bản đã kiểm.
 
+Với --remote (chạy tay, có mạng): thêm một dòng cho mỗi MCP từ xa trong catalog (mcp_remote.drift_rows): lấy lại
+định nghĩa tool, so sha256 với bản đã duyệt; MCP scope user trong ~/.claude.json mà không qua catalog thì là unvetted.
+
 Giới hạn: plugin `strict: false` lấy cấu hình (ví dụ lệnh LSP) từ marketplace.json của marketplace;
 phần đó không nằm trong thư mục plugin nên không được so ở đây.
 """
@@ -23,7 +26,7 @@ from pathlib import Path
 OWN_PLUGINS = {"agent-stack@agent-stack-local", "agent-stack-vendor@agent-stack-vendor-local"}
 # Dấu vết Claude Code hay vet.py để lại, không phải nội dung plugin.
 IGNORED_NAMES = {".in_use", ".orphaned_at", ".git", ".vet-complete"}
-OK_STATUSES = {"match", "own"}
+OK_STATUSES = {"match", "own", "absent"}
 
 
 def _load(path: Path):
@@ -133,6 +136,9 @@ LABELS = {
     "missing": "thư mục cài không còn",
     "own": "plugin của agent-stack, bỏ qua",
     "bad-lock": "mục trong vetted.lock sai dạng (local_patches); sửa lock rồi kiểm lại",
+    "absent": "chưa cài",
+    "url-mismatch": "URL trong ~/.claude.json khác URL đã duyệt",
+    "unreachable": "không lấy được định nghĩa tool để so",
 }
 
 
@@ -143,20 +149,30 @@ def render(rows: list, quiet: bool) -> str:
         return ""
     lines = []
     for r in (bad if quiet else rows):
-        sha = f", đã kiểm {r['vetted_sha']}" if r.get("vetted_sha") else ""
-        lines.append(f"{r['plugin']} (bản {r.get('version')}{sha}): {LABELS[r['status']]}")
+        meta = ", ".join(x for x in (f"bản {r['version']}" if r.get("version") else "",
+                                      f"đã kiểm {r['vetted_sha']}" if r.get("vetted_sha") else "") if x)
+        lines.append(f"{r['plugin']}{f' ({meta})' if meta else ''}: {LABELS[r['status']]}")
         for kind, label in (("changed", "đổi"), ("added", "thêm"), ("removed", "mất")):
             for name in r.get(kind, []):
                 lines.append(f"  - {label}: {name}")
-    if bad:
+        if r.get("error") and r["status"] == "unreachable":
+            lines.append(f"  - lỗi: {r['error']}")
+    if any(not r["plugin"].startswith("MCP ") for r in bad):
         lines.append("Đừng dùng plugin lệch hay chưa duyệt khi chưa kiểm lại: "
                      "chạy vet.py scan <khóa> rồi đọc báo cáo, hoặc tắt plugin.")
+    if any(r["plugin"].startswith("MCP ") for r in bad):
+        lines.append("MCP lệch hay chưa duyệt: gỡ bằng `claude mcp remove -s user <tên>`, hoặc chạy vet.py scan <url> "
+                     "rồi đọc báo cáo và duyệt lại.")
     return "\n".join(lines) + "\n"
 
 
 def main_cli(args, home: Path) -> int:
     plugins_dir = Path(args.plugins_dir).expanduser() if args.plugins_dir else Path("~/.claude/plugins").expanduser()
     rows = check(home, plugins_dir)
+    if getattr(args, "remote", False):
+        import mcp_remote
+        claude_json = Path(args.claude_json).expanduser() if args.claude_json else mcp_remote.claude_json_path()
+        rows += mcp_remote.drift_rows(home, claude_json)
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     else:

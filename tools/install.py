@@ -11,7 +11,9 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
               terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
-  catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh
+  catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh. MCP từ xa
+              (kind mcp-remote): `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt và định
+              nghĩa tool lấy lại ngay trước khi cài còn khớp hash đã duyệt
   tools       công cụ dòng lệnh mà mục đã duyệt cần (khóa "brew" trong catalog.json), cài bằng Homebrew
   opencode    symlink skill (agent-stack + vendor) vào ~/.config/opencode/skills/, agent vào ~/.config/opencode/agents/
 
@@ -34,6 +36,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +54,9 @@ SKIP_IN_VENDOR = {".git", ".vet-complete", ".claude-plugin", ".cursor-plugin", "
 SKIP_IN_VENDOR_PLUGIN = {".git", ".vet-complete"}  # plugin cần giữ .claude-plugin/plugin.json
 DIGEST_IGNORED = {".in_use", ".orphaned_at", ".git", ".vet-complete"}
 PATCH_DIR = "patches"  # bản vá cục bộ đã duyệt cho đồ bên thứ ba (mục local_patches của vetted.lock)
+# Mã của vet-skill nằm cạnh file này (không theo AGENT_STACK_HOME, vốn chỉ trỏ dữ liệu: lock, catalog, cache).
+VET_SCRIPTS = Path(__file__).resolve().parents[1] / "plugin" / "skills" / "vet-skill" / "scripts"
+MCP_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 
 def read_json_file(path: Path) -> dict:
@@ -431,6 +437,9 @@ class Installer:
             if entry["verdict"] == "FAIL":
                 self.say(f"  ! bỏ qua (FAIL): {key}")
                 continue
+            if item["kind"] == "mcp-remote":
+                self.install_mcp(item, entry)
+                continue
             if item["kind"] in ("vendor-skill", "vendor-plugin"):
                 vendored.append((item, entry))
                 continue
@@ -447,6 +456,56 @@ class Installer:
                      undo=[self.claude_bin, "plugin", "uninstall", plugin_id, "--scope", "user"], ok_if="already")
         if vendored:
             self.vendor(vendored)
+
+    def install_mcp(self, item: dict, entry: dict) -> None:
+        """MCP từ xa: chỉ cài đúng URL đã duyệt, không đè server cùng tên, và chỉ khi định nghĩa tool lấy lại
+        ngay lúc cài còn khớp hash đã duyệt (server có thể đổi tool sau khi bạn duyệt)."""
+        if str(VET_SCRIPTS) not in sys.path:
+            sys.path.insert(0, str(VET_SCRIPTS))
+        import mcp_remote
+        inst = item.get("install") if isinstance(item.get("install"), dict) else {}
+        name, url = str(inst.get("name", "")), str(inst.get("url", ""))
+        if not MCP_NAME_RE.match(name) or not mcp_remote.URL_RE.match(url):
+            self.say(f"  ! bỏ qua {item['key']}: tên hay URL của MCP sai dạng trong catalog.json")
+            self.failures.append(f"{item['key']}: tên hay URL MCP sai dạng")
+            return
+        if entry.get("kind") != "mcp-remote" or entry.get("source") != "mcp:" + url:
+            self.say(f"  ! bỏ qua {item['key']}: URL trong catalog.json khác URL đã duyệt trong vetted.lock")
+            self.failures.append(f"{item['key']}: URL MCP khác bản đã duyệt")
+            return
+        if item["scope"] != "user":
+            self.say(f"  · {item['scope']}: tự cài khi cần, trong project: claude mcp add -s project --transport http {name} {url}")
+            return
+        have = mcp_remote.user_servers(mcp_remote.claude_json_path(self.home)).get(name)
+        if have is not None:
+            if isinstance(have, dict) and have.get("url") == url:
+                self.say(f"  = đã có MCP {name}: {url}")
+            else:
+                self.say(f"  ! bỏ qua MCP {name}: ~/.claude.json đã có server cùng tên trỏ chỗ khác, không ghi đè")
+                self.skipped.append(f"MCP {name}: trùng tên với server sẵn có")
+            return
+        if not self.apply:
+            self.say(f"  · trước khi cài sẽ lấy lại định nghĩa tool của {url}, chỉ cài khi khớp hash đã duyệt "
+                     f"{entry.get('sha', '')[:12]}")
+        else:
+            try:
+                live = mcp_remote.digests(mcp_remote.fetch_snapshot(url))
+            except Exception as exc:  # noqa: BLE001 - không kiểm được thì không cài, và không làm sập lần cài
+                self.say(f"  ! không cài MCP {name}: không lấy được định nghĩa tool để so "
+                         f"({mcp_remote.clean(str(exc) or type(exc).__name__, 160)})")
+                self.failures.append(f"{item['key']}: không kiểm được định nghĩa tool")
+                return
+            if live["sha"] != entry.get("sha"):
+                change = mcp_remote.diff(entry, live)
+                detail = "; ".join(f"{label} {', '.join(mcp_remote.clean(x, 40) for x in change[k])}"
+                                   for k, label in (("changed", "đổi"), ("added", "thêm"), ("removed", "mất")) if change[k])
+                self.say(f"  ! không cài MCP {name}: định nghĩa tool khác bản đã duyệt ({detail or 'hash khác'}); "
+                         f"chạy lại vet.py scan {url}, đọc báo cáo rồi duyệt lại")
+                self.failures.append(f"{item['key']}: định nghĩa tool đổi sau khi duyệt")
+                return
+            self.say(f"  ✓ định nghĩa tool của {name} khớp bản đã duyệt {entry['sha'][:12]}")
+        self.run([self.claude_bin, "mcp", "add", "-s", "user", "--transport", "http", name, url],
+                 undo=[self.claude_bin, "mcp", "remove", "-s", "user", name])
 
     def vendor(self, vendored: list) -> None:
         """Chép đúng commit đã kiểm vào vendor/: skill chỉ-có-chỉ-dẫn vào vendor/skills (gộp thành plugin
