@@ -30,7 +30,7 @@
       "model": "sonnet",
       "effort": "medium",
       "plugins": ["vendor/plugins/superpowers"],
-      "note": "A + superpowers (ghim 5bf4e78 trong vendor/, MIT), đo trước khi bật toàn cục (09/10/2026)"
+      "note": "A + superpowers (ghim 5bf4e78 trong vendor/, MIT). A/B 10/10/2026: 20/20 như A, đắt hơn 14%; không bật toàn cục"
     },
     "H": {
       "model": "haiku",

@@ -3,7 +3,7 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 09/10/2026.*
+*Cập nhật 10/10/2026.*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026); chưa push.
@@ -51,11 +51,11 @@
   - **Xoá hẳn đồ đã gỡ, cài `claude-security`, chép `superpowers` để thử** (09/10/2026, theo yêu cầu của bạn; plugin 0.8.4, **đã cập nhật trên máy** lúc 23:39, nhật ký `state/install-logs/20261009-233655.json` và `…233908.json`; `claude plugin list` báo agent-stack 0.8.4, bản cache giống hệt `plugin/`):
     - 8 mục đã gỡ (`claude-code-setup`, `claude-md-management`, `session-report`, `grill-me`, `tdd`, `diagnosing-bugs`, `handoff`, `humanizer`) xoá khỏi `catalog.json`, `vetted.lock`, `vet-reports/`; bản chép trong `.vet-cache/` và bản cache sót trong `~/.claude/plugins/cache/claude-plugins-official/` chuyển vào Thùng rác (`~/.Trash/agent-stack-da-go-20261009/`). Bên thứ ba còn 17 mục: 14 duyệt, 3 từ chối. Dùng lại mục nào thì phải chạy lại `vet-skill`.
     - `claude-security` 0.12.0 cài toàn cục (bạn chọn, thay điều kiện cũ "theo project"); bản marketplace giống hệt bản đã kiểm (46 file), `vet.py drift` báo khớp. Hook sau mỗi lệnh Bash tốn khoảng 0,3 giây (đo: `metrics` 0,28 giây, hai `tip` 0,08 giây), không in gì, không gọi mạng.
-    - `superpowers` (6.4.1, commit 5bf4e78, MIT) chuyển sang kind `vendor-plugin` scope `project`: chép vào `vendor/plugins/superpowers`, chưa cài. Thử nhanh 09/10: nạp bằng `--plugin-dir` cạnh agent-stack, hook SessionStart của nó và của agent-stack đều chạy, không lỗi; lượt chạy model hỏng vì `claude` dòng lệnh hết phiên đăng nhập (`claude auth status`: `loggedIn: false`). Cấu hình eval `S` = A + superpowers đã thêm.
+    - `superpowers` (6.4.1, commit 5bf4e78, MIT) chuyển sang kind `vendor-plugin` scope `project`: chép vào `vendor/plugins/superpowers`, chưa cài. Thử nhanh 10/10 (sau khi bạn đăng nhập lại `claude`): nạp bằng `--plugin-dir` cạnh agent-stack, hook của cả hai chạy không lỗi; việc thêm `slugify` kèm test xong trong 17 giây, 0,14 USD, 8 test đạt; model theo luật agent-stack và không gọi skill nào của superpowers.
+    - **A/B superpowers** (10/10/2026, `evals/results/20261010-074444.jsonl`, tổng 4,45 USD): A và S (A + superpowers) cùng đạt 20/20 trên 10 việc × 2 lượt; S tốn 0,119 USD/việc so với 0,104 (+14%), 29 so với 26 giây; skill của nó chỉ được gọi 1/20 lượt. Không bật toàn cục; giữ chép sẵn, scope `project` (chi tiết `routing-table.md` mục 8).
     - Kiểm chứng: 502 test đạt, `claude plugin validate plugin` đạt, router 103/103 (có biên nhận); reviewer (sonnet) tìm 2 lỗi tài liệu, đã sửa.
 - **Đang dở:** không có việc đang sửa dở; cây làm việc sạch. Phần còn treo của các phiên trước (gỡ Phi-4-mini trong `KE-HOACH.md`, mục "Bộ duyệt web" trong §0) đã commit ở `5f088da` ngày 09/10/2026 theo lệnh của bạn.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  0. Đăng nhập lại `claude` dòng lệnh (`claude auth login`), rồi đo A/B superpowers: `python3 evals/run_eval.py --configs A,S --repeats 2 --tasks code-async-pool,code-cron-next,code-duration,debug-multifile,debug-race,qa-write-tests,write-vn-rewrite,code-unified-diff,debug-flaky-rank,debug-ttl-cache --yes --max-total-usd 12` (40 lượt, ước tính 4,8 USD). Có ích thì đổi scope của superpowers trong `catalog.json` thành `user` rồi chạy `./install.sh --apply --only catalog`.
   1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
   2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   3. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.

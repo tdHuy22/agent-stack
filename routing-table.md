@@ -197,6 +197,17 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 - V không đạt thêm việc nào, và **không gọi skill vendor ở lượt nào (0/20)**: sonnet tự làm xong. Vì vậy skill vendor **tắt mặc định** (`catalog.json` scope `on-demand`, router không gợi ý). Ngày 08/10/2026 đã gỡ hẳn khỏi máy: plugin và marketplace `agent-stack-vendor-local`, 5 symlink trong `~/.config/opencode/skills/`, thư mục `vendor/` và cấu hình V. Ngày 09/10/2026 xoá luôn khỏi `catalog.json`, `vetted.lock`, `vet-reports/` và `.vet-cache/` (cùng 3 plugin đã gỡ 03/10: `claude-code-setup`, `claude-md-management`, `session-report`); muốn dùng lại thì chạy lại `vet-skill`.
 - Giới hạn: số đo này không nói skill có giúp khi được gọi hay không; nó chỉ cho thấy với sonnet · medium chúng không được dùng tới.
 
+**A/B superpowers (10/10/2026).** S = A + plugin `superpowers` 6.4.1 (commit 5bf4e78, chép ở `vendor/plugins/superpowers`), nạp bằng `--plugin-dir`; cùng 10 việc × 2 lượt như trên, chạy cùng đợt với A.
+
+| Cấu hình | Đạt | USD/việc (TB) | USD p90 | Giây/việc |
+|---|---:|---:|---:|---:|
+| A: sonnet · medium | 20/20 | 0,104 | 0,164 | 26 |
+| S: A + superpowers | 20/20 | 0,119 | 0,174 | 29 |
+
+- S không đạt thêm việc nào, tốn hơn khoảng 14% và chậm hơn 3 giây mỗi việc: hook SessionStart của nó nạp luật "phải gọi skill" vào đầu mọi phiên. Skill của nó chỉ được gọi ở 1/20 lượt (`systematic-debugging` ở `debug-multifile`; lượt đó vẫn đạt nhưng tốn 0,159 USD, gần gấp đôi A ở cùng việc).
+- Thử nhanh cùng ngày khi bật cạnh agent-stack (việc thêm `slugify` kèm test): hook của cả hai chạy không lỗi, model làm theo luật agent-stack và không gọi skill nào của superpowers.
+- Quyết định: **không bật toàn cục**; giữ chép sẵn trong `vendor/`, scope `project`. Giới hạn: việc eval đặc tả rõ và prompt có "Không hỏi lại", nên phần mạnh nhất của superpowers (brainstorm khi đặc tả mơ hồ, kế hoạch dài, phát triển bằng subagent qua nhiều giờ) chưa được đo. Muốn thử phần đó thì cài cho một project thật: `claude plugin install superpowers@agent-stack-vendor-local --scope project`. Tổng chi phí đợt đo 4,45 USD; kết quả `evals/results/20261010-074444.jsonl`.
+
 **Haiku 5.5 (08/10/2026).** Lần đo đầu (alias `haiku`, thật ra là Haiku 4.5; rồi `claude-haiku-5-5 · max` bị trần chi phí cắt sớm vì CLI 2.1.285 tính giá Haiku 5.5 theo Opus 5.5, gấp 40 lần) đã bỏ. `run_eval.py` nay tự tính chi phí từ token khi CLI báo `costBasis: unknown`, và cấu hình đặt `cli_cost_factor: 40`. Đo lại trên cùng 10 việc × 2 lượt:
 
 | Cấu hình | Lượt đạt | 9 việc code, debug (lượt) | Viết lại văn tiếng Việt (lượt) | USD/việc (TB) | Giây/việc |

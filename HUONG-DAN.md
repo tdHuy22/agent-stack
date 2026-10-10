@@ -528,7 +528,7 @@ Test chạy bằng `python3` (3.11 của pyenv), cũng là Python mà app dùng 
 
 ### Eval chọn cấu hình
 
-`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), H5L, H5M, HM (Haiku 5.5 · low, medium, max), S (A + superpowers chép ở `vendor/plugins/superpowers`, để đo trước khi bật toàn cục).
+`evals/` có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong `evals/configs.json`: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias `haiku`, tức Haiku 4.5, chỉ đo trần dưới), H5L, H5M, HM (Haiku 5.5 · low, medium, max), S (A + superpowers chép ở `vendor/plugins/superpowers`; A/B 10/10/2026: đạt 20/20 như A, tốn hơn 14%, nên không bật toàn cục, xem `routing-table.md` mục 8).
 
 ```bash
 python3 evals/run_eval.py --configs A,C,D --repeats 2
