@@ -94,26 +94,17 @@
 - **Đang dở:** không có việc đang sửa dở trong repo (main sạch ở `281e021` trước lượt dọn §0 ngày 11/10, không có worktree khác). Phiên tách riêng "Thêm lệnh xoá biên nhận cũ cho receipt.py" mà bạn mở lúc 11/10 làm trùng việc đã xong ở `cd2bbe7`: nếu nó có commit hay nhánh riêng thì bỏ, đừng gộp.
 - **Việc tiếp theo, theo thứ tự:**
   - ~~Mở phiên mới để dùng plugin 0.8.19 (hook Stop nhắc hiện cây, chọn nhiều việc).~~ Xong 11/10/2026: phiên mới mở, câu trả lời đầu tiên hiện cây kế hoạch có ô tick.
-  - Tùy bạn: báo lỗi cho Claude Code nếu bạn không bấm gì lúc thử 0.8.12. Hai lần, `ask` ở auto mode được duyệt sau 10–15 giây với nguồn `user_temporary` mà không hiện hộp hỏi, trong khi docs nói phải hiện (Claude Code 2.1.295, app desktop). Hook 0.8.13 dùng `deny` nên không còn phụ thuộc lỗi này.
+  - ~~Báo lỗi cho Claude Code về `ask` ở auto mode được duyệt mà không hiện hộp hỏi (0.8.12, Claude Code 2.1.295).~~ Xong (bạn xác nhận 11/10/2026).
   0. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   1. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Ghi nhớ (đã xong, không phải việc):**
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
   - `giong-van` đã có mẫu mặc định (5 bài kinh điển mỗi ngôn ngữ trong `samples/kinh-dien/`). Mẫu riêng và style card của từng project viết luận làm trong chính project đó khi bắt đầu viết, không phải việc của repo này.
-- **Quyết định còn treo:**
-  - **Còn treo sau GĐ19, GĐ20** (09/10/2026; đề xuất bảo mật ngày 05/10/2026 đã làm xong ở GĐ19, GĐ20, phần còn lại là mục này): 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: vet khi có code mã hóa hay C cần soi. Các rủi ro đã chốt theo đề xuất ngày 09/10/2026: chấp nhận TM-6, phần còn lại của TM-7 và TM-9; khóa `hatchling` cho TM-8 (xem `.agent/threat-model.md`).
-  - **Bộ duyệt web** (chốt 10/10/2026: A2, B1, cài qua `install.sh`; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Exa đã duyệt; kiểm lệch tự động mỗi ngày đã làm. Còn chờ bạn:
-    - Parallel và DeepWiki: đã chốt cách 2 ngày 11/10/2026 (skill `goi-mcp`, không cài).
-    - Tùy chọn: thêm Cisco `mcp-scanner` (`--analyzers yara`, cục bộ) làm lớp quét thứ hai. Phải vet trước, và nó kéo theo nhiều dependency.
-    - Trình duyệt: giữ nguyên (B1). Khi cần chạy `claude` ngoài app desktop thì xem lại `@playwright/cli` và `chrome-devtools-mcp`.
-  - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
-    - tạo key OpenRouter và đặt vào biến môi trường (mình không nhập key);
-    - quyết định có nạp 10 USD không (mức 1.000 request mỗi ngày, so với 50 khi chưa nạp);
-    - chọn 2–3 model free có gọi tool, hoặc để `reuse-best` chọn theo benchmark.
-    - Phần mình làm: thêm cấu hình `opencode run -m openrouter/<model>:free`, cách ly khỏi cấu hình toàn cục của OpenCode, giới hạn dưới 20 request mỗi phút, và `--resume`.
-    - Bạn cho biết OpenCode đang dùng OpenRouter và model free của OpenCode (02/10/2026); chưa rõ key đã nằm trong biến môi trường chưa. Lưu ý quyền riêng tư ở trên: model free có thể dùng dữ liệu để huấn luyện.
-    - Câu còn mở ở `KE-HOACH.md` mục 10 (việc hay thư mục tuyệt đối không gửi cho model từ xa) chỉ cần khi dùng model từ xa qua OpenCode, nên gác lại cùng mục này.
-    - Symlink OpenCode cho `chot-viec`, `mo-hinh-de-doa` (09/10/2026) và `goi-mcp` (11/10/2026) đã có trong `~/.config/opencode/skills/` (kiểm 11/10/2026).
+  - Đã quyết (bạn xác nhận 11/10/2026), không còn treo:
+    - 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: chỉ vet khi có code mã hóa hay C cần soi. Rủi ro TM-6 đến TM-9 đã chốt ngày 09/10/2026 (xem `.agent/threat-model.md`).
+    - Bộ duyệt web: A2, B1. Exa đã cài, Parallel và DeepWiki gọi qua skill `goi-mcp`, trình duyệt giữ nguyên. Cisco `mcp-scanner` chỉ là tùy chọn, phải vet trước nếu muốn thêm. Khi chạy `claude` ngoài app desktop thì xem lại `@playwright/cli` và `chrome-devtools-mcp`. Trang so sánh: https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2.
+    - Eval OpenCode qua OpenRouter: gác lại (03/10/2026), chỉ làm khi bạn nhắc. Lúc đó cần key OpenRouter trong biến môi trường, quyết có nạp 10 USD không, và chọn 2–3 model free có gọi tool. Lưu ý: model free có thể dùng dữ liệu để huấn luyện.
+- **Quyết định còn treo:** không có.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
   - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `Ran 560 tests … OK`; `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
   - `claude plugin validate plugin` → `Validation passed`
