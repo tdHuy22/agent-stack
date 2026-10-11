@@ -97,7 +97,7 @@
   - ~~Mở phiên mới để dùng plugin 0.8.19 (hook Stop nhắc hiện cây, chọn nhiều việc).~~ Xong 11/10/2026: phiên mới mở, câu trả lời đầu tiên hiện cây kế hoạch có ô tick.
   - ~~Báo lỗi cho Claude Code về `ask` ở auto mode được duyệt mà không hiện hộp hỏi (0.8.12, Claude Code 2.1.295).~~ Xong (bạn xác nhận 11/10/2026).
   - ~~Cài plugin 0.8.20 (`./install.sh --apply`).~~ Xong 22:08 11/10/2026.
-  0. Mở phiên mới (phiên đang mở vẫn chạy hook cũ) và để ý vài phiên: lượt đầu, câu hỏi tiến độ, lượt tick việc đều phải có widget cây; hook nhắc oan thì báo lại. @ban
+  - ~~Mở phiên mới (phiên đang mở vẫn chạy hook cũ) và để ý vài phiên: lượt đầu, câu hỏi tiến độ, lượt tick việc đều phải có widget cây; hook nhắc oan thì báo lại.~~ Xong (bạn xác nhận 11/10/2026): plugin 0.8.20 hiện widget cây đúng; phiên `254034da` vẽ widget ngay ở câu hỏi tiến độ đầu tiên.
   1. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   2. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
 - **Ghi nhớ (đã xong, không phải việc):**
