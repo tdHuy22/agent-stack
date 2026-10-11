@@ -203,19 +203,42 @@ def render_text(tree: dict) -> str:
             lines.append(("   " if last else "│  ") + ("└─ " if j == len(kids) - 1 else "├─ ") + kid)
     first = tree["milestones"][0] if tree["milestones"] else None
     if first:
-        lines.append(f"Chọn: gõ mã lá (ví dụ {first['all_leaves'][0]['id']}) để làm một việc, "
-                     f"hoặc mã mốc (ví dụ {first['id']}) để làm cả mốc.")
+        lines.append(f"Chọn: gõ mã lá (ví dụ {first['all_leaves'][0]['id']}) để làm một việc, mã mốc (ví dụ "
+                     f"{first['id']}) để làm cả mốc, hoặc nhiều mã cách nhau bằng dấu phẩy để làm lần lượt.")
     return "\n".join(lines)
 
 
-def pick_prompt(tree: dict, code: str) -> str:
-    """Câu gửi vào chat khi người dùng chọn một mốc hay một lá."""
-    m, leaf = find(tree, code)
-    if leaf:
-        return f"Làm việc [{leaf['id']}] trong mốc \"{m['title']}\": {leaf['text']}"
-    if m:
-        return f"Làm cả mốc [{m['id']}] \"{m['title']}\""
-    return ""
+def leaf_line(m: dict, leaf: dict) -> str:
+    """Một dòng của danh sách việc: mã, chữ đang hiện, mốc và nhãn."""
+    return f"[{leaf['id']}] {leaf['text']} (mốc \"{m['title']}\"; {tag_text(leaf['tags'])})"
+
+
+def split_codes(codes) -> list:
+    """Danh sách mã từ chuỗi "T.1, 14.1 Q" hay từ list; giữ thứ tự, bỏ trùng."""
+    if isinstance(codes, str):
+        codes = [codes]
+    parts = [c for raw in codes or [] for c in re.split(r"[,;\s]+", raw or "") if c]
+    return list(dict.fromkeys(p.strip("[]").upper() for p in parts))
+
+
+def pick_prompt(tree: dict, codes) -> str:
+    """Câu gửi vào chat khi người dùng chọn. Một lá: một câu. Một mốc hay nhiều mã: danh sách gạch đầu dòng, mỗi
+    việc một dòng, để các việc không dính thành một đoạn văn."""
+    found = [(code, *find(tree, code)) for code in split_codes(codes)]
+    found = [(code, m, leaf) for code, m, leaf in found if m]
+    if not found:
+        return ""
+    if len(found) == 1:
+        _, m, leaf = found[0]
+        if leaf:
+            return f"Làm việc [{leaf['id']}] trong mốc \"{m['title']}\": {leaf['text']}"
+        lines = [f"Làm cả mốc [{m['id']}] \"{m['title']}\", lần lượt, dừng ở việc có nhãn:"]
+        lines += [f"- {leaf_line(m, x)}" for x in m["all_leaves"]]
+        return "\n".join(lines)
+    lines = ["Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:"]
+    for _, m, leaf in found:
+        lines.append(f"- {leaf_line(m, leaf)}" if leaf else f"- cả mốc [{m['id']}] \"{m['title']}\"")
+    return "\n".join(lines)
 
 
 def find(tree: dict, code: str):
@@ -230,7 +253,12 @@ def find(tree: dict, code: str):
     return None, None
 
 
-def render_pick(tree: dict, code: str) -> str:
+def render_pick(tree: dict, codes) -> str:
+    """Việc ứng với một hay nhiều mã; nhiều mã thì in lần lượt từng mã, cách nhau một dòng trống."""
+    codes = split_codes(codes)
+    if len(codes) > 1:
+        return "\n\n".join(render_pick(tree, code) for code in codes)
+    code = codes[0] if codes else ""
     m, leaf = find(tree, code)
     if not m:
         return f"Không có mã {code!r} trong cây hiện tại (cây có thể đã đổi): chạy lại plan_tree.py để xem."
@@ -263,7 +291,15 @@ WIDGET_STYLE = """<style>
 .pt .ok{background:var(--bg-success);color:var(--text-success)}
 .pt .sm{font-size:12px;color:var(--text-secondary)}
 .pt button.all{font-size:12px;padding:2px 10px;height:auto}
+.pt .row{display:flex;align-items:center;gap:6px}
+.pt .row .lf{flex:1;min-width:0}
 </style>"""
+WIDGET_SCRIPT = """<script>
+function ptPicked(){return Array.from(document.querySelectorAll('.pt .pick:checked')).map(function(x){return '- '+x.dataset.line;});}
+function ptCount(){var n=ptPicked().length;document.getElementById('pt-go').textContent=n?'Làm '+n+' việc đã chọn ↗':'Làm các việc đã chọn ↗';document.getElementById('pt-err').textContent='';}
+function ptGo(){var xs=ptPicked();if(!xs.length){document.getElementById('pt-err').textContent='Tick ít nhất một việc trước.';return;}
+sendPrompt(xs.length===1?'Làm việc đã chọn:\\n'+xs[0]:'Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:\\n'+xs.join('\\n'));}
+</script>"""
 KIND_TI = {"blocked": "ti-alert-triangle", "wip": "ti-progress", "next": "ti-arrow-right",
            "phase": "ti-git-branch", "decisions": "ti-help-circle"}
 
@@ -294,12 +330,17 @@ def render_widget(tree: dict) -> str:
         for leaf in m["leaves"]:
             tags = "".join(f'<span class="tg need">{e(TAG_LABEL[t])}</span>' for t in leaf["tags"]) \
                 or '<span class="tg ai">Claude làm</span>'
-            out.append(f'<button class="lf" onclick="sendPrompt({js_arg(pick_prompt(tree, leaf["id"]))})">'
-                       f'<span class="sm">{leaf["id"]}</span>{e(leaf["text"])}{tags}</button>')
+            out.append(f'<div class="row"><input type="checkbox" class="pick" aria-label="Chọn {leaf["id"]}" '
+                       f'data-line="{e(leaf_line(m, leaf), quote=True)}" onchange="ptCount()">'
+                       f'<button class="lf" onclick="sendPrompt({js_arg(pick_prompt(tree, leaf["id"]))})">'
+                       f'<span class="sm">{leaf["id"]}</span>{e(leaf["text"])}{tags}</button></div>')
         if m["hidden"]:
             out.append(f'<span class="sm">+{m["hidden"]} lá nữa (gõ {m["id"]} để xem)</span>')
         out.append("</div>")
+    out.append('<div class="mh" style="margin-top:8px"><button id="pt-go" onclick="ptGo()">Làm các việc đã chọn ↗</button>'
+               '<span id="pt-err" class="sm" style="color:var(--text-danger)"></span></div>')
     out.append("</div>")
+    out.append(WIDGET_SCRIPT)
     return "\n".join(out)
 
 
@@ -317,7 +358,7 @@ def main(argv=None) -> int:
     fmt.add_argument("--text", action="store_true", help="cây chữ (mặc định)")
     fmt.add_argument("--json", action="store_true")
     fmt.add_argument("--widget", action="store_true", help="HTML cho công cụ show_widget")
-    fmt.add_argument("--pick", metavar="MÃ", help="xem mốc hay lá theo mã, ví dụ 2 hoặc 2.3")
+    fmt.add_argument("--pick", metavar="MÃ", nargs="+", help="xem mốc hay lá theo mã, ví dụ T.1 hoặc \"T.1, 14\"")
     ap.add_argument("--leaves", type=int, default=MAX_LEAVES, help="số lá hiện mỗi mốc")
     args = ap.parse_args(argv)
     root = A.project_root(args.project)
@@ -328,7 +369,7 @@ def main(argv=None) -> int:
         print(render_widget(tree) or render_text(tree))
     elif args.pick:
         print(render_pick(tree, args.pick))
-        return 0 if find(tree, args.pick)[0] else 1
+        return 0 if all(find(tree, code)[0] for code in split_codes(args.pick)) else 1
     else:
         print(render_text(tree))
     return 0

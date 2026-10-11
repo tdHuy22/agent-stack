@@ -103,6 +103,27 @@ class PlanTree(TempDirTestCase):
         self.assertEqual(after["G1: Thiết kế"], before["G1: Thiết kế"])
         self.assertEqual(after["Việc tiếp theo"], "T")
 
+    def test_many_choices_become_a_list(self):
+        one = plan_tree.pick_prompt(self.tree, "2.1")
+        self.assertNotIn("\n", one)
+        whole = plan_tree.pick_prompt(self.tree, "2").splitlines()
+        self.assertTrue(whole[0].startswith("Làm cả mốc [2]"))
+        self.assertEqual(len(whole), 1 + 5)
+        self.assertTrue(all(line.startswith("- [2.") for line in whole[1:]))
+        many = plan_tree.pick_prompt(self.tree, "t.1, 2.3 Q 9.9 2.3").splitlines()
+        self.assertEqual(many[0], "Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:")
+        self.assertEqual([line[:7] for line in many[1:]], ["- [T.1]", "- [2.3]", "- cả mố"])  # bỏ mã sai, mã trùng
+        self.assertIn("tốn tiền", many[2])
+        self.assertEqual(plan_tree.render_pick(self.tree, ["T.1", "2.3"]).count("Lá ["), 2)
+
+    def test_widget_has_checkboxes_and_list_button(self):
+        out = plan_tree.render_widget(self.tree)
+        self.assertEqual(out.count('class="pick"'), sum(len(m["leaves"]) for m in self.tree["milestones"]))
+        self.assertIn('onclick="ptGo()"', out)
+        self.assertIn("xs.join('\\n')", out)
+        self.assertIn("Tick ít nhất một việc", out)  # bấm khi chưa chọn: báo lỗi, không gửi
+        self.assertNotIn("<img", out)
+
     def test_leaf_cap(self):
         tree = plan_tree.build(self.tmp, max_leaves=2)
         g1 = tree["milestones"][2]
@@ -112,7 +133,8 @@ class PlanTree(TempDirTestCase):
     def test_widget_escapes_plan_text(self):
         out = plan_tree.render_widget(self.tree)
         self.assertNotIn("<img", out)
-        self.assertNotIn("</script>", out)
+        self.assertEqual(out.count("</script>"), 1)  # chỉ thẻ script của widget, ở cuối
+        self.assertTrue(out.rstrip().endswith("</script>"))
         self.assertIn("sendPrompt(&quot;Làm việc [2.1]", out)
         self.assertIn("Làm cả mốc (2/5 Claude tự làm)", out)
         self.assertNotIn("Làm cả mốc [Q]", out)  # quyết định không có nút làm cả mốc

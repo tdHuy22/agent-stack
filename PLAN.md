@@ -90,9 +90,10 @@
     - Review `agent-stack:reviewer`: 1 vừa (luật router bắt cả việc debug repo của bạn, hạ model và mời gửi câu hỏi về repo riêng), 2 thấp (chữ lỗi của server lọt ra ngoài khung; từ chối secret không chỉ ra chỗ); đã sửa kèm test.
   - GĐ23 (11/10/2026, plugin 0.8.17, chưa cài trên máy): cây kế hoạch `tien-do/scripts/plan_tree.py` (`--text`, `--widget`, `--pick`, `--json`; mã mốc ổn định: C, D, T, Q và số thứ tự tiêu đề §1), luật "Cây kế hoạch" trong `SHARED.global.md` (Claude Code nạp thẳng từ repo nên có hiệu lực ngay), hook Stop nhắc hiện cây khi lượt tick thêm việc. Bằng chứng: `unittest discover` đạt, `claude plugin validate plugin` passed (có biên nhận); review `agent-stack:reviewer` (opus): 3 lỗi thấp đã sửa (nhắc oan khi đổi file kế hoạch giữa lượt, lời nhắc ghép mâu thuẫn, mã dời khi nhóm khác hiện ra), góp ý về đoán nhãn và câu gửi khi bấm cũng đã sửa.
   - `receipt.py forget <tên>` và `receipt.py prune [--dry-run]` (11/10/2026, plugin 0.8.18): đã dùng `prune` xoá biên nhận trượt của `tests.test_prompt_submit` (module xoá từ GĐ18), nên SessionStart và cây kế hoạch hết báo "Chặn đường" oan. Review `agent-stack:reviewer` (sonnet): 1 cao (prune xoá nhầm biên nhận của test còn, qua `discover -p`, `-k`, gói ngoài project), 2 vừa, 2 thấp; đã sửa (chỉ xoá khi chắc chắn, chịu được dữ liệu hỏng), `unittest discover` 579 OK có biên nhận; reviewer kiểm lại: 5 lỗi đã đóng, góp ý `--ignore` của pytest cũng đã sửa. Test trong `tests/test_receipt.py`. Lưu ý: bạn cũng đã mở việc này ở một phiên tách riêng; nếu phiên đó cũng commit thì chỉ giữ một bản.
+  - Chọn nhiều việc trên cây (11/10/2026, plugin 0.8.19, theo yêu cầu của bạn): ô tick và nút "Làm các việc đã chọn" gửi danh sách mỗi việc một dòng thay vì một đoạn văn; "Làm cả mốc" cũng liệt kê từng việc; `plan_tree.py --pick T.1, 14.1`.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự:**
-  - Cài plugin 0.8.18 và luật OpenCode: `./install.sh --apply`, rồi mở phiên mới (hook Stop nhắc cây chỉ chạy từ bản đã cài). @ban
+  - Cài plugin 0.8.19 và luật OpenCode: `./install.sh --apply`, rồi mở phiên mới (hook Stop nhắc cây chỉ chạy từ bản đã cài). @ban
   - Tùy bạn: báo lỗi cho Claude Code nếu bạn không bấm gì lúc thử 0.8.12. Hai lần, `ask` ở auto mode được duyệt sau 10–15 giây với nguồn `user_temporary` mà không hiện hộp hỏi, trong khi docs nói phải hiện (Claude Code 2.1.295, app desktop). Hook 0.8.13 dùng `deny` nên không còn phụ thuộc lỗi này.
   0. Khi trailofbits/skills gộp PR #352 (issue #297): vet commit mới của `static-analysis` (`vet.py` sẽ cảnh báo bỏ bản vá), duyệt, rồi xoá `patches/static-analysis/`.
   1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
@@ -309,4 +310,5 @@ Chốt 11/10/2026 theo khuyến nghị cả 4 câu (trang so sánh https://claud
 - [x] Hook Stop nhắc hiện cây khi lượt tick thêm việc mà chưa chạy `plan_tree.py`; số việc xong lưu lúc bắt đầu lượt (`plan_done`).
 - [x] Mẫu PLAN và `session-keeper` ghi quy ước mốc, lá, nhãn; bổ sung GĐ16–GĐ22 vào §1; plugin 0.8.17.
 - [x] `receipt.py forget` và `prune` để dọn biên nhận trượt của test đã xoá (làm cây hiện "Chặn đường" oan); plugin 0.8.18.
-- [ ] Cài plugin 0.8.18 trên máy và cập nhật luật OpenCode: `./install.sh --apply` @ban
+- [x] Chọn nhiều việc: widget có ô tick và nút "Làm các việc đã chọn"; câu gửi vào chat (cả "Làm cả mốc") là danh sách mỗi việc một dòng; `--pick` nhận nhiều mã; plugin 0.8.19.
+- [ ] Cài plugin 0.8.19 trên máy và cập nhật luật OpenCode: `./install.sh --apply` @ban
