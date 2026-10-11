@@ -1,7 +1,7 @@
 {
   "name": "agent-stack",
   "displayName": "Agent Stack",
-  "version": "0.8.17",
+  "version": "0.8.18",
   "description": "Bộ công cụ cá nhân: kiểm duyệt đồ bên thứ ba, tìm thứ có sẵn tốt nhất (GitHub, nghiên cứu SOTA) trước khi build, giữ trạng thái phiên và biên nhận kiểm tra, theo dõi tiến độ, chọn skill, model và effort theo project và việc hiện tại, chỉnh giọng văn, cổng kiểm trước khi báo xong.",
   "author": {
     "name": "tdHuy22",

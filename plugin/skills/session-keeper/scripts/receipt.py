@@ -10,6 +10,12 @@ Lệnh:
       Chạy lệnh (không qua shell), in output, ghi biên nhận. Mã thoát của receipt.py là mã thoát của lệnh.
   receipt.py show [--project DIR] [--json]
       In các lần kiểm tra đã ghi và cho biết từng kết quả còn khớp code hiện tại không.
+  receipt.py forget [--project DIR] TÊN [TÊN...]
+      Xoá biên nhận theo tên (tên như `show` in ra). Mã thoát 1 nếu có tên không tìm thấy.
+  receipt.py prune [--project DIR] [--dry-run]
+      Xoá biên nhận trượt của lệnh test trỏ tới module hay file test không còn trong project (ví dụ
+      `python3 -m unittest tests.test_cu` sau khi xoá tests/test_cu.py), vì chạy lại lệnh đó chỉ trượt mãi.
+      Không chắc (discover, gói ngoài project, giá trị của option) thì giữ, để không che một test đang trượt thật.
 
 Biên nhận nằm trong state/tests/ của agent-stack, không ghi gì vào project.
 """
@@ -17,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -85,6 +92,129 @@ def cmd_run(root: Path, label: str, cmd: list, timeout: float) -> int:
     return code
 
 
+MODULE_RE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$")
+PYTEST_VALUE_OPTS = ("--ignore", "--deselect", "--ignore-glob", "-k", "-m", "-p", "-c", "-o", "--rootdir",
+                     "--junitxml", "--basetemp", "--confcutdir")
+PYTEST_FILE_RE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")
+
+
+def load_checks(root: Path) -> dict:
+    """Các biên nhận đã ghi; bỏ qua phần hỏng (file không phải dict, mục không phải dict)."""
+    data = A.read_json(A.receipt_path(root), {})
+    checks = data.get("checks") if isinstance(data, dict) else None
+    if not isinstance(checks, dict):
+        return {}
+    return {label: rec for label, rec in checks.items() if isinstance(label, str) and isinstance(rec, dict)}
+
+
+def save_checks(root: Path, checks: dict):
+    """Ghi lại biên nhận (xoá file khi không còn mục nào). Trả về lỗi dạng chữ, hoặc None khi ghi được."""
+    path = A.receipt_path(root)
+    try:
+        if checks:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            A.write_json_atomic(path, {"root": str(root), "checks": checks})
+        elif path.exists():
+            path.unlink()
+    except OSError as exc:
+        return str(exc)
+    return None
+
+
+def unittest_missing(root: Path, args: list) -> list:
+    if "discover" in args:
+        return []  # discover tự tìm test theo pattern: không biết chắc module nào
+    missing, skip = [], False
+    for arg in args:
+        if skip:
+            skip = False
+            continue
+        if arg in ("-k",):
+            skip = True  # giá trị của -k là mẫu tên test, không phải module
+            continue
+        if arg.startswith("-") or not MODULE_RE.match(arg):
+            continue
+        parts = arg.split(".")
+        if not ((root / parts[0]).is_dir() or (root / f"{parts[0]}.py").is_file()):
+            continue  # gốc không nằm trong project (gói đã cài, hay lớp test): không đoán
+        # Còn khi có một tiền tố là file .py (phần sau là lớp, hàm test), hoặc cả tên là một gói.
+        as_file = any((root / Path(*parts[:i])).with_suffix(".py").is_file() for i in range(1, len(parts) + 1))
+        if not as_file and not (root / Path(*parts) / "__init__.py").is_file():
+            missing.append(arg)
+    return missing
+
+
+def missing_targets(root: Path, cmd) -> list:
+    """Module hay file test mà lệnh nhắc tới nhưng không còn trong project; rỗng khi không chắc. Chỉ xét
+    `python -m unittest a.b.c` (module, lớp hay hàm test, gốc `a` phải nằm trong project; bỏ qua discover và giá
+    trị của -k) và pytest với tham số là file test theo quy ước tên (`test_*.py`, `*_test.py`, kể cả `::test_y`)
+    trong thư mục đang có. Lệnh khác trả về rỗng."""
+    if not isinstance(cmd, list) or not cmd or not all(isinstance(x, str) for x in cmd):
+        return []
+    for i, arg in enumerate(cmd):
+        if arg == "unittest" and i > 0 and cmd[i - 1] == "-m":
+            return unittest_missing(root, cmd[i + 1:])
+    pytest_at = next((i for i, arg in enumerate(cmd)
+                      if (arg == "pytest" and i > 0 and cmd[i - 1] == "-m")
+                      or (i == 0 and Path(arg).name in ("pytest", "py.test"))), None)
+    if pytest_at is None:
+        return []
+    missing, skip = [], False
+    for arg in cmd[pytest_at + 1:]:
+        if skip:
+            skip = False
+            continue
+        if arg in PYTEST_VALUE_OPTS:
+            skip = True  # file bị loại khỏi lần chạy (--ignore x.py): mất cũng không làm lệnh trượt
+            continue
+        target = arg.split("::", 1)[0]
+        if arg.startswith("-") or not PYTEST_FILE_RE.search(target):
+            continue
+        if (root / target).parent.is_dir() and not (root / target).exists():
+            missing.append(arg)
+    return missing
+
+
+def cmd_forget(root: Path, labels: list) -> int:
+    checks = load_checks(root)
+    labels = list(dict.fromkeys(labels))
+    gone = [label for label in labels if label in checks]
+    unknown = [label for label in labels if label not in checks]
+    for label in gone:
+        del checks[label]
+    error = save_checks(root, checks) if gone else None
+    if error:
+        print(f"Không ghi được biên nhận ({error}); chưa xoá gì.")
+        return 1
+    for label in gone:
+        print(f"Đã xoá biên nhận: {label}")
+    for label in unknown:
+        print(f"Không có biên nhận tên {label!r}.")
+    if unknown and checks:
+        print("Các tên hiện có: " + "; ".join(sorted(checks)))
+    return 1 if unknown else 0
+
+
+def cmd_prune(root: Path, dry_run: bool) -> int:
+    """Chỉ xoá biên nhận trượt; biên nhận đạt luôn giữ."""
+    checks = load_checks(root)
+    stale = {label: missing_targets(root, rec.get("cmd")) for label, rec in checks.items() if rec.get("ok") is False}
+    stale = {label: miss for label, miss in stale.items() if miss}
+    if not stale:
+        print("Không có biên nhận nào trỏ tới test đã xoá.")
+        return 0
+    for label in stale:
+        checks.pop(label)
+    error = None if dry_run else save_checks(root, checks)
+    if error:
+        print(f"Không ghi được biên nhận ({error}); chưa xoá gì.")
+        return 1
+    verb = "Sẽ xoá" if dry_run else "Đã xoá"
+    for label, miss in stale.items():
+        print(f"{verb} biên nhận: {label} (không còn: {', '.join(miss)})")
+    return 0
+
+
 def ago(ts: str) -> str:
     try:
         delta = time.time() - datetime.fromisoformat(ts).timestamp()
@@ -130,10 +260,20 @@ def main(argv=None) -> int:
     show = sub.add_parser("show", help="xem các biên nhận đã ghi")
     show.add_argument("--project", default=".")
     show.add_argument("--json", action="store_true")
+    forget = sub.add_parser("forget", help="xoá biên nhận theo tên")
+    forget.add_argument("--project", default=".")
+    forget.add_argument("labels", nargs="+", metavar="TÊN")
+    prune = sub.add_parser("prune", help="xoá biên nhận trượt của test đã bị xoá khỏi project")
+    prune.add_argument("--project", default=".")
+    prune.add_argument("--dry-run", action="store_true", help="chỉ in, không xoá")
     args = ap.parse_args(argv)
     root = A.project_root(Path(args.project).expanduser().resolve())
     if args.cmd == "show":
         return cmd_show(root, args.json)
+    if args.cmd == "forget":
+        return cmd_forget(root, args.labels)
+    if args.cmd == "prune":
+        return cmd_prune(root, args.dry_run)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         ap.error("thiếu lệnh kiểm tra, ví dụ: receipt.py run -- python3 -m pytest -q")

@@ -195,6 +195,8 @@ python3 plugin/skills/session-keeper/scripts/receipt.py show
 
 `run` chạy lệnh và ghi lại mã thoát kèm dấu vân tay của code lúc đó. `show` liệt kê biên nhận và đánh dấu biên nhận nào đã cũ vì code đổi sau khi chạy. Tùy chọn: `--project`, `--label`, `--timeout`.
 
+Biên nhận trượt mà không còn ý nghĩa sẽ làm hook SessionStart và cây kế hoạch báo "Chặn đường" mãi. `forget <tên>` xoá biên nhận theo tên mà `show` in ra. `prune` tự xoá biên nhận trượt của lệnh `unittest` hay `pytest` trỏ tới module hoặc file test đã bị xoá; không chắc (ví dụ `discover`) thì giữ. Thêm `--dry-run` để xem trước.
+
 ### 5.3 `task-router`: chọn model, effort, subagent, skill
 
 **Khi nào:** "việc này nên dùng opus hay sonnet?", "effort bao nhiêu?", "có nên giao subagent không?", "làm sao tiết kiệm token".
