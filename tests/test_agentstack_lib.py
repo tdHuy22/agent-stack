@@ -431,7 +431,8 @@ class LastTurn(TempDirTestCase):
         git(self.root, "commit", "-q", "-m", "init")
         head = git(self.root, "rev-parse", "HEAD").strip()
         record = A.start_turn("sid-flags", str(self.root), {"threat_model": True})
-        self.assertEqual((record["head"], record["threat_model"]), (head, True))
+        self.assertEqual((record["head"], record["threat_model"], record["first"]), (head, True, True))
+        self.assertFalse(A.start_turn("sid-flags", str(self.root))["first"], "lượt thứ hai của phiên")
         self.assertEqual(A.load_turn("sid-flags")["head"], head)
         other = self.tmp / "other"
         other.mkdir()

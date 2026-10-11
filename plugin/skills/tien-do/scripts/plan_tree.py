@@ -310,7 +310,7 @@ def render_widget(tree: dict) -> str:
         return ""
     e = html.escape
     out = [WIDGET_STYLE, '<h2 class="sr-only">Cây kế hoạch: mốc là thân, việc là lá; bấm để chọn việc tiếp theo.</h2>',
-           '<div class="pt">']
+           '<div class="pt" data-plan-tree>']
     dp = tree["done_phases"]
     if dp["count"]:
         span = dp["first"] if dp["count"] == 1 else f"{short_title(dp['first'])} → {short_title(dp['last'])}"

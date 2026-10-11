@@ -123,6 +123,7 @@ class PlanTree(TempDirTestCase):
         self.assertIn("xs.join('\\n')", out)
         self.assertIn("Tick ít nhất một việc", out)  # bấm khi chưa chọn: báo lỗi, không gửi
         self.assertNotIn("<img", out)
+        self.assertIn('<div class="pt" data-plan-tree>', out)  # hook Stop nhận ra cây qua dấu này
 
     def test_leaf_cap(self):
         tree = plan_tree.build(self.tmp, max_leaves=2)
@@ -176,3 +177,22 @@ class StopHelpers(TempDirTestCase):
         self.assertFalse(A.tool_used_since(path, now - 50, "plan_tree.py"))
         self.assertTrue(A.tool_used_since(path, now - 200, "plan_tree.py"))
         self.assertTrue(A.tool_used_since(self.tmp / "missing.jsonl", now, "plan_tree.py"))  # đọc lỗi: không nhắc
+        self.assertFalse(A.tool_used_since(path, now - 200, "plan_tree.py", tool_suffix="show_widget"))
+        self.assertTrue(A.tool_used_since(path, now - 200, "plan_tree.py", tool_suffix="Bash"))
+
+    def test_transcript_offers_tool(self):
+        listed = json.dumps({"type": "attachment", "attachment": {"type": "deferred_tools_delta",
+                                                                  "addedNames": ["mcp__x__show_widget"]}})
+        said = json.dumps({"type": "user", "message": {"content": "show_widget là gì?"}})
+        rules = json.dumps({"type": "attachment", "attachment": {"type": "instructions", "files": [
+            {"content": "đưa vào công cụ vẽ widget (như `show_widget`)"}]}})
+        loaded = json.dumps({"type": "attachment", "attachment": {"type": "prompt_snapshot", "tools": [
+            {"name": "Bash"}, {"name": "mcp__visualize__show_widget"}]}})
+        removed = json.dumps({"type": "attachment", "attachment": {"type": "deferred_tools_delta",
+                                                                   "addedNames": ["mcp__x__show_widget"],
+                                                                   "removedNames": ["mcp__x__show_widget"]}})
+        self.assertTrue(A.transcript_offers_tool(self.write("a.jsonl", listed + "\n"), "show_widget"))
+        self.assertTrue(A.transcript_offers_tool(self.write("c.jsonl", loaded + "\n"), "show_widget"))
+        for name, line in (("b", said), ("d", rules), ("e", removed)):  # chữ trong tin nhắn hay CLAUDE.md không tính
+            self.assertFalse(A.transcript_offers_tool(self.write(f"{name}.jsonl", line + "\n"), "show_widget"), name)
+        self.assertFalse(A.transcript_offers_tool(self.tmp / "missing.jsonl", "show_widget"))

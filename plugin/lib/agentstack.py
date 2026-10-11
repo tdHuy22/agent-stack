@@ -863,9 +863,10 @@ def plan_done_count(root: Path):
     return {"path": str(path), "count": count}
 
 
-def tool_used_since(transcript_path, since: float, needle: str, tail_bytes: int = 2_000_000) -> bool:
-    """Trong transcript (JSONL), từ thời điểm `since`, có lời gọi công cụ nào chứa `needle` trong đầu vào không.
-    Chỉ đọc phần cuối file; lỗi đọc thì coi như có (không nhắc oan)."""
+def tool_used_since(transcript_path, since: float, needle: str, tool_suffix: str = "",
+                    tail_bytes: int = 2_000_000) -> bool:
+    """Trong transcript (JSONL), từ thời điểm `since`, có lời gọi công cụ nào (tên kết thúc bằng `tool_suffix`, nếu
+    có) chứa `needle` trong đầu vào không. Chỉ đọc phần cuối file; lỗi đọc thì coi như có (không nhắc oan)."""
     try:
         path = Path(transcript_path)
         with path.open("rb") as fh:
@@ -889,8 +890,41 @@ def tool_used_since(transcript_path, since: float, needle: str, tail_bytes: int 
         if ts < since:
             return False
         content = ((entry.get("message") or {}).get("content")) or []
-        if any(isinstance(c, dict) and c.get("type") == "tool_use" and needle in json.dumps(c.get("input"), ensure_ascii=False)
-               for c in content):
+        if any(isinstance(c, dict) and c.get("type") == "tool_use" and str(c.get("name") or "").endswith(tool_suffix)
+               and needle in json.dumps(c.get("input"), ensure_ascii=False) for c in content):
+            return True
+    return False
+
+
+def transcript_offers_tool(transcript_path, suffix: str, head_bytes: int = 1_000_000) -> bool:
+    """Phiên có công cụ tên kết thúc bằng `suffix` không, theo danh sách công cụ Claude Code ghi vào phần đầu transcript:
+    tên trong attachment deferred_tools_delta (công cụ hoãn) và prompt_snapshot (công cụ nạp sẵn). Chỉ khớp theo tên
+    công cụ, không khớp chữ trong CLAUDE.md hay tin nhắn. Định dạng này không được công bố nên lỗi đọc hay không thấy
+    thì coi như không có."""
+    try:
+        with Path(transcript_path).open("rb") as fh:
+            lines = fh.read(head_bytes).decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError, ValueError):
+        return False
+    for line in lines:
+        if suffix not in line or '"attachment"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue  # dòng bị cắt ở cuối phần đã đọc
+        att = entry.get("attachment") if entry.get("type") == "attachment" else None
+        if not isinstance(att, dict):
+            continue
+        if att.get("type") == "deferred_tools_delta":
+            names = [n for key in ("addedNames", "readdedNames") for n in att.get(key) or []]
+            gone = set(att.get("removedNames") or [])
+            names = [n for n in names if n not in gone]
+        elif att.get("type") == "prompt_snapshot":
+            names = [t.get("name") for t in att.get("tools") or [] if isinstance(t, dict)]
+        else:
+            continue
+        if any(isinstance(n, str) and n.endswith(suffix) for n in names):
             return True
     return False
 
@@ -922,6 +956,7 @@ def start_turn(session_id, cwd, extra=None):
             return None
         root = project_root(cwd)
         record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root),
+                  "first": not path.exists(),  # lượt đầu của phiên: hook Stop nhắc hiện cây kế hoạch
                   "plan_done": plan_done_count(root),
                   "head": (git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip() or None}
         record.update(extra or {})

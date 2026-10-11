@@ -4,12 +4,15 @@ file đổi) để phiên mới làm tiếp được. Chặn một lần để C
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
-- lượt vừa xong một việc trong kế hoạch (thêm ô tick hay bước gạch) mà chưa chạy plan_tree.py: hiện cây kế hoạch để
-  người dùng chọn việc tiếp theo (gộp vào lời nhắc ở trên nếu có).
+- lượt cần hiện cây kế hoạch (câu trả lời đầu tiên của phiên trong project có kế hoạch, vừa xong việc trong kế
+  hoạch, hay người dùng hỏi tiến độ) mà người dùng chưa thấy cây: hiện cây để người dùng chọn việc tiếp theo (gộp
+  vào lời nhắc ở trên nếu có). Chạy plan_tree.py để tự đọc không tính: phải có lời gọi show_widget với HTML của cây,
+  hay cây chữ trong câu trả lời cuối khi phiên không có công cụ widget.
 
 Lúc bắt đầu lượt và dấu §0 lúc đó do hook UserPromptSubmit ghi (state/turns/). Lần Stop thứ hai của cùng lượt
 (stop_hook_active) không chặn nữa, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập nhật §0".
 """
+import re
 import sys
 from pathlib import Path
 
@@ -27,28 +30,65 @@ def block_reason(changed, plan_rel) -> str:
             "hoặc thay đổi quá nhỏ để ghi, trả lời đúng một câu nói vậy và không sửa gì.")
 
 
-TREE_CMD = "plan_tree.py"
+TREE_WIDGET_MARK = "data-plan-tree"  # plan_tree.py --widget gắn vào thẻ gốc của cây
+TREE_TEXT_RE = re.compile(r"[├└]─ ")  # nét cây của plan_tree.py --text
+WIDGET_TOOL = "show_widget"  # đuôi tên công cụ vẽ widget (mcp__visualize__show_widget và bản deferred)
 TREE_HOW = ("chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget` rồi "
             "đưa nguyên kết quả vào công cụ vẽ widget nếu có (không có thì chạy với `--text` và in trong khối code), "
             "rồi kết thúc lượt bằng dòng ➡️")
-TREE_ALONE = ("agent-stack (hook Stop): lượt này vừa xong việc trong kế hoạch (thêm ô tick hay bước gạch) mà chưa hiện "
-              f"cây kế hoạch. Hiện cây để người dùng chọn việc tiếp theo: {TREE_HOW}. Không làm thêm việc khác. Nếu "
-              "lượt này không tick hay gạch việc nào (ví dụ phiên khác vừa sửa kế hoạch), trả lời đúng một câu nói "
-              "vậy và không làm gì thêm.")
-TREE_AFTER = (" Lượt này cũng vừa xong việc trong kế hoạch: làm xong phần trên thì, thay cho câu kết ngắn, hiện cây "
-              f"kế hoạch: {TREE_HOW}. Nếu các file không do lượt này đổi thì bỏ qua cả cây.")
+TREE_WHY = {"first": "là câu trả lời đầu tiên của phiên trong project có file kế hoạch",
+            "progress": "trả lời câu hỏi về tiến độ hay việc tiếp theo",
+            "done": "vừa xong việc trong kế hoạch (thêm ô tick hay bước gạch)"}
+TREE_SHORT = {"first": "là câu trả lời đầu tiên của phiên", "progress": "trả lời câu hỏi tiến độ",
+              "done": "vừa xong việc trong kế hoạch"}
 
 
-def tree_due(root: Path, turn, data: dict) -> bool:
-    """Lượt xong thêm việc trong kế hoạch (số việc xong tăng) mà chưa gọi plan_tree.py trong lượt."""
+def join_why(reasons, table) -> str:
+    return ", ".join(table[r] for r in reasons)
+
+
+def tree_alone(reasons) -> str:
+    return (f"agent-stack (hook Stop): lượt này {join_why(reasons, TREE_WHY)} mà người dùng chưa thấy cây kế hoạch "
+            "(chạy plan_tree.py để tự đọc, tả cây bằng lời, hay in cây chữ khi phiên có công cụ widget đều không "
+            "tính). Hiện cây để người dùng chọn việc tiếp "
+            f"theo: {TREE_HOW}. Không làm thêm việc khác. Nếu nhắc này sai (ví dụ phiên khác vừa sửa kế hoạch, hay "
+            "người dùng không hỏi tiến độ), trả lời đúng một câu nói vậy và không làm gì thêm.")
+
+
+def tree_after(reasons) -> str:
+    # Lượt đầu và câu hỏi tiến độ cần cây dù file do ai đổi; chỉ cây vì "vừa xong việc" mới bỏ theo file.
+    skip = " Nếu các file không do lượt này đổi thì bỏ qua cả cây." if reasons == ["done"] else ""
+    return (f" Lượt này cũng {join_why(reasons, TREE_WHY)}: làm xong phần trên thì, thay cho câu kết ngắn, hiện cây "
+            f"kế hoạch: {TREE_HOW}.{skip}")
+
+
+def tree_due(root: Path, turn, data: dict) -> list:
+    """Lý do lượt này phải hiện cây kế hoạch ("first", "progress", "done") mà người dùng chưa thấy cây; rỗng nếu
+    không cần. Chỉ xét project có file kế hoạch."""
     start = (turn or {}).get("plan_done")
     if not isinstance(start, dict) or not isinstance(start.get("count"), int):
-        return False
+        return []
     now = A.plan_done_count(root)
+    if not now:
+        return []
+    reasons = [key for key in ("first", "progress") if turn.get(key) is True]
     # Khác file kế hoạch (read_plan chọn file sửa gần nhất) thì hai số không so được.
-    if not now or now["path"] != start.get("path") or now["count"] <= start["count"]:
-        return False
-    return not A.tool_used_since(data.get("transcript_path"), turn["ts"], TREE_CMD)
+    if now["path"] == start.get("path") and now["count"] > start["count"]:
+        reasons.append("done")
+    if not reasons or tree_shown(turn, data):
+        return []
+    return reasons
+
+
+def tree_shown(turn: dict, data: dict) -> bool:
+    """Người dùng đã thấy cây trong lượt: lời gọi show_widget với HTML của cây, hay cây chữ trong câu trả lời cuối
+    khi phiên không có công cụ widget (luật chung: có widget thì vẽ widget)."""
+    transcript = data.get("transcript_path")
+    if A.tool_used_since(transcript, turn["ts"], TREE_WIDGET_MARK, tool_suffix=WIDGET_TOOL):
+        return True
+    message = data.get("last_assistant_message")
+    return (isinstance(message, str) and bool(TREE_TEXT_RE.search(message))
+            and not A.transcript_offers_tool(transcript, WIDGET_TOOL))
 
 
 def chot_viec_gate(root: Path, turn: dict, changed: list):
@@ -130,7 +170,7 @@ def main():
         except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
             A.log_event("hook-error", {"hook": "chot_viec_gate", "error": repr(exc)[:300]})
     plan_block = bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
-    tree_block = False
+    tree_block = []
     if not active and turn is not None:
         try:
             tree_block = tree_due(root, turn, data)
@@ -169,10 +209,10 @@ def main():
     A.write_last_turn(root, sid, prompt, answer, next_step, changed, len(git.get("dirty") or []),
                       git.get("branch"), plan_status)
     A.log_event("stop", {"session": sid, "cwd": str(root), "changed": len(changed), "plan_updated": plan_updated,
-                         "blocked": should_block or tree_block, "chot_viec": gate["level"] if gate else None,
-                         "tree": tree_block})
+                         "blocked": should_block or bool(tree_block), "chot_viec": gate["level"] if gate else None,
+                         "tree": tree_block or False})
 
-    tree_extra = TREE_AFTER if tree_block else ""
+    tree_extra = tree_after(tree_block) if tree_block else ""
 
     if gate is not None:
         A.emit_block(gate_reason(gate, plan_rel) + tree_extra,
@@ -182,8 +222,8 @@ def main():
         A.emit_block(block_reason(changed, plan_rel) + tree_extra,
                      f"📝 Lượt này đổi {len(changed)} file mà §0 chưa đổi: nhờ Claude cập nhật §0 trước khi xong.")
     elif tree_block:
-        A.emit_block(TREE_ALONE,
-                     "🌳 Lượt này vừa xong việc trong kế hoạch: nhờ Claude hiện cây để bạn chọn việc tiếp theo.")
+        A.emit_block(tree_alone(tree_block),
+                     f"🌳 Lượt này {join_why(tree_block, TREE_SHORT)}: nhờ Claude hiện cây để bạn chọn việc tiếp theo.")
 
 
 if __name__ == "__main__":

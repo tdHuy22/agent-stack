@@ -41,6 +41,11 @@ FAMILIES = ("fable", "opus", "sonnet", "haiku")
 # Tin nhắn chỉ bảo làm tiếp (đã bỏ dấu): định tuyến theo việc tiếp theo trong §0.
 CONTINUE_RE = re.compile(r"^(ok[a-z]*[ ,.!]*)?(tiep tuc|lam tiep|tiep di|tiep theo|lam di|buoc tiep theo|"
                          r"lam buoc tiep theo|continue|go on|next|proceed|keep going)( di| nhe| nha| thoi| nao)?[ .!?]*$")
+# Câu hỏi tiến độ cho cờ progress của hook Stop (nhắc hiện cây). Hẹp hơn luật progress của router: "đang do" (bị gây
+# bởi) hay "việc tiếp theo là…" giữa câu lệnh không tính; câu dài coi là việc, không phải câu hỏi.
+PROGRESS_RE = re.compile(r"\b(tien do|lam gi tiep|viec gi tiep|viec tiep theo (la gi|nao)|con (viec |gi )+(chua lam|dang do"
+                         r"|nua)|dang o dau|toi dau roi|lam toi dau|what'?s next|what next)\b|^status\b")
+PROGRESS_MAX_WORDS = 12
 # Skill có sẵn trong Claude Code, không cần cài.
 BUILTIN_SKILLS = ("verify", "code-review", "security-review")
 
@@ -363,15 +368,27 @@ def needs_model_switch(wanted: str, now: str) -> bool:
 
 def turn_flags(prompt: str, cwd) -> dict:
     """Cờ của lượt cho các hook khác: threat_model khi việc là chức năng đụng ranh giới tin cậy (luật
-    feature-boundary), để hook PreToolUse nhắc chạy mo-hinh-de-doa trước khi code. Không phụ thuộc việc gợi ý
-    có bị ẩn vì đã nhắc trong giờ qua hay không."""
+    feature-boundary), để hook PreToolUse nhắc chạy mo-hinh-de-doa trước khi code; progress khi người dùng hỏi tiến
+    độ hay việc tiếp theo (is_progress_question), để hook Stop nhắc hiện cây kế hoạch. Không phụ thuộc việc gợi ý có bị ẩn
+    vì đã nhắc trong giờ qua hay không."""
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
         return {}
     root = A.project_root(cwd) if cwd else None
-    text = (next_task(root) or prompt) if root and CONTINUE_RE.match(A.fold(prompt)) else prompt
-    hit = suggest(text)
-    return {"threat_model": True} if hit and hit["rule"] == "feature-boundary" else {}
+    if is_progress_question(prompt):
+        return {"progress": True}
+    continuing = bool(root and CONTINUE_RE.match(A.fold(prompt)))
+    hit = suggest((next_task(root) or prompt) if continuing else prompt)
+    if hit and hit["rule"] == "feature-boundary":
+        return {"threat_model": True}
+    return {}
+
+
+def is_progress_question(prompt: str) -> bool:
+    """Người dùng hỏi tiến độ hay việc tiếp theo ("làm tiếp" thì không: đó là lệnh làm việc trong §0)."""
+    text = A.fold(prompt or "")
+    return (len(text.split()) <= PROGRESS_MAX_WORDS and not CONTINUE_RE.match(text)
+            and bool(PROGRESS_RE.search(text)))
 
 
 def hook_suggestion(prompt: str, data: dict):

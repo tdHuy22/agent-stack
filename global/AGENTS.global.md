@@ -32,7 +32,7 @@
 ## Cây kế hoạch để chọn việc tiếp theo
 
 - Hiện cây (mốc là thân, việc là lá) ngay trước dòng ➡️ khi: câu trả lời đầu tiên của phiên trong project có file kế hoạch, vừa xong (tick, gạch) một việc hay một mốc, hoặc người dùng hỏi làm gì tiếp. Câu trả lời khác chỉ có dòng ➡️.
-- Cách hiện: chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget`, đưa nguyên kết quả vào công cụ vẽ widget (như `show_widget`) nếu có; không có thì chạy với `--text` và in trong khối code. Đã vẽ widget thì không chép lại cây bằng chữ.
+- Cách hiện: chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget`, đưa nguyên kết quả vào công cụ vẽ widget (như `show_widget`) nếu có; không có thì chạy với `--text` và in trong khối code. Đã vẽ widget thì không chép lại cây bằng chữ. Chạy script để tự đọc, tả cây bằng lời, hay in cây chữ khi có công cụ widget đều chưa phải hiện cây.
 - Đã hiện cây thì dòng ➡️ ghi việc đầu tiên trên cây mà Claude tự làm được.
 - Người dùng bấm trên cây, tick nhiều việc, hay gõ mã như `T.2` (một việc), `13` (cả mốc), `T.2, 14.1` (nhiều việc): chạy `plan_tree.py --pick <mã>...` để biết việc. Nhiều việc thì làm lần lượt theo danh sách, báo kết quả từng việc thành danh sách. Làm cả mốc là làm lần lượt các việc không nhãn, kiểm chứng và tick từng việc, hiện cây một lần khi dừng; tới việc cần bạn, chờ bên ngoài hay tốn tiền thì dừng và hỏi.
 - Ghi việc mới vào kế hoạch dưới tiêu đề mốc của nó ở §1, dạng `- [ ]`; mốc mới thì thêm tiêu đề mới. Việc cần người dùng, chờ bên ngoài, tốn tiền thì thêm nhãn `@ban`, `@cho`, `@usd`.

@@ -23,6 +23,18 @@ class RouterRules(TempDirTestCase):
         self.assertEqual(a["rule"], b["rule"])
         self.assertEqual(a["rule"], "security-review")
 
+    def test_turn_flags_mark_progress_questions(self):
+        self.assertEqual(route.turn_flags("làm gì tiếp theo", str(self.tmp)), {"progress": True})
+        self.assertEqual(route.turn_flags("tiến độ tới đâu rồi?", str(self.tmp)), {"progress": True})
+        self.assertEqual(route.turn_flags("làm tiếp đi", str(self.tmp)), {})  # chấm theo §0, không phải câu hỏi
+        self.assertEqual(route.turn_flags("sửa lỗi parser đọc sai ngày", str(self.tmp)), {})
+        for prompt in ("lỗi đang do hàm parse gây ra, sửa giúp tôi", "giải thích đoạn code này đang do ai gọi",
+                       "refactor module thanh toán, việc tiếp theo là viết test", "sửa màu status bar",
+                       "có vẻ như nhiều lúc claude vẫn quên vẽ tree graph cho tiến độ, như các phiên khác đang làm"):
+            self.assertFalse(route.is_progress_question(prompt), prompt)
+        for prompt in ("còn việc gì đang dở", "what's next?", "status", "đang ở đâu rồi"):
+            self.assertTrue(route.is_progress_question(prompt), prompt)
+
     def test_word_boundaries(self):
         # "secretary" không được khớp "secret"
         hit = route.suggest("the secretary scheduled a meeting tomorrow")
