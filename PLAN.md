@@ -81,10 +81,15 @@
     - **Kiểm chứng (có biên nhận):** xem mục Mốc kiểm tra; `./install.sh --only catalog` (xem trước) báo 3 mục "chờ duyệt"; `vet.py drift --remote` báo "chưa cài".
     - **Đã cài** lúc 23:05 ngày 10/10/2026 theo lựa chọn của bạn (`./install.sh --apply --only plugin,catalog`, nhật ký `state/install-logs/20261010-230500.json`): plugin 0.8.15 (bản cache giống hệt `plugin/`), MCP `exa` scope user (`claude mcp list`: Connected; bước cài lấy lại định nghĩa tool, khớp `90f51c5b65f2`). `vet.py drift --remote`: Exa khớp dù server đã lên 3.4.2. Chạy hook SessionStart từ bản cache: trả về sau 0,43 giây, lượt kiểm nền ghi `state/mcp-drift.json` với Exa khớp, không cảnh báo nhầm. MCP `exa` kết nối vào cả phiên đang mở; gọi thật `web_search_exa` qua Claude Code trả đúng trang đặc tả MCP. Luật chung thêm dòng chọn công cụ tìm web (Exa trước, Tavily cho crawl và research, WebSearch dự phòng).
     - **Bạn chọn trong chat (10/10/2026):** duyệt Exa (đã ghi `approve`); kiểm lệch MCP tự động mỗi ngày. Plugin 0.8.15: hook SessionStart báo kết quả lần kiểm nền trước (chỉ khi còn đúng: server còn cài, chưa duyệt bản khác) và mỗi ngày khởi một lượt `vet.py drift --save-state` chạy tách phiên, không chờ; tắt bằng `AGENT_STACK_NO_BACKGROUND=1` (test luôn đặt). Review `agent-stack:reviewer` lượt hai: 1 vừa (cảnh báo cũ không tự hết), 1 thấp (dòng lạ làm mất output của hook), đã sửa kèm test.
+  - **Skill `goi-mcp`: Parallel và DeepWiki dùng theo việc, không cài** (11/10/2026, bạn chọn cách 2; plugin 0.8.16). Không cài vào Claude Code nên `instructions` của chúng (5.000 ký tự) không nạp vào mọi phiên.
+    - `goi-mcp/scripts/call.py` chỉ gọi server scope `skill` đã duyệt, đúng URL. Mỗi lần gọi kiểm định nghĩa tool trong cùng phiên khớp hash đã ghim; lệch thì không gọi. Từ chối tham số trông như khóa. Bỏ `session_id`, `model_name` của Parallel. In kết quả trong khung có mã ngẫu nhiên, đã làm sạch.
+    - `reuse-best` xét mcporter, inspector CLI, mcptools, mcp-remote, mcp-proxy: không cái nào ghim hash từng lần gọi, phần lớn cần Node; nên mở rộng `mcp_remote.py` thêm `tools/call`.
+    - Router thêm luật `github-repo-question` (109/109, có 3 câu âm). Luật chung trỏ tới skill. `HUONG-DAN.md` mục 5.9. Duyệt Parallel và DeepWiki trong `vetted.lock` theo lựa chọn của bạn. Threat model TM-19 đến TM-22.
+    - Gọi thật: DeepWiki trả lời đúng câu hỏi về `modelcontextprotocol/python-sdk`; Parallel trả kết quả và script đã bỏ hai tham số theo dõi.
+    - Review `agent-stack:reviewer`: 1 vừa (luật router bắt cả việc debug repo của bạn, hạ model và mời gửi câu hỏi về repo riêng), 2 thấp (chữ lỗi của server lọt ra ngoài khung; từ chối secret không chỉ ra chỗ); đã sửa kèm test.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
   - Mở phiên mới để dùng plugin 0.8.15 và MCP `exa` (phiên đang mở không nạp lại).
-  - Chọn cách cho Parallel và DeepWiki (xem "Quyết định còn treo").
   - Tùy bạn: báo lỗi cho Claude Code nếu bạn không bấm gì lúc thử 0.8.12. Hai lần, `ask` ở auto mode được duyệt sau 10–15 giây với nguồn `user_temporary` mà không hiện hộp hỏi, trong khi docs nói phải hiện (Claude Code 2.1.295, app desktop). Hook 0.8.13 dùng `deny` nên không còn phụ thuộc lỗi này.
   0. Khi trailofbits/skills gộp PR #352 (issue #297): vet commit mới của `static-analysis` (`vet.py` sẽ cảnh báo bỏ bản vá), duyệt, rồi xoá `patches/static-analysis/`.
   1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
@@ -94,7 +99,7 @@
   - **Còn treo sau GĐ19, GĐ20** (09/10/2026): 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: vet khi có code mã hóa hay C cần soi. Các rủi ro đã chốt theo đề xuất ngày 09/10/2026: chấp nhận TM-6, phần còn lại của TM-7 và TM-9; khóa `hatchling` cho TM-8 (xem `.agent/threat-model.md`).
   - **Đề xuất bảo mật từ phiên "Skill/plugin security hiện tại" (05/10/2026):** đã làm ở GĐ19 và GĐ20: router không còn gợi ý `differential-review` khi chưa cài; dòng "Audit bảo mật cả repo" trỏ `claude-security`; đã vet `NVIDIA/SkillSpector`. Phần còn lại nằm ở mục "Còn treo sau GĐ19, GĐ20" ở trên.
   - **Bộ duyệt web** (chốt 10/10/2026: A2, B1, cài qua `install.sh`; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Exa đã duyệt; kiểm lệch tự động mỗi ngày đã làm. Còn chờ bạn:
-    - Parallel và DeepWiki: bạn muốn giữ để Claude tự dùng khi việc hợp. Hai cách: (1) duyệt và cài ở scope user (Claude tự gọi; `instructions` khoảng 5.000 ký tự nạp vào mọi phiên; Parallel nhận mã phiên cố định), hoặc (2) không cài, làm skill nhỏ gọi chúng qua script khi việc hợp (không tốn context ở phiên thường, phải viết thêm skill và test).
+    - Parallel và DeepWiki: đã chốt cách 2 ngày 11/10/2026 (skill `goi-mcp`, không cài).
     - Tùy chọn: thêm Cisco `mcp-scanner` (`--analyzers yara`, cục bộ) làm lớp quét thứ hai. Phải vet trước, và nó kéo theo nhiều dependency.
     - Trình duyệt: giữ nguyên (B1). Khi cần chạy `claude` ngoài app desktop thì xem lại `@playwright/cli` và `chrome-devtools-mcp`.
   - **Gác lại (bạn nói 03/10/2026: không cần quan tâm OpenCode vì đã setup riêng; chỉ làm khi bạn nhắc).** Có thêm eval bằng model free trên OpenRouter qua OpenCode không. Mục đích là đo xem worker OpenCode và phương án dự phòng khi hết hạn mức có giữ chất lượng không; việc này không thay eval Claude. Nếu làm, cần bạn:
@@ -106,10 +111,10 @@
     - Câu còn mở ở `KE-HOACH.md` mục 10 (việc hay thư mục tuyệt đối không gửi cho model từ xa) chỉ cần khi dùng model từ xa qua OpenCode, nên gác lại cùng mục này.
     - OpenCode chưa có symlink `chot-viec` (bước `opencode` của `install.sh` chạy lần cuối 04/10/2026, skill có từ 07/10/2026) Theo code của `step_opencode`, `./install.sh --apply --only opencode` sẽ thêm `chot-viec` (5 symlink vendor đã xóa 08/10/2026, và `vendor/` không còn nên bước này không tạo lại chúng).
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
-  - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `Ran 548 tests … OK`; `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
+  - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `Ran 560 tests … OK`; `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
   - `claude plugin validate plugin` → `Validation passed`
   - `python3 evals/run_eval.py --self-test` → 22 dấu ✓ (18 việc chọn cấu hình, 4 việc của bộ `suite:reuse-best`)
-  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 103/103
+  - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 109/109
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status`, `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
 
 ## 1. Giai đoạn

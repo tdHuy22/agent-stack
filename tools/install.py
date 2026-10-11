@@ -473,6 +473,9 @@ class Installer:
             self.say(f"  ! bỏ qua {item['key']}: URL trong catalog.json khác URL đã duyệt trong vetted.lock")
             self.failures.append(f"{item['key']}: URL MCP khác bản đã duyệt")
             return
+        if item["scope"] == "skill":
+            self.say(f"  · skill: MCP {name} không cài vào Claude Code, gọi qua skill goi-mcp khi việc cần")
+            return
         if item["scope"] != "user":
             self.say(f"  · {item['scope']}: tự cài khi cần, trong project: claude mcp add -s project --transport http {name} {url}")
             return

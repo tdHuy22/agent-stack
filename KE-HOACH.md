@@ -204,9 +204,9 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 |---|---|---|---|---|---|
 | `/deep-research`, WebSearch, WebFetch | có sẵn | — | CC | **Dùng ngay** | |
 | Tavily | MCP / plugin chính thức | 2.4k / 09-29 | CC, OC | Đã kết nối trong desktop app | crawl, map, research; tìm kiếm thì kém hơn Exa và Parallel (Artificial Analysis Search Index 28/09/2026: Tavily basic 66). |
-| Exa | MCP từ xa, không key | — | CC | **Cài** (A2, 10/10/2026), qua `install.sh` sau khi bạn duyệt | Tìm và đọc trang; điểm 74; định nghĩa tool gọn (2.372 ký tự), không có `instructions`. |
-| Parallel Search | MCP từ xa, không key | — | CC | **Cài** (A2), sau khi bạn duyệt | Điểm 73–75; tool bảo model gửi `session_id` cố định và tên model; định nghĩa tool 12.596 ký tự. |
-| DeepWiki | MCP từ xa, không key | — | CC | **Cài** (A2), sau khi bạn duyệt | Hỏi về repo GitHub công khai; `instructions` 3.458 ký tự nạp vào mọi phiên. |
+| Exa | MCP từ xa, không key | — | CC | **Đã cài** (10/10/2026) qua `install.sh` | Tìm và đọc trang; điểm 74; định nghĩa tool gọn (2.372 ký tự), không có `instructions`. |
+| Parallel Search | MCP từ xa, không key | — | CC | **Dùng qua skill `goi-mcp`** (11/10/2026), không cài | Điểm 73–75; script bỏ `session_id` và tên model mà tool xin; định nghĩa tool 12.596 ký tự. |
+| DeepWiki | MCP từ xa, không key | — | CC | **Dùng qua skill `goi-mcp`** (11/10/2026), không cài | Hỏi về repo GitHub công khai; không cài vì `instructions` 3.458 ký tự sẽ nạp vào mọi phiên. |
 | firecrawl, brave, jina, searxng, duckduckgo | MCP | — | CC | Không cài | So sánh 07/10/2026: cần key hay thẻ, hoặc kém hơn Exa (trang so sánh trong PLAN §0). |
 | K-Dense scientific-agent-skills | skills | 47.2k / 10-01 | CC, OC | Thử chọn lẻ | Đọc paper khoa học, hợp trục bán dẫn và AI. |
 | paper-anatomy (của bạn) | skill | — | CC | **Dùng tiếp** | Đã có sẵn. |

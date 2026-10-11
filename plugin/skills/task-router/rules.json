@@ -497,6 +497,25 @@
       ]
     },
     {
+      "id": "github-repo-question",
+      "skills": [
+        "goi-mcp"
+      ],
+      "model": "sonnet",
+      "effort": "low",
+      "match": [
+        "deepwiki",
+        "hoi ve repo",
+        "repo nay lam",
+        "kien truc cua repo",
+        "kien truc repo",
+        "codebase ma nguon mo",
+        "repo ma nguon mo",
+        "about this github repo",
+        "how does the repo"
+      ]
+    },
+    {
       "id": "research",
       "agent": "agent-stack:researcher",
       "model": "sonnet",

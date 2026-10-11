@@ -401,9 +401,9 @@
     },
     "mcp:mcp.deepwiki.com/mcp": {
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-11T02:37:14Z",
+        "note": "Bạn chọn trong chat 11/10/2026 cách 2: không cài vào Claude Code, gọi qua skill goi-mcp khi việc hợp; đã đọc tóm tắt báo cáo (REVIEW, không dấu hiệu tool poisoning) và chấp nhận việc gửi câu hỏi tới hãng.",
+        "status": "approved"
       },
       "instructions_sha": "3323757204c58f113ea083e7a93fe3367a6f69022e2feed41edb8df37fa7bac0",
       "kind": "mcp-remote",
@@ -458,9 +458,9 @@
     },
     "mcp:search.parallel.ai/mcp": {
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-10-11T02:37:14Z",
+        "note": "Bạn chọn trong chat 11/10/2026 cách 2: không cài vào Claude Code, gọi qua skill goi-mcp khi việc hợp; đã đọc tóm tắt báo cáo (REVIEW, không dấu hiệu tool poisoning) và chấp nhận việc gửi câu hỏi tới hãng.",
+        "status": "approved"
       },
       "instructions_sha": "6ff1160819714320799e1c2f5697dfb6c3e63db97521b960072aa6e7b2c0b316",
       "kind": "mcp-remote",

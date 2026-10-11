@@ -175,6 +175,9 @@ def _call(opener, url, method, params, req_id, session, protocol, deadline):
         raise ValueError(f"server không trả lời {method}")
     if "error" in reply:
         err = reply["error"] if isinstance(reply["error"], dict) else {}
+        if method == "tools/call":  # lúc dùng thật: chữ của server không được ra ngoài khung dữ liệu không tin cậy
+            code = err.get("code") if isinstance(err.get("code"), int) else "?"
+            raise ValueError(f"server báo lỗi khi gọi tool (mã {code}; nội dung do server viết, không in)")
         raise ValueError(f"server báo lỗi ở {method}: {clean(str(err.get('message', '')), 160)}")
     result = reply.get("result")
     if result is None:
@@ -184,26 +187,40 @@ def _call(opener, url, method, params, req_id, session, protocol, deadline):
     return result, new_session
 
 
+def _fixture(url: str):
+    """Ảnh chụp giả cho test (AGENT_STACK_TEST_MCP_SNAPSHOTS), hoặc None khi biến không đặt. Luôn cảnh báo."""
+    fixtures = os.environ.get(TEST_ENV)
+    if not fixtures:
+        return None
+    print(f"⚠️  {TEST_ENV} đang bật: dùng ảnh chụp giả thay cho {url}, không gọi mạng", file=sys.stderr)
+    data = json.loads(Path(fixtures).read_text(encoding="utf-8"))
+    if url not in data or not isinstance(data[url], dict):
+        raise ValueError(f"không lấy được {url}")
+    return data[url]
+
+
 def fetch_snapshot(url: str) -> dict:
     """initialize → notifications/initialized → tools/list (mọi trang). Trả về ảnh chụp thô của server.
     Mọi lỗi mạng hay phản hồi sai dạng đều thành ValueError hoặc OSError."""
     check_url(url)
-    fixtures = os.environ.get(TEST_ENV)
-    if fixtures:
-        print(f"⚠️  {TEST_ENV} đang bật: dùng ảnh chụp giả thay cho {url}, không gọi mạng", file=sys.stderr)
-        data = json.loads(Path(fixtures).read_text(encoding="utf-8"))
-        if url not in data or not isinstance(data[url], dict):
-            raise ValueError(f"không lấy được {url}")
-        return data[url]
-    return _fetch(url)
+    snap = _fixture(url)
+    return snap if snap is not None else _fetch(url)
 
 
 def _fetch(url: str) -> dict:
-    """Phần gọi mạng của fetch_snapshot, không kiểm URL (test chạy nó trên server HTTP cục bộ). Lỗi nào cũng thành
-    ValueError với chữ đã làm sạch: lý do trong dòng trạng thái HTTP do server viết, có thể chứa mã điều khiển."""
+    """Phần gọi mạng của fetch_snapshot, không kiểm URL (test chạy nó trên server HTTP cục bộ)."""
+    return _guarded(_session, url)
+
+
+def _guarded(fn, *args):
+    """Chạy một lượt gọi mạng; lỗi nào cũng thành ValueError với chữ đã làm sạch: lý do trong dòng trạng thái HTTP
+    do server viết, có thể chứa mã điều khiển."""
     try:
-        return _session(url)
+        return fn(*args)
+    except PinError:
+        raise
     except urllib.error.HTTPError as exc:
+        exc.close()
         raise ValueError(f"server trả HTTP {exc.code}") from None
     except http.client.HTTPException as exc:  # IncompleteRead, LineTooLong, BadStatusLine... không phải OSError
         raise ValueError(f"phản hồi HTTP hỏng: {type(exc).__name__}") from None
@@ -211,7 +228,9 @@ def _fetch(url: str) -> dict:
         raise ValueError(f"không kết nối được: {clean(str(exc), 160)}") from None
 
 
-def _session(url: str) -> dict:
+def _session(url: str, keep_open: bool = False):
+    """Một phiên MCP: initialize, tools/list (mọi trang). keep_open thì trả thêm (opener, phiên, giao thức, hạn chót)
+    để gọi tiếp tools/call trong cùng phiên, tức đúng bộ tool vừa được kiểm."""
     opener, deadline = build_opener(), time.monotonic() + 4 * TIMEOUT
     init, session = _call(opener, url, "initialize", {
         "protocolVersion": PROTOCOL, "capabilities": {}, "clientInfo": client_identity()}, 1, None, None, deadline)
@@ -232,10 +251,76 @@ def _session(url: str) -> dict:
         raise ValueError(f"tools/list quá {MAX_PAGES} trang")
     info = init.get("serverInfo") if isinstance(init.get("serverInfo"), dict) else {}
     caps = init.get("capabilities") if isinstance(init.get("capabilities"), dict) else {}
-    return {"url": url, "protocol": protocol, "capabilities": sorted(str(k) for k in caps),
+    snap = {"url": url, "protocol": protocol, "capabilities": sorted(str(k) for k in caps),
             "server": {k: info.get(k) for k in ("name", "title", "version")},
             "instructions": init.get("instructions") if isinstance(init.get("instructions"), str) else None,
             "tools": tools, "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    return (snap, (opener, session, protocol, deadline)) if keep_open else snap
+
+
+# ---------------------------------------------------------------- gọi tool (skill goi-mcp)
+
+class PinError(ValueError):
+    """Bộ tool của server không khớp bản đã duyệt: không được gọi."""
+
+
+def check_pin(snapshot: dict, entry: dict, tool: str) -> None:
+    """Bộ tool vừa lấy phải khớp đúng bản đã duyệt trong lock, và có tool cần gọi; không thì ValueError nêu chỗ đổi."""
+    live = digests(snapshot)
+    if live["sha"] != entry.get("sha"):
+        change = diff(entry, live)
+        for k in ("changed", "added", "removed"):  # tên do server đặt: chỉ in tên đúng mẫu, còn lại chỉ đếm
+            odd = [x for x in change[k] if not (TOOL_NAME_RE.match(x) or x.startswith("("))]
+            change[k] = [x for x in change[k] if x not in odd] + ([f"({len(odd)} tên sai mẫu)"] if odd else [])
+        detail = "; ".join(f"{label} {', '.join(change[k])}"
+                           for k, label in (("changed", "đổi"), ("added", "thêm"), ("removed", "mất")) if change[k])
+        raise PinError(f"định nghĩa tool khác bản đã duyệt ({detail or 'hash khác'}): không gọi. "
+                         "Chạy lại vet.py scan cho server này, đọc báo cáo rồi duyệt lại.")
+    if tool not in live["tools"]:
+        raise PinError(f"server không có tool '{clean(tool, 60)}' trong bản đã duyệt")
+
+
+def call_result(result: dict) -> dict:
+    """Phần text của kết quả tools/call. Nội dung khác (ảnh, resource) chỉ được đếm, không in."""
+    content = result.get("content") if isinstance(result.get("content"), list) else []
+    texts, skipped = [], []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
+            texts.append(item["text"])
+        else:
+            skipped.append(clean(str(item.get("type") if isinstance(item, dict) else type(item).__name__), 20))
+    return {"text": "\n\n".join(texts), "is_error": result.get("isError") is True, "skipped": skipped}
+
+
+def call_tool(url: str, entry: dict, tool: str, arguments: dict) -> dict:
+    """Gọi một tool của MCP từ xa đã duyệt: cùng một phiên, lấy tools/list, kiểm khớp bản đã ghim, rồi tools/call."""
+    check_url(url)
+    if not isinstance(arguments, dict):
+        raise ValueError("tham số phải là một JSON object")
+    snap = _fixture(url)
+    if snap is not None:
+        check_pin(snap, entry, tool)
+        return call_result((snap.get("_test_results") or {}).get(tool) or {})
+    return _guarded(_call_tool_session, url, entry, tool, arguments)
+
+
+def _call_tool_session(url: str, entry: dict, tool: str, arguments: dict) -> dict:
+    snap, (opener, session, protocol, deadline) = _session(url, keep_open=True)
+    check_pin(snap, entry, tool)
+    result, _ = _call(opener, url, "tools/call", {"name": tool, "arguments": arguments}, 100, session, protocol,
+                      deadline)
+    return call_result(result)
+
+
+def untrusted_block(text: str, limit: int = 60000) -> str:
+    """Kết quả đã làm sạch để in vào context: giữ xuống dòng, ký tự ẩn hiện thành [U+XXXX], bỏ ký tự điều khiển
+    khác, cắt ở `limit` ký tự (có ghi chú)."""
+    text = HIDDEN_CHARS.sub(lambda m: f"[U+{ord(m.group()):04X}]", str(text))
+    text = EXTRA_HIDDEN.sub(lambda m: f"[U+{ord(m.group()):04X}]", text)
+    text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", text.replace("\r\n", "\n"))
+    if len(text) > limit:
+        text = text[:limit] + f"\n[… cắt bớt {len(text) - limit} ký tự]"
+    return text
 
 
 # ---------------------------------------------------------------- ghim

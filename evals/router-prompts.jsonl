@@ -101,3 +101,9 @@
 {"prompt": "thêm tính năng hiển thị số token đã dùng trong statusline", "expect": "feature"}
 {"prompt": "thêm nút đổi màu nền cho trang cài đặt", "expect": "feature"}
 {"prompt": "làm chức năng lưu session khi hết hạn mức", "expect": "feature"}
+{"prompt": "repo github vercel-labs/agent-browser lưu snapshot thế nào, hỏi deepwiki giúp mình", "expect": "github-repo-question"}
+{"prompt": "kiến trúc của repo microsoft/playwright-mcp ra sao", "expect": "github-repo-question"}
+{"prompt": "how does the repo modelcontextprotocol/python-sdk handle session ids? it's a github repository", "expect": "github-repo-question"}
+{"prompt": "repo github này bị lỗi build, debug giúp", "expect": "debug-hard"}
+{"prompt": "sửa lỗi CI trong repo github của mình", "expect": "none"}
+{"prompt": "tạo repo github mới cho project này rồi push code lên", "expect": "none"}

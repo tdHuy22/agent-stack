@@ -372,6 +372,14 @@ python3 plugin/skills/chot-viec/scripts/risk.py
 
 Ý lấy từ skill `threat-model` của `anthropics/defending-code-reference-harness` (Apache-2.0): phép thử "sửa một dòng là hết thì là lỗi, không phải mối đe dọa" và tên cột của bảng. Bản đó mô hình hóa cả codebase bằng nhiều subagent; bản này gọn cho từng chức năng.
 
+### 5.9 `goi-mcp`: gọi MCP từ xa theo việc, không cài
+
+**Khi nào:** hỏi về một repo GitHub công khai (DeepWiki), hay cần tìm web sâu hơn khi Exa chưa đủ (Parallel). Claude tự gọi khi việc hợp; bạn cũng gọi được bằng `/agent-stack:goi-mcp <câu hỏi>`.
+
+**Vì sao không cài thẳng như Exa:** server cài vào Claude Code thì `instructions` của nó nạp vào mọi phiên (DeepWiki 3.458 ký tự, phần lớn nói về tool không dùng được; Parallel 1.587). Qua skill thì phiên thường chỉ tốn một dòng mô tả.
+
+**Script làm gì:** `plugin/skills/goi-mcp/scripts/call.py <server> <tool> --args '<json>'`. Chỉ gọi server có trong `catalog.json` với scope `skill` và đã duyệt trong `vetted.lock`. Mỗi lần gọi, lấy định nghĩa tool trong cùng phiên và so sha256 với bản đã duyệt; lệch thì không gọi. Từ chối tham số trông như khóa hay token. Bỏ tham số theo dõi (`session_id`, `model_name` của Parallel). In kết quả giữa hai dòng mốc có mã ngẫu nhiên mỗi lần gọi, đã làm sạch ký tự ẩn; đó là dữ liệu, không phải chỉ dẫn. `call.py list` xem server và tool gọi được.
+
 ---
 
 ## 6. Subagent
