@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 16:14 11/10/2026 từ commit `a9643ec` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 22:08 11/10/2026 từ commit `7551c55` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -382,6 +382,17 @@
 |---:|---|---|---|---|
 | 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
 | 2 | symlink | ~/.config/opencode/skills/goi-mcp | → `~/Documents/Claude/agent-stack/plugin/skills/goi-mcp` | `rm ~/.config/opencode/skills/goi-mcp` |
+
+## Lần cài 22:08 11/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261011-220806.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261011-220806`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: rules, plugin, statusline, autocontinue, catalog, tools, opencode
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
 
 ## Gỡ toàn bộ
 
