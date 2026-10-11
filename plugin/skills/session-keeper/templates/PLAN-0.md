@@ -15,5 +15,8 @@
 
 ## 1. Giai đoạn
 
+<!-- Mỗi tiêu đề ### là một mốc, mỗi ô - [ ] là một việc; plan_tree.py dựng cây từ đây để chọn việc tiếp theo.
+     Nhãn: @ban (cần người dùng), @cho (chờ bên ngoài), @usd (tốn tiền). Việc không nhãn là việc Claude tự làm. -->
+
 ### Giai đoạn 1: …
 - [ ] …

@@ -41,3 +41,7 @@ Từ lần báo thứ hai cho cùng một project, script so với snapshot củ
 ## Với `all`
 
 Tóm tắt bảng thành 3 nhóm: cần làm ngay (có chặn đường), đang chạy (có việc dang dở), và bị bỏ quên (nên quyết định làm tiếp, tạm dừng hay đóng). Không đi sâu vào từng project, trừ khi người dùng hỏi. Mục "Đổi từ lần trước" của `all` mỗi project đã đổi một dòng (số lượng kèm việc đầu tiên của từng nhóm), project không đổi chỉ nêu tên; nêu các dòng đó cho người dùng.
+
+## Cây kế hoạch
+
+`${CLAUDE_SKILL_DIR}/scripts/plan_tree.py` dựng cây từ file kế hoạch: mốc là thân (Chặn đường, Đang dở, Việc tiếp theo, mỗi tiêu đề §1 còn ô chưa tick, Quyết định còn treo), việc là lá có mã như `T.2` hay `13.1`. `--text` in cây chữ, `--widget` in HTML cho công cụ vẽ widget (bấm lá hay "Làm cả mốc" gửi câu chọn vào chat), `--pick <mã>` in việc ứng với mã, `--json` cho máy đọc. Khi báo tiến độ, chép nguyên cây chữ (`--text`) vào cuối câu trả lời để phiên chính vẽ lại thành widget theo luật chung. Nhãn `@ban`, `@cho`, `@usd` trên lá đánh dấu việc cần người dùng, chờ bên ngoài, tốn tiền; "Làm cả mốc" dừng ở các lá đó.

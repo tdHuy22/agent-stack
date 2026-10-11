@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from datetime import datetime
 from pathlib import Path
 
 LIB_DIR = Path(__file__).resolve().parent
@@ -293,6 +294,40 @@ def parse_section0(text: str) -> dict:
                 current_text += " " + line.strip()
     flush()
     return result
+
+
+def section0_items(text: str, key: str) -> list:
+    """Các mục con cấp cao nhất dưới một nhãn của §0 (key theo classify_label, ví dụ "done", "decisions");
+    nhãn không có mục con thì lấy phần chữ ngay sau nhãn. Dòng nối tiếp của một mục được ghép vào mục đó."""
+    found = section0(text)
+    if not found:
+        return []
+    items, active, inline, kids = [], False, "", []
+
+    def flush():
+        if not active:
+            return
+        if kids:
+            top = min(width for width, _ in kids)
+            items.extend(t for width, t in kids if width == top)
+        elif inline.strip():
+            items.append(inline)
+
+    for line in found[1].splitlines():
+        head = re.match(r"^[-*]\s+(.*)$", line)
+        if head:
+            flush()
+            label = re.match(r"^\*\*([^*]+?):?\*\*:?\s*(.*)$", head.group(1))
+            active = bool(label) and classify_label(label.group(1)) == key
+            inline, kids = (label.group(2) if label else ""), []
+            continue
+        child = re.match(r"^(\s{2,})(?:[-*]|\d+[.)])\s+(.*)$", line)
+        if child and active:
+            kids.append([len(child.group(1)), child.group(2)])
+        elif active and line.strip() and kids and not line.lstrip().startswith(("|", "#", "```")):
+            kids[-1][1] += " " + line.strip()
+    flush()
+    return items
 
 
 def baseline_anywhere(text: str):
@@ -815,6 +850,51 @@ def is_project(root: Path) -> bool:
     return bool(find_plans(root)) or git_out(root, "rev-parse", "--git-dir") is not None
 
 
+def plan_done_count(root: Path):
+    """{"path", "count"}: file kế hoạch đang dùng và số việc đã xong trong đó (ô đã tick cộng bước đã gạch ~~...~~
+    trong "Việc tiếp theo" của §0). Hook Stop so đầu và cuối lượt, chỉ khi cùng file, để biết lượt vừa xong một
+    việc. None nếu không có file kế hoạch."""
+    found = read_plan(root)
+    if not found:
+        return None
+    path, text, sec = found
+    ticked = len(re.findall(r"(?m)^\s*[-*]\s+\[[xX]\]\s", text))
+    count = ticked + sum(1 for step in sec.get("next") or [] if step.strip().startswith("~~"))
+    return {"path": str(path), "count": count}
+
+
+def tool_used_since(transcript_path, since: float, needle: str, tail_bytes: int = 2_000_000) -> bool:
+    """Trong transcript (JSONL), từ thời điểm `since`, có lời gọi công cụ nào chứa `needle` trong đầu vào không.
+    Chỉ đọc phần cuối file; lỗi đọc thì coi như có (không nhắc oan)."""
+    try:
+        path = Path(transcript_path)
+        with path.open("rb") as fh:
+            size = path.stat().st_size
+            fh.seek(max(0, size - tail_bytes))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError, ValueError):
+        return True
+    for line in reversed(lines):
+        if needle not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        stamp = entry.get("timestamp") or ""
+        try:
+            ts = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+        if ts < since:
+            return False
+        content = ((entry.get("message") or {}).get("content")) or []
+        if any(isinstance(c, dict) and c.get("type") == "tool_use" and needle in json.dumps(c.get("input"), ensure_ascii=False)
+               for c in content):
+            return True
+    return False
+
+
 def section0_digest(root: Path):
     """Dấu của mục §0 (file kế hoạch đang dùng + nội dung §0), hoặc None nếu project không có §0."""
     found = read_plan(root)
@@ -842,6 +922,7 @@ def start_turn(session_id, cwd, extra=None):
             return None
         root = project_root(cwd)
         record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root),
+                  "plan_done": plan_done_count(root),
                   "head": (git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip() or None}
         record.update(extra or {})
         path.parent.mkdir(mode=0o700, exist_ok=True)

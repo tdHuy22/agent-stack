@@ -3,7 +3,9 @@
 file đổi) để phiên mới làm tiếp được. Chặn một lần để Claude làm nốt trước khi xong:
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
-- còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0.
+- còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
+- lượt vừa xong một việc trong kế hoạch (thêm ô tick hay bước gạch) mà chưa chạy plan_tree.py: hiện cây kế hoạch để
+  người dùng chọn việc tiếp theo (gộp vào lời nhắc ở trên nếu có).
 
 Lúc bắt đầu lượt và dấu §0 lúc đó do hook UserPromptSubmit ghi (state/turns/). Lần Stop thứ hai của cùng lượt
 (stop_hook_active) không chặn nữa, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập nhật §0".
@@ -23,6 +25,30 @@ def block_reason(changed, plan_rel) -> str:
             "còn treo; ngắn gọn, giữ định dạng, không chép lại cả câu trả lời. Không làm thêm việc khác, rồi kết thúc "
             "lượt bằng một câu ngắn. Nếu các file này không do lượt này đổi (ví dụ phiên khác đang làm cùng repo) "
             "hoặc thay đổi quá nhỏ để ghi, trả lời đúng một câu nói vậy và không sửa gì.")
+
+
+TREE_CMD = "plan_tree.py"
+TREE_HOW = ("chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget` rồi "
+            "đưa nguyên kết quả vào công cụ vẽ widget nếu có (không có thì chạy với `--text` và in trong khối code), "
+            "rồi kết thúc lượt bằng dòng ➡️")
+TREE_ALONE = ("agent-stack (hook Stop): lượt này vừa xong việc trong kế hoạch (thêm ô tick hay bước gạch) mà chưa hiện "
+              f"cây kế hoạch. Hiện cây để người dùng chọn việc tiếp theo: {TREE_HOW}. Không làm thêm việc khác. Nếu "
+              "lượt này không tick hay gạch việc nào (ví dụ phiên khác vừa sửa kế hoạch), trả lời đúng một câu nói "
+              "vậy và không làm gì thêm.")
+TREE_AFTER = (" Lượt này cũng vừa xong việc trong kế hoạch: làm xong phần trên thì, thay cho câu kết ngắn, hiện cây "
+              f"kế hoạch: {TREE_HOW}. Nếu các file không do lượt này đổi thì bỏ qua cả cây.")
+
+
+def tree_due(root: Path, turn, data: dict) -> bool:
+    """Lượt xong thêm việc trong kế hoạch (số việc xong tăng) mà chưa gọi plan_tree.py trong lượt."""
+    start = (turn or {}).get("plan_done")
+    if not isinstance(start, dict) or not isinstance(start.get("count"), int):
+        return False
+    now = A.plan_done_count(root)
+    # Khác file kế hoạch (read_plan chọn file sửa gần nhất) thì hai số không so được.
+    if not now or now["path"] != start.get("path") or now["count"] <= start["count"]:
+        return False
+    return not A.tool_used_since(data.get("transcript_path"), turn["ts"], TREE_CMD)
 
 
 def chot_viec_gate(root: Path, turn: dict, changed: list):
@@ -104,6 +130,12 @@ def main():
         except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
             A.log_event("hook-error", {"hook": "chot_viec_gate", "error": repr(exc)[:300]})
     plan_block = bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
+    tree_block = False
+    if not active and turn is not None:
+        try:
+            tree_block = tree_due(root, turn, data)
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "tree_due", "error": repr(exc)[:300]})
     should_block = plan_block or gate is not None
 
     if digest_now is None:
@@ -137,15 +169,21 @@ def main():
     A.write_last_turn(root, sid, prompt, answer, next_step, changed, len(git.get("dirty") or []),
                       git.get("branch"), plan_status)
     A.log_event("stop", {"session": sid, "cwd": str(root), "changed": len(changed), "plan_updated": plan_updated,
-                         "blocked": should_block, "chot_viec": gate["level"] if gate else None})
+                         "blocked": should_block or tree_block, "chot_viec": gate["level"] if gate else None,
+                         "tree": tree_block})
+
+    tree_extra = TREE_AFTER if tree_block else ""
 
     if gate is not None:
-        A.emit_block(gate_reason(gate, plan_rel),
+        A.emit_block(gate_reason(gate, plan_rel) + tree_extra,
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
                      "Claude chạy chot-viec trước khi xong.")
     elif should_block:
-        A.emit_block(block_reason(changed, plan_rel),
+        A.emit_block(block_reason(changed, plan_rel) + tree_extra,
                      f"📝 Lượt này đổi {len(changed)} file mà §0 chưa đổi: nhờ Claude cập nhật §0 trước khi xong.")
+    elif tree_block:
+        A.emit_block(TREE_ALONE,
+                     "🌳 Lượt này vừa xong việc trong kế hoạch: nhờ Claude hiện cây để bạn chọn việc tiếp theo.")
 
 
 if __name__ == "__main__":

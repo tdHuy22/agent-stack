@@ -3,7 +3,7 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 10/10/2026.*
+*Cập nhật 11/10/2026.*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026); chưa push.
@@ -88,9 +88,11 @@
     - Gọi thật: DeepWiki trả lời đúng câu hỏi về `modelcontextprotocol/python-sdk`; Parallel trả kết quả và script đã bỏ hai tham số theo dõi.
     - **Đã cài** lúc 09:54 ngày 11/10/2026 (`./install.sh --apply --only plugin,catalog`, nhật ký `state/install-logs/20261011-095427.json`): plugin 0.8.16, bản cache khớp `plugin/`; chạy `call.py` từ bản cache ở ngoài repo, DeepWiki trả mục lục wiki của `vercel-labs/agent-browser`. Skill có ở phiên mới.
     - Review `agent-stack:reviewer`: 1 vừa (luật router bắt cả việc debug repo của bạn, hạ model và mời gửi câu hỏi về repo riêng), 2 thấp (chữ lỗi của server lọt ra ngoài khung; từ chối secret không chỉ ra chỗ); đã sửa kèm test.
+  - GĐ23 (11/10/2026, plugin 0.8.17, chưa cài trên máy): cây kế hoạch `tien-do/scripts/plan_tree.py` (`--text`, `--widget`, `--pick`, `--json`; mã mốc ổn định: C, D, T, Q và số thứ tự tiêu đề §1), luật "Cây kế hoạch" trong `SHARED.global.md` (Claude Code nạp thẳng từ repo nên có hiệu lực ngay), hook Stop nhắc hiện cây khi lượt tick thêm việc. Bằng chứng: `unittest discover` đạt, `claude plugin validate plugin` passed (có biên nhận); review `agent-stack:reviewer` (opus): 3 lỗi thấp đã sửa (nhắc oan khi đổi file kế hoạch giữa lượt, lời nhắc ghép mâu thuẫn, mã dời khi nhóm khác hiện ra), góp ý về đoán nhãn và câu gửi khi bấm cũng đã sửa.
 - **Đang dở:** không có việc đang sửa dở.
-- **Việc tiếp theo, theo thứ tự (đều cần bạn):**
-  - Mở phiên mới để dùng plugin 0.8.15 và MCP `exa` (phiên đang mở không nạp lại).
+- **Việc tiếp theo, theo thứ tự:**
+  - Cài plugin 0.8.17 và luật OpenCode: `./install.sh --apply`, rồi mở phiên mới (hook Stop nhắc cây chỉ chạy từ bản đã cài). @ban
+  - Biên nhận trượt của `tests.test_prompt_submit` (module đã xoá từ GĐ18) làm cây và SessionStart báo "Chặn đường" mãi: thêm lệnh xoá biên nhận cho `receipt.py` (đã tách thành việc riêng ngày 11/10/2026).
   - Tùy bạn: báo lỗi cho Claude Code nếu bạn không bấm gì lúc thử 0.8.12. Hai lần, `ask` ở auto mode được duyệt sau 10–15 giây với nguồn `user_temporary` mà không hiện hộp hỏi, trong khi docs nói phải hiện (Claude Code 2.1.295, app desktop). Hook 0.8.13 dùng `deny` nên không còn phụ thuộc lỗi này.
   0. Khi trailofbits/skills gộp PR #352 (issue #297): vet commit mới của `static-analysis` (`vet.py` sẽ cảnh báo bỏ bản vá), duyệt, rồi xoá `patches/static-analysis/`.
   1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
@@ -274,3 +276,36 @@ Quyết định và nguồn: `KE-HOACH.md` mục 6.14.
 - [x] Eval 12 lượt (`E@axi`): 12/12, rẻ và nhanh hơn 0.5.1, ngang bản cũ; bảng ở `evals/README.md`. Grader `reuse-stdlib` sửa một chỗ chấm oan; chấm lại năm đợt.
 - [x] Review độc lập (sonnet): 0 lỗi đạt ngưỡng, 3 nhận xét nhỏ đã sửa.
 - [x] Cập nhật plugin trên máy lên 0.5.2: 22:50 07/10/2026, theo lệnh của bạn; cache khớp `plugin/`.
+
+<!-- GĐ16–GĐ22 bổ sung ngày 11/10/2026 từ commit, để cây kế hoạch (plan_tree.py) thấy đủ các mốc. Chi tiết ở §0 và git log. -->
+
+### GĐ16: Tắt skill vendor mặc định, router dùng model mới nhất (08/10/2026)
+- [x] Tắt skill vendor mặc định; router dùng Haiku 5.5; thêm 2 việc eval debug rất khó; plugin 0.5.3.
+
+### GĐ17: Đo Haiku 5.5 (08/10/2026)
+- [x] Đo Haiku 5.5 đúng giá; router chọn `claude-haiku-5-5` · low cho việc có test; plugin 0.5.4.
+
+### GĐ18: Tự lưu sau mỗi lượt (09/10/2026)
+- [x] Hook Stop ghi `.agent/LAST-TURN.md` và nhờ cập nhật §0; plugin 0.6.0.
+
+### GĐ19: Bảo mật theo mức rủi ro (09/10/2026)
+- [x] Threat model trước khi code (`mo-hinh-de-doa`), plugin bảo mật đã duyệt; plugin 0.7.0.
+
+### GĐ20: Skill cần thiết tự chạy (09/10/2026)
+- [x] Hook PreToolUse chốt chặn, Stop buộc chạy `chot-viec`, bước tools cài semgrep; plugin 0.8.0.
+- [x] Cài trên máy (plugin 0.8.0, differential-review ghim 82fe822, semgrep, skill OpenCode).
+
+### GĐ21: MCP từ xa trong vet-skill (10/10/2026)
+- [x] `vet-skill` và `install.sh` kiểm MCP từ xa (Exa, Parallel, DeepWiki); plugin 0.8.14.
+- [x] GĐ21b: duyệt Exa; kiểm lệch MCP từ xa mỗi ngày qua hook SessionStart; plugin 0.8.15; đã cài trên máy.
+
+### GĐ22: Skill `goi-mcp` (11/10/2026)
+- [x] Gọi Parallel, DeepWiki theo việc, không cài vào Claude Code; plugin 0.8.16; đã cài trên máy.
+
+### GĐ23: Cây kế hoạch để chọn việc tiếp theo (11/10/2026)
+Chốt 11/10/2026 theo khuyến nghị cả 4 câu (trang so sánh https://claude.ai/artifact/9bkcD1vwK8Eth6Ca4fqLg5): widget bấm được kèm cây chữ dự phòng; hiện ở ranh giới việc, còn lại giữ dòng ➡️; dữ liệu từ §1 cộng §0, nhãn `@ban` `@cho` `@usd`; "Làm cả mốc" làm lần lượt, dừng ở lá có nhãn.
+- [x] `tien-do/scripts/plan_tree.py` (`--text`, `--widget`, `--pick`, `--json`) kèm `tests/test_plan_tree.py`; phần đọc mục con §0 dời vào `agentstack.section0_items`, `collect.py` dùng lại.
+- [x] Luật "Cây kế hoạch" trong `global/SHARED.global.md` (Claude Code nạp thẳng từ repo nên có hiệu lực ngay); dựng lại `AGENTS.global.md`.
+- [x] Hook Stop nhắc hiện cây khi lượt tick thêm việc mà chưa chạy `plan_tree.py`; số việc xong lưu lúc bắt đầu lượt (`plan_done`).
+- [x] Mẫu PLAN và `session-keeper` ghi quy ước mốc, lá, nhãn; bổ sung GĐ16–GĐ22 vào §1; plugin 0.8.17.
+- [ ] Cài plugin 0.8.17 trên máy và cập nhật luật OpenCode: `./install.sh --apply` @ban

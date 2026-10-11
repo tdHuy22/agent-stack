@@ -215,6 +215,53 @@ class HookTests(TempDirTestCase):
         exclude = (self.project / ".git" / "info" / "exclude").read_text()
         self.assertEqual(exclude.count("/.agent/LAST-TURN.md"), 1)  # ghi nhiều lần vẫn chỉ một dòng
 
+    def test_stop_asks_for_the_plan_tree_after_a_task_is_ticked(self):
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text("")
+        self.submit("t1", "làm phần thiết kế")
+        plan = self.project / "PLAN.md"
+        plan.write_text(plan.read_text().replace("- [ ] Viết phần thiết kế", "- [x] Viết phần thiết kế"))
+        out = self.stop("t1", transcript_path=str(transcript))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("plan_tree.py --widget", out["reason"])
+        self.assertIn("🌳", out["systemMessage"])
+        self.assertIsNone(self.stop("t1", transcript_path=str(transcript), stop_hook_active=True))
+        # Đã chạy plan_tree.py trong lượt: không nhắc.
+        self.submit("t2", "làm thử nghiệm")
+        plan.write_text(plan.read_text().replace("- [ ] Thử nghiệm", "- [x] Thử nghiệm"))
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() + 1)) + ".000Z"
+        transcript.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "input": {"command": "python3 plan_tree.py --widget"}}]}}) + "\n")
+        self.assertIsNone(self.stop("t2", transcript_path=str(transcript)))
+        # Lượt không xong việc nào: không nhắc.
+        self.submit("t3", "giải thích kế hoạch")
+        self.assertIsNone(self.stop("t3", "Kế hoạch có hai giai đoạn.", transcript_path=str(transcript)))
+        # Đầu lượt đếm trên file kế hoạch khác (HANDOFF.md mới hơn), cuối lượt trên PLAN.md: không so, không nhắc.
+        transcript.write_text("")
+        handoff = self.project / ".agent" / "HANDOFF.md"
+        handoff.parent.mkdir(exist_ok=True)
+        handoff.write_text("# HANDOFF\n")
+        later = time.time() + 5
+        os.utime(handoff, (later, later))
+        self.submit("t4", "cập nhật §0")
+        self.update_section0()
+        os.utime(plan, (later + 5, later + 5))
+        self.assertIsNone(self.stop("t4", transcript_path=str(transcript)))
+
+    def test_stop_combines_section0_and_tree_reminders(self):
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text("")
+        self.submit("c1", "làm phần thiết kế")
+        plan = self.project / "PLAN.md"
+        plan.write_text(plan.read_text().replace("- [ ] Viết phần thiết kế", "- [x] Viết phần thiết kế"))
+        self.touch("design.md")
+        out = self.stop("c1", transcript_path=str(transcript))
+        self.assertIn("§0 của `PLAN.md`", out["reason"])
+        self.assertIn("thay cho câu kết ngắn", out["reason"])
+        self.assertIn("plan_tree.py --widget", out["reason"])
+
     def test_stop_does_not_block_a_turn_without_changes_or_with_section0_updated(self):
         self.with_plan()
         self.submit("q1", "giải thích parser chạy thế nào")

@@ -29,6 +29,14 @@
 - Chọn skill, subagent, model, effort theo gợi ý `[agent-stack]` (hồ sơ project, lúc mở phiên) và `[router]` (từng tin nhắn) nếu có; không có thì theo bảng của công cụ đang dùng.
 - Chỉ khuyên đổi model hay effort ở ranh giới giữa hai việc (đổi giữa chừng mất prompt cache).
 
+## Cây kế hoạch để chọn việc tiếp theo
+
+- Hiện cây (mốc là thân, việc là lá) ngay trước dòng ➡️ khi: câu trả lời đầu tiên của phiên trong project có file kế hoạch, vừa xong (tick, gạch) một việc hay một mốc, hoặc người dùng hỏi làm gì tiếp. Câu trả lời khác chỉ có dòng ➡️.
+- Cách hiện: chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget`, đưa nguyên kết quả vào công cụ vẽ widget (như `show_widget`) nếu có; không có thì chạy với `--text` và in trong khối code. Đã vẽ widget thì không chép lại cây bằng chữ.
+- Đã hiện cây thì dòng ➡️ ghi việc đầu tiên trên cây mà Claude tự làm được.
+- Người dùng bấm trên cây, hay gõ mã như `T.2` (một việc) hoặc `13` (cả mốc): chạy `plan_tree.py --pick <mã>` để biết việc. Làm cả mốc là làm lần lượt các việc không nhãn, kiểm chứng và tick từng việc, hiện cây một lần khi dừng; tới việc cần bạn, chờ bên ngoài hay tốn tiền thì dừng và hỏi.
+- Ghi việc mới vào kế hoạch dưới tiêu đề mốc của nó ở §1, dạng `- [ ]`; mốc mới thì thêm tiêu đề mới. Việc cần người dùng, chờ bên ngoài, tốn tiền thì thêm nhãn `@ban`, `@cho`, `@usd`.
+
 ## Model ngoài và dữ liệu riêng tư
 
 - Model qua OpenRouter hay model miễn phí của OpenCode nhận toàn bộ prompt và file gửi đi; `opencode/*-contributor-free` (mặc định của OpenCode ở máy này) còn được dùng dữ liệu đó để huấn luyện model hãng khác.

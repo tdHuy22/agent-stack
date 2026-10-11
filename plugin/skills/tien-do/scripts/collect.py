@@ -60,9 +60,6 @@ SHOW_ITEMS = 3  # số việc tối đa in ra cho mỗi nhóm; phần còn lại
 COMMIT_WIDTH = 60  # tiêu đề commit dài hơn mức này bị cắt
 HEX_RE = re.compile(r"[0-9a-f]{4,40}")
 BOX_RE = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
-TOP_RE = re.compile(r"^[-*]\s+(.*)$")
-CHILD_RE = re.compile(r"^(\s{2,})(?:[-*]|\d+[.)])\s+(.*)$")
-LABEL_RE = re.compile(r"^\*\*([^*]+?):?\*\*:?\s*(.*)$")
 
 
 def ago(ts) -> str:
@@ -355,33 +352,7 @@ def step_title(raw: str):
 
 def section0_done(text: str) -> list:
     """Các mục Xong của §0: mục con cấp 1 dưới nhãn "Xong"; không có mục con thì phần chữ ngay sau nhãn."""
-    found = A.section0(text)
-    if not found:
-        return []
-    items, active, inline, kids = [], False, "", []
-
-    def flush():
-        if not active:
-            return
-        if kids:
-            top = min(width for width, _ in kids)
-            items.extend(t for width, t in kids if width == top)
-        elif inline.strip():
-            items.append(inline)
-
-    for line in found[1].splitlines():
-        head = TOP_RE.match(line)
-        if head:
-            flush()
-            label = LABEL_RE.match(head.group(1))
-            active = bool(label) and A.classify_label(label.group(1)) == "done"
-            inline, kids = (label.group(2) if label else ""), []
-            continue
-        child = CHILD_RE.match(line)
-        if child and active:
-            kids.append((len(child.group(1)), child.group(2)))
-    flush()
-    return items
+    return A.section0_items(text, "done")
 
 
 def tidy_titles(items: list, cap: int) -> list:

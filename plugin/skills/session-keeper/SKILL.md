@@ -50,4 +50,5 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 
 - Không chép §0 sang file khác. Các file khác chỉ trỏ tới §0.
 - Không xóa lịch sử trong file kế hoạch. Chỉ cập nhật §0 và tick checkbox kèm ngày.
+- Việc mới ghi thành ô `- [ ]` dưới tiêu đề mốc của nó ở §1 (mốc mới thì thêm tiêu đề `###`), kèm nhãn `@ban`, `@cho`, `@usd` khi việc cần người dùng, chờ bên ngoài hay tốn tiền. Như vậy `tien-do/scripts/plan_tree.py` dựng được cây để chọn việc tiếp theo.
 - Không ghi "xong" khi chưa có bằng chứng.
