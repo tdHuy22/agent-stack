@@ -95,10 +95,11 @@
 - **Việc tiếp theo, theo thứ tự:**
   - ~~Mở phiên mới để dùng plugin 0.8.19 (hook Stop nhắc hiện cây, chọn nhiều việc).~~ Xong 11/10/2026: phiên mới mở, câu trả lời đầu tiên hiện cây kế hoạch có ô tick.
   - Tùy bạn: báo lỗi cho Claude Code nếu bạn không bấm gì lúc thử 0.8.12. Hai lần, `ask` ở auto mode được duyệt sau 10–15 giây với nguồn `user_temporary` mà không hiện hộp hỏi, trong khi docs nói phải hiện (Claude Code 2.1.295, app desktop). Hook 0.8.13 dùng `deny` nên không còn phụ thuộc lỗi này.
-  0. Khi trailofbits/skills gộp PR #352 (issue #297): vet commit mới của `static-analysis` (`vet.py` sẽ cảnh báo bỏ bản vá), duyệt, rồi xoá `patches/static-analysis/`.
-  1. Khi bắt đầu một project viết luận: đặt 3–5 bài mẫu cùng thể loại vào `.agent/giong-van/samples/` của project, rồi nhờ Claude chạy `giong-van tao-style-card` cho project đó.
-  2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
-  3. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
+  0. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
+  1. Push khi bạn muốn: `git push` (mình không tự push). Repo chưa có remote nào, nên cần `git remote add origin <url>` trước.
+- **Ghi nhớ (đã xong, không phải việc):**
+  - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
+  - `giong-van` đã có mẫu mặc định (5 bài kinh điển mỗi ngôn ngữ trong `samples/kinh-dien/`). Mẫu riêng và style card của từng project viết luận làm trong chính project đó khi bắt đầu viết, không phải việc của repo này.
 - **Quyết định còn treo:**
   - **Còn treo sau GĐ19, GĐ20** (09/10/2026; đề xuất bảo mật ngày 05/10/2026 đã làm xong ở GĐ19, GĐ20, phần còn lại là mục này): 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: vet khi có code mã hóa hay C cần soi. Các rủi ro đã chốt theo đề xuất ngày 09/10/2026: chấp nhận TM-6, phần còn lại của TM-7 và TM-9; khóa `hatchling` cho TM-8 (xem `.agent/threat-model.md`).
   - **Bộ duyệt web** (chốt 10/10/2026: A2, B1, cài qua `install.sh`; trang so sánh https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2). Exa đã duyệt; kiểm lệch tự động mỗi ngày đã làm. Còn chờ bạn:
