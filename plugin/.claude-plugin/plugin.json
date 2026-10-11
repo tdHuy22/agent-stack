@@ -14,5 +14,7 @@
     "reuse",
     "security",
     "writing"
-  ]
+  ],
+  "license": "Apache-2.0",
+  "repository": "https://github.com/tdHuy22/agent-stack"
 }
