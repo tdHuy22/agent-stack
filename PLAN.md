@@ -86,6 +86,7 @@
     - `reuse-best` xét mcporter, inspector CLI, mcptools, mcp-remote, mcp-proxy: không cái nào ghim hash từng lần gọi, phần lớn cần Node; nên mở rộng `mcp_remote.py` thêm `tools/call`.
     - Router thêm luật `github-repo-question` (109/109, có 3 câu âm). Luật chung trỏ tới skill. `HUONG-DAN.md` mục 5.9. Duyệt Parallel và DeepWiki trong `vetted.lock` theo lựa chọn của bạn. Threat model TM-19 đến TM-22.
     - Gọi thật: DeepWiki trả lời đúng câu hỏi về `modelcontextprotocol/python-sdk`; Parallel trả kết quả và script đã bỏ hai tham số theo dõi.
+    - **Đã cài** lúc 09:54 ngày 11/10/2026 (`./install.sh --apply --only plugin,catalog`, nhật ký `state/install-logs/20261011-095427.json`): plugin 0.8.16, bản cache khớp `plugin/`; chạy `call.py` từ bản cache ở ngoài repo, DeepWiki trả mục lục wiki của `vercel-labs/agent-browser`. Skill có ở phiên mới.
     - Review `agent-stack:reviewer`: 1 vừa (luật router bắt cả việc debug repo của bạn, hạ model và mời gửi câu hỏi về repo riêng), 2 thấp (chữ lỗi của server lọt ra ngoài khung; từ chối secret không chỉ ra chỗ); đã sửa kèm test.
 - **Đang dở:** không có việc đang sửa dở.
 - **Việc tiếp theo, theo thứ tự (đều cần bạn):**
