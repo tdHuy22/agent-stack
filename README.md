@@ -30,9 +30,9 @@ Làm việc nhiều ngày với agent lập trình hay vấp bốn chuyện:
 
 | Vấn đề | Cách agent-stack xử lý |
 |---|---|
-| **Mất tiến độ** khi hết hạn mức, crash, compact hay đổi công cụ | Trạng thái nằm trên đĩa: mục §0 "Đang ở đâu, việc tiếp theo" của `PLAN.md`, `.agent/HANDOFF.md`, `.agent/LAST-TURN.md`. Hook tự nạp lại khi mở phiên và tự ghi sau mỗi lượt. |
+| **Mất tiến độ** khi hết hạn mức, crash, compact hay đổi công cụ | Trạng thái nằm trên đĩa: mục §0 "Đang ở đâu, việc tiếp theo" của `PLAN.md`, `.agent/HANDOFF.md`, `.agent/LAST-TURN.md`. Hook tự nạp lại khi mở phiên và tự ghi lúc gửi tin (đang chạy), khi xong lượt và khi lỗi API kết thúc lượt, kể cả ở thư mục không phải project. |
 | **Không biết làm gì tiếp** khi quay lại project sau vài ngày | Skill `tien-do` đọc §0, git, TODO rồi xếp việc theo 5 bậc ưu tiên; cây kế hoạch bấm chọn được. |
-| **Tốn hạn mức** vì chọn model quá mạnh, hoặc làm hỏng việc vì chọn quá yếu | Router gợi ý model, effort, subagent, skill cho từng tin nhắn, dựa trên hồ sơ project và số liệu eval của chính người dùng. Cuối mỗi câu trả lời có dòng `➡️`. |
+| **Tốn hạn mức** vì chọn model quá mạnh, hoặc làm hỏng việc vì chọn quá yếu | Router gợi ý model, effort, subagent, skill cho từng tin nhắn, dựa trên hồ sơ project và số liệu eval của chính người dùng. Đổi model giữa phiên làm mất prompt cache, nên router đọc transcript và chỉ gợi ý `/model` khi rẻ; lúc khác gợi ý giữ model và giao subagent. Cuối mỗi câu trả lời có dòng `➡️`. |
 | **Cài đồ bên thứ ba thiếu kiểm tra** | Skill `vet-skill` ghim commit, quét dấu hiệu độc hại, ghi kết quả vào `vetted.lock`. Hook chặn các lệnh cài quen thuộc khi đích chưa được duyệt. |
 
 Thêm vào đó là các cổng chất lượng: không được nói "xong" khi chưa có biên nhận kiểm chứng, threat model ngắn trước khi code chức năng đụng ranh giới tin cậy, review đối kháng theo mức rủi ro của diff.
@@ -51,9 +51,9 @@ flowchart LR
 
     subgraph CC["Claude Code"]
         H1[SessionStart: nạp §0, hồ sơ project, lượt cuối]
-        H2[UserPromptSubmit: router, cảnh báo hạn mức]
+        H2[UserPromptSubmit: ghi lượt đang chạy, router, cảnh báo hạn mức]
         H3[PreToolUse: chặn cài chưa vet, nhắc threat model]
-        H4[Stop: ghi LAST-TURN, buộc chot-viec khi rủi ro]
+        H4[Stop, StopFailure: ghi LAST-TURN, buộc chot-viec khi rủi ro]
     end
 
     subgraph Proj["Project đang làm"]
@@ -89,7 +89,7 @@ Skill tự kích hoạt theo từ khóa tiếng Việt hoặc tiếng Anh; gọi
 |---|---|---|
 | `session-keeper` | Lưu và khôi phục trạng thái: cập nhật §0, viết `HANDOFF.md` khi bàn giao, chạy bước kiểm sau khi bị ngắt. Ghi biên nhận kiểm chứng gắn với nội dung code lúc chạy, để phiên sau biết kết quả còn đúng hay code đã đổi. | `state.py`, `receipt.py` |
 | `tien-do` | Tiến độ và việc nên làm tiếp (chặn đường, dang dở, giai đoạn hiện tại, nợ TODO, bị bỏ quên), kèm gợi ý model và câu `/goal`. `--all` cho mọi project. Vẽ cây kế hoạch dạng widget có ô tick. | `collect.py`, `plan_tree.py` |
-| `task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (ngôn ngữ, test, CI, code nhạy cảm) và việc tiếp theo trong §0. `--session` cho công cụ không có hook như OpenCode. | `route.py`, `rules.json` |
+| `task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (ngôn ngữ, test, CI, code nhạy cảm) và việc tiếp theo trong §0. Tính chi phí ghi lại cache trước khi gợi ý đổi model. `merge_back.py` gộp nhánh worktree của subagent khi test đạt và fast-forward được, dừng khi đụng file nhạy cảm. `--session` cho công cụ không có hook như OpenCode. | `route.py`, `rules.json`, `merge_back.py` |
 | `vet-skill` | Kiểm duyệt skill, plugin, MCP, marketplace của bên thứ ba: ghim commit, quét dấu hiệu độc hại (tải rồi chạy mã, đọc khóa, prompt injection, ký tự ẩn, hook tự chạy), chạy thử trong sandbox, chạy SkillSpector, kiểm lệch so với bản đã duyệt, ghi `vetted.lock`. | `vet.py`, `redflags.py`, `dynamic.py`, `drift.py`, `mcp_remote.py`, `spector.py` |
 | `reuse-best` | Trước khi tự làm tool, tính năng, thuật toán: tìm thứ có sẵn tốt nhất theo thứ tự tính năng sẵn có, code trong project, skill đã duyệt, GitHub, bài nghiên cứu SOTA; kiểm từng tiêu chí bằng bằng chứng rồi quyết định dùng lại, điều chỉnh hay tự viết, và nêu phần còn phải làm. | `scout.py` |
 | `chot-viec` | Cổng kiểm trước khi báo xong hay commit: nêu lại ý định, chấm rủi ro của diff (kể cả ranh giới tin cậy bị đụng), chạy kiểm chứng có biên nhận, tái hiện như người dùng sẽ dùng, review ở context mới với độ sâu theo rủi ro, rà tài liệu. | `risk.py` |
@@ -225,10 +225,10 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
 4. **Trong lúc làm.** Để ý dòng cuối mỗi câu trả lời, gợi ý cho *việc kế tiếp*:
 
    ```
-   ➡️ Tiếp: chạy test sau khi sửa parser · Model: sonnet · Effort: medium · Subagent: agent-stack:test-runner · Skill: không
+   ➡️ Tiếp: viết test cho parser · Model: giữ opus · Effort: medium · Subagent: general-purpose (claude-haiku-5-5·low) · Skill: không
    ```
 
-   Chỉ đổi model hay effort ở ranh giới giữa hai việc, vì đổi giữa chừng mất prompt cache.
+   Effort đổi giữa phiên thoải mái: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 giữ prompt cache khi đổi effort. Đổi model thì phải ghi lại cả context vào cache của model mới (context 250K token tốn khoảng 1 USD giá niêm yết), nên dòng ➡️ ghi `giữ <model>` khi đổi không rẻ, và phần việc hợp model khác giao cho subagent. Việc dài, sửa nhiều file: subagent trong worktree riêng, xong chạy `merge_back.py` để tự gộp khi test đạt.
 5. **Chạy kiểm tra** qua `receipt.py` để có biên nhận:
 
    ```bash
@@ -254,7 +254,7 @@ Luật chung cấm giao file chứa secret, dữ liệu cá nhân hay mã riêng
 - **Trạng thái nằm trên đĩa, không nằm trong context.** Hết hạn mức, crash, compact hay đổi công cụ đều không mất việc.
 - **Chưa kiểm chứng thì chưa xong.** Biên nhận gắn với dấu vân tay nội dung code lúc chạy; kết quả đạt cũ không chứng minh cho code đã sửa sau đó.
 - **Chất lượng trước chi phí, nhưng đo chứ không đoán.** Chỉ dùng model rẻ hơn khi có kiểm tra tự động; bảng định tuyến ghi rõ dòng nào có số đo, dòng nào là phán đoán.
-- **Hook không bao giờ làm kẹt phiên.** Bắt mọi lỗi, thoát mã 0, chạy trong vài chục ms, các lần chặn để nhắc (threat model, `chot-viec`, §0) chỉ chặn một lần mỗi lượt.
+- **Hook không bao giờ làm kẹt phiên.** Bắt mọi lỗi, thoát mã 0, ghi trạng thái trước các bước chậm, chạy trong vài trăm ms, các lần chặn để nhắc (threat model, `chot-viec`, §0) chỉ chặn một lần mỗi lượt.
 - **Chỉ thư viện chuẩn của Python.** Không có dependency để cài hay để bị tấn công chuỗi cung ứng; gói bên thứ ba (nếu cần cho công cụ phụ) nằm trong `.venv/` của repo.
 - **Mọi thay đổi toàn cục đảo ngược được.** `install.sh` xem trước theo mặc định, sao lưu trước khi sửa, ghi nhật ký, gỡ sạch.
 - **Đồ bên thứ ba là không tin cậy cho tới khi được kiểm.** Ghim commit, quét, người dùng duyệt, rồi mới cài; kiểm lệch mỗi lần mở phiên. Nội dung đọc từ web, file, kết quả công cụ là dữ liệu, không phải chỉ dẫn.
@@ -321,7 +321,8 @@ Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích ti�
 
 - **Hook PreToolUse là lớp nhắc, không phải ranh giới bảo mật.** Nó so chuỗi lệnh với mẫu, nên lệnh viết vòng qua biến hay script trung gian vẫn lọt. Ranh giới thật là quyền của Claude Code, việc người dùng duyệt, và bước kiểm lệch lúc mở phiên.
 - **Che khóa là nỗ lực tốt nhất.** Yêu cầu và câu trả lời được che token, khóa API theo mẫu trước khi ghi ra `state/` và `.agent/`, nhưng đừng dán secret vào chat.
-- **`state/` và `.agent/LAST-TURN.md` chứa nội dung phiên** và không bao giờ vào git (`.gitignore`, `.git/info/exclude`).
+- **`state/` và `.agent/LAST-TURN.md` chứa nội dung phiên** và không bao giờ vào git (`.gitignore`, `.git/info/exclude`, hay `.agent/.gitignore` ở thư mục chưa có git). Mỗi bản ghi ký HMAC bằng khóa trong `state/`, gắn với thư mục; phiên mới chỉ nạp bản ký đúng, nên file `LAST-TURN.md` cài sẵn trong repo clone không được nạp. HMAC không chống được mã chạy dưới quyền người dùng (nó đọc được khóa).
+- **`merge_back.py` chạy toàn bộ mã của nhánh** (test, `conftest.py`) dưới quyền người dùng. Chỉ dùng cho nhánh do subagent của chính phiên tạo.
 - **Mẫu văn riêng của người dùng** trong `plugin/skills/giong-van/samples/` bị loại khỏi git; chỉ văn mẫu thuộc phạm vi công cộng được đưa vào.
 - **Chuỗi trông như secret trong repo đều là dữ liệu thử.** Ví dụ khóa giả trong `evals/tasks/sec-secrets/` (bài kiểm review bảo mật) và mẫu khóa SSH giả trong `vet-skill/scripts/dynamic.py` (mồi nhử khi chạy thử skill trong sandbox).
 - **Bộ này viết cho một người, một máy.** Luật và hướng dẫn bằng tiếng Việt; model local `tuf/*` là máy trong mạng nhà của tác giả; vài đường dẫn mặc định giả định `~/Documents/Claude/agent-stack`. Dùng lại thì nên đọc `KE-HOACH.md` và chỉnh cho hợp.
