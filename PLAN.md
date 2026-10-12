@@ -99,7 +99,8 @@
   - ~~Báo lỗi cho Claude Code về `ask` ở auto mode được duyệt mà không hiện hộp hỏi (0.8.12, Claude Code 2.1.295).~~ Xong (bạn xác nhận 11/10/2026).
   - ~~Cài plugin 0.8.20 (`./install.sh --apply`).~~ Xong 22:08 11/10/2026.
   - ~~Mở phiên mới (phiên đang mở vẫn chạy hook cũ) và để ý vài phiên: lượt đầu, câu hỏi tiến độ, lượt tick việc đều phải có widget cây; hook nhắc oan thì báo lại.~~ Xong (bạn xác nhận 11/10/2026): plugin 0.8.20 hiện widget cây đúng; phiên `254034da` vẽ widget ngay ở câu hỏi tiến độ đầu tiên.
-  1. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
+  1. Chốt 5 câu của GĐ24 trên trang so sánh, rồi làm GĐ24 (xem §1). @ban
+  2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
@@ -108,7 +109,7 @@
     - 3 skill Trail of Bits còn lại (`constant-time-analysis`, `zeroize-audit`, `variant-analysis`) và `cloudflare/security-audit-skill`: chỉ vet khi có code mã hóa hay C cần soi. Rủi ro TM-6 đến TM-9 đã chốt ngày 09/10/2026 (xem `.agent/threat-model.md`).
     - Bộ duyệt web: A2, B1. Exa đã cài, Parallel và DeepWiki gọi qua skill `goi-mcp`, trình duyệt giữ nguyên. Cisco `mcp-scanner` chỉ là tùy chọn, phải vet trước nếu muốn thêm. Khi chạy `claude` ngoài app desktop thì xem lại `@playwright/cli` và `chrome-devtools-mcp`. Trang so sánh: https://claude.ai/artifact/3TcuQdMiTrxNvgwxDsCvY2.
     - Eval OpenCode qua OpenRouter: gác lại (03/10/2026), chỉ làm khi bạn nhắc. Lúc đó cần key OpenRouter trong biến môi trường, quyết có nạp 10 USD không, và chọn 2–3 model free có gọi tool. Lưu ý: model free có thể dùng dữ liệu để huấn luyện.
-- **Quyết định còn treo:** không có.
+- **Quyết định còn treo:** 5 câu của GĐ24 (tự lưu, đổi model mà không mất cache) trên trang https://claude.ai/artifact/2sMt245QSxJJYPyry9H3QT. Rà soát 12/10/2026 từ transcript thật: 125 lượt từ khi cài 0.6.0, khoảng 30% không được lưu (20 lượt chạy plugin cũ vì phiên mở trước lúc cài, 18 lượt ở thư mục không phải project); hook không có `StopFailure` (lỗi API, hết hạn mức) và Stop không chạy khi Esc. 230/364 dòng ➡️ gợi ý đổi model khi context trung vị 255K token (mỗi lần đổi phải ghi lại toàn bộ context vào cache); tài liệu chính thức nói đổi effort giữ cache trên các model 5.5 và Fable 5.1, có `/advisor`, và skill `task-router` (`model: sonnet`, không `context: fork`) là một lần đổi model.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
   - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `Ran 584 tests … OK` (12/10/2026); `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
   - `claude plugin validate plugin` → `Validation passed`
@@ -309,3 +310,19 @@ Chốt 11/10/2026 theo khuyến nghị cả 4 câu (trang so sánh https://claud
 - [x] Hook Stop không bỏ sót cây: chỉ tính widget thật (`data-plan-tree`) hay cây chữ khi không có công cụ widget; nhắc thêm ở lượt đầu phiên và câu hỏi tiến độ; plugin 0.8.20.
 - [x] Cài plugin 0.8.20 trên máy: `./install.sh --apply` lúc 22:08 11/10/2026 theo lệnh của bạn (nhật ký `state/install-logs/20261011-220806.json`: `claude plugin update`; `claude plugin list` báo 0.8.20, bản cache khớp `plugin/`, `stop.py` từ cache thoát 0).
 - [x] Cài plugin 0.8.19 trên máy: `./install.sh --apply` lúc 16:14 11/10/2026 theo lệnh của bạn (nhật ký `state/install-logs/20261011-161426.json`: `claude plugin update` lên 0.8.19, thêm symlink `goi-mcp` cho OpenCode; `claude plugin list` báo 0.8.19). Luật OpenCode là symlink tới `global/AGENTS.global.md` nên đã khớp.
+
+### GĐ24: Tự lưu chắc chắn, đổi model không mất cache (12/10/2026)
+Trang so sánh và 5 câu cần chốt: https://claude.ai/artifact/2sMt245QSxJJYPyry9H3QT. Số liệu và nguồn ở §0, mục "Quyết định còn treo".
+- [ ] Chốt 5 câu trên trang so sánh @ban
+- [ ] Sửa lỗi rõ: `task-router` thêm `context: fork`; luật "đổi effort mất cache" trong `SHARED.global.md`, `routing-table.md`, `task-router` sửa theo tài liệu (effort giữ cache trên model 5.5 và Fable 5.1)
+- [ ] F1: nhắc khi phiên chạy plugin cũ hơn bản đã cài (`/reload-plugins` hoặc mở lại phiên)
+- [ ] F2: hook `StopFailure` ghi LAST-TURN khi lỗi API kết thúc lượt
+- [ ] F3: ghi "lượt đang chạy" lúc gửi tin, để Esc, crash, lượt dài vẫn có bản ghi
+- [ ] F4: lưu lượt cuối của thư mục không phải project (theo câu 2)
+- [ ] F5: bản ghi theo phiên khi nhiều phiên cùng project
+- [ ] F6: ghi LAST-TURN trước, chấm rủi ro và cây sau
+- [ ] Router đọc model, cỡ context, độ ấm cache từ transcript; chỉ gợi ý `/model` khi rẻ, gợi ý `/effort` thoải mái
+- [ ] Dòng ➡️ có "giữ <model>" và subagent kèm model, effort
+- [ ] Worktree cho việc dài, tự gộp khi test đạt (theo câu 3, 4)
+- [ ] Thử `/advisor` trên một project, đo chi phí và chất lượng (theo câu 5) @ban
+- [ ] Cài plugin mới trên máy @ban
