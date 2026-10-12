@@ -103,7 +103,7 @@
   1. ~~Chốt 5 câu của GĐ24 trên trang so sánh, rồi làm GĐ24 (xem §1).~~ Xong 12/10/2026: code, review, commit.
   2. ~~Cài plugin 0.9.0 (`./install.sh --apply`).~~ Xong 15:00 12/10/2026 (chỉ phần plugin).
   3. Gõ `/reload-plugins` hay mở lại các phiên đang mở (chúng còn chạy 0.8.20, chưa có tự lưu mới và chưa nhắc được). @ban
-  4. Thử `/advisor` trên một project, đo chi phí và chất lượng. @ban
+  4. ~~Thử `/advisor` trên một project.~~ Bỏ (bạn quyết 12/10/2026): còn thử nghiệm, advisor đọc transcript không có cache nên tốn kém.
   5. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
@@ -328,5 +328,5 @@ Trang so sánh và 5 câu đã chốt: https://claude.ai/artifact/2sMt245QSxJJYP
 - [x] Router đọc model, cỡ context, độ ấm cache từ transcript; chỉ gợi ý `/model` khi rẻ, gợi ý `/effort` thoải mái
 - [x] Dòng ➡️ có "giữ <model>" và subagent kèm model, effort
 - [x] Worktree cho việc dài, tự gộp khi test đạt (theo câu 3, 4)
-- [ ] Thử `/advisor` trên một project, đo chi phí và chất lượng (theo câu 5) @ban
+- [x] ~~Thử `/advisor`~~: không dùng (bạn quyết 12/10/2026: còn thử nghiệm, tốn kém)
 - [x] Cài plugin 0.9.0 trên máy (15:00 12/10/2026, `./install.sh --apply --only plugin`)
