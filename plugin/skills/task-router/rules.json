@@ -2,6 +2,16 @@
   "version": 2,
   "status": "đối chiếu tài liệu chính thức 04/10/2026; model mới nhất kiểm 08/10/2026 (Haiku 5.5 có effort); số liệu eval 02–08/10/2026; skill vendor tắt mặc định 08/10/2026 (A/B không hơn A); dòng không có số đo là phán đoán, xem routing-table.md",
   "min_words": 4,
+  "switch": {
+    "_note": "Đổi /model giữa phiên phải ghi lại cả context vào cache của model mới: giá ghi = giá token vào × hệ số theo TTL (2 với cache 1 giờ, 1,25 với 5 phút). Giá USD mỗi triệu token vào, đọc từ skill claude-api ngày 06/10/2026 (routing-table.md). Đổi effort giữ cache trên các model trong effort_keeps_cache (code.claude.com/docs/en/prompt-caching, kiểm 12/10/2026). Rẻ khi: đầu phiên, context dưới free_tokens, hoặc đã nghỉ quá TTL.",
+    "free_tokens": 40000,
+    "cache_write": {"3600": 2.0, "300": 1.25},
+    "price_in": {"fable": 10, "opus": 4, "sonnet": 2, "haiku": 0.1},
+    "price_in_long": {"haiku": 0.5},
+    "long_from": 100000,
+    "effort_keeps_cache": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+    "agents_doing_the_work": ["agent-stack:reviewer", "agent-stack:researcher", "agent-stack:oc-worker"]
+  },
   "model_ids": {
     "_note": "Alias còn trỏ bản cũ thì ghi ID đầy đủ. Kiểm 08/10/2026 bằng claude 2.1.285: sonnet → claude-sonnet-5-5, opus → claude-opus-5-5, fable → claude-fable-5-1, nhưng haiku → claude-haiku-4-5 (không có effort).",
     "haiku": "claude-haiku-5-5"

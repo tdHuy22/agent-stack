@@ -1,8 +1,8 @@
 # agent-stack
 
-Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code** và **OpenCode**: một plugin Claude Code (9 skill, 5 subagent, 7 hook), statusline, bộ luật chung dùng cho cả hai công cụ, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
+Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code** và **OpenCode**: một plugin Claude Code (9 skill, 5 subagent, 8 hook), statusline, bộ luật chung dùng cho cả hai công cụ, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
 
-> **English summary.** agent-stack is a personal toolkit for Claude Code and OpenCode, written in Vietnamese. It ships a Claude Code plugin (9 skills, 5 subagents, 7 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
+> **English summary.** agent-stack is a personal toolkit for Claude Code and OpenCode, written in Vietnamese. It ships a Claude Code plugin (9 skills, 5 subagents, 8 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
 
 ---
 
@@ -118,11 +118,12 @@ Tất cả viết bằng Python thư viện chuẩn, bắt mọi lỗi, thoát m
 | Hook | Khi nào | Làm gì |
 |---|---|---|
 | `SessionStart` | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project, lượt cuối vào context; in dòng 📍 🧭 🕘. Báo plugin lệch bản đã kiểm duyệt; kiểm nền MCP từ xa mỗi ngày một lần. |
-| `UserPromptSubmit` | Mỗi tin nhắn | Gợi ý `[router]`; cảnh báo hạn mức 5 giờ (90%) và tuần (80%); lưu yêu cầu gần nhất (đã che khóa) cho subagent; ghi mốc bắt đầu lượt cho hook Stop. |
+| `UserPromptSubmit` | Mỗi tin nhắn | Ghi lượt cuối ở trạng thái đang chạy; gợi ý `[router]` có tính chi phí ghi lại cache khi đổi model; cảnh báo hạn mức 5 giờ (90%) và tuần (80%); nhắc khi phiên chạy plugin cũ hơn bản đã cài; lưu yêu cầu gần nhất (đã che khóa) cho subagent; ghi mốc bắt đầu lượt cho hook Stop. |
 | `PreToolUse` | Trước Bash và mỗi lần ghi, sửa file | Chặn cài đồ chưa vet (mỗi lần); hỏi trước marketplace lạ và `git checkout` trên cây bẩn; khi router thấy lượt đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa mã nguồn đầu tiên để chạy `mo-hinh-de-doa`; chặn lần tạo tag git hay `gh release create` đầu tiên cho tới khi người dùng trả lời đã audit cả repo chưa. |
 | `SubagentStart` | Mỗi subagent, skill `context: fork` | Đưa yêu cầu gần nhất và 1–2 việc đầu trong §0 cho subagent, vì chúng không thấy hội thoại. |
 | `PreCompact` | Trước compact | Nhắc nếu §0 đã lâu chưa cập nhật; không chặn compact. |
-| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md`; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `chot-viec` thì chặn một lần; nếu có đổi file mà §0 chưa cập nhật thì chặn một lần; nhắc vẽ cây kế hoạch khi cần. |
+| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `chot-viec` thì chặn một lần; nếu có đổi file mà §0 chưa cập nhật thì chặn một lần; nhắc vẽ cây kế hoạch khi cần. |
+| `StopFailure` | Lỗi API kết thúc lượt | Ghi lượt cuối ở trạng thái "dừng vì lỗi", kèm file đã đổi và phần trả lời dở. |
 | `SessionEnd` | Đóng phiên | Ghi `state/sessions.jsonl` để `tien-do` gợi ý `claude --resume`. |
 
 ### 3.4 Các phần khác
@@ -267,7 +268,7 @@ agent-stack/
 │   ├── .claude-plugin/      plugin.json (phiên bản)
 │   ├── skills/<tên>/        SKILL.md, scripts/, references/
 │   ├── agents/              5 subagent
-│   ├── hooks/               hooks.json + 7 hook Python
+│   ├── hooks/               hooks.json + 8 hook Python
 │   ├── lib/agentstack.py    thư viện dùng chung (vị trí, hồ sơ project, git, biên nhận, che khóa)
 │   ├── evals/               bộ đo riêng cho skill
 │   └── NOTICES.md           ghi công bên thứ ba

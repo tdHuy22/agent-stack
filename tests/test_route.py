@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase
 
@@ -141,7 +142,7 @@ class HookSuggestion(TempDirTestCase):
     def test_suggests_switch_once_per_session(self):
         data = {"session_id": "s1", "effort": {"level": "medium"}}
         first = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", data)
-        self.assertIn("/effort high", first["user"])
+        self.assertNotIn("/effort", first["user"])  # reviewer tự chạy effort của nó (N2)
         self.assertIn("agent-stack:reviewer", first["user"])
         self.assertIn("đừng tự đổi", first["context"])
         self.assertIsNone(route.hook_suggestion("Review bảo mật thêm file khác nữa nhé", data))
@@ -164,6 +165,89 @@ class HookSuggestion(TempDirTestCase):
         self.assertIn("skill reuse-best", hit["user"])
         self.assertIn("không tầm thường", hit["context"])
         self.assertEqual(route.suggest("Có tool nào trên GitHub quét secret trong repo chưa?")["rule"], "reuse-best")
+
+    # ---------------------------------------------------------------- GĐ24: đổi model chỉ khi rẻ, effort thoải mái
+
+    DEBUG = "Test cứ lúc pass lúc fail, hình như race condition, debug giúp"  # luật debug-hard: opus · medium
+
+    def transcript(self, name, model, ctx, age, ttl="1h"):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - age)) + ".000Z"
+        usage = {"input_tokens": 2, "cache_creation_input_tokens": 500, "cache_read_input_tokens": ctx,
+                 "cache_creation": {f"ephemeral_{ttl}_input_tokens": 500}}
+        path = self.tmp / f"{name}.jsonl"
+        path.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {
+            "model": model, "usage": usage, "content": [{"type": "text", "text": "x"}]}}) + "\n", encoding="utf-8")
+        return str(path)
+
+    def test_model_switch_mid_session_is_replaced_by_a_subagent_when_the_cache_is_warm(self):
+        data = {"session_id": "w1", "effort": {"level": "medium"},
+                "transcript_path": self.transcript("w1", "claude-sonnet-5-5", 250000, age=120)}
+        hit = route.hook_suggestion(self.DEBUG, data)
+        self.assertNotIn("/model", hit["user"])
+        self.assertIn("giữ sonnet (đổi tốn ≈2,00 USD)", hit["user"])  # 250K token × 4 USD/M × 2 (cache 1 giờ)
+        self.assertIn("subagent opus · medium", hit["user"])
+        self.assertIn("Đừng đổi /model lúc này: context ≈250K token", hit["context"])
+        self.assertIn('Agent với model "opus", effort "medium"', hit["context"])
+        self.assertIn("merge_back.py", hit["context"])
+        self.assertIn("`Model: giữ sonnet`", hit["context"])
+
+    def test_model_switch_is_suggested_when_it_is_cheap(self):
+        cases = (("c1", 250000, 2 * 3600, "1h", "cache đã nguội"), ("c2", 20000, 60, "1h", "context nhỏ"),
+                 ("c3", 250000, 10 * 60, "5m", "cache đã nguội"))
+        for sid, ctx, age, ttl, why in cases:
+            with self.subTest(sid=sid):
+                data = {"session_id": sid, "transcript_path": self.transcript(sid, "claude-sonnet-5-5", ctx, age, ttl)}
+                hit = route.hook_suggestion(self.DEBUG, data)
+                self.assertIn(f"/model opus ({why})", hit["user"])
+                self.assertNotIn("Đừng đổi", hit["context"])
+        hit = route.hook_suggestion(self.DEBUG, {"session_id": "c4", "transcript_path": str(self.tmp / "chua-co.jsonl")})
+        self.assertIsNone(hit)  # chưa biết model đang chạy: không gợi ý đổi bừa
+
+    def test_effort_is_suggested_freely_on_models_that_keep_the_cache(self):
+        data = {"session_id": "e1", "effort": {"level": "low"},
+                "transcript_path": self.transcript("e1", "claude-opus-5-5", 400000, age=60)}
+        hit = route.hook_suggestion(self.DEBUG, data)
+        self.assertIn("/effort medium", hit["user"])
+        self.assertNotIn("/model", hit["user"])
+        old = {"session_id": "e2", "effort": {"level": "low"},
+               "transcript_path": self.transcript("e2", "claude-opus-4-1", 400000, age=60)}
+        self.assertIsNone(route.hook_suggestion(self.DEBUG, old))  # model cũ: đổi effort mất cache, cache còn ấm
+
+    def test_agents_that_do_the_work_carry_their_own_model(self):
+        data = {"session_id": "a9", "effort": {"level": "high"},
+                "transcript_path": self.transcript("a9", "claude-sonnet-5-5", 300000, age=60)}
+        hit = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", data)
+        self.assertNotIn("/model", hit["user"])
+        self.assertNotIn("giữ sonnet", hit["user"])
+        self.assertIn("agent-stack:reviewer", hit["user"])
+
+    def test_effort_is_not_pushed_on_the_main_session_for_agent_work(self):
+        # N2: luật security-critical là opus·xhigh nhưng reviewer tự chạy effort của nó.
+        data = {"session_id": "n2", "effort": {"level": "medium"},
+                "transcript_path": self.transcript("n2", "claude-sonnet-5-5", 300000, age=60)}
+        hit = route.hook_suggestion("Review bảo mật phần mã hóa và xác thực token thanh toán giúp mình", data)
+        self.assertIn("agent-stack:reviewer", hit["user"])
+        self.assertNotIn("/effort", hit["user"])
+
+    def test_a_fresh_model_switch_makes_another_switch_cheap(self):
+        path = self.tmp / "sw.jsonl"
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 60)) + ".000Z"
+        path.write_text(Path(self.transcript("sw0", "claude-sonnet-5-5", 300000, age=120)).read_text() + json.dumps(
+            {"type": "attachment", "timestamp": stamp, "attachment": {"type": "model", "identity": {
+                "modelId": "claude-haiku-5-5"}}}) + "\n", encoding="utf-8")
+        hit = route.hook_suggestion(self.DEBUG, {"session_id": "sw", "transcript_path": str(path)})
+        self.assertIn("/model opus (vừa đổi model, cache mới chưa có)", hit["user"])
+
+    def test_switch_cost_uses_the_target_price_and_cache_lifetime(self):
+        now = time.time()
+        advice = route.switch_advice("sonnet", {"context": 250000, "ts": now - 60, "ttl": 3600}, now=now)
+        self.assertFalse(advice["cheap"])
+        self.assertAlmostEqual(advice["cost"], 1.0)
+        short = route.switch_advice("sonnet", {"context": 250000, "ts": now - 60, "ttl": 300}, now=now)
+        self.assertAlmostEqual(short["cost"], 0.625)
+        long_haiku = route.switch_advice("haiku", {"context": 200000, "ts": now - 60, "ttl": 3600}, now=now)
+        self.assertAlmostEqual(long_haiku["cost"], 0.2)  # prompt trên 100K: 0,5 USD/M
+        self.assertTrue(route.switch_advice("opus", {}, now=now)["cheap"])
 
     def test_prompt_submit_hook_end_to_end(self):
         payload = {"session_id": "e2e", "prompt": "Review bảo mật hàm đăng nhập này giúp mình",

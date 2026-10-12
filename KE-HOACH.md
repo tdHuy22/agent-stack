@@ -148,7 +148,7 @@ prompt ─┼─► [Lớp 2: Định tuyến]  hook UserPromptSubmit + router-r
 - **Chạy rẻ trước, hỏng thì chạy lại ở mức cao.** Kết quả khoảng 93% đạt với khoảng một nửa chi phí, so với 91,7% khi chạy mọi thứ ở mức mặc định. Chỉ áp dụng khi có tín hiệu thất bại tự động như test hoặc linter.
 - **Haiku 4.5** hợp việc khối lượng lớn mà kết quả kiểm tra được. Không hợp vòng agent dài.
 - **Mô hình "điều phối viên + worker rẻ"** chỉ có lời khi có nhiều phần việc độc lập. Với một chuỗi việc phụ thuộc nhau, một model mạnh ở effort thấp hơn thường thắng.
-- **Cache gắn với từng model.** Đổi model hoặc effort giữa chừng làm mất cache, nên chỉ đổi ở ranh giới việc (sau `/clear` hoặc khi sang việc mới).
+- **Cache gắn với từng model.** Đổi model giữa chừng làm mất cache, nên chỉ đổi khi rẻ (đầu phiên, sau `/clear` hay `/compact`, context nhỏ, cache đã hết hạn); còn lại giao subagent. Đổi effort giữ cache trên các model 5.x (kiểm 12/10/2026, mục 6.20).
 
 **N3. Thang quyết định "dùng lại tốt nhất" (reuse-best).** Đây là ý của chữ "luôn kiểm tra" trong yêu cầu #1: trước khi build hay làm gì không tầm thường, tìm thứ có sẵn tốt nhất, kể cả công cụ trên GitHub và bài nghiên cứu SOTA. Skill `reuse-best` (mục 7.9) làm việc này cho mọi việc build. Với skill, plugin và MCP, dừng ở bậc đầu tiên đáp ứng được:
 tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → plugin chính chủ của hãng (Microsoft Playwright, Semgrep…) → repo cộng đồng (≥1k★, có cập nhật trong 3 tháng, giấy phép rõ, qua cổng kiểm duyệt) → ✍️ tự viết.
@@ -526,6 +526,34 @@ Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nh�
 - Hook PreToolUse so chuỗi lệnh theo mẫu, nên là lớp nhắc chứ không phải ranh giới bảo mật (TM-6).
 - Mỗi lần Stop chặn tốn thêm một lượt model.
 - Mức "vừa" của `risk.py` dựa vào regex, nên có thể chặn nhầm; khi đó `chot-viec` ghi một dòng lý do rồi kết thúc nhanh.
+
+### 6.20 Tự lưu chắc chắn, đổi model không mất cache (12/10/2026)
+
+Bạn thấy tự lưu chưa ổn định, và hỏi cách tránh mất cache khi router gợi ý model khác model đang chạy. Rà transcript thật từ 09/10 (125 lượt, 25 phiên; trang so sánh https://claude.ai/artifact/2sMt245QSxJJYPyry9H3QT). Bạn chốt theo khuyến nghị cả 5 câu; riêng câu 2 bạn muốn lưu ngay trong thư mục để không phụ thuộc agent-stack.
+
+**Tự lưu.** Hook Stop chạy và ghi đúng ở mọi lượt kết thúc bình thường (trung vị 0,24 giây, chậm nhất 2,0 giây), nhưng khoảng 30% lượt không được lưu:
+- F1: 20 lượt chạy plugin cũ hơn 0.6.0, vì phiên mở trước lúc cài giữ hook của bản đã nạp tới khi `/reload-plugins` hay mở lại. Nay UserPromptSubmit so bản đang chạy với `installed_plugins.json` và nhắc một lần. Chỉ có tác dụng cho phiên mở từ 0.9.0 trở đi.
+- F2: lỗi API kết thúc lượt thì Claude Code gọi `StopFailure` thay cho Stop (tài liệu hook; có trong Claude Code 2.1.285). Hook mới `stop_failure.py` ghi trạng thái "dừng vì lỗi", file đã đổi và đoạn chữ gần nhất Claude viết trong lượt.
+- F3: Stop không chạy khi Esc, crash, đóng app, lượt dài chưa xong. UserPromptSubmit ghi ngay trạng thái "đang chạy" (yêu cầu, lúc bắt đầu), giữ lượt xong trước đó của cùng phiên; SessionStart của phiên khác báo "CHƯA XONG" kèm file đổi từ lúc đó; compact giữa lượt dài thì báo "lượt hiện tại đang chạy".
+- F4: 18 lượt ở thư mục không phải project (`new-idea`, `~/Documents/Claude`, `~/.claude/plugins`) bị bỏ qua. Nay ghi `.agent/LAST-TURN.md` ngay trong thư mục; thư mục chung (home và thư mục cha của nó, `~/.claude`, `~/.config`, `~/Library`, thư mục tạm, thư mục gom từ hai project trở lên) thì ghi `state/last-turn/<băm>.md`.
+- F5: hai phiên cùng project ghi đè nhau. Nay file giữ tối đa 3 phiên khác trong 24 giờ (mục "Phiên khác gần đây"), SessionStart hiện 2 dòng.
+- F6: Stop ghi file trước khi chấm rủi ro và đọc transcript; trạng thái §0 đổi sau khi chấm thì ghi lại.
+- Chốt chặn (TM-23 tới TM-25): `.agent` hay file là symlink, file do git theo dõi thì ghi vào `state/`; mọi chữ qua `redact_secrets`; mỗi bản ghi ký HMAC-SHA256 bằng `state/last-turn.key` (0600), bản không ký đúng không được nạp (file cũ chưa ký bị bỏ qua một lần sau khi cài).
+
+**Đổi model.** 230/364 dòng ➡️ gợi ý model khác model đang chạy khi context trung vị 255K token; đổi lúc đó tốn khoảng 1 USD giá niêm yết để ghi lại cache, trong khi Opus 5.5 và Sonnet 5.5 đọc cache cùng giá. Tài liệu chính thức (kiểm 12/10/2026): đổi effort giữ cache trên Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1; skill có `model:` mà không `context: fork` là một lần đổi model (sửa `task-router`); có `/advisor`.
+- Router đọc phần cuối transcript (`agentstack.session_usage`: model, token, lúc gọi, TTL; không lấy chữ tự do, TM-27), chỉ gợi ý `/model` khi rẻ (đầu phiên, context dưới 40K, nghỉ quá TTL), còn lại gợi ý giữ model, subagent với model và effort, kèm số tiền ước tính; `/effort` gợi ý thoải mái trên model giữ cache. Agent tự làm việc (reviewer, researcher, oc-worker) mang model riêng nên không gợi ý đổi.
+- Luật dòng ➡️: `Model: giữ <model>` khi đổi không rẻ, Subagent ghi kèm model·effort; `CLAUDE.global.md` cho phép truyền `effort` vào Agent.
+- `merge_back.py` (TM-26): gộp nhánh worktree của subagent khi test đạt (argv, không shell), fast-forward được, diff không đụng file nhạy cảm, không trùng file chưa commit của phiên chính; xong xoá worktree và nhánh; mã thoát 2 thì hỏi bạn. Claude Code không tự gộp worktree của subagent (tài liệu worktrees).
+- `/advisor` chưa đo: để bạn thử trên một project.
+
+**Review trước khi gộp** (12/10/2026): `differential-review` (Trail of Bits, có PoC chạy thật) và `agent-stack:reviewer` (opus · high, phản biện từng phát hiện của nó).
+- `differential-review`: 3 cao, 4 vừa, 9 thấp, 4 thông tin.
+  - Hai lỗi cao đã được sửa trước khi nó báo: tên file tạm cố định bị đi theo symlink cài sẵn nên ghi đè file bất kỳ; bước kiểm file nhạy cảm lọt qua chữ hoa, đổi tên, symlink `.claude`.
+  - Lỗi cao còn lại: mã test của nhánh tự commit cấu hình quyền sau bước kiểm, script vẫn gộp theo tên nhánh. Reviewer hạ xuống vừa vì chạy test vốn đã là chạy mã tùy ý. Nay ghim sha và kiểm lại sau test.
+- Reviewer tìm thêm 2 vừa: tên có `"` bị git bọc ngoặc kép nên lọt bước kiểm (nay dùng `-z`); router đẩy `/effort max` cho phiên chính khi việc do reviewer tự làm. Và 2 thấp: router không thấy `/model` vừa gõ; thư mục không ghi được thì mất bản ghi (nay rơi về `state/`).
+- Đã sửa hết kèm test, kể cả: `ſ` mà APFS coi là `s` (NFKC + casefold); U+2028 trong câu trả lời giả được dòng "Phiên khác" (chuẩn hoá xuống dòng trước khi ký); `ts` vô lý làm hook văng lỗi và tắt cổng §0; ký tự thay thế đơn lẻ trong JSON đầu vào làm mọi hook văng lỗi khi ghi file (có từ trước GĐ24, nay làm sạch ngay lúc đọc đầu vào); chữ ký gắn với thư mục; khóa chỉ thay khi hỏng thật; `.agent/.gitignore` ở thư mục chưa có git; test chạy trong nhóm tiến trình riêng.
+- Theo phản biện của reviewer, không coi `~/Desktop`, `~/Documents`, `~/Downloads` là thư mục chung, vì trái với lựa chọn lưu ngay trong thư mục của bạn. Vẫn coi file kế hoạch là nhạy cảm khi gộp, và dặn subagent không sửa chúng.
+- Chạy lại PoC của `differential-review` trên code đã sửa: `merge_back` ra `can-hoi` cả 6 ca; lượt cuối không ghi đè, không giả dòng, không nạp bản chép sang thư mục khác; hook Stop với bản ghi giả vẫn chặn đúng.
 
 ---
 
@@ -959,7 +987,7 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 | Skill hoặc plugin độc hại (chuỗi cung ứng) | Trung bình | Rất cao (đã có mã độc đánh cắp dữ liệu trên macOS) | Làm GĐ1 trước mọi cài đặt; ghim SHA; đọc kỹ hook. |
 | Chất lượng giảm khi dùng model rẻ | Cao nếu không đo | Cao | Eval ở GĐ4; cổng test và review; hỏng thì chạy lại ở mức cao hơn. |
 | Context phình vì quá nhiều skill và MCP | Cao | Trung bình | Giới hạn 20 skill / 4 MCP; `/skill-doctor`. |
-| Đổi model/effort liên tục làm mất cache | Trung bình | Trung bình (tốn hơn) | Chỉ đổi ở ranh giới việc. |
+| Đổi model liên tục làm mất cache | Trung bình | Trung bình (tốn hơn) | Router tính chi phí ghi lại cache, chỉ gợi ý `/model` khi rẻ; còn lại giao subagent (mục 6.20). |
 | Rò rỉ dữ liệu qua dịch vụ ngoài (Snyk, cloud sync của claude-mem) | Trung bình | Cao với code nhạy cảm | Chỉ dùng cho project không nhạy cảm; ưu tiên công cụ local. |
 | Vi phạm điều khoản khi dùng OAuth gói Claude trong công cụ bên thứ ba (jcode, plugin kiểu opencode-with-claude) | Trung bình | Cao (có thể bị khóa tài khoản) | Chính sách đã đổi nhiều lần trong 2026: sửa ToS 02/2026, thực thi 04/2026, rồi có điều chỉnh 05/2026 theo báo chí. Không dùng Claude trong công cụ bên thứ ba khi chưa đọc điều khoản hiện hành. |
 | Chạy không người giám sát (auto-continue + quyền rộng) | Thấp đến trung bình | Cao | Không dùng `bypassPermissions`; thêm deny rule cho lệnh nguy hiểm; dùng sandbox Bash. |

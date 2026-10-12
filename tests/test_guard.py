@@ -221,7 +221,7 @@ class WriteGuard(GuardBase):
     def test_no_nudge_when_threat_model_written_or_feature_is_plain(self):
         self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "tm2")
         time.sleep(0.05)
-        (self.project / ".agent").mkdir()
+        (self.project / ".agent").mkdir(exist_ok=True)  # hook UserPromptSubmit đã tạo nó để ghi lượt đang chạy
         (self.project / ".agent" / "threat-model.md").write_text("## mục mới\n")
         self.assertIsNone(self.guard("Edit", {"file_path": str(self.project / "app" / "views.py")}, "tm2"))
         self.start("Thêm tính năng xuất CSV cho trang báo cáo", "tm3")

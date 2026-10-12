@@ -17,8 +17,10 @@ Gợi ý tính cả hồ sơ project (loại code, có test, code nhạy cảm b
 tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0. Lúc mở phiên, project lớn (hoặc có
 cấu hình kiểm kiểu, biên dịch) mà chưa bật LSP thì được đề xuất bật LSP riêng cho project đó (scope local).
 
-Router chỉ GỢI Ý. Hook không thể đổi model hay effort; người dùng tự đổi bằng /model, /effort,
-và chỉ nên đổi ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache.
+Router chỉ GỢI Ý. Hook không thể đổi model hay effort; người dùng tự đổi bằng /model, /effort. Đổi model giữa phiên
+phải ghi lại cả context vào cache của model mới, nên router đọc phần cuối transcript (model, cỡ context, lúc gọi gần
+nhất) và chỉ gợi ý /model khi rẻ (đầu phiên, context nhỏ, hay cache đã hết hạn); còn lại gợi ý giữ model và giao phần
+việc cho subagent chạy model đó. Đổi effort giữ cache trên các model 5.x nên được gợi ý thoải mái.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -366,6 +369,41 @@ def needs_model_switch(wanted: str, now: str) -> bool:
     return target != wanted and target not in now
 
 
+def effort_keeps_cache(model: str) -> bool:
+    """Đổi effort giữa phiên giữ prompt cache với model này (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1)."""
+    return any((model or "").startswith(m) for m in (rules().get("switch") or {}).get("effort_keeps_cache") or [])
+
+
+def switch_advice(target: str, usage: dict, now: float = None) -> dict:
+    """Đổi sang model họ `target` lúc này có rẻ không, theo usage của phiên (A.session_usage). Rẻ khi chưa có lần gọi
+    nào (đầu phiên, sau /clear), context dưới free_tokens, hay đã nghỉ quá TTL (cache hết hạn). `cost` là giá niêm yết
+    (USD) để ghi lại cả context vào cache của model mới. Trả {cheap, why, cost, context, idle, ttl}."""
+    cfg = rules().get("switch") or {}
+    usage = usage or {}
+    ctx = int(usage.get("context") or 0)
+    ts = usage.get("ts")
+    ttl = int(usage.get("ttl") or 3600)
+    idle = (now or time.time()) - ts if isinstance(ts, (int, float)) else None
+    long_price = (cfg.get("price_in_long") or {}).get(target) if ctx > cfg.get("long_from", 10 ** 12) else None
+    price = long_price or (cfg.get("price_in") or {}).get(target) or 0
+    cost = ctx * price * float((cfg.get("cache_write") or {}).get(str(ttl), 2.0)) / 1e6
+    if not ctx or idle is None:
+        cheap, why = True, "đầu phiên"
+    elif usage.get("switched"):
+        cheap, why = True, "vừa đổi model, cache mới chưa có"
+    elif idle > ttl:
+        cheap, why = True, "cache đã nguội"
+    elif ctx < cfg.get("free_tokens", 40000):
+        cheap, why = True, "context nhỏ"
+    else:
+        cheap, why = False, "cache còn ấm"
+    return {"cheap": cheap, "why": why, "cost": cost, "context": ctx, "idle": idle, "ttl": ttl}
+
+
+def usd(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
 def turn_flags(prompt: str, cwd) -> dict:
     """Cờ của lượt cho các hook khác: threat_model khi việc là chức năng đụng ranh giới tin cậy (luật
     feature-boundary), để hook PreToolUse nhắc chạy mo-hinh-de-doa trước khi code; progress khi người dùng hỏi tiến
@@ -408,12 +446,34 @@ def hook_suggestion(prompt: str, data: dict):
         return None
     localize(hit, root)
     sid = data.get("session_id", "")
-    now_model = current_model(sid)
+    usage = A.session_usage(data["transcript_path"]) if data.get("transcript_path") else {}
+    now_model = (usage.get("model") or current_model(sid) or "").lower()
     now_effort = (data.get("effort") or {}).get("level")
     parts_user, parts_ctx = [], []
-    if needs_model_switch(hit["model"], now_model):
-        parts_user.append(f"/model {model_name(hit['model'])}")
-    if hit["effort"] and now_effort and hit["effort"] != now_effort:
+    switch_note = ""
+    # Việc do chính agent làm (reviewer, researcher...) thì model nằm ở agent, không cần đổi model của phiên chính.
+    own = hit["agent"] in ((rules().get("switch") or {}).get("agents_doing_the_work") or [])
+    want_switch = needs_model_switch(hit["model"], now_model) and not own
+    advice = switch_advice(hit["model"], usage) if want_switch else None
+    if advice and advice["cheap"]:
+        parts_user.append(f"/model {model_name(hit['model'])} ({advice['why']})")
+    elif advice:
+        cur = family(now_model) or now_model
+        parts_user.append(f"giữ {cur} (đổi tốn ≈{usd(advice['cost'])} USD)")
+        parts_user.append(f"subagent {model_effort(hit)}")
+        idle = f"{advice['idle'] / 60:.0f} phút trước" if advice["idle"] is not None else "chưa rõ lúc nào"
+        switch_note = (f"Đừng đổi /model lúc này: context ≈{advice['context'] // 1000}K token, cache còn ấm (lần gọi model "
+                       f"gần nhất {idle}, cache giữ {advice['ttl'] // 60} phút); đổi sẽ ghi lại cả context vào cache "
+                       f"của model mới, ≈{usd(advice['cost'])} USD giá niêm yết. Phần việc hợp {model_effort(hit)}: giao "
+                       f"subagent (Agent với model \"{model_name(hit['model'])}\""
+                       + (f", effort \"{hit['effort']}\"" if hit["effort"] else "")
+                       + "); việc dài sửa nhiều file thì thêm isolation \"worktree\" rồi gộp bằng merge_back.py của "
+                       "task-router. Sang việc mới không cần hội thoại này thì đề nghị /clear rồi mới đổi. Việc cần model "
+                       f"mạnh hơn mới làm đúng thì vẫn nên đổi (chất lượng trước chi phí). Dòng ➡️ ghi `Model: giữ {cur}`.")
+    # Effort của luật đi kèm model của luật; việc do agent tự làm thì effort cũng nằm ở agent.
+    effort_differs = hit["effort"] and now_effort and hit["effort"] != now_effort and not own
+    if effort_differs and not (advice and not advice["cheap"]) and (
+            not now_model or effort_keeps_cache(now_model) or (advice and advice["cheap"])):
         parts_user.append(f"/effort {hit['effort']}")
     if hit["agent"]:
         parts_user.append(f"agent {hit['agent']}")
@@ -435,7 +495,8 @@ def hook_suggestion(prompt: str, data: dict):
     model_note = (f"model {model_effort(hit)}" + (f", test trượt thì {hit['fallback']}" if hit.get("fallback") else "")
                   if hit["model"] else "")
     context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
-               + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi.")
+               + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi."
+               + (f" {switch_note}" if switch_note else ""))
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)
     return {"context": context, "user": user, "rule": hit["rule"]}
 

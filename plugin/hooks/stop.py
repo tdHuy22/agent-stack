@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Hook Stop: sau mỗi lượt, ghi .agent/LAST-TURN.md (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo,
-file đổi) để phiên mới làm tiếp được. Chặn một lần để Claude làm nốt trước khi xong:
+"""Hook Stop: sau mỗi lượt, ghi lượt cuối (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi) vào
+.agent/LAST-TURN.md của thư mục làm việc, kể cả thư mục không phải project (thư mục chung thì vào state/last-turn/),
+để phiên mới làm tiếp được. Ghi trước các bước chậm. Chặn một lần để Claude làm nốt trước khi xong:
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
@@ -145,6 +146,19 @@ def gate_reason(result: dict, plan_rel: str) -> str:
             "một câu nói vậy và không làm gì thêm.")
 
 
+def plan_state(digest_now, plan_updated, should_block, gate, changed) -> str:
+    if digest_now is None:
+        return "project không có mục §0"
+    if plan_updated:
+        return "đã cập nhật trong lượt này"
+    if should_block:
+        return ("chưa cập nhật; hook đã nhờ Claude cập nhật ngay sau lượt này"
+                + (" (cùng lúc chạy chot-viec)" if gate is not None else ""))
+    if changed:
+        return "chưa cập nhật dù lượt có đổi file"
+    return "không đổi (lượt không đổi file)"
+
+
 def main():
     data = A.read_hook_input()
     sid = data.get("session_id", "")
@@ -152,8 +166,6 @@ def main():
         return  # đầu vào thiếu hay hỏng: không đoán thư mục, vì hook sẽ ghi file vào đó
     active = bool(data.get("stop_hook_active"))
     root = A.project_root(data.get("cwd"))
-    if not A.is_project(root):
-        return
     turn = A.load_turn(sid)
     if turn and turn.get("root") != str(root):
         turn = None  # lượt bắt đầu ở thư mục khác: không so được
@@ -162,34 +174,7 @@ def main():
     plan_updated = bool(turn) and digest_now is not None and digest_now != turn.get("plan_digest")
     found = A.read_plan(root)
     plan_rel = str(found[0].relative_to(root)) if found and str(found[0]).startswith(str(root)) else "PLAN.md"
-
-    gate = None
-    if changed and not active and turn is not None:
-        try:
-            gate = chot_viec_gate(root, turn, changed)
-        except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
-            A.log_event("hook-error", {"hook": "chot_viec_gate", "error": repr(exc)[:300]})
     plan_block = bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
-    tree_block = []
-    if not active and turn is not None:
-        try:
-            tree_block = tree_due(root, turn, data)
-        except Exception as exc:  # noqa: BLE001
-            A.log_event("hook-error", {"hook": "tree_due", "error": repr(exc)[:300]})
-    should_block = plan_block or gate is not None
-
-    if digest_now is None:
-        plan_status = "project không có mục §0"
-    elif plan_updated:
-        plan_status = "đã cập nhật trong lượt này"
-    elif should_block:
-        plan_status = "chưa cập nhật; hook đã nhờ Claude cập nhật ngay sau lượt này"
-        if gate is not None:
-            plan_status += " (cùng lúc chạy chot-viec)"
-    elif changed:
-        plan_status = "chưa cập nhật dù lượt có đổi file"
-    else:
-        plan_status = "không đổi (lượt không đổi file)"
 
     # Lần Stop thứ hai của cùng lượt: giữ câu trả lời thật của lần đầu.
     message = data.get("last_assistant_message")
@@ -201,13 +186,38 @@ def main():
         if turn:
             turn.update(answer=A.redact_secrets(answer)[:A.LAST_TURN_ANSWER_CHARS + 200], next=next_step)
             A.save_turn(sid, turn)
-    request = A.load_last_request(sid) or {}
-    prompt = request.get("prompt", "")
-    if request.get("earlier") and len(prompt) < A.LAST_REQUEST_FULL:
-        prompt = f"{prompt} (trước đó: {request['earlier']['prompt']})"
+    request = A.request_text(sid)
     git = A.git_summary(root)
-    A.write_last_turn(root, sid, prompt, answer, next_step, changed, len(git.get("dirty") or []),
-                      git.get("branch"), plan_status)
+    dirty = len(git.get("dirty") or []) if git.get("is_repo") else None
+
+    def write(status):
+        try:
+            A.record_turn(root, sid, state="done", request=request, answer=answer, next_step=next_step,
+                          changed=changed, dirty_count=dirty, branch=git.get("branch"), plan_status=status)
+        except Exception as exc:  # noqa: BLE001 (ghi lỗi thì các cổng §0, chot-viec vẫn phải chạy)
+            A.log_event("hook-error", {"hook": "record_turn", "error": repr(exc)[:300]})
+
+    # Ghi trước các bước chậm (chấm rủi ro bằng git diff, đọc transcript), để hook có bị ngắt vì quá giờ thì lượt
+    # vẫn được lưu.
+    status = plan_state(digest_now, plan_updated, plan_block, None, changed)
+    write(status)
+
+    gate = None
+    if changed and not active and turn is not None and A.is_project(root):
+        try:
+            gate = chot_viec_gate(root, turn, changed)
+        except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
+            A.log_event("hook-error", {"hook": "chot_viec_gate", "error": repr(exc)[:300]})
+    tree_block = []
+    if not active and turn is not None:
+        try:
+            tree_block = tree_due(root, turn, data)
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "tree_due", "error": repr(exc)[:300]})
+    should_block = plan_block or gate is not None
+    final = plan_state(digest_now, plan_updated, should_block, gate, changed)
+    if final != status:
+        write(final)
     A.log_event("stop", {"session": sid, "cwd": str(root), "changed": len(changed), "plan_updated": plan_updated,
                          "blocked": should_block or bool(tree_block), "chot_viec": gate["level"] if gate else None,
                          "tree": tree_block or False})

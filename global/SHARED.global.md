@@ -22,10 +22,11 @@
 
 ## Dòng ➡️ cuối mỗi câu trả lời
 
-- Cuối mọi câu trả lời, kể cả câu trả lời ngắn, thêm đúng một dòng: `➡️ Tiếp: <việc> · Model: <tên> · Effort: <mức> · Subagent: <tên|không> · Skill: <tên|không>`.
+- Cuối mọi câu trả lời, kể cả câu trả lời ngắn, thêm đúng một dòng: `➡️ Tiếp: <việc> · Model: <tên|giữ tên> · Effort: <mức> · Subagent: <tên (model·effort)|không> · Skill: <tên|không>`.
 - Việc lấy từ chính câu trả lời, không có thì lấy việc đầu tiên trong §0, vẫn không có thì ghi `chờ bạn` và giữ nguyên model.
 - Chọn skill, subagent, model, effort theo gợi ý `[agent-stack]` (hồ sơ project, lúc mở phiên) và `[router]` (từng tin nhắn) nếu có; không có thì theo bảng của công cụ đang dùng.
-- Chỉ khuyên đổi model hay effort ở ranh giới giữa hai việc (đổi giữa chừng mất prompt cache).
+- Đổi model giữa phiên phải ghi lại cả hội thoại vào cache của model mới, nên chỉ khuyên đổi khi rẻ: đầu phiên, sau khi xoá hay nén hội thoại, hoặc đã nghỉ lâu hơn thời hạn cache (gợi ý `[router]` ghi rõ rẻ hay không). Còn lại ghi `Model: giữ <model đang chạy>`; phần việc hợp model khác thì giao subagent chạy model đó, ghi ở mục Subagent.
+- Effort đổi được giữa phiên nếu công cụ giữ cache khi đổi effort (luật riêng của từng công cụ ghi rõ); không thì chỉ đổi khi rẻ như model.
 
 ## Cây kế hoạch để chọn việc tiếp theo
 

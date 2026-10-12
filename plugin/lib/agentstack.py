@@ -8,11 +8,13 @@ và yêu cầu gần nhất của người dùng theo từng phiên (che khóa, 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from datetime import datetime
@@ -58,11 +60,23 @@ def state_dir() -> Path:
 
 # ---------------------------------------------------------------- hook I/O
 
+def _clean_text(value):
+    """Chuỗi ghi được ra UTF-8: ký tự thay thế đơn lẻ (lone surrogate, do JSON như "\\ud83d" mang tới) thành "?".
+    Không làm thì mọi lần ghi file sau đó văng lỗi và hook bỏ qua các bước còn lại."""
+    if isinstance(value, str):
+        return value.encode("utf-8", "replace").decode("utf-8")
+    if isinstance(value, list):
+        return [_clean_text(v) for v in value]
+    if isinstance(value, dict):
+        return {_clean_text(k): _clean_text(v) for k, v in value.items()}
+    return value
+
+
 def read_hook_input() -> dict:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
-        return data if isinstance(data, dict) else {}
+        return _clean_text(data) if isinstance(data, dict) else {}
     except (ValueError, OSError):
         return {}
 
@@ -841,7 +855,14 @@ LAST_TURN_ANSWER_CHARS = 1500   # câu trả lời cuối lưu trong file
 LAST_TURN_REQUEST_CHARS = 600
 LAST_TURN_FILES = 15            # số tên file ghi ra
 CHANGED_SCAN = 500              # chỉ xét bấy nhiêu dòng git status, để repo lớn vẫn nhanh
-LAST_TURN_HEADER_RE = re.compile(r"<!-- agent-stack last-turn ts=(\d+(?:\.\d+)?) session=([A-Za-z0-9_-]*) -->")
+LAST_TURN_HEADER_RE = re.compile(r"<!-- agent-stack last-turn ts=(\d+(?:\.\d+)?) session=([A-Za-z0-9_-]*)"
+                                 r"(?: state=(running|done|failed))?(?: sig=([0-9a-f]{32}))? -->")
+LAST_TURN_STATE_DIR = "last-turn"       # lượt cuối của thư mục chung (home, ~/.claude, thư mục tạm...)
+LAST_TURN_KEY = "last-turn.key"         # khóa HMAC ký mỗi bản ghi; bản không ký đúng không được nạp
+LAST_TURN_PREV_CHARS = 700              # câu trả lời của lượt xong trước đó, khi lượt mới đang chạy hay lỗi
+LAST_TURN_OTHERS = 3                    # số phiên khác giữ lại
+LAST_TURN_OTHERS_SECONDS = 24 * 3600    # chỉ giữ phiên khác trong khoảng này
+STATE_LABELS = {"done": "xong", "running": "đang chạy", "failed": "dừng vì lỗi"}
 NEXT_LINE_RE = re.compile(r"^[ \t]*➡️?[ \t]*Tiếp:[ \t]*(.+?)[ \t]*$", re.M)
 
 
@@ -1097,70 +1118,430 @@ def ensure_git_exclude(root: Path) -> None:
         pass
 
 
-def write_last_turn(root: Path, session_id, request, answer, next_step, changed, dirty_count, branch,
-                    plan_status: str, ts: float = None) -> Path:
-    """Ghi .agent/LAST-TURN.md. Câu trả lời và yêu cầu được che khóa rồi mới cắt."""
-    ts = ts or time.time()
-    key = _session_key(session_id) or ""
-    req = redact_secrets(request or "").strip()[:LAST_TURN_REQUEST_CHARS] or "(không lưu được)"
-    ans = redact_secrets(answer or "").strip()
-    if len(ans) > LAST_TURN_ANSWER_CHARS:
-        ans = ans[:LAST_TURN_ANSWER_CHARS].rstrip() + "\n…(đã cắt)"
-    files = ", ".join(f"`{f}`" for f in changed[:LAST_TURN_FILES]) + (" …" if len(changed) > LAST_TURN_FILES else "")
-    lines = [
-        f"<!-- agent-stack last-turn ts={ts:.0f} session={key} -->",
-        "# Lượt cuối",
-        "",
-        "Hook Stop của agent-stack tự ghi sau mỗi lượt; đừng sửa tay. File này chỉ nằm trên máy (đã thêm vào "
-        "`.git/info/exclude`).",
-        "",
-        f"- **Lúc:** {time.strftime('%d/%m/%Y %H:%M', time.localtime(ts))} · phiên `{key[:8] or '?'}`"
-        + (f" · nhánh `{branch}`" if branch else ""),
-        f"- **Yêu cầu:** {_one_line(req, LAST_TURN_REQUEST_CHARS)}",
-        f"- **Tiếp:** {_one_line(redact_secrets(next_step), 300) if next_step else 'không rõ (câu trả lời không có dòng ➡️)'}",
-        f"- **File đổi trong lượt:** {files or 'không có'}",
-        f"- **File chưa commit:** {dirty_count}",
-        f"- **§0:** {plan_status}",
-        "",
-        "## Câu trả lời cuối (đã che khóa)",
-        "",
-        ans or "(Claude Code không gửi câu trả lời cuối cho hook)",
-        "",
-    ]
-    path = root / LAST_TURN_REL
-    path.parent.mkdir(exist_ok=True)
-    tmp = path.with_name(path.name + f".{os.getpid()}.tmp")
-    tmp.write_text("\n".join(lines), encoding="utf-8")
-    os.chmod(str(tmp), 0o600)
-    tmp.replace(path)
-    ensure_git_exclude(root)
-    return path
+# ---------------------------------------------------------------- lượt cuối: nơi ghi, chữ ký
+
+def _shared_dir(root: Path) -> bool:
+    """Thư mục chung, không nên rải file của agent-stack vào: home và các thư mục cha của nó, thư mục cấu hình của
+    công cụ (~/.claude, ~/.config, ~/Library...), thư mục tạm của hệ điều hành."""
+    try:
+        root = Path(root).resolve()
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        return True
+    if root == home or root in home.parents:
+        return True
+    bases = [home / rel for rel in (".claude", ".config", ".cache", ".local", "Library")]
+    bases += [Path(tempfile.gettempdir()), Path("/tmp"), Path("/var/folders"), Path("/private/var/folders")]
+    for base in bases:
+        try:
+            base = base.resolve()
+        except (OSError, RuntimeError):
+            continue
+        if root == base or base in root.parents:
+            return True
+    return False
+
+
+def _workspace_dir(root: Path, scan: int = 300) -> bool:
+    """Thư mục chứa từ hai project trở lên ở ngay cấp dưới (như ~/Documents/Claude): nơi gom nhiều project, không phải
+    một việc riêng."""
+    count = 0
+    try:
+        for i, child in enumerate(Path(root).iterdir()):
+            if i >= scan:
+                break
+            if child.name.startswith(".") or not child.is_dir():
+                continue
+            if (child / ".git").exists() or find_plans(child):
+                count += 1
+                if count >= 2:
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+def _in_folder_ok(root: Path) -> bool:
+    """Ghi được .agent/LAST-TURN.md ngay trong thư mục: `.agent` và file đích không phải symlink hay thứ lạ, nằm trong
+    thư mục, và file không do git theo dõi (repo clone có thể cài sẵn file này để nhồi chữ vào phiên sau)."""
+    agent = Path(root) / ".agent"
+    target = agent / "LAST-TURN.md"
+    try:
+        if agent.is_symlink() or target.is_symlink():
+            return False
+        if agent.exists() and not agent.is_dir():
+            return False
+        if target.exists() and not target.is_file():
+            return False
+        if agent.exists() and Path(root).resolve() not in agent.resolve().parents:
+            return False
+        if agent.exists() and hasattr(os, "getuid") and agent.stat().st_uid != os.getuid():
+            return False  # thư mục nhiều người cùng ghi: `.agent` của người khác
+    except OSError:
+        return False
+    tracked = git_out(Path(root), "ls-files", "--", LAST_TURN_REL)
+    return not (tracked and tracked.strip())
+
+
+def last_turn_path(root: Path) -> Path:
+    """Nơi ghi lượt cuối của thư mục làm việc. Mặc định `.agent/LAST-TURN.md` ngay trong thư mục, kể cả thư mục không
+    phải project, để project tự đọc được mà không cần agent-stack. Thư mục chung (home, ~/.claude, thư mục tạm, thư mục
+    gom nhiều project) và chỗ không ghi an toàn được thì ghi vào state/last-turn/<băm đường dẫn>.md."""
+    root = Path(root)
+    shared = _shared_dir(root) or (not is_project(root) and _workspace_dir(root))
+    if not shared and _in_folder_ok(root):
+        return root / LAST_TURN_REL
+    return _state_path(root)
+
+
+def _scope(root: Path) -> str:
+    """Thư mục mà bản ghi thuộc về; nằm trong chữ ký, nên chép bản ghi sang thư mục khác thì không được nạp."""
+    try:
+        return str(Path(root).resolve())
+    except (OSError, RuntimeError):
+        return str(root)
+
+
+def _state_path(root: Path) -> Path:
+    key = hashlib.sha1(_scope(root).encode("utf-8", "replace")).hexdigest()[:16]
+    return state_dir() / LAST_TURN_STATE_DIR / f"{key}.md"
+
+
+def _last_turn_key() -> bytes:
+    """Khóa HMAC riêng của máy này (state/last-turn.key, quyền 0600). Chỉ tạo khóa mới khi chưa có file, hay file có mà
+    nội dung hỏng thật; lỗi đọc tạm thời thì văng lỗi (bản ghi lần đó không ký được) chứ không thay khóa."""
+    path = state_dir() / LAST_TURN_KEY
+    for _ in range(3):
+        try:
+            raw = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            raw = None
+        if raw is None:
+            key = os.urandom(32)
+            try:
+                fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            except FileExistsError:
+                time.sleep(0.05)  # tiến trình khác vừa tạo: đọc khóa của nó
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(key.hex())
+            return key
+        try:
+            key = bytes.fromhex(raw)
+        except ValueError:
+            key = b""
+        if len(key) >= 16:
+            return key
+        if raw:  # nội dung hỏng thật: thay bằng khóa mới (bản ghi cũ mất hiệu lực, lỗi theo hướng an toàn)
+            key = os.urandom(32)
+            tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+            fd = os.open(str(tmp), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(key.hex())
+            tmp.replace(path)
+            return key
+        time.sleep(0.05)  # file rỗng: tiến trình khác đang ghi dở
+    raise OSError("không đọc được khóa ký lượt cuối")
+
+
+def _sign(ts: str, session: str, state: str, body: str, scope: str) -> str:
+    message = f"{ts}|{session}|{state}|{scope}\n{body}".encode("utf-8", "replace")
+    return hmac.new(_last_turn_key(), message, hashlib.sha256).hexdigest()[:32]
+
+
+# ---------------------------------------------------------------- lượt cuối: viết và đọc
+
+SEC_ANSWER = "## Câu trả lời cuối (đã che khóa)"
+SEC_PARTIAL = "## Phần trả lời trước khi dừng (đã che khóa)"
+SEC_PREVIOUS = "## Lượt xong trước đó (đã che khóa)"
+SEC_OTHERS = "## Phiên khác gần đây"
+OTHER_LINE_RE = re.compile(r"^- <!-- ts=(\d+(?:\.\d+)?) session=([A-Za-z0-9_-]+) state=(running|done|failed) --> "
+                           r"`[^`]*` · [^·]* · [^·]* · yêu cầu: (.*?)(?: · tiếp: (.*))?$")
+FIELD_RE = re.compile(r"^- \*\*(.+?):\*\* (.*)$", re.M)
+
+
+NEWLINES_RE = re.compile("\r\n?|[\u2028\u2029\x0b\x0c\x1c\x1d\x1e\x85]")
+
+
+def _norm_newlines(text: str) -> str:
+    """Mọi kiểu xuống dòng (kể cả U+2028, \\x85, \\r) thành \\n, để file chỉ có một nghĩa của "dòng" khi ghi, ký và đọc."""
+    return NEWLINES_RE.sub("\n", text or "")
+
+
+def _sane_ts(value) -> bool:
+    """Mốc thời gian hợp lý: số hữu hạn, sau năm 2001 và không quá một ngày trong tương lai."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return False
+    return 1e9 < value < time.time() + 86400
+
+
+def _demote(text: str) -> str:
+    """Dòng `## ` trong câu trả lời thành `### `, để không lẫn với các mục của file."""
+    return re.sub(r"(?m)^## ", "### ", text or "")
+
+
+def _when(ts: float) -> str:
+    try:
+        return time.strftime("%d/%m/%Y %H:%M", time.localtime(ts))
+    except (OverflowError, OSError, ValueError):
+        return "?"
+
+
+def _short_when(ts: float) -> str:
+    try:
+        return time.strftime("%H:%M %d/%m", time.localtime(ts))
+    except (OverflowError, OSError, ValueError):
+        return "?"
+
+
+def _render_other(o: dict) -> str:
+    line = (f"- <!-- ts={float(o['ts']):.0f} session={o['session']} state={o['state']} --> `{o['session'][:8]}` · "
+            f"{_short_when(float(o['ts']))} · {STATE_LABELS.get(o['state'], o['state'])} · "
+            f"yêu cầu: {_one_line(redact_secrets(o.get('request') or '?'), 160).replace(' · tiếp: ', ' - tiếp: ')}")
+    if o.get("next"):
+        line += f" · tiếp: {_one_line(redact_secrets(o['next']), 160)}"
+    return line
+
+
+def _render_last_turn(rec: dict, in_git: bool, scope: str) -> str:
+    """Nội dung file lượt cuối (đã ký). `rec`: ts, session, state, fields (thứ tự giữ nguyên), answer, previous
+    ({fields, answer} hay None), others (danh sách {ts, session, state, request, next})."""
+    where = ("File này chỉ nằm trên máy (đã thêm vào `.git/info/exclude`)." if in_git
+             else "File này chỉ nằm trên máy.")
+    lines = ["# Lượt cuối", "",
+             f"Hook của agent-stack tự ghi lúc bắt đầu và kết thúc mỗi lượt; đừng sửa tay (sửa thì bản ghi không được "
+             f"nạp vào phiên sau). {where}", ""]
+    lines += [f"- **{k}:** {v}" for k, v in rec["fields"].items() if v]
+    if rec["state"] != "running":
+        lines += ["", SEC_PARTIAL if rec["state"] == "failed" else SEC_ANSWER, ""]
+        lines.append(_demote(rec.get("answer") or "") or "(Claude Code không gửi câu trả lời cuối cho hook)")
+    prev = rec.get("previous")
+    if prev and rec["state"] != "done":
+        lines += ["", SEC_PREVIOUS, ""]
+        lines += [f"- **{k}:** {v}" for k, v in prev.get("fields", {}).items() if v]
+        if prev.get("answer"):
+            lines += ["", _demote(clip(prev["answer"], LAST_TURN_PREV_CHARS))]
+    if rec.get("others"):
+        lines += ["", SEC_OTHERS, ""] + [_render_other(o) for o in rec["others"]]
+    body = _norm_newlines("\n".join(lines) + "\n").encode("utf-8", "replace").decode("utf-8")
+    ts = f"{float(rec['ts']):.0f}"
+    sig = _sign(ts, rec["session"], rec["state"], body, scope)
+    return f"<!-- agent-stack last-turn ts={ts} session={rec['session']} state={rec['state']} sig={sig} -->\n{body}"
+
+
+def _parse_last_turn(text: str, scope: str):
+    """Đọc nội dung file lượt cuối của thư mục `scope`. None nếu không có header, chữ ký sai hay thiếu (file không do
+    hook trên máy này ghi cho đúng thư mục này, hoặc bị sửa tay), hay mốc thời gian vô lý."""
+    first, _, body = text.partition("\n")
+    m = LAST_TURN_HEADER_RE.fullmatch(first.strip())
+    if not m or not m.group(4) or not _sane_ts(m.group(1)):
+        return None
+    ts, session, state = m.group(1), m.group(2), m.group(3) or "done"
+    if not hmac.compare_digest(_sign(ts, session, state, body, scope), m.group(4)):
+        return None
+    sections, current = {"": []}, ""
+    for line in body.split("\n"):  # đúng nghĩa "dòng" lúc ký: chỉ \n
+        if line.startswith("## "):
+            current = line.strip()
+            sections[current] = []
+        else:
+            sections[current].append(line)
+    head = "\n".join(sections[""])
+    fields = {}
+    for label, value in FIELD_RE.findall(head):
+        fields.setdefault(label, value)
+    answer = "\n".join(sections.get(SEC_ANSWER) or sections.get(SEC_PARTIAL) or []).strip()
+    previous = None
+    if SEC_PREVIOUS in sections:
+        prev_text = "\n".join(sections[SEC_PREVIOUS])
+        pf = {}
+        for label, value in FIELD_RE.findall(prev_text):
+            pf.setdefault(label, value)
+        prev_answer = FIELD_RE.sub("", prev_text).strip()
+        previous = {"fields": pf, "answer": prev_answer}
+    others = []
+    for line in sections.get(SEC_OTHERS) or []:
+        om = OTHER_LINE_RE.match(line.strip())
+        if om and _sane_ts(om.group(1)):
+            others.append({"ts": float(om.group(1)), "session": om.group(2), "state": om.group(3),
+                           "request": om.group(4), "next": om.group(5)})
+    return {"ts": float(ts), "session": session, "state": state, "fields": fields, "answer": answer,
+            "previous": previous, "others": others}
 
 
 def read_last_turn(root: Path):
-    """Đọc .agent/LAST-TURN.md: {ts, session, fields{Lúc, Yêu cầu, …}, answer, path}, hoặc None."""
-    path = root / LAST_TURN_REL
+    """Đọc lượt cuối của thư mục: {ts, session, state, fields{Trạng thái, Lúc, Yêu cầu, …}, answer, previous, others,
+    path}, hoặc None nếu chưa có, hỏng, hay không mang chữ ký đúng của máy này."""
+    best = None
+    for path in dict.fromkeys((last_turn_path(root), _state_path(root))):  # bản trong thư mục, và bản dự phòng
+        rec = _read_record(path, _scope(root))
+        if rec and (best is None or rec["ts"] > best["ts"]):
+            best = rec
+    return best
+
+
+def _read_record(path: Path, scope: str):
     try:
+        if path.is_symlink():
+            return None
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    m = LAST_TURN_HEADER_RE.search(text)
-    if not m:
+    try:
+        rec = _parse_last_turn(text, scope)
+    except (ValueError, OverflowError):
+        rec = None
+    if rec is None:
+        log_event("last-turn-unsigned", {"path": str(path)})
         return None
-    # Trường chỉ đọc ở phần đầu do hook ghi: câu trả lời cũ có dòng "- **Tiếp:** …" không được ghi đè chúng.
-    head, _, tail = text.partition("\n## Câu trả lời cuối")
+    rec["path"] = path
+    return rec
+
+
+def _summary_of(rec: dict) -> dict:
+    f = rec.get("fields") or {}
+    nxt = f.get("Tiếp", "")
+    return {"ts": rec["ts"], "session": rec["session"], "state": rec.get("state", "done"),
+            "request": f.get("Yêu cầu", ""), "next": None if not nxt or nxt.startswith(("không rõ", "(")) else nxt}
+
+
+def record_turn(root: Path, session_id, *, state: str, request: str, answer: str = "", next_step=None,
+                changed=(), dirty_count=None, branch=None, plan_status: str = "", note: str = "",
+                ts: float = None):
+    """Ghi lượt cuối của thư mục (state: running lúc bắt đầu lượt, done khi xong, failed khi lỗi API kết thúc lượt).
+    Giữ lại lượt xong trước đó của cùng phiên khi lượt mới đang chạy hay lỗi, và tối đa LAST_TURN_OTHERS phiên khác
+    trong 24 giờ. Mọi chữ được che khóa; file quyền 0600, ký HMAC. Trả về đường dẫn đã ghi."""
+    ts = ts or time.time()
+    key = _session_key(session_id) or ""
+    root = Path(root)
+    path = last_turn_path(root)
+    old = read_last_turn(root)
+    req = redact_secrets(request or "").strip()[:LAST_TURN_REQUEST_CHARS] or "(không lưu được)"
     fields = {}
-    for label, value in re.findall(r"^- \*\*(.+?):\*\* (.*)$", head, re.M):
-        fields.setdefault(label, value)
-    answer = tail.partition("\n")[2].strip()
-    return {"ts": float(m.group(1)), "session": m.group(2), "fields": fields, "answer": answer, "path": path}
+    if state == "running":
+        fields["Trạng thái"] = (f"đang chạy từ {_short_when(ts)} (chưa xong; phiên đó đã đóng mà vẫn thấy dòng này "
+                                "thì lượt bị ngắt giữa chừng: Esc, crash, đóng app, máy ngủ)")
+    elif state == "failed":
+        fields["Trạng thái"] = _one_line(redact_secrets(note or "dừng vì lỗi API"), 300)
+    else:
+        fields["Trạng thái"] = "xong"
+    fields["Lúc"] = f"{_when(ts)} · phiên `{key[:8] or '?'}`" + (f" · nhánh `{branch}`" if branch else "")
+    fields["Yêu cầu"] = _one_line(req, LAST_TURN_REQUEST_CHARS)
+    if state != "running":
+        files = ", ".join(f"`{f}`" for f in list(changed)[:LAST_TURN_FILES]) + (
+            " …" if len(changed) > LAST_TURN_FILES else "")
+        fields["Tiếp"] = (_one_line(redact_secrets(next_step), 300) if next_step
+                          else ("(lượt dừng giữa chừng)" if state == "failed"
+                                else "không rõ (câu trả lời không có dòng ➡️)"))
+        fields["File đổi trong lượt"] = files or "không có"
+        if dirty_count is not None:
+            fields["File chưa commit"] = str(dirty_count)
+        if plan_status:
+            fields["§0"] = plan_status
+    ans = redact_secrets(_norm_newlines(answer)).strip()
+    if len(ans) > LAST_TURN_ANSWER_CHARS:
+        ans = ans[:LAST_TURN_ANSWER_CHARS].rstrip() + "\n…(đã cắt)"
+    previous = None
+    if old and old["session"] == key:
+        if old["state"] == "done":
+            previous = {"fields": {k: old["fields"].get(k) for k in ("Lúc", "Yêu cầu", "Tiếp")},
+                        "answer": old.get("answer", "")}
+        else:
+            previous = old.get("previous")
+    others = [o for o in (old or {}).get("others", []) if o["session"] != key]
+    if old and old["session"] and old["session"] != key:
+        others.insert(0, _summary_of(old))
+    seen, kept = set(), []
+    for o in others:
+        if o["session"] in seen or not _sane_ts(o["ts"]) or ts - float(o["ts"]) > LAST_TURN_OTHERS_SECONDS:
+            continue
+        seen.add(o["session"])
+        kept.append(o)
+    rec = {"ts": ts, "session": key, "state": state, "fields": fields, "answer": ans,
+           "previous": previous, "others": kept[:LAST_TURN_OTHERS]}
+    scope = _scope(root)
+    in_folder = path == root / LAST_TURN_REL
+    in_git = in_folder and git_out(root, "rev-parse", "--git-dir") is not None
+    try:
+        _write_record(path, _render_last_turn(rec, in_git, scope))
+    except OSError:
+        if not in_folder:
+            raise
+        # Thư mục không ghi được (ổ chỉ đọc, `.agent` của người khác): ghi bản dự phòng vào state/.
+        path, in_folder, in_git = _state_path(root), False, False
+        _write_record(path, _render_last_turn(rec, False, scope))
+    if in_git:
+        ensure_git_exclude(root)
+    elif in_folder:
+        _ensure_agent_gitignore(path.parent)
+    return path
+
+
+def _write_record(path: Path, text: str) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    # O_EXCL và O_NOFOLLOW: không bao giờ ghi qua một file hay symlink có sẵn mang tên file tạm.
+    fd = os.open(str(tmp), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _ensure_agent_gitignore(agent_dir: Path) -> None:
+    """Thư mục chưa có git: thêm `.agent/.gitignore` bỏ qua LAST-TURN.md, để sau này `git init && git add -A` không
+    commit nhầm nội dung phiên. Không đụng file .gitignore đã có."""
+    try:
+        fd = os.open(str(agent_dir / ".gitignore"), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
+                     0o644)
+    except OSError:
+        return
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write("# agent-stack: lượt cuối do hook ghi, chỉ dùng trên máy này\nLAST-TURN.md\nLAST-TURN.md.*.tmp\n")
+
+
+def write_last_turn(root: Path, session_id, request, answer, next_step, changed, dirty_count, branch,
+                    plan_status: str, ts: float = None) -> Path:
+    """Ghi lượt đã xong (giữ chữ ký hàm cũ)."""
+    return record_turn(root, session_id, state="done", request=request, answer=answer, next_step=next_step,
+                       changed=changed, dirty_count=dirty_count, branch=branch, plan_status=plan_status, ts=ts)
+
+
+def request_text(session_id) -> str:
+    """Yêu cầu gần nhất của người dùng trong phiên, kèm yêu cầu dài trước đó khi tin mới quá ngắn ("làm tiếp đi")."""
+    request = load_last_request(session_id) or {}
+    prompt = request.get("prompt", "")
+    if request.get("earlier") and len(prompt) < LAST_REQUEST_FULL:
+        prompt = f"{prompt} (trước đó: {request['earlier']['prompt']})"
+    return prompt
+
+
+def mark_turn_running(session_id, cwd, prompt) -> None:
+    """Lúc người dùng gửi tin: ghi lượt cuối ở trạng thái đang chạy, để Esc, crash, đóng app hay lượt dài chưa xong
+    vẫn để lại yêu cầu và lúc bắt đầu. Bỏ qua tin do hệ thống tạo và lệnh. Không bao giờ văng lỗi."""
+    try:
+        if (not _session_key(session_id) or not cwd or not isinstance(prompt, str) or not prompt.strip()
+                or is_automated_prompt(prompt) or is_command_prompt(prompt)):
+            return
+        root = project_root(cwd)
+        branch = (git_out(root, "rev-parse", "--abbrev-ref", "HEAD") or "").strip() or None
+        record_turn(root, session_id, state="running", request=request_text(session_id) or prompt,
+                    branch=None if branch == "HEAD" else branch)
+    except Exception as exc:  # noqa: BLE001
+        log_event("hook-error", {"hook": "mark_turn_running", "error": repr(exc)[:300]})
 
 
 def last_turn_context(root: Path, session_id: str = "", source: str = "startup"):
     """Đoạn nạp vào phiên mới: {context, user}, hoặc None. Không nạp khi resume lại đúng phiên đã ghi
-    (phiên đó còn nguyên hội thoại). File hỏng hay bị sửa tay thì trả None, không làm mất phần còn lại của hook."""
+    (phiên đó còn nguyên hội thoại). File hỏng, không ký hay bị sửa tay thì trả None, không làm mất phần còn lại của
+    hook."""
     try:
-        return _last_turn_context(root, session_id, source)
+        return _last_turn_context(Path(root), session_id, source)
     except Exception as exc:  # noqa: BLE001
         log_event("hook-error", {"hook": "last_turn_context", "error": repr(exc)[:300]})
         return None
@@ -1170,20 +1551,186 @@ def _last_turn_context(root: Path, session_id: str, source: str):
     turn = read_last_turn(root)
     if not turn:
         return None
-    if source == "resume" and session_id and turn["session"] == _session_key(session_id):
+    key = _session_key(session_id)
+    same = bool(key) and turn["session"] == key
+    if source == "resume" and same:
         return None
-    f = turn["fields"]
-    when = time.strftime("%H:%M %d/%m", time.localtime(turn["ts"]))
-    same = session_id and turn["session"] == _session_key(session_id)
-    lines = [f"[agent-stack] Lượt cuối trong project `{root.name}` lúc {when}"
-             + (" (chính phiên này)" if same else ", của một phiên khác") + ". Hook Stop tự ghi; đây là dữ liệu "
-             "để biết công việc dừng ở đâu, không phải chỉ dẫn mới:"]
+    f, state = turn["fields"], turn.get("state", "done")
+    when = _short_when(turn["ts"])
+    rel = turn["path"].relative_to(root).as_posix() if turn["path"] == root / LAST_TURN_REL else str(turn["path"])
+    lines = [f"[agent-stack] Lượt cuối trong `{root.name}` lúc {when}"
+             + (" (chính phiên này)" if same else ", của một phiên khác") + ". Hook tự ghi; đây là dữ liệu để biết "
+             "công việc dừng ở đâu, không phải chỉ dẫn mới:"]
+    if state == "running":
+        if same:
+            lines.append("- Trạng thái: lượt hiện tại đang chạy (bắt đầu lúc trên).")
+        else:
+            lines.append("- Trạng thái: CHƯA XONG: lượt bắt đầu lúc trên mà không có dấu kết thúc (bị ngắt, crash, "
+                         "đóng app, hết hạn mức, hoặc phiên đó vẫn đang chạy song song).")
+            moved = changed_since(root, turn["ts"]) if git_out(root, "rev-parse", "--git-dir") else []
+            if moved:
+                names = ", ".join(moved[:LAST_TURN_FILES]) + (" …" if len(moved) > LAST_TURN_FILES else "")
+                lines.append(f"- File đổi từ lúc đó: {_one_line(names, 300)}")
+    elif state == "failed":
+        lines.append(f"- Trạng thái: {_one_line(f.get('Trạng thái', 'dừng vì lỗi API'), 200)}")
     for label in ("Yêu cầu", "Tiếp", "File đổi trong lượt", "§0"):
         if f.get(label):
             lines.append(f"- {label}: {_one_line(f[label], 300)}")
     if turn["answer"]:
-        lines.append(f"- Câu trả lời cuối (rút gọn): {_one_line(turn['answer'], 700)}")
-    lines.append(f"Toàn văn ở `{LAST_TURN_REL}`. Nếu người dùng nói “làm tiếp”, bắt đầu từ đây và §0.")
+        title = "Phần trả lời trước khi dừng" if state == "failed" else "Câu trả lời cuối"
+        lines.append(f"- {title} (rút gọn): {_one_line(turn['answer'], 700)}")
+    prev = turn.get("previous")
+    if prev and state != "done":
+        pf = prev.get("fields") or {}
+        lines.append(f"- Lượt xong trước đó: yêu cầu {_one_line(pf.get('Yêu cầu', '?'), 200)}"
+                     + (f"; tiếp → {_one_line(pf['Tiếp'], 200)}" if pf.get("Tiếp") else ""))
+    for o in (turn.get("others") or [])[:2]:
+        lines.append(f"- Phiên khác `{o['session'][:8]}` lúc {_short_when(o['ts'])} "
+                     f"({STATE_LABELS.get(o['state'], o['state'])}): {_one_line(o.get('request') or '?', 160)}"
+                     + (f"; tiếp → {_one_line(o['next'], 120)}" if o.get("next") else ""))
+    lines.append(f"Toàn văn ở `{rel}`. Nếu người dùng nói “làm tiếp”, bắt đầu từ đây và §0.")
     nxt = f.get("Tiếp", "")
-    user = f"🕘 Lượt cuối ({when})" + (f": tiếp → {_one_line(nxt, 90)}" if nxt and not nxt.startswith("không rõ") else "")
+    if state == "running" and not same:
+        user = f"⚠️ Lượt cuối chưa xong ({when}): {_one_line(f.get('Yêu cầu', ''), 90)}"
+    elif state == "failed":
+        user = f"⚠️ Lượt cuối {_one_line(f.get('Trạng thái', 'dừng vì lỗi'), 60)} ({when})"
+    else:
+        user = f"🕘 Lượt cuối ({when})" + (
+            f": tiếp → {_one_line(nxt, 90)}" if nxt and not nxt.startswith(("không rõ", "(")) else "")
     return {"context": "\n".join(lines), "user": user, "ts": turn["ts"]}
+
+
+# ---------------------------------------------------------------- transcript: model, context, phần trả lời dở
+
+MODEL_ID_RE = re.compile(r"claude-[a-z0-9.-]{1,60}")
+
+
+def _transcript_tail(transcript_path, tail_bytes: int):
+    path = Path(transcript_path)
+    with path.open("rb") as fh:
+        size = path.stat().st_size
+        fh.seek(max(0, size - tail_bytes))
+        return fh.read().decode("utf-8", "replace").splitlines()
+
+
+def _stamp(entry: dict):
+    try:
+        return datetime.fromisoformat(str(entry.get("timestamp") or "").replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _count(value) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def session_usage(transcript_path, tail_bytes: int = 2_000_000) -> dict:
+    """Từ phần cuối transcript của phiên chính: model đang chạy, cỡ context (token vào của lần gọi gần nhất), lúc gọi,
+    TTL của cache (3600 hay 300 giây; không thấy thì coi là 3600 cho chắc), và `switched` khi người dùng vừa đổi
+    /model sau lần gọi đó (cache của model mới chưa có). Chỉ lấy tên model đúng mẫu và con số, không lấy chữ nào khác.
+    Lỗi đọc thì trả các trường rỗng."""
+    out = {"model": None, "context": 0, "ts": None, "ttl": None, "switched": False}
+    try:
+        lines = _transcript_tail(transcript_path, tail_bytes)
+    except (OSError, TypeError, ValueError):
+        lines = []
+    looked = 0
+    for line in reversed(lines):
+        is_model_note = '"attachment"' in line and '"model"' in line and out["model"] is None
+        if not is_model_note and ('"usage"' not in line or '"assistant"' not in line):
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict) or entry.get("isSidechain"):
+            continue
+        att = entry.get("attachment") if entry.get("type") == "attachment" else None
+        if is_model_note and isinstance(att, dict) and att.get("type") == "model":
+            ident = att.get("identity") if isinstance(att.get("identity"), dict) else {}
+            model = ident.get("modelId") or att.get("model")
+            if isinstance(model, str) and MODEL_ID_RE.fullmatch(model):
+                out.update(model=model, switched=True)  # /model sau lần gọi gần nhất: cache của model này chưa có
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        msg = entry.get("message") if isinstance(entry.get("message"), dict) else {}
+        usage = msg.get("usage")
+        model = msg.get("model")
+        if not isinstance(usage, dict) or not isinstance(model, str) or not MODEL_ID_RE.fullmatch(model):
+            continue
+        if out["ts"] is None:
+            total = sum(_count(usage.get(k)) for k in
+                        ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+            out.update(context=total, ts=_stamp(entry))
+            if out["model"] is None:
+                out["model"] = model
+        cc = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else {}
+        if _count(cc.get("ephemeral_1h_input_tokens")):
+            out["ttl"] = 3600
+            break
+        if _count(cc.get("ephemeral_5m_input_tokens")):
+            out["ttl"] = 300
+            break
+        looked += 1
+        if looked >= 50:
+            break
+    if out["ttl"] is None:
+        out["ttl"] = 3600
+    return out
+
+
+def last_assistant_text(transcript_path, since: float = 0, tail_bytes: int = 2_000_000) -> str:
+    """Đoạn chữ gần nhất Claude viết ở phiên chính từ lúc `since` (bỏ thông báo lỗi API), để ghi lại phần việc dở
+    khi lượt dừng vì lỗi. Chuỗi rỗng nếu không có."""
+    try:
+        lines = _transcript_tail(transcript_path, tail_bytes)
+    except (OSError, TypeError, ValueError):
+        return ""
+    for line in reversed(lines):
+        if '"assistant"' not in line or '"text"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") != "assistant" or entry.get("isSidechain") or entry.get("isApiErrorMessage"):
+            continue
+        stamp = _stamp(entry)
+        if stamp is not None and stamp < since:
+            return ""
+        content = (entry.get("message") or {}).get("content")
+        texts = [c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text"]
+        text = "\n".join(t for t in texts if isinstance(t, str)).strip()
+        if text:
+            return text
+    return ""
+
+
+# ---------------------------------------------------------------- phiên chạy plugin cũ
+
+def _version_tuple(text):
+    try:
+        return tuple(int(x) for x in str(text).strip().split("."))
+    except ValueError:
+        return None
+
+
+def plugin_staleness():
+    """(bản đang chạy, bản đã cài) khi phiên này chạy agent-stack cũ hơn bản đã cài trên máy (phiên mở trước lần cài
+    giữ hook của bản cũ tới khi /reload-plugins hay mở lại); None nếu không lệch hay không đọc được."""
+    running = (read_json(LIB_DIR.parent / ".claude-plugin" / "plugin.json", {}) or {}).get("version")
+    plugins = Path(os.environ.get("AGENT_STACK_PLUGINS_DIR")
+                   or Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude") / "plugins").expanduser()
+    entries = ((read_json(plugins / "installed_plugins.json", {}) or {}).get("plugins") or {})
+    installed = None
+    for name, rows in entries.items():
+        if name.split("@", 1)[0] == "agent-stack" and isinstance(rows, list):
+            for row in rows:
+                v = row.get("version") if isinstance(row, dict) else None
+                if _version_tuple(v) and (installed is None or _version_tuple(v) > _version_tuple(installed)):
+                    installed = v
+    run_t, inst_t = _version_tuple(running), _version_tuple(installed)
+    if run_t and inst_t and run_t < inst_t:
+        return running, installed
+    return None
