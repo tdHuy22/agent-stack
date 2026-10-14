@@ -146,6 +146,8 @@ class PlanTree(TempDirTestCase):
         out = plan_tree.render_widget(tree)
         self.assertIn(A.strip_md(long), out)  # widget có đủ chữ, cây chữ mới cắt
         self.assertIn('<button class="more" data-c data-l="Xem đủ chữ" aria-expanded="false" hidden>', out)
+        self.assertIn("document.currentScript", out)  # gốc là cây ngay trước thẻ script
+        self.assertIn("ResizeObserver", out)
         self.assertNotIn(A.strip_md(long), plan_tree.render_text(tree))
 
     def test_widget_escapes_plan_text(self):
@@ -220,6 +222,16 @@ class PlanTree(TempDirTestCase):
         self.assertEqual(plan_tree.leaf_tags("Viết README để người dùng đọc được")[1], [])
         self.assertEqual(plan_tree.leaf_tags("(c) user đọc bộ lõi")[1], ["ban"])
         self.assertEqual(plan_tree.leaf_tags("User chạy `./package.sh`")[1], ["ban"])
+
+    def test_next_steps_read_the_same_way_everywhere(self):
+        def sec(body):
+            return A.parse_section0("# P\n\n## 0. Đang ở đâu\n" + body)
+        wrapped = sec("- **Việc tiếp theo:** chạy test toàn bộ\n  rồi commit giai đoạn 5.\n- **Xong:** G0\n")
+        self.assertEqual(wrapped["next"], ["chạy test toàn bộ rồi commit giai đoạn 5."])
+        self.assertEqual(A.next_open(wrapped), wrapped["next"])  # dòng nối tiếp của nhãn viết liền không mất
+        two = sec("- **Việc tiếp theo:**\n  1. A\n- **Bước tiếp theo sau khi bạn duyệt:**\n  1. B\n")
+        self.assertEqual(two["next"], ["A", "B"])  # nhiều nhãn cùng loại thì gộp, không ghi đè
+        self.assertEqual(A.next_open(two), ["A", "B"])
 
     def test_pick_without_code(self):
         out = subprocess.run([sys.executable, str(SCRIPT), "--project", str(self.tmp), "--pick", "xem"],

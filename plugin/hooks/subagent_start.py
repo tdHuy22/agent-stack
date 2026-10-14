@@ -43,7 +43,7 @@ def plan_items(cwd) -> list:
             section = A.parse_section0(path.read_text(encoding="utf-8", errors="replace"))
         except OSError:
             continue
-        items = [A.clip(item, ITEM_CHARS) for item in section["next"] if not A.step_done(item)]
+        items = [A.clip(item, ITEM_CHARS) for item in A.next_open(section)]
         if items and info.st_mtime > best_mtime:
             best_mtime, best = info.st_mtime, items[:PLAN_ITEMS]
     return best

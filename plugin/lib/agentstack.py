@@ -259,9 +259,11 @@ def section0(text: str):
 
 
 def parse_section0(text: str) -> dict:
-    """Đọc mục §0 thành các trường: done, in_progress, next (danh sách), decisions, checks, after_interrupt."""
+    """Đọc mục §0 thành các trường: done, in_progress, next (danh sách phẳng mọi cấp), next_open (bước chưa xong,
+    bỏ cả mục con của bước đã xong), decisions, checks, after_interrupt."""
     found = section0(text)
-    result = {"heading": None, "updated": None, "fields": {}, "next": [], "after_interrupt": [], "notes": []}
+    result = {"heading": None, "updated": None, "fields": {}, "next": [], "next_open": [], "after_interrupt": [],
+              "notes": []}
     if not found:
         return result
     result["heading"], body = found
@@ -278,7 +280,7 @@ def parse_section0(text: str) -> dict:
             return
         if current_key in ("next", "after_interrupt"):
             items = children or ([current_text] if current_text else [])
-            result[current_key] = [clip(x, 220) for x in items if strip_md(x)]
+            result[current_key] += [clip(x, 220) for x in items if strip_md(x)]  # nhiều nhãn cùng loại thì gộp
             if current_text and children:
                 result["fields"][current_key + "_intro"] = clip(current_text, 220)
         elif current_key:
@@ -309,6 +311,16 @@ def parse_section0(text: str) -> dict:
             else:
                 current_text += " " + line.strip()
     flush()
+
+    def open_flat(nodes):
+        out = []
+        for node in nodes:
+            if strip_md(node["text"]) and not step_done(node["text"]):
+                out.append(clip(node["text"], 220))
+                out.extend(open_flat(node["kids"]))
+        return out
+
+    result["next_open"] = open_flat(section0_outline(text, "next"))
     return result
 
 
@@ -344,8 +356,11 @@ def section0_outline(text: str, key: str) -> list:
             (stack[-1][1]["kids"] if stack else out).append(node)
             stack.append((width, node))
             has_kids = True
-        elif line.strip() and stack and not line.lstrip().startswith(("|", "#", "```")):
-            stack[-1][1]["text"] += " " + line.strip()
+        elif line.strip() and not line.lstrip().startswith(("|", "#", "```")):
+            if stack:
+                stack[-1][1]["text"] += " " + line.strip()
+            elif inline.strip():
+                inline += " " + line.strip()
     flush()
     return out
 
@@ -366,7 +381,10 @@ def step_done(text: str) -> bool:
 
 
 def next_open(sec: dict) -> list:
-    """Các bước chưa xong trong "Việc tiếp theo" của §0 đã đọc bằng parse_section0."""
+    """Các bước chưa xong trong "Việc tiếp theo" của §0 đã đọc bằng parse_section0: mục con của bước đã xong (dù
+    không đánh dấu) cũng bị bỏ. Dict không có "next_open" thì lọc danh sách phẳng."""
+    if "next_open" in sec:
+        return sec["next_open"]
     return [step for step in sec.get("next") or [] if not step_done(step)]
 
 

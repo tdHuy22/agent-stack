@@ -86,7 +86,7 @@ def cmd_handoff(root: Path) -> int:
     body = (template.replace("{project}", root.name).replace("{date}", today())
             .replace("{done}", f.get("done") or "(chưa ghi)")
             .replace("{in_progress}", f.get("in_progress") or "(chưa ghi)")
-            .replace("{next}", bullet_list(sec["next"]))
+            .replace("{next}", bullet_list(A.next_open(sec)))
             .replace("{decisions}", f.get("decisions") or "không có")
             .replace("{checks}", f.get("checks") or A.baseline_anywhere(text) or "(chưa ghi)")
             .replace("{after}", "; ".join(sec["after_interrupt"]) or "chạy `git status`, chạy mốc kiểm tra")

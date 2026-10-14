@@ -369,7 +369,7 @@ def tidy_titles(items: list, cap: int) -> list:
 
 def plan_items(data: dict):
     """(còn mở, đã xong, số mục §0) của file kế hoạch mà collect() đã đọc.
-    Còn mở: ô chưa tick, mục Đang dở, bước chưa gạch trong Việc tiếp theo.
+    Còn mở: ô chưa tick, mục Đang dở, bước chưa xong trong Việc tiếp theo (bỏ mục con của bước đã xong).
     Đã xong: ô đã tick, mục Xong của §0, bước đã gạch (~~...~~) hay đánh ✅."""
     text = ""
     if data.get("plan"):
@@ -387,7 +387,7 @@ def plan_items(data: dict):
     wip = [wip] if A.has_value(wip) else []
     steps = [step_title(s) for s in sec.get("next") or []]
     s0_done = section0_done(text)
-    still_open = boxes[False] + wip + [t for t, done in steps if not done]
+    still_open = boxes[False] + wip + A.next_open(sec)
     finished = boxes[True] + s0_done + [t for t, done in steps if done]
     counts = {"done": len(s0_done), "in_progress": len(wip), "next": len(steps)}
     return tidy_titles(still_open, MAX_OPEN), tidy_titles(finished, MAX_DONE), counts

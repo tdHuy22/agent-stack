@@ -49,3 +49,15 @@ class StateCli(TempDirTestCase):
         self.assertEqual(len(sec["next"]), 3)
         run_script(STATE, "handoff", "--project", str(self.tmp))
         self.assertTrue((self.tmp / ".agent" / "HANDOFF.prev.md").exists())
+
+    def test_handoff_keeps_only_open_steps(self):
+        # Bước ✅ và mục con của nó không sang HANDOFF: HANDOFF mới hơn PLAN nên hook đọc nó thay PLAN.
+        self.write("PLAN.md", "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Việc tiếp theo:**\n"
+                              "  1. **Bước 3:** ✅ tài liệu thiết kế\n     - chương threat model;\n"
+                              "  2. Viết lại thiết kế đánh giá\n")
+        out = run_script(STATE, "handoff", "--project", str(self.tmp))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        handoff = (self.tmp / ".agent" / "HANDOFF.md").read_text()
+        self.assertNotIn("chương threat model", handoff)
+        self.assertNotIn("Bước 3", handoff)
+        self.assertIn("tiếp theo → Viết lại thiết kế đánh giá", A.brief(self.tmp)["user"])

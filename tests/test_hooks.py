@@ -740,7 +740,8 @@ class HookTests(TempDirTestCase):
         self.assertIn("1) Mở phiên mới và kiểm tra dòng trạng thái.\n2) Chọn việc từ rà soát nguồn chính thức.", ctx)
         self.assertNotIn("/login", ctx)
         # Bước đánh ✅ (kể cả sau nhãn ngắn) cũng là đã xong; nhãn có "việc tiếp theo" trong ngoặc không phải bước.
-        checked = PLAN_STRUCK.replace("  1. ~~Chạy `claude /login`~~", "  0. ✅ Chạy `claude /login`\n  1. **Bước 1:** ✅ đăng nhập lại")
+        checked = PLAN_STRUCK.replace("  1. ~~Chạy `claude /login`~~", "  0. ✅ Chạy `claude /login`\n  1. **Bước 1:** ✅ đăng nhập lại\n"
+                                       "     - mục con của bước đã xong")
         checked = checked.replace("- **Việc tiếp theo, theo thứ tự:**",
                                   "- **Việc của user (không chặn việc tiếp theo):**\n  - Push lên GitHub\n"
                                   "- **Việc tiếp theo, theo thứ tự:**")
@@ -749,6 +750,7 @@ class HookTests(TempDirTestCase):
         self.assertIn("1) Mở phiên mới và kiểm tra dòng trạng thái.\n2) Chọn việc từ rà soát nguồn chính thức.", ctx)
         self.assertNotIn("/login", ctx)
         self.assertNotIn("Push lên GitHub", ctx)
+        self.assertNotIn("mục con của bước đã xong", ctx)
         self.assertIn("tiếp theo → Mở phiên mới", A.brief(self.project)["user"])  # dòng 📍 lúc mở phiên
 
     def test_subagent_start_finds_plan_from_a_subdirectory_and_from_dot_agent(self):

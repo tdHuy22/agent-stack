@@ -41,7 +41,6 @@ LEAF_WIDTH = 90  # độ dài tối đa chữ của một lá ở cây chữ và
 WIDGET_WIDTH = 600  # độ dài tối đa chữ của một lá trong widget (đủ chữ; --pick in toàn bộ)
 TITLE_WIDTH = 100  # độ dài tối đa tên mốc
 MAX_LEAVES = 6  # số lá hiện cho mỗi mốc khi thu gọn, phần còn lại ẩn sau "Xem đủ"
-CLAMP_MIN = 40  # lá ngắn hơn chừng này chắc chắn vừa hai dòng: mốc toàn lá ngắn không cần nút "Xem đủ chữ"
 BOX_RE = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
 TAG_RE = re.compile(r"(?<![\w@])@(ban|cho|usd)\b", re.I)
 TAG_LABEL = {"ban": "cần bạn", "cho": "chờ bên ngoài", "usd": "tốn tiền"}
@@ -362,13 +361,14 @@ WIDGET_STYLE = """<style>
 .pt [hidden]{display:none!important}
 </style>"""
 # Bấm sau khi widget hiện xong: lá, "Làm cả mốc", "Xem đủ"/"Thu gọn", "Làm các việc đã chọn". Câu gửi vào chat ghép
-# từ PROMPTS; chữ lá cắt còn LEAF_WIDTH như cây chữ (mã lá mới là thứ Claude dùng, qua --pick). Gốc là cây cuối cùng
-# trong trang (cây vừa vẽ), phòng khi nhiều widget chung một trang. Nút "Xem đủ chữ" (data-c) chỉ hiện khi có chữ
-# thật sự bị kẹp, đo lại khi đổi cỡ khung.
+# từ PROMPTS; chữ lá cắt còn LEAF_WIDTH như cây chữ (mã lá mới là thứ Claude dùng, qua --pick). Gốc là cây ngay trước
+# thẻ script này (không lấy được thì cây cuối trong trang), phòng khi nhiều widget chung một trang. Nút "Xem đủ chữ"
+# (data-c) chỉ hiện khi có chữ thật sự bị kẹp; đo lại khi khung đổi cỡ và khi font tải xong.
 WIDGET_SCRIPT = """<script>
-(function(){var P=%s,W=%d,a=document.querySelectorAll('[data-plan-tree]'),root=a[a.length-1],go=root.querySelector('.go'),err=root.querySelector('.err');
+(function(){var P=%s,W=%d,s=document.currentScript,p=s&&s.previousElementSibling,a=document.querySelectorAll('[data-plan-tree]'),root=p&&p.matches('[data-plan-tree]')?p:a[a.length-1],go=root.querySelector('.go'),err=root.querySelector('.err'),lw=-1;
 function fit(){root.querySelectorAll('.more[data-c]').forEach(function(b){var ms=b.closest('.ms');b.hidden=!ms.classList.contains('open')&&!Array.from(ms.querySelectorAll('.tx')).some(function(t){return t.scrollHeight>t.clientHeight+1;});});}
-fit();window.addEventListener('resize',fit);
+fit();if(window.ResizeObserver)new ResizeObserver(function(){if(root.clientWidth!==lw){lw=root.clientWidth;fit();}}).observe(root);else window.addEventListener('resize',fit);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);
 function fill(t,o){return t.replace(/\\{(\\w+)\\}/g,function(_,k){return o[k]==null?'':o[k];});}
 function clip(t){t=t.trim();return t.length<=W?t:t.slice(0,W-1).trimEnd()+'\\u2026';}
 function info(r,ind){var ms=r.closest('.ms');return {id:r.querySelector('.sm').textContent,text:clip(r.querySelector('.tx').textContent),ms:ms.dataset.t,mid:ms.dataset.id,tags:Array.from(r.querySelectorAll('.tg')).map(function(x){return x.textContent;}).join(', '),indent:ind?'  '.repeat(+(r.dataset.d||0)):''};}
@@ -416,7 +416,7 @@ def render_widget(tree: dict) -> str:
         if m["hidden"]:
             label = f"Xem đủ (+{m['hidden']} lá)"
             head += f'<button class="more" data-l="{e(label)}" aria-expanded="false">{e(label)}</button>'
-        elif any(len(leaf["full"]) > CLAMP_MIN for leaf in m["leaves"]):  # JS hiện nút nếu chữ bị kẹp thật
+        else:  # JS hiện nút nếu chữ bị kẹp thật (tùy cỡ khung, nên không đoán theo độ dài chữ)
             head += '<button class="more" data-c data-l="Xem đủ chữ" aria-expanded="false" hidden>Xem đủ chữ</button>'
         out.append(head + "</div>")
         for i, leaf in enumerate(m["all_leaves"]):
