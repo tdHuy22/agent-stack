@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import subprocess
 import sys
 import time
+import unittest
 from datetime import datetime, timezone
 
 from tests._util import PLUGIN, TempDirTestCase
@@ -118,27 +121,50 @@ class PlanTree(TempDirTestCase):
 
     def test_widget_has_checkboxes_and_list_button(self):
         out = plan_tree.render_widget(self.tree)
-        self.assertEqual(out.count('class="pick"'), sum(len(m["leaves"]) for m in self.tree["milestones"]))
-        self.assertIn('onclick="ptGo()"', out)
-        self.assertIn("xs.join('\\n')", out)
+        every = sum(len(m["all_leaves"]) for m in self.tree["milestones"])
+        self.assertEqual(out.count('type="checkbox"'), every)  # mọi lá đều có trong widget, kể cả lá đang ẩn
+        self.assertIn('<button class="go">', out)
+        self.assertIn("a[a.length-1]", out)  # gốc là cây vừa vẽ, phòng nhiều widget chung một trang
         self.assertIn("Tick ít nhất một việc", out)  # bấm khi chưa chọn: báo lỗi, không gửi
         self.assertNotIn("<img", out)
         self.assertIn('<div class="pt" data-plan-tree>', out)  # hook Stop nhận ra cây qua dấu này
+        self.assertNotIn("gõ ", out)  # không bảo người dùng gõ vào chat để xem thêm
 
     def test_leaf_cap(self):
         tree = plan_tree.build(self.tmp, max_leaves=2)
         g1 = tree["milestones"][2]
         self.assertEqual((len(g1["leaves"]), g1["hidden"]), (2, 3))
-        self.assertIn("(+3 lá nữa", plan_tree.render_text(tree))
+        self.assertIn('(+3 lá nữa: gõ "xem 2" để xem đủ)', plan_tree.render_text(tree))
+        out = plan_tree.render_widget(tree)
+        self.assertEqual(out.count('<div class="r x"'), 3)  # lá thừa vẫn có, ẩn tới khi bấm "Xem đủ"
+        self.assertIn('<button class="more" data-l="Xem đủ (+3 lá)"', out)
+
+    def test_widget_keeps_full_text(self):
+        long = "Viết phần thiết kế " + "rất dài " * 40
+        self.write("PLAN.md", PLAN.replace("- [ ] Viết phần thiết kế\n", f"- [ ] {long}\n"))
+        tree = plan_tree.build(self.tmp)
+        out = plan_tree.render_widget(tree)
+        self.assertIn(A.strip_md(long), out)  # widget có đủ chữ, cây chữ mới cắt
+        self.assertIn('<button class="more" data-c data-l="Xem đủ chữ" aria-expanded="false" hidden>', out)
+        self.assertNotIn(A.strip_md(long), plan_tree.render_text(tree))
 
     def test_widget_escapes_plan_text(self):
         out = plan_tree.render_widget(self.tree)
         self.assertNotIn("<img", out)
         self.assertEqual(out.count("</script>"), 1)  # chỉ thẻ script của widget, ở cuối
         self.assertTrue(out.rstrip().endswith("</script>"))
-        self.assertIn("sendPrompt(&quot;Làm việc [2.1]", out)
+        self.assertIn("&lt;img src=x", out)
+        self.assertIn('"one": "Làm việc [{id}] trong mốc \\"{ms}\\": {text}"', out)  # mẫu câu nhúng một lần
         self.assertIn("Làm cả mốc (2/5 Claude tự làm)", out)
-        self.assertNotIn("Làm cả mốc [Q]", out)  # quyết định không có nút làm cả mốc
+        q = out[out.index('data-id="Q"'):]
+        self.assertNotIn('class="all"', q)  # quyết định không có nút làm cả mốc
+
+    @unittest.skipUnless(shutil.which("node"), "cần node để kiểm cú pháp JS")
+    def test_widget_script_is_valid_js(self):
+        script = re.search(r"<script>(.*)</script>", plan_tree.render_widget(self.tree), re.S).group(1)
+        path = self.write("w.js", script)
+        out = subprocess.run(["node", "--check", str(path)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 0, out.stderr)
 
     def test_cli(self):
         def run(*args):
@@ -150,6 +176,56 @@ class PlanTree(TempDirTestCase):
         self.assertNotIn("all_leaves", data["milestones"][0])
         self.assertEqual(run("--pick", "8").returncode, 1)
         self.assertIn("Lá [T.1]", run("--pick", "T.1").stdout)
+
+    def test_nested_steps_and_done_marks(self):
+        plan = PLAN.replace("""  1. ~~Dọn thư mục cũ~~
+  2. Viết test cho parser
+""", """  0. ✅ *(01/10)* Chốt phương án A
+  1. **Bước 3:** ✅ *(viết 01/10)* tài liệu thiết kế
+     - chương threat model;
+  2. Viết test cho parser
+  3. **G1:** làm theo thứ tự:
+     - (a) viết lại thiết kế đánh giá
+       - *(12/10)* thêm hàng D21
+       - ✅ *(08/10)* đã gộp D11
+     - (b) chạy cổng 0 USD
+     - (c) user đọc bộ lõi
+""").replace("- **Quyết định còn treo:**", "- **Việc của user (không chặn việc tiếp theo):**\n  - Push lên GitHub\n"
+             "- **Quyết định còn treo:**")
+        self.write("PLAN.md", plan)
+        tree = plan_tree.build(self.tmp)
+        nxt = next(m for m in tree["milestones"] if m["id"] == "T")
+        rows = [(leaf["id"], leaf["depth"], leaf["text"]) for leaf in nxt["all_leaves"]]
+        self.assertEqual([r[:2] for r in rows], [("T.1", 0), ("T.2", 0), ("T.2.1", 1), ("T.2.2", 1), ("T.2.3", 1),
+                                                 ("T.3", 0)])  # bước ✅ bị bỏ cùng mục con; nhãn trong ngoặc không lẫn
+        self.assertEqual(rows[2][2], "(a) viết lại thiết kế đánh giá · (12/10) thêm hàng D21")  # cấp 3 gộp vào cấp 2
+        tags = {leaf["id"]: leaf["tags"] for leaf in nxt["all_leaves"]}
+        self.assertEqual((tags["T.2.2"], tags["T.2.3"]), ([], ["ban"]))  # "0 USD" không tốn tiền; "user đọc" cần bạn
+        self.assertEqual(plan_tree.whole_note(nxt), "3/5")  # nhóm T.2 không tính là việc
+        self.assertIn("   [T.2.1]", plan_tree.render_text(tree))
+        group = plan_tree.render_pick(tree, "xem T.2")
+        self.assertIn("Việc con, làm lần lượt:", group)
+        self.assertEqual(group.count("\n- [T.2."), 3)
+        whole = plan_tree.pick_prompt(tree, "T").splitlines()
+        self.assertTrue(whole[3].startswith("  - [T.2.1]"))  # việc con thụt vào trong câu làm cả mốc
+        self.assertEqual(A.plan_done_count(self.tmp)["count"], 3 + 3)  # 3 ô tick + 3 bước ✅, kể cả bước con
+
+    def test_done_marks_and_guesses_stay_narrow(self):
+        for text in ("✅ (01/10) Chốt phương án", "**Bước 3:** ✅ *(viết 01/10)* tài liệu", "~~Dọn thư mục~~", "[x] Xong"):
+            self.assertTrue(A.step_done(text), text)
+        for text in ("Viết test, xong thì đánh ✅", "Một nhãn rất dài hơn bốn mươi ký tự cho bước này: ✅ rồi",
+                     "Kiểm ~~ trong chuỗi"):
+            self.assertFalse(A.step_done(text), text)
+        self.assertEqual(A.next_open({"next": ["~~a~~", "✅ b", "c"]}), ["c"])
+        self.assertEqual(plan_tree.leaf_tags("Viết README để người dùng đọc được")[1], [])
+        self.assertEqual(plan_tree.leaf_tags("(c) user đọc bộ lõi")[1], ["ban"])
+        self.assertEqual(plan_tree.leaf_tags("User chạy `./package.sh`")[1], ["ban"])
+
+    def test_pick_without_code(self):
+        out = subprocess.run([sys.executable, str(SCRIPT), "--project", str(self.tmp), "--pick", "xem"],
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("Thiếu mã", out.stdout)
 
     def test_no_plan(self):
         (self.tmp / "PLAN.md").unlink()

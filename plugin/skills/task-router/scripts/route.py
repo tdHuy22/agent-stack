@@ -273,8 +273,9 @@ def next_task(root) -> str:
     if not found:
         return ""
     sec = found[2]
-    if sec.get("next"):
-        return sec["next"][0]
+    steps = A.next_open(sec)
+    if steps:
+        return steps[0]
     in_progress = (sec.get("fields") or {}).get("in_progress")
     return in_progress if A.has_value(in_progress) else ""
 

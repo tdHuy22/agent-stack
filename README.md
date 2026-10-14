@@ -219,7 +219,7 @@ phải có `agent-stack@agent-stack-local` đang bật. Thư mục không phải
 
 Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
 
-1. **Mở project.** Đọc dòng 📍. Quên đang làm gì thì hỏi "làm gì tiếp?": `tien-do` trả tối đa 3 việc kèm lý do và cây kế hoạch. Gõ mã như `T.2` hay `13` để chọn việc trên cây.
+1. **Mở project.** Đọc dòng 📍. Quên đang làm gì thì hỏi "làm gì tiếp?": `tien-do` trả tối đa 3 việc kèm lý do và cây kế hoạch. Gõ mã như `T.2` hay `13` để chọn việc trên cây, `xem 13` để chỉ xem đủ mốc đó; trong widget, nút "Xem đủ" mở mốc dài ngay tại chỗ.
 2. **Trước việc lớn.** "Có sẵn thư viện nào làm X chưa?": `reuse-best` tìm rồi ra quyết định có nguồn.
 3. **Chức năng đụng đăng nhập, upload, webhook, API ngoài.** Hook nhắc chạy `mo-hinh-de-doa` trước lần sửa mã nguồn đầu tiên.
 4. **Trong lúc làm.** Để ý dòng cuối mỗi câu trả lời, gợi ý cho *việc kế tiếp*:

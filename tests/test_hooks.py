@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
-from tests.test_agentstack_lib import PLAN, secret_samples
+from tests.test_agentstack_lib import PLAN, A, secret_samples
 
 HOOKS = PLUGIN / "hooks"
 PYTHONS = ["python3"]  # Python mà app dùng để gọi hook (3.11 của pyenv); không kiểm 3.9 của hệ thống
@@ -739,6 +739,17 @@ class HookTests(TempDirTestCase):
         ctx = self.start_subagent("struck")
         self.assertIn("1) Mở phiên mới và kiểm tra dòng trạng thái.\n2) Chọn việc từ rà soát nguồn chính thức.", ctx)
         self.assertNotIn("/login", ctx)
+        # Bước đánh ✅ (kể cả sau nhãn ngắn) cũng là đã xong; nhãn có "việc tiếp theo" trong ngoặc không phải bước.
+        checked = PLAN_STRUCK.replace("  1. ~~Chạy `claude /login`~~", "  0. ✅ Chạy `claude /login`\n  1. **Bước 1:** ✅ đăng nhập lại")
+        checked = checked.replace("- **Việc tiếp theo, theo thứ tự:**",
+                                  "- **Việc của user (không chặn việc tiếp theo):**\n  - Push lên GitHub\n"
+                                  "- **Việc tiếp theo, theo thứ tự:**")
+        (self.project / "PLAN.md").write_text(checked, encoding="utf-8")
+        ctx = self.start_subagent("checked")
+        self.assertIn("1) Mở phiên mới và kiểm tra dòng trạng thái.\n2) Chọn việc từ rà soát nguồn chính thức.", ctx)
+        self.assertNotIn("/login", ctx)
+        self.assertNotIn("Push lên GitHub", ctx)
+        self.assertIn("tiếp theo → Mở phiên mới", A.brief(self.project)["user"])  # dòng 📍 lúc mở phiên
 
     def test_subagent_start_finds_plan_from_a_subdirectory_and_from_dot_agent(self):
         self.with_plan()

@@ -3,17 +3,20 @@
 
 Lệnh:
   plan_tree.py [--project DIR] [--text | --json | --widget] [--leaves N]
-  plan_tree.py [--project DIR] --pick MÃ        (MÃ: "T" là cả mốc T, "T.3" là lá thứ 3 của mốc T)
+  plan_tree.py [--project DIR] --pick MÃ        (MÃ: "T" là cả mốc T, "T.3" là lá thứ 3 của mốc T, "T.3.1" là
+                                                 việc con thứ nhất của lá đó)
 
 Mã mốc: C (chặn đường), D (đang dở), T (việc tiếp theo), Q (quyết định còn treo), và số thứ tự của tiêu đề có ô ở §1
 (ví dụ 13 là tiêu đề thứ 13, kể cả các mốc đã xong). Mã không dời khi nhóm khác hiện ra hay biến mất.
 
 Nguồn, theo thứ tự hiện:
   1. Chặn đường: kiểm tra đang trượt (biên nhận của session-keeper/scripts/receipt.py).
-  2. Đang dở, Việc tiếp theo (bước chưa gạch ~~...~~): lấy từ §0.
+  2. Đang dở, Việc tiếp theo: lấy từ §0. Bước đã xong (gạch ~~...~~ hay đánh ✅) bị bỏ cùng các mục con của nó;
+     mục con của bước còn lại thành việc con.
   3. Mỗi tiêu đề ở §1 trở đi còn ô `- [ ]`: một mốc, lá là các ô chưa tick.
   4. Quyết định còn treo của §0.
-Mốc đã tick hết thì gộp thành một dòng "N mốc xong".
+Mốc đã tick hết thì gộp thành một dòng "N mốc xong". Widget giữ đủ chữ và đủ lá; mốc dài thì thu gọn, bấm "Xem đủ"
+để mở ngay trong widget, không phải gõ vào chat.
 
 Nhãn trên lá: `@ban` (cần người dùng), `@cho` (chờ bên ngoài), `@usd` (tốn tiền). Viết nhãn trong file kế hoạch thì
 chắc chắn nhất; không có nhãn thì đoán từ chữ ("Bạn làm:", "cần bạn", "Khi … gộp", số USD). Lá không nhãn là việc
@@ -34,16 +37,20 @@ HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parents[3] / "lib"))
 import agentstack as A  # noqa: E402
 
-LEAF_WIDTH = 90  # độ dài tối đa chữ của một lá khi hiện
-TITLE_WIDTH = 60  # độ dài tối đa tên mốc
-MAX_LEAVES = 6  # số lá hiện cho mỗi mốc, phần còn lại ghi "+N nữa"
+LEAF_WIDTH = 90  # độ dài tối đa chữ của một lá ở cây chữ và câu gửi vào chat
+WIDGET_WIDTH = 600  # độ dài tối đa chữ của một lá trong widget (đủ chữ; --pick in toàn bộ)
+TITLE_WIDTH = 100  # độ dài tối đa tên mốc
+MAX_LEAVES = 6  # số lá hiện cho mỗi mốc khi thu gọn, phần còn lại ẩn sau "Xem đủ"
+CLAMP_MIN = 40  # lá ngắn hơn chừng này chắc chắn vừa hai dòng: mốc toàn lá ngắn không cần nút "Xem đủ chữ"
 BOX_RE = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
 TAG_RE = re.compile(r"(?<![\w@])@(ban|cho|usd)\b", re.I)
 TAG_LABEL = {"ban": "cần bạn", "cho": "chờ bên ngoài", "usd": "tốn tiền"}
 # Đoán nhãn khi file kế hoạch không ghi; so trên chữ thường còn dấu, để "căn bản" không khớp "cần bạn".
 GUESS = (
-    ("usd", re.compile(r"\d\s*usd\b|\busd\s*\d|\$\d+[.,]\d|\d\s*\$")),
-    ("ban", re.compile(r"\bbạn (làm|duyệt|quyết|chạy|muốn|đồng ý)\b|\bcần bạn\b|\bt[uù]y (bạn|chọn)\b|\btuỳ (bạn|chọn)\b")),
+    ("usd", re.compile(r"(?<![\d.,])(?!0+(?:[.,]0+)?\s*usd)\d+(?:[.,]\d+)?\s*usd\b|\busd\s*[1-9]|\$\d+[.,]\d"
+                       r"|[1-9]\s*\$")),  # "0 USD" (cổng miễn phí) không tính
+    ("ban", re.compile(r"\bbạn (làm|duyệt|quyết|chạy|muốn|đồng ý)\b|\bcần bạn\b|\bt[uù]y (bạn|chọn)\b|\btuỳ (bạn|chọn)\b"
+                       r"|^(\(\w\)\s*)?(user|người dùng) (làm|duyệt|quyết|chạy|đọc|chốt)\b")),  # "user …" chỉ khi đứng đầu
     ("cho", re.compile(r"^(khi|nếu)\s|^chờ\s")),
 )
 # Mã mốc: nhóm lấy từ §0 và biên nhận có chữ cái riêng; mốc ở §1 lấy số thứ tự của tiêu đề có ô (kể cả mốc đã
@@ -123,6 +130,40 @@ def failing_checks(root: Path) -> list:
     return out
 
 
+def open_steps(nodes) -> list:
+    """Bỏ các bước đã xong (cùng mục con của chúng) khỏi cây mục của §0."""
+    return [{"text": n["text"], "kids": open_steps(n["kids"])} for n in nodes
+            if A.strip_md(n["text"]) and not A.step_done(n["text"])]
+
+
+def flat_text(node) -> str:
+    """Chữ của một mục cùng mọi mục con của nó, nối bằng " · "."""
+    return " · ".join([node["text"]] + [flat_text(kid) for kid in node["kids"]])
+
+
+def make_leaves(mid: str, nodes, common=()) -> list:
+    """Lá theo thứ tự đọc, việc con nằm ngay sau lá cha: mã "T.1", con "T.1.1"; con thừa nhãn của cha. Chỉ hai cấp:
+    mục lồng sâu hơn (thường là ghi chú bổ sung) gộp vào chữ của việc con chứa nó."""
+    out = []
+
+    def walk(items, prefix, depth, inherited):
+        for i, node in enumerate(items, 1):
+            if isinstance(node, str):
+                raw, kids = node, []
+            elif depth >= 1:
+                raw, kids = flat_text(node), []
+            else:
+                raw, kids = node["text"], node["kids"]
+            clean, tags = leaf_tags(raw, inherited)
+            leaf = {"id": f"{prefix}.{i}", "text": A.clip(clean, LEAF_WIDTH), "full": A.strip_md(clean),
+                    "tags": tags, "depth": depth, "group": bool(kids)}
+            out.append(leaf)
+            walk(kids, leaf["id"], depth + 1, tags)
+
+    walk(nodes, mid, 0, tuple(common))
+    return out
+
+
 def build(root: Path, max_leaves: int = MAX_LEAVES) -> dict:
     """Cây của project dưới dạng dict; {} nếu không có file kế hoạch."""
     found = A.read_plan(root)
@@ -130,7 +171,7 @@ def build(root: Path, max_leaves: int = MAX_LEAVES) -> dict:
         return {}
     path, text, sec = found
     fields = sec.get("fields") or {}
-    groups = []  # (kind, tên mốc, [chữ lá], nhãn chung)
+    groups = []  # (kind, tên mốc, [mục: chữ hay {"text", "kids"}], nhãn chung, (số thứ tự, mốc §1) hay None)
 
     blocked = failing_checks(root)
     if blocked:
@@ -138,7 +179,7 @@ def build(root: Path, max_leaves: int = MAX_LEAVES) -> dict:
     wip = fields.get("in_progress")
     if A.has_value(wip):
         groups.append(("wip", "Đang dở", [wip], (), None))
-    steps = [s for s in sec.get("next") or [] if not s.strip().startswith("~~")]
+    steps = open_steps(A.section0_outline(text, "next"))
     if steps:
         intro = A.fold(next_label(text) + " " + (fields.get("next_intro") or ""))
         common = ("ban",) if re.search(r"\bcan ban\b", intro) else ()
@@ -152,13 +193,9 @@ def build(root: Path, max_leaves: int = MAX_LEAVES) -> dict:
         groups.append(("decisions", "Quyết định còn treo", decisions, ("ban",), None))
 
     milestones = []
-    for kind, title, raw_leaves, common, numbered in groups:
+    for kind, title, nodes, common, numbered in groups:
         mid = str(numbered[0]) if numbered else KIND_PREFIX[kind]
-        leaves = []
-        for i, raw in enumerate(raw_leaves, 1):
-            clean, tags = leaf_tags(raw, common)
-            leaves.append({"id": f"{mid}.{i}", "text": A.clip(clean, LEAF_WIDTH), "full": A.strip_md(clean),
-                           "tags": tags})
+        leaves = make_leaves(mid, nodes, common)
         phase = numbered[1] if numbered else None
         milestones.append({"id": mid, "kind": kind, "title": title, "leaves": leaves[:max_leaves],
                            "hidden": max(0, len(leaves) - max_leaves), "all_leaves": leaves,
@@ -179,6 +216,19 @@ def tag_text(tags) -> str:
     return ", ".join(TAG_LABEL[t] for t in tags) if tags else "Claude làm"
 
 
+def tasks(m: dict) -> list:
+    """Việc thật của một mốc: lá không có việc con (lá có việc con chỉ là nhóm)."""
+    return [leaf for leaf in m["all_leaves"] if not leaf["group"]]
+
+
+def whole_note(m: dict) -> str:
+    """"Claude tự làm a/b" của nút làm cả mốc; rỗng khi mốc không có nút đó."""
+    work = tasks(m)
+    if len(m["all_leaves"]) < 2 or m["kind"] == "decisions":
+        return ""
+    return f"{sum(1 for leaf in work if not leaf['tags'])}/{len(work)}"
+
+
 def render_text(tree: dict) -> str:
     if not tree:
         return "Không có file kế hoạch (PLAN.md, .agent/PLAN.md…): chưa có cây để chọn."
@@ -189,12 +239,12 @@ def render_text(tree: dict) -> str:
         span = dp["first"] if dp["count"] == 1 else f"{short_title(dp['first'])} → {short_title(dp['last'])}"
         rows.append((f"✓ {dp['count']} mốc xong: {span}", []))
     for m in tree["milestones"]:
-        claude = sum(1 for leaf in m["all_leaves"] if not leaf["tags"])
-        extra = (f"  [làm cả mốc: gõ {m['id']}; Claude tự làm {claude}/{len(m['all_leaves'])}]"
-                 if len(m["all_leaves"]) > 1 and m["kind"] != "decisions" else "")
-        kids = [f"[{leaf['id']}] {leaf['text']}  · {tag_text(leaf['tags'])}" for leaf in m["leaves"]]
+        note = whole_note(m)
+        extra = f"  [làm cả mốc: gõ {m['id']}; Claude tự làm {note}]" if note else ""
+        kids = [f"{'   ' * leaf['depth']}[{leaf['id']}] {leaf['text']}  · {tag_text(leaf['tags'])}"
+                for leaf in m["leaves"]]
         if m["hidden"]:
-            kids.append(f"(+{m['hidden']} lá nữa: gõ {m['id']} để xem)")
+            kids.append(f"(+{m['hidden']} lá nữa: gõ \"xem {m['id']}\" để xem đủ)")
         rows.append((f"{KIND_ICON[m['kind']]} [{m['id']}] {m['title']}{extra}", kids))
     for i, (head, kids) in enumerate(rows):
         last = i == len(rows) - 1
@@ -204,21 +254,34 @@ def render_text(tree: dict) -> str:
     first = tree["milestones"][0] if tree["milestones"] else None
     if first:
         lines.append(f"Chọn: gõ mã lá (ví dụ {first['all_leaves'][0]['id']}) để làm một việc, mã mốc (ví dụ "
-                     f"{first['id']}) để làm cả mốc, hoặc nhiều mã cách nhau bằng dấu phẩy để làm lần lượt.")
+                     f"{first['id']}) để làm cả mốc, nhiều mã cách nhau bằng dấu phẩy để làm lần lượt, hoặc "
+                     f"\"xem <mã>\" để xem đủ chữ mà không làm.")
     return "\n".join(lines)
 
 
-def leaf_line(m: dict, leaf: dict) -> str:
-    """Một dòng của danh sách việc: mã, chữ đang hiện, mốc và nhãn."""
-    return f"[{leaf['id']}] {leaf['text']} (mốc \"{m['title']}\"; {tag_text(leaf['tags'])})"
+# Mẫu câu gửi vào chat. Widget ghép câu bằng JS từ đúng các mẫu này (nhúng dạng JSON), nên chữ của mỗi lá chỉ có
+# một lần trong HTML; pick_prompt dùng cùng mẫu để test và để đối chiếu.
+PROMPTS = {
+    "one": "Làm việc [{id}] trong mốc \"{ms}\": {text}",
+    "whole": "Làm cả mốc [{mid}] \"{ms}\", lần lượt, dừng ở việc có nhãn:",
+    "many": "Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:",
+    "line": "{indent}- [{id}] {text} (mốc \"{ms}\"; {tags})",
+    "ms": "- cả mốc [{mid}] \"{ms}\"",
+}
+
+
+def leaf_line(m: dict, leaf: dict, indent: bool = False) -> str:
+    """Một dòng của danh sách việc: mã, chữ đang hiện, mốc và nhãn; `indent` thụt việc con theo cấp."""
+    return PROMPTS["line"].format(indent="  " * leaf["depth"] if indent else "", id=leaf["id"], text=leaf["text"],
+                                  ms=m["title"], tags=tag_text(leaf["tags"]))
 
 
 def split_codes(codes) -> list:
-    """Danh sách mã từ chuỗi "T.1, 14.1 Q" hay từ list; giữ thứ tự, bỏ trùng."""
+    """Danh sách mã từ chuỗi "T.1, 14.1 Q" hay từ list; giữ thứ tự, bỏ trùng, bỏ chữ "xem" đứng trước."""
     if isinstance(codes, str):
         codes = [codes]
     parts = [c for raw in codes or [] for c in re.split(r"[,;\s]+", raw or "") if c]
-    return list(dict.fromkeys(p.strip("[]").upper() for p in parts))
+    return [p for p in dict.fromkeys(p.strip("[]").upper() for p in parts) if p and p != "XEM"]
 
 
 def pick_prompt(tree: dict, codes) -> str:
@@ -231,13 +294,13 @@ def pick_prompt(tree: dict, codes) -> str:
     if len(found) == 1:
         _, m, leaf = found[0]
         if leaf:
-            return f"Làm việc [{leaf['id']}] trong mốc \"{m['title']}\": {leaf['text']}"
-        lines = [f"Làm cả mốc [{m['id']}] \"{m['title']}\", lần lượt, dừng ở việc có nhãn:"]
-        lines += [f"- {leaf_line(m, x)}" for x in m["all_leaves"]]
+            return PROMPTS["one"].format(id=leaf["id"], ms=m["title"], text=leaf["text"])
+        lines = [PROMPTS["whole"].format(mid=m["id"], ms=m["title"])]
+        lines += [leaf_line(m, x, indent=True) for x in m["all_leaves"]]
         return "\n".join(lines)
-    lines = ["Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:"]
+    lines = [PROMPTS["many"]]
     for _, m, leaf in found:
-        lines.append(f"- {leaf_line(m, leaf)}" if leaf else f"- cả mốc [{m['id']}] \"{m['title']}\"")
+        lines.append(leaf_line(m, leaf) if leaf else PROMPTS["ms"].format(mid=m["id"], ms=m["title"]))
     return "\n".join(lines)
 
 
@@ -263,17 +326,18 @@ def render_pick(tree: dict, codes) -> str:
     if not m:
         return f"Không có mã {code!r} trong cây hiện tại (cây có thể đã đổi): chạy lại plan_tree.py để xem."
     if leaf:
-        return "\n".join([f"Lá [{leaf['id']}] thuộc mốc [{m['id']}] {m['title']}", f"Việc: {leaf['full']}",
-                          f"Nhãn: {tag_text(leaf['tags'])}"])
+        out = [f"Lá [{leaf['id']}] thuộc mốc [{m['id']}] {m['title']}", f"Việc: {leaf['full']}",
+               f"Nhãn: {tag_text(leaf['tags'])}"]
+        kids = [x for x in m["all_leaves"] if x["id"].startswith(leaf["id"] + ".")]
+        if kids:
+            out.append("Việc con, làm lần lượt:")
+            out += [f"{'  ' * (x['depth'] - leaf['depth'] - 1)}- [{x['id']}] {tag_text(x['tags'])}: {x['full']}"
+                    for x in kids]
+        return "\n".join(out)
     out = [f"Mốc [{m['id']}] {m['title']}: làm lần lượt, dừng ở lá có nhãn."]
     for leaf in m["all_leaves"]:
-        out.append(f"- [{leaf['id']}] {tag_text(leaf['tags'])}: {leaf['full']}")
+        out.append(f"{'  ' * leaf['depth']}- [{leaf['id']}] {tag_text(leaf['tags'])}: {leaf['full']}")
     return "\n".join(out)
-
-
-def js_arg(text: str) -> str:
-    """Chuỗi JS an toàn để đặt trong thuộc tính onclick (đã thoát cả JSON lẫn HTML)."""
-    return html.escape(json.dumps(text, ensure_ascii=False), quote=True)
 
 
 WIDGET_STYLE = """<style>
@@ -283,29 +347,52 @@ WIDGET_STYLE = """<style>
 .pt .ms.decisions{border-left-style:dashed}
 .pt .mh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pt .mh b{font-weight:500}
-.pt .lf{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;text-align:left;padding:4px 8px;margin:2px 0;border:0.5px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--surface-2);font:inherit;color:inherit;height:auto}
+.pt .r{display:flex;align-items:center;gap:6px}
+.pt .lf{flex:1;min-width:0;display:flex;align-items:flex-start;gap:8px;text-align:left;padding:4px 8px;margin:2px 0;border:0.5px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--surface-2);font:inherit;color:inherit;height:auto}
 .pt .lf:hover{border-color:var(--border-strong);background:var(--surface-1)}
-.pt .tg{font-size:12px;padding:1px 8px;border-radius:var(--radius)}
+.pt .tx{flex:1;min-width:0;overflow-wrap:anywhere}
+.pt .ms:not(.open) .tx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pt .ms:not(.open) .x{display:none}
+.pt .tg{font-size:12px;padding:1px 8px;border-radius:var(--radius);white-space:nowrap}
 .pt .ai{background:var(--bg-accent);color:var(--text-accent)}
 .pt .need{background:var(--bg-warning);color:var(--text-warning)}
 .pt .ok{background:var(--bg-success);color:var(--text-success)}
-.pt .sm{font-size:12px;color:var(--text-secondary)}
-.pt button.all{font-size:12px;padding:2px 10px;height:auto}
-.pt .row{display:flex;align-items:center;gap:6px}
-.pt .row .lf{flex:1;min-width:0}
+.pt .sm{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.pt .mh button{font-size:12px;padding:2px 10px;height:auto}
+.pt [hidden]{display:none!important}
 </style>"""
+# Bấm sau khi widget hiện xong: lá, "Làm cả mốc", "Xem đủ"/"Thu gọn", "Làm các việc đã chọn". Câu gửi vào chat ghép
+# từ PROMPTS; chữ lá cắt còn LEAF_WIDTH như cây chữ (mã lá mới là thứ Claude dùng, qua --pick). Gốc là cây cuối cùng
+# trong trang (cây vừa vẽ), phòng khi nhiều widget chung một trang. Nút "Xem đủ chữ" (data-c) chỉ hiện khi có chữ
+# thật sự bị kẹp, đo lại khi đổi cỡ khung.
 WIDGET_SCRIPT = """<script>
-function ptPicked(){return Array.from(document.querySelectorAll('.pt .pick:checked')).map(function(x){return '- '+x.dataset.line;});}
-function ptCount(){var n=ptPicked().length;document.getElementById('pt-go').textContent=n?'Làm '+n+' việc đã chọn ↗':'Làm các việc đã chọn ↗';document.getElementById('pt-err').textContent='';}
-function ptGo(){var xs=ptPicked();if(!xs.length){document.getElementById('pt-err').textContent='Tick ít nhất một việc trước.';return;}
-sendPrompt(xs.length===1?'Làm việc đã chọn:\\n'+xs[0]:'Làm các việc đã chọn, lần lượt, dừng ở việc có nhãn:\\n'+xs.join('\\n'));}
+(function(){var P=%s,W=%d,a=document.querySelectorAll('[data-plan-tree]'),root=a[a.length-1],go=root.querySelector('.go'),err=root.querySelector('.err');
+function fit(){root.querySelectorAll('.more[data-c]').forEach(function(b){var ms=b.closest('.ms');b.hidden=!ms.classList.contains('open')&&!Array.from(ms.querySelectorAll('.tx')).some(function(t){return t.scrollHeight>t.clientHeight+1;});});}
+fit();window.addEventListener('resize',fit);
+function fill(t,o){return t.replace(/\\{(\\w+)\\}/g,function(_,k){return o[k]==null?'':o[k];});}
+function clip(t){t=t.trim();return t.length<=W?t:t.slice(0,W-1).trimEnd()+'\\u2026';}
+function info(r,ind){var ms=r.closest('.ms');return {id:r.querySelector('.sm').textContent,text:clip(r.querySelector('.tx').textContent),ms:ms.dataset.t,mid:ms.dataset.id,tags:Array.from(r.querySelectorAll('.tg')).map(function(x){return x.textContent;}).join(', '),indent:ind?'  '.repeat(+(r.dataset.d||0)):''};}
+function picked(){return Array.from(root.querySelectorAll('.r input:checked')).map(function(x){return x.closest('.r');});}
+root.addEventListener('change',function(){var n=picked().length;go.textContent=n?'Làm '+n+' việc đã chọn \\u2197':'Làm các việc đã chọn \\u2197';err.textContent='';});
+root.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!root.contains(b))return;var ms=b.closest('.ms');
+if(b.classList.contains('lf'))sendPrompt(fill(P.one,info(b.closest('.r'))));
+else if(b.classList.contains('all'))sendPrompt([fill(P.whole,{mid:ms.dataset.id,ms:ms.dataset.t})].concat(Array.from(ms.querySelectorAll('.r')).map(function(r){return fill(P.line,info(r,true));})).join('\\n'));
+else if(b.classList.contains('more')){var o=ms.classList.toggle('open');b.textContent=o?'Thu gọn':b.dataset.l;b.setAttribute('aria-expanded',o);}
+else if(b===go){var xs=picked();if(!xs.length){err.textContent='Tick ít nhất một việc trước.';return;}
+sendPrompt(xs.length===1?fill(P.one,info(xs[0])):[P.many].concat(xs.map(function(r){return fill(P.line,info(r));})).join('\\n'));}});})();
 </script>"""
 KIND_TI = {"blocked": "ti-alert-triangle", "wip": "ti-progress", "next": "ti-arrow-right",
            "phase": "ti-git-branch", "decisions": "ti-help-circle"}
 
 
+def widget_script() -> str:
+    # PROMPTS là hằng của file này; vẫn chặn "</" để chuỗi JSON không đóng được thẻ script.
+    return WIDGET_SCRIPT % (json.dumps(PROMPTS, ensure_ascii=False).replace("</", "<\\/"), LEAF_WIDTH)
+
+
 def render_widget(tree: dict) -> str:
-    """Đoạn HTML cho công cụ show_widget: bấm lá hay nút "Làm cả mốc" gửi câu chọn vào chat (sendPrompt)."""
+    """Đoạn HTML cho công cụ show_widget. Mỗi lá có đủ chữ (tới WIDGET_WIDTH); mốc dài hiện MAX_LEAVES lá, chữ gọn
+    hai dòng, nút "Xem đủ" mở hết ngay trong widget. Bấm lá hay "Làm cả mốc" gửi câu chọn vào chat (sendPrompt)."""
     if not tree:
         return ""
     e = html.escape
@@ -318,29 +405,34 @@ def render_widget(tree: dict) -> str:
                    '<i class="ti ti-circle-check" aria-hidden="true"></i>'
                    f'<b>{e(span)}</b><span class="tg ok">{dp["count"]} mốc xong</span></div></div>')
     for m in tree["milestones"]:
-        claude = sum(1 for leaf in m["all_leaves"] if not leaf["tags"])
-        head = (f'<div class="ms {m["kind"]}"><div class="mh"><i class="ti {KIND_TI[m["kind"]]}" aria-hidden="true">'
-                f'</i><b>{e(m["title"])}</b>')
+        shown = len(m["leaves"])
+        head = (f'<div class="ms {m["kind"]}" data-id="{e(m["id"])}" data-t="{e(m["title"], quote=True)}">'
+                f'<div class="mh"><i class="ti {KIND_TI[m["kind"]]}" aria-hidden="true"></i><b>{e(m["title"])}</b>')
         if m["total"]:
             head += f'<span class="sm">{m["done"]}/{m["total"]}</span>'
-        if len(m["all_leaves"]) > 1 and m["kind"] != "decisions":
-            head += (f'<button class="all" onclick="sendPrompt({js_arg(pick_prompt(tree, m["id"]))})">'
-                     f'Làm cả mốc ({claude}/{len(m["all_leaves"])} Claude tự làm) ↗</button>')
+        note = whole_note(m)
+        if note:
+            head += f'<button class="all">Làm cả mốc ({note} Claude tự làm) ↗</button>'
+        if m["hidden"]:
+            label = f"Xem đủ (+{m['hidden']} lá)"
+            head += f'<button class="more" data-l="{e(label)}" aria-expanded="false">{e(label)}</button>'
+        elif any(len(leaf["full"]) > CLAMP_MIN for leaf in m["leaves"]):  # JS hiện nút nếu chữ bị kẹp thật
+            head += '<button class="more" data-c data-l="Xem đủ chữ" aria-expanded="false" hidden>Xem đủ chữ</button>'
         out.append(head + "</div>")
-        for leaf in m["leaves"]:
+        for i, leaf in enumerate(m["all_leaves"]):
             tags = "".join(f'<span class="tg need">{e(TAG_LABEL[t])}</span>' for t in leaf["tags"]) \
                 or '<span class="tg ai">Claude làm</span>'
-            out.append(f'<div class="row"><input type="checkbox" class="pick" aria-label="Chọn {leaf["id"]}" '
-                       f'data-line="{e(leaf_line(m, leaf), quote=True)}" onchange="ptCount()">'
-                       f'<button class="lf" onclick="sendPrompt({js_arg(pick_prompt(tree, leaf["id"]))})">'
-                       f'<span class="sm">{leaf["id"]}</span>{e(leaf["text"])}{tags}</button></div>')
-        if m["hidden"]:
-            out.append(f'<span class="sm">+{m["hidden"]} lá nữa (gõ {m["id"]} để xem)</span>')
+            cls = "r x" if i >= shown else "r"
+            depth = (f' data-d="{leaf["depth"]}" style="margin-left:{22 * leaf["depth"]}px"'
+                     if leaf["depth"] else "")
+            out.append(f'<div class="{cls}"{depth}><input type="checkbox" aria-label="Chọn {leaf["id"]}">'
+                       f'<button class="lf"><span class="sm">{leaf["id"]}</span>'
+                       f'<span class="tx">{e(A.clip(leaf["full"], WIDGET_WIDTH))}</span>{tags}</button></div>')
         out.append("</div>")
-    out.append('<div class="mh" style="margin-top:8px"><button id="pt-go" onclick="ptGo()">Làm các việc đã chọn ↗</button>'
-               '<span id="pt-err" class="sm" style="color:var(--text-danger)"></span></div>')
+    out.append('<div class="mh" style="margin-top:8px"><button class="go">Làm các việc đã chọn ↗</button>'
+               '<span class="sm err" style="color:var(--text-danger)"></span></div>')
     out.append("</div>")
-    out.append(WIDGET_SCRIPT)
+    out.append(widget_script())
     return "\n".join(out)
 
 
@@ -368,8 +460,12 @@ def main(argv=None) -> int:
     elif args.widget:
         print(render_widget(tree) or render_text(tree))
     elif args.pick:
-        print(render_pick(tree, args.pick))
-        return 0 if all(find(tree, code)[0] for code in split_codes(args.pick)) else 1
+        codes = split_codes(args.pick)
+        if not codes:
+            print("Thiếu mã: ví dụ --pick T.1 hay --pick \"T.1, 14\".")
+            return 1
+        print(render_pick(tree, codes))
+        return 0 if all(find(tree, code)[0] for code in codes) else 1
     else:
         print(render_text(tree))
     return 0

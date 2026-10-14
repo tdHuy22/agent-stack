@@ -262,8 +262,9 @@ def rank(d: dict) -> list:
                         "thay đổi chưa commit lâu dễ bị mất"))
     if A.has_value(f.get("in_progress")):
         actions.append((2, f"Làm nốt: {A.clip(f['in_progress'], 160)}", "§0 ghi đang dở"))
-    if sec.get("next"):
-        actions.append((2, A.clip(sec["next"][0], 160), "bước đầu tiên trong \"Việc tiếp theo\" của §0"))
+    steps = A.next_open(sec)
+    if steps:
+        actions.append((2, A.clip(steps[0], 160), "bước đầu tiên chưa xong trong \"Việc tiếp theo\" của §0"))
     if git.get("ahead"):
         actions.append((2, f"Push {git['ahead']} commit trên nhánh {git['branch']}", "có commit chưa push"))
     for pr in (d.get("github") or {}).get("prs", []):
@@ -276,7 +277,7 @@ def rank(d: dict) -> list:
     if d.get("todos"):
         t = d["todos"][0]
         actions.append((4, f"Xem {len(d['todos'])} TODO/FIXME mới, ví dụ {t['file']}:{t['line']}", "nợ kỹ thuật vừa phát sinh"))
-    unfinished = bool(sec.get("next")) or A.has_value(f.get("in_progress")) or bool(cur)
+    unfinished = bool(steps) or A.has_value(f.get("in_progress")) or bool(cur)
     if unfinished and d.get("last_activity") and time.time() - d["last_activity"] > FORGOTTEN_DAYS * 86400:
         actions.append((5, "Quyết định: làm tiếp, tạm dừng hay đóng project này",
                         f"còn việc dở nhưng không hoạt động từ {ago(d['last_activity'])}"))
@@ -343,11 +344,11 @@ def matches(key: str, keys: list) -> bool:
 
 
 def step_title(raw: str):
-    """(tiêu đề, đã xong?) của một bước trong "Việc tiếp theo": bước bị gạch (~~...~~) là đã xong."""
+    """(tiêu đề, đã xong?) của một bước trong "Việc tiếp theo": bước bị gạch (~~...~~) hay đánh ✅ là đã xong."""
     raw = raw.strip()
     if raw.startswith("~~"):
         return raw[2:].split("~~", 1)[0].strip(), True
-    return raw, False
+    return raw, A.step_done(raw)
 
 
 def section0_done(text: str) -> list:
@@ -369,7 +370,7 @@ def tidy_titles(items: list, cap: int) -> list:
 def plan_items(data: dict):
     """(còn mở, đã xong, số mục §0) của file kế hoạch mà collect() đã đọc.
     Còn mở: ô chưa tick, mục Đang dở, bước chưa gạch trong Việc tiếp theo.
-    Đã xong: ô đã tick, mục Xong của §0, bước đã gạch (~~...~~)."""
+    Đã xong: ô đã tick, mục Xong của §0, bước đã gạch (~~...~~) hay đánh ✅."""
     text = ""
     if data.get("plan"):
         try:

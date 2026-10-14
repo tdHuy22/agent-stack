@@ -232,7 +232,9 @@ EMPTY_VALUES = ("khong co", "chua co", "none", "n/a", "-")
 
 
 def classify_label(label: str):
-    f = fold(label)
+    """Loại nhãn của §0 theo từ khóa; bỏ phần trong ngoặc, để "Việc của user (không chặn việc tiếp theo)" hay
+    "Ghi nhớ (đã xong, …)" không bị nhận là "Việc tiếp theo", "Xong"."""
+    f = fold(re.sub(r"\([^)]*\)", " ", label))
     for key, needles in LABELS:
         if any(n in f for n in needles):
             return key
@@ -310,22 +312,19 @@ def parse_section0(text: str) -> dict:
     return result
 
 
-def section0_items(text: str, key: str) -> list:
-    """Các mục con cấp cao nhất dưới một nhãn của §0 (key theo classify_label, ví dụ "done", "decisions");
-    nhãn không có mục con thì lấy phần chữ ngay sau nhãn. Dòng nối tiếp của một mục được ghép vào mục đó."""
+def section0_outline(text: str, key: str) -> list:
+    """Các mục con dưới một nhãn của §0 (key theo classify_label, ví dụ "next", "decisions"), giữ cấp lồng nhau:
+    [{"text", "kids": [...]}]. Nhãn không có mục con thì là một mục với phần chữ ngay sau nhãn. Dòng nối tiếp
+    được ghép vào mục gần nhất ở trên."""
     found = section0(text)
     if not found:
         return []
-    items, active, inline, kids = [], False, "", []
+    out, active, inline, stack = [], False, "", []  # stack: [(độ thụt, mục)]
+    has_kids = False  # nhãn đang đọc đã có mục con chưa
 
     def flush():
-        if not active:
-            return
-        if kids:
-            top = min(width for width, _ in kids)
-            items.extend(t for width, t in kids if width == top)
-        elif inline.strip():
-            items.append(inline)
+        if active and not has_kids and inline.strip():
+            out.append({"text": inline, "kids": []})
 
     for line in found[1].splitlines():
         head = re.match(r"^[-*]\s+(.*)$", line)
@@ -333,15 +332,42 @@ def section0_items(text: str, key: str) -> list:
             flush()
             label = re.match(r"^\*\*([^*]+?):?\*\*:?\s*(.*)$", head.group(1))
             active = bool(label) and classify_label(label.group(1)) == key
-            inline, kids = (label.group(2) if label else ""), []
+            inline, stack, has_kids = (label.group(2) if label else ""), [], False
+            continue
+        if not active:
             continue
         child = re.match(r"^(\s{2,})(?:[-*]|\d+[.)])\s+(.*)$", line)
-        if child and active:
-            kids.append([len(child.group(1)), child.group(2)])
-        elif active and line.strip() and kids and not line.lstrip().startswith(("|", "#", "```")):
-            kids[-1][1] += " " + line.strip()
+        if child:
+            width, node = len(child.group(1)), {"text": child.group(2), "kids": []}
+            while stack and stack[-1][0] >= width:
+                stack.pop()
+            (stack[-1][1]["kids"] if stack else out).append(node)
+            stack.append((width, node))
+            has_kids = True
+        elif line.strip() and stack and not line.lstrip().startswith(("|", "#", "```")):
+            stack[-1][1]["text"] += " " + line.strip()
     flush()
-    return items
+    return out
+
+
+def section0_items(text: str, key: str) -> list:
+    """Các mục con cấp cao nhất dưới một nhãn của §0 (key theo classify_label, ví dụ "done", "decisions");
+    nhãn không có mục con thì lấy phần chữ ngay sau nhãn. Dòng nối tiếp của một mục được ghép vào mục đó."""
+    return [node["text"] for node in section0_outline(text, key)]
+
+
+DONE_STEP_RE = re.compile(r"^(?:~~|✅|✔|☑|\[[xX]\])|^[^:~]{1,40}:\s*(?:✅|✔|☑)")
+
+
+def step_done(text: str) -> bool:
+    """Bước đã xong: bị gạch (~~...~~), hay mở đầu bằng ✅ (kể cả sau nhãn ngắn như "Bước 3: ✅ …")."""
+    raw = (text or "").strip()
+    return raw.startswith("~~") or bool(DONE_STEP_RE.match(strip_md(raw)))
+
+
+def next_open(sec: dict) -> list:
+    """Các bước chưa xong trong "Việc tiếp theo" của §0 đã đọc bằng parse_section0."""
+    return [step for step in sec.get("next") or [] if not step_done(step)]
 
 
 def baseline_anywhere(text: str):
@@ -600,8 +626,9 @@ def brief(root: Path, max_next: int = 3) -> dict:
              + (f" (cập nhật {sec['updated']})" if sec["updated"] else "") + ":"]
     if has_value(f.get("in_progress")):
         lines.append(f"- Đang dở: {clip(f['in_progress'], 220)}")
-    if sec["next"]:
-        lines.append("- Việc tiếp theo: " + " | ".join(f"{i}) {clip(x, 160)}" for i, x in enumerate(sec["next"][:max_next], 1)))
+    steps = next_open(sec)
+    if steps:
+        lines.append("- Việc tiếp theo: " + " | ".join(f"{i}) {clip(x, 160)}" for i, x in enumerate(steps[:max_next], 1)))
     elif progress["current"] and progress["current"]["first_todo"]:
         cur = progress["current"]
         lines.append(f"- Giai đoạn hiện tại: {cur['title']} ({cur['done']}/{cur['done'] + cur['todo']}); "
@@ -624,7 +651,7 @@ def brief(root: Path, max_next: int = 3) -> dict:
     if warn:
         lines.append("- Cảnh báo: " + "; ".join(warn))
     lines.append(f"Đọc mục §0 trong `{rel}` trước khi làm việc khác. Trước khi dừng phiên, cập nhật §0.")
-    user = f"📍 {root.name}: " + (f"tiếp theo → {clip(sec['next'][0], 90)}" if sec["next"]
+    user = f"📍 {root.name}: " + (f"tiếp theo → {clip(steps[0], 90)}" if steps
                                    else (f"đang dở → {clip(f['in_progress'], 90)}" if has_value(f.get("in_progress"))
                                          else f"kế hoạch ở {rel}"))
     return {"context": "\n".join(lines), "user": user, "plan": str(path), "after_interrupt": sec["after_interrupt"]}
@@ -872,15 +899,15 @@ def is_project(root: Path) -> bool:
 
 
 def plan_done_count(root: Path):
-    """{"path", "count"}: file kế hoạch đang dùng và số việc đã xong trong đó (ô đã tick cộng bước đã gạch ~~...~~
-    trong "Việc tiếp theo" của §0). Hook Stop so đầu và cuối lượt, chỉ khi cùng file, để biết lượt vừa xong một
-    việc. None nếu không có file kế hoạch."""
+    """{"path", "count"}: file kế hoạch đang dùng và số việc đã xong trong đó (ô đã tick cộng bước đã xong trong
+    "Việc tiếp theo" của §0: gạch ~~...~~ hay đánh ✅). Hook Stop so đầu và cuối lượt, chỉ khi cùng file, để biết
+    lượt vừa xong một việc. None nếu không có file kế hoạch."""
     found = read_plan(root)
     if not found:
         return None
     path, text, sec = found
     ticked = len(re.findall(r"(?m)^\s*[-*]\s+\[[xX]\]\s", text))
-    count = ticked + sum(1 for step in sec.get("next") or [] if step.strip().startswith("~~"))
+    count = ticked + sum(1 for step in sec.get("next") or [] if step_done(step))
     return {"path": str(path), "count": count}
 
 
