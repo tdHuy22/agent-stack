@@ -354,7 +354,7 @@ Bạn báo: widget cắt chữ và lá, "gõ T hoặc Q để xem thêm" không 
 ### GĐ26: Mod giao diện của Claude Code (15/10/2026)
 Trang so sánh: https://claude.ai/artifact/Y3LgptJa9GDoQ82Zz4XhvQ. Chọn phương án A: lớp UI mỏng `plugin/hooks/ui.tsx`, logic vẫn ở Python.
 - [x] Đợt 1: pane "Kế hoạch" và lệnh `/cay`, `/cay <mã>`; `tools/claude_app.py`; test mod (`plugin/tests/ui.test.tsx`) và Python (`tests/test_ui_mod.py`); TM-28..30; plugin 0.10.0
-- [ ] Xem pane trên app desktop sau `/reload-plugins`: hiện không, bấm lá điền mã không @ban
+- [x] Xem pane trên app desktop (15/10/2026, bạn xác nhận): pane hiện đủ chữ; bấm mã điền vào ô nhập, bấm nhiều mã ra `T.1 T.2 T.3` và `plan_tree.py --pick` hiểu đủ 3 việc
 - [x] Đợt 2: status line trên desktop và cảnh báo hạn mức qua `ui_status.py`; dải router và rút gọn ➡️ bỏ (route.py không khớp phần lớn việc)
 - [x] Đợt 2: phiên có pane thì model thôi vẽ widget cây, hook Stop thôi nhắc (mục `agent-stack:ui`, biến `AGENT_STACK_UI`)
 - [x] Kiểm status line trên desktop (15/10/2026, sau `/reload-plugins`): `state/limits.json` do `ui_status.py` ghi, có session_id của phiên desktop; cảnh báo "Hạn mức tuần đã dùng 95%" hiện được trên desktop
