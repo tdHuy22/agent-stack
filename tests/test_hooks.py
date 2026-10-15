@@ -316,6 +316,49 @@ class HookTests(TempDirTestCase):
             fh.write(self.tool_entry("mcp__visualize__show_widget", {"widget_code": '<div class="pt" data-plan-tree>'}))
         self.assertIsNone(self.stop("f4", "Cây ở trên.", transcript_path=str(offered)))
 
+    def test_stop_skips_the_tree_when_the_ui_mod_shows_it_in_a_pane(self):
+        # ui.tsx đặt AGENT_STACK_UI=1 ở phiên có nơi vẽ: cây đã nằm ở pane Kế hoạch, không bắt vẽ widget.
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text("")
+        payload = {"session_id": "u1", "cwd": str(self.project), "last_assistant_message": "Parser đọc từng dòng.",
+                   "transcript_path": str(transcript)}
+        self.submit("u1", "giải thích parser")
+        self.assertIsNone(self.run_hook("stop.py", payload, env_extra={"AGENT_STACK_UI": "1"}))
+        # Giá trị khác 1 (đặt nhầm) vẫn nhắc như phiên không có mod.
+        self.submit("u2", "giải thích parser")
+        out = self.run_hook("stop.py", dict(payload, session_id="u2"), env_extra={"AGENT_STACK_UI": "yes"})
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("plan_tree.py --widget", out["reason"])
+
+    def test_ui_status_writes_limits_and_prints_a_plain_line(self):
+        resets = int(time.time()) + 3600
+        payload = {"session_id": "s1", "model": {"id": "claude-opus-5-5"}, "context_window": {"used_percentage": 23.4},
+                   "rate_limits": {"five_hour": {"used_percentage": 91, "resets_at": resets},
+                                   "seven_day": {"used_percentage": 12}}}
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+        out = subprocess.run(["python3", str(HOOKS / "ui_status.py")], input=json.dumps(payload),
+                             capture_output=True, text=True, timeout=30, env=env)
+        self.assertEqual((out.returncode, out.stderr), (0, ""))
+        self.assertEqual(out.stdout, "ctx 23% · 5h 91% · 7d 12%")
+        saved = json.loads((self.state / "limits.json").read_text())
+        self.assertEqual(saved["rate_limits"]["five_hour"]["resets_at"], resets)
+        self.assertEqual(saved["session_id"], "s1")
+        # Hook UserPromptSubmit đọc file này để cảnh báo hạn mức (trước đây chỉ statusline của terminal ghi).
+        out = self.run_hook("prompt_submit.py", {"session_id": "s1", "cwd": str(self.project), "prompt": "chào"})
+        self.assertIn("Hạn mức 5 giờ đã dùng 91%", json.dumps(out, ensure_ascii=False))
+        # Không có số liệu hạn mức, cửa sổ đã qua giờ reset (đọc lúc resume phiên cũ), hay input hỏng: vẫn in
+        # dòng, không ghi file, mã 0.
+        (self.state / "limits.json").unlink()
+        stale = json.dumps({"rate_limits": {"five_hour": {"used_percentage": 99, "resets_at": 1000}}})
+        for bad in ("{}", "[1, 2]", "không phải json", stale):
+            out = subprocess.run(["python3", str(HOOKS / "ui_status.py")], input=bad,
+                                 capture_output=True, text=True, timeout=30, env=env)
+            self.assertEqual(out.returncode, 0)
+            self.assertFalse((self.state / "limits.json").exists())
+        self.assertEqual(subprocess.run(["python3", str(HOOKS / "ui_status.py")], input="{}", capture_output=True,
+                                        text=True, timeout=30, env=env).stdout, "ctx – · 5h – · 7d –")
+
     def test_stop_combines_section0_and_tree_reminders(self):
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"

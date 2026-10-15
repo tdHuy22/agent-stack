@@ -19,6 +19,22 @@ const MAX_LEAVES = '200'
 const EMPTY: PlanView = { tree: null, error: null, planPath: null, mtimeMs: 0 }
 
 const plan = atom({ plugin: 'agent-stack', key: 'plan' } as const, EMPTY)
+const paneShown = atom({ plugin: 'agent-stack', key: 'paneShown' } as const, false)
+
+// Mục system prompt cố định (TM-32): chữ là hằng, thêm từ yêu cầu đầu tiên, không phụ thuộc trạng thái pane, để
+// không làm đổi system prompt giữa phiên (đổi là ghi lại cả context vào prompt cache).
+const UI_SECTION = {
+  id: 'agent-stack:ui',
+  text:
+    'agent-stack:ui. Phiên này có mod giao diện của agent-stack. Khi project có file kế hoạch, pane "Kế hoạch" cạnh ' +
+    'hội thoại hiện cây kế hoạch và tự cập nhật khi file đổi; người dùng bấm mã một việc để điền mã vào ô nhập, gõ ' +
+    '/cay để mở lại pane hay /cay <mã> để xem một việc. Khi luật chung bảo hiện cây kế hoạch, đừng chạy ' +
+    'plan_tree.py --widget hay vẽ widget cây: thay vào đó viết một dòng nhắc xem pane Kế hoạch (hoặc gõ /cay). ' +
+    'Dòng ➡️ vẫn ghi đủ như luật chung.',
+  scope: 'session',
+} as const
+
+let uiEnvSet = false
 
 // Lượt làm mới đang chạy: mọi bên gọi cùng chờ nó, không chạy chồng.
 let inflight: Promise<void> | null = null
@@ -82,12 +98,45 @@ async function poll($: EngineInterface): Promise<void> {
   if ((await mtimeOf($, view.planPath)) !== view.mtimeMs) await refresh($)
 }
 
+/** Status line: số liệu context và hạn mức qua ui_status.py, script đó ghi luôn state/limits.json để hook
+ *  UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline của terminal không chạy). */
+async function refreshStatus($: EngineInterface): Promise<void> {
+  try {
+    const usage = await $.session.usage()
+    const limits: Record<string, { used_percentage: number; resets_at?: number }> = {}
+    for (const w of usage.rateLimits) {
+      if (w.kind !== 'five_hour' && w.kind !== 'seven_day') continue
+      const resets = w.resetsAt ? Math.floor(Date.parse(w.resetsAt) / 1000) : NaN
+      limits[w.kind] = Number.isFinite(resets)
+        ? { used_percentage: w.percentUsed, resets_at: resets }
+        : { used_percentage: w.percentUsed }
+    }
+    const payload = {
+      session_id: await $.session.id(),
+      model: { id: await $.session.model() },
+      context_window: { used_percentage: usage.context.percent ?? null },
+      rate_limits: limits,
+    }
+    const run = await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`], {
+      stdin: JSON.stringify(payload),
+      timeoutMs: TIMEOUT_MS,
+    })
+    const text = run.stdout.trim()
+    if (run.exitCode === 0 && text) $.ui.status(`agent-stack · ${text}`)
+  } catch {
+    // Status chỉ là phần thêm: lỗi thì giữ dòng cũ.
+  }
+}
+
 function paneTitle(view: PlanView): string {
   return view.tree ? `Kế hoạch · ${view.tree.project}` : 'Kế hoạch'
 }
 
+/** Mở pane; đã được vẽ thì ghi cờ paneShown cho cả phiên (mục system prompt và biến AGENT_STACK_UI dựa vào nó). */
 async function openPane($: EngineInterface) {
-  return $.ui.open({ id: PANE, title: paneTitle(await read($, plan)) })
+  const opened = await $.ui.open({ id: PANE, title: paneTitle(await read($, plan)) })
+  if (opened.isPlaced) await update($, paneShown, () => true)
+  return opened
 }
 
 /** Điền mã việc vào ô nhập, không gửi (TM-28). */
@@ -125,6 +174,7 @@ export const register: Register = on => {
       const view = await read($, plan)
       // Không xét e.isInteractive: phiên của app desktop là phiên headless (isInteractive false).
       if (view.tree && !(await $.store.get(CLOSED_KEY))) await openPane($)
+      await refreshStatus($)
     })
     $.clock.every(POLL_MS, () => poll($))
     await $.command.register({
@@ -137,9 +187,27 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     // Lượt của subagent không đổi kế hoạch của phiên chính (TM-29).
-    if (!e.agentId) $.clock.after(0, () => refresh($))
+    if (!e.agentId) {
+      $.clock.after(0, async () => {
+        await refresh($)
+        await refreshStatus($)
+      })
+    }
     return done
   })
+
+  // Chỉ phiên có nơi vẽ (terminal, app desktop) và pane đã thật sự được vẽ mới thêm mục; phiên `-p` (eval) hay
+  // terminal quá hẹp giữ luật cũ (vẽ widget). Cờ giữ tới hết phiên nên mục không bật tắt theo pane (TM-32).
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    if (e.surfaces.length === 0 || !(await read($, paneShown))) return composed
+    if (!uiEnvSet) {
+      uiEnvSet = true
+      // Hook Python chạy sau đó (Stop) đọc biến này để thôi nhắc vẽ widget cây (TM-33).
+      await $.env.set('AGENT_STACK_UI', '1')
+    }
+    return { sections: [...composed.sections, UI_SECTION] }
+  }).catch(($, e, next) => next(e))
 
   // Ghi nhớ lỗi thì vẫn để pane đóng như người dùng muốn.
   on('ui.close', async ($, e, next) => {

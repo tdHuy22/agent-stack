@@ -13,6 +13,7 @@
 Lúc bắt đầu lượt và dấu §0 lúc đó do hook UserPromptSubmit ghi (state/turns/). Lần Stop thứ hai của cùng lượt
 (stop_hook_active) không chặn nữa, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập nhật §0".
 """
+import os
 import re
 import sys
 from pathlib import Path
@@ -83,7 +84,10 @@ def tree_due(root: Path, turn, data: dict) -> list:
 
 def tree_shown(turn: dict, data: dict) -> bool:
     """Người dùng đã thấy cây trong lượt: lời gọi show_widget với HTML của cây, hay cây chữ trong câu trả lời cuối
-    khi phiên không có công cụ widget (luật chung: có widget thì vẽ widget)."""
+    khi phiên không có công cụ widget (luật chung: có widget thì vẽ widget). Phiên có mod giao diện (ui.tsx đặt
+    AGENT_STACK_UI=1, chỉ ở phiên có nơi vẽ) thì cây đã nằm sẵn ở pane Kế hoạch."""
+    if os.environ.get("AGENT_STACK_UI") == "1":
+        return True
     transcript = data.get("transcript_path")
     if A.tool_used_since(transcript, turn["ts"], TREE_WIDGET_MARK, tool_suffix=WIDGET_TOOL):
         return True

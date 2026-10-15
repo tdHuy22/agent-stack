@@ -13,6 +13,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 # Không để hook SessionStart chạy trong test khởi lượt kiểm MCP thật qua mạng (máy có MCP đã cài).
 os.environ.setdefault("AGENT_STACK_NO_BACKGROUND", "1")
+# Mod giao diện đặt biến này cho mọi lệnh chạy trong phiên có pane; test hook Stop phải chạy như phiên không có mod.
+os.environ.pop("AGENT_STACK_UI", None)
 TMP_ROOT = REPO / ".tmp"
 PLUGIN = REPO / "plugin"
 

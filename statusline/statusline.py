@@ -7,7 +7,6 @@ Kích hoạt trong settings: {"statusLine": {"type": "command", "command": "pyth
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "lib"))
@@ -38,13 +37,7 @@ def main() -> None:
     parts.append(colored("ctx", ctx, 60, 80))
     parts.append(colored("5h", (limits.get("five_hour") or {}).get("used_percentage"), 70, 90))
     parts.append(colored("7d", (limits.get("seven_day") or {}).get("used_percentage"), 70, 85))
-    if limits:
-        try:
-            A.write_json_atomic(A.state_dir() / "limits.json", {
-                "ts": time.time(), "rate_limits": limits, "model": model, "effort": effort,
-                "session_id": data.get("session_id")})
-        except OSError:
-            pass
+    A.record_limits(data)
     if os.environ.get("NO_COLOR"):
         parts = [p.replace(GREEN, "").replace(YELLOW, "").replace(RED, "").replace(DIM, "").replace(RESET, "")
                  for p in parts]

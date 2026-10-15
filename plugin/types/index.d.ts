@@ -39,6 +39,7 @@ export type PlanView = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-stack': { plan: PlanView }
+    // paneShown: pane Kế hoạch đã được vẽ ít nhất một lần trong phiên (giữ tới hết phiên).
+    'agent-stack': { plan: PlanView; paneShown: boolean }
   }
 }

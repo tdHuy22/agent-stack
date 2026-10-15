@@ -28,7 +28,8 @@ const TREE = {
 
 type Setup = {
   runs: string[][]; fills: string[]; tree?: unknown; exitCode?: number
-  cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number
+  cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number; unplaced?: boolean
+  statusStdins?: string[]
 }
 
 /** Giả lập phần engine mà module cần: thư mục phiên, script Python, stat, ô nhập. */
@@ -40,6 +41,11 @@ function fake(on: On, s: Setup) {
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: s.cwd ?? CWD }))
   on('process.run', async ($, e) => {
+    if (e.argv[1]?.endsWith('ui_status.py')) {
+      s.statusStdins?.push(e.init?.stdin ?? '')
+      const stdout = 'ctx 23% · 5h 41% · 7d –\n'
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     s.runs.push([...e.argv])
     if (s.gate) await s.gate
     const pick = e.argv.includes('--pick')
@@ -61,7 +67,7 @@ function fake(on: On, s: Setup) {
   })
   on('ui.open', () => {
     s.opens = (s.opens ?? 0) + 1
-    return { value: { isPlaced: true } }
+    return { value: s.unplaced ? { isPlaced: false, reason: 'narrow' } : { isPlaced: true } }
   })
   return clock
 }
@@ -191,4 +197,93 @@ test('lượt của subagent không chạy lại script', async ($, on) => {
   await $.turn.complete({ ...turn, turnId: 't2' })
   await clock.advance(1)
   expect(s.runs).toHaveLength(1)
+})
+
+const COMPOSE = {
+  model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', tools: [], outputStyle: null, traits: [],
+} as const
+
+test('pane đã được vẽ: thêm mục system prompt cố định và đặt AGENT_STACK_UI một lần', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  const envs: [string, string | undefined][] = []
+  on('env.set', ($, e) => {
+    envs.push([e.name, e.value])
+    return { value: undefined }
+  })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'gốc', scope: 'shared' }] }))
+  // Chưa có pane: chưa thêm gì.
+  const before = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
+  expect(before.sections.map(x => x.id)).toEqual(['intro'])
+  await $.command.run({ command: 'cay', args: '' })
+  const first = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
+  const second = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
+  expect(first.sections.map(x => x.id)).toEqual(['intro', 'agent-stack:ui'])
+  // Chữ là hằng giữa các yêu cầu, để không làm mất prompt cache (TM-32).
+  expect(second.sections[1]).toEqual(first.sections[1])
+  expect(first.sections[1]?.scope).toBe('session')
+  expect(first.sections[1]?.text).toContain('pane "Kế hoạch"')
+  expect(envs).toEqual([['AGENT_STACK_UI', '1']])
+})
+
+test('phiên -p (không nơi vẽ, như eval) giữ nguyên system prompt và không đặt biến', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  const envs: string[] = []
+  on('env.set', ($, e) => {
+    envs.push(e.name)
+    return { value: undefined }
+  })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'gốc', scope: 'shared' }] }))
+  await $.command.run({ command: 'cay', args: '' })
+  const out = await $.prompt.compose({ ...COMPOSE, surfaces: [] } as never)
+  expect(out.sections.map(x => x.id)).toEqual(['intro'])
+  expect(envs).toEqual([])
+})
+
+test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status.py', async ($, on) => {
+  const stdins: string[] = []
+  const s: Setup = { runs: [], fills: [], statusStdins: stdins }
+  const clock = fake(on, s)
+  const statuses: (string | undefined)[] = []
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { window: 200000, percent: 23 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 41, resetsAt: '2026-10-15T12:00:00Z' },
+        { kind: 'spend_limit', percentUsed: 5 },
+      ],
+    },
+  }))
+  on('session.id', () => ({ value: 'sid-1' }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.status', ($, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  const turn = { reason: 'answer', text: 'xong', answer: 'xong', isAborted: false, durationMs: 1 } as const
+  await $.turn.complete({ ...turn, turnId: 't1' })
+  await clock.advance(1)
+  const sent = JSON.parse(stdins[0] ?? '{}')
+  expect(sent.session_id).toBe('sid-1')
+  expect(sent.context_window.used_percentage).toBe(23)
+  expect(sent.rate_limits.five_hour).toEqual({ used_percentage: 41, resets_at: 1792065600 })
+  expect(sent.rate_limits.spend_limit).toBeUndefined()
+  expect(statuses).toContain('agent-stack · ctx 23% · 5h 41% · 7d –')
+})
+
+test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không thêm mục, không đặt biến', async ($, on) => {
+  const s: Setup = { runs: [], fills: [], unplaced: true }
+  fake(on, s)
+  const envs: string[] = []
+  on('env.set', ($, e) => {
+    envs.push(e.name)
+    return { value: undefined }
+  })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'gốc', scope: 'shared' }] }))
+  await $.command.run({ command: 'cay', args: '' })
+  const out = await $.prompt.compose({ ...COMPOSE, surfaces: ['terminal'] } as never)
+  expect(out.sections.map(x => x.id)).toEqual(['intro'])
+  expect(envs).toEqual([])
 })

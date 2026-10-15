@@ -174,6 +174,26 @@ def write_json_atomic(path: Path, data) -> None:
     tmp.replace(path)
 
 
+def record_limits(data: dict) -> None:
+    """Ghi state/limits.json từ số liệu dạng statusline (statusline của terminal, hay ui_status.py của mod giao diện
+    trên app desktop) để hook UserPromptSubmit cảnh báo hạn mức. Không có số liệu hạn mức thì không ghi."""
+    limits = data.get("rate_limits") or {}
+    if not isinstance(limits, dict):
+        return
+    now = time.time()
+    # Bỏ cửa sổ đã qua giờ reset: số đọc lúc resume phiên cũ không được coi là mới.
+    limits = {k: v for k, v in limits.items() if not (isinstance(v, dict) and isinstance(v.get("resets_at"), (int, float))
+                                                      and v["resets_at"] < now)}
+    if not limits:
+        return
+    try:
+        write_json_atomic(state_dir() / "limits.json", {
+            "ts": time.time(), "rate_limits": limits, "model": data.get("model") or {},
+            "effort": (data.get("effort") or {}).get("level"), "session_id": data.get("session_id")})
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- văn bản
 
 def fold(text: str) -> str:
