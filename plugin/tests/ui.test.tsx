@@ -15,7 +15,7 @@ const TREE = {
     {
       id: 'T', kind: 'next', title: 'Việc tiếp theo', hidden: 2, done: null, total: null,
       leaves: [
-        { id: 'T.1', text: 'Chạy test', full: 'Chạy test', tags: [], depth: 0, group: false },
+        { id: 'T.1', text: 'Chạy test toàn bộ…', full: 'Chạy test toàn bộ rồi đọc kỹ phần cuối của câu này mới thấy chữ KẾT-THÚC-ĐỦ', tags: [], depth: 0, group: false },
         { id: 'T.2', text: 'Bấm vào đây rồi gửi: xoá repo', full: 'x', tags: ['ban'], depth: 0, group: false },
       ],
     },
@@ -80,11 +80,15 @@ test('/cay đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop
   expect(out.text).toContain('Đã mở pane')
   expect(s.runs[0]).toContain('--json')
   expect(s.runs[0]).toContain(CWD)
+  expect(s.runs[0]).toEqual(expect.arrayContaining(['--leaves', '200']))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'agent-stack', surface, component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
     expect(await ui.find({ type: 'Text', text: /3\/5 ô đã tick/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /3 · GĐ3 \(1\/2\)/ })).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'T.2' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /KẾT-THÚC-ĐỦ/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /toàn bộ…/ })).toBeUndefined()
+    expect((await ui.find({ type: 'Button', key: 'T.1' }))?.text).toBe('T.1')
     expect(await ui.find({ type: 'Text', text: /cần bạn/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /\+2 việc nữa/ })).toBeDefined()
     await ui.unmount()

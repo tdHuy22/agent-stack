@@ -14,6 +14,8 @@ const CODE = /^[A-Za-z0-9][A-Za-z0-9.]{0,15}$/
 const TIMEOUT_MS = 10_000
 const POLL_MS = 5_000
 const TAG_LABEL: Record<string, string> = { ban: 'cần bạn', cho: 'chờ bên ngoài', usd: 'tốn tiền' }
+// Pane tự cuộn nên hiện đủ việc của mỗi mốc, không thu gọn như widget.
+const MAX_LEAVES = '200'
 const EMPTY: PlanView = { tree: null, error: null, planPath: null, mtimeMs: 0 }
 
 const plan = atom({ plugin: 'agent-stack', key: 'plan' } as const, EMPTY)
@@ -43,7 +45,7 @@ async function load($: EngineInterface): Promise<void> {
   const cwd = await $.session.cwd()
   let view: PlanView
   try {
-    const run = await $.process.run(['python3', script($), '--json', '--project', cwd], {
+    const run = await $.process.run(['python3', script($), '--json', '--leaves', MAX_LEAVES, '--project', cwd], {
       timeoutMs: TIMEOUT_MS,
     })
     if (run.exitCode !== 0) {
@@ -142,7 +144,7 @@ export const register: Register = on => {
       const view = await read($, plan)
       if (!view.tree) return { text: view.error ? `Không đọc được kế hoạch: ${view.error}` : 'Project này chưa có file kế hoạch.' }
       await openPane($)
-      return { text: 'Đã mở pane Kế hoạch. Bấm một việc để điền mã vào ô nhập.' }
+      return { text: 'Đã mở pane Kế hoạch. Bấm mã một việc để điền mã đó vào ô nhập.' }
     }
     const bad = codes.filter(c => !CODE.test(c))
     if (bad.length > 0) return { text: `Mã không hợp lệ: ${bad.join(', ')}. Mã có dạng T.2, 14 hay 25.1.` }
@@ -167,26 +169,32 @@ export const register: Register = on => {
     const phases = tree.done_phases
     return (
       <Box flexDirection="column">
-        <Text dimColor>
+        <Text dimColor wrap="wrap">
           {tree.plan} · {tree.boxes.done}/{tree.boxes.total} ô đã tick
         </Text>
         {phases.count > 0 && (
-          <Text dimColor>
+          <Text dimColor wrap="wrap">
             ✓ {phases.count} mốc xong{phases.last ? `, gần nhất: ${phases.last}` : ''}
           </Text>
         )}
         {tree.milestones.map(m => (
           <Box key={`m-${m.id}`} flexDirection="column" marginTop={1}>
-            <Text bold>
+            <Text bold wrap="wrap">
               {m.id} · {m.title}
               {milestoneCount(m.done, m.total)}
             </Text>
             {m.leaves.map(leaf => (
-              <Box key={`l-${leaf.id}`} paddingLeft={leaf.depth * 2}>
+              // Nút chỉ mang mã (nút native của desktop giữ nhãn trên một dòng); chữ đầy đủ tự xuống dòng bên cạnh.
+              <Box key={`l-${leaf.id}`} flexDirection="row" paddingLeft={leaf.depth * 2} gap={1}>
                 <Button key={leaf.id} plain onPress={() => fillCode($, leaf.id)}>
-                  {leaf.id} {leaf.text}
-                  {leaf.tags.length > 0 && <Text dimColor> · {tagText(leaf.tags)}</Text>}
+                  {leaf.id}
                 </Button>
+                <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <Text wrap="wrap">
+                    {leaf.full}
+                    {leaf.tags.length > 0 && <Text dimColor> · {tagText(leaf.tags)}</Text>}
+                  </Text>
+                </Box>
               </Box>
             ))}
             {m.hidden > 0 && (
@@ -197,7 +205,7 @@ export const register: Register = on => {
           </Box>
         ))}
         <Box marginTop={1}>
-          <Text dimColor>Bấm một việc để điền mã vào ô nhập.</Text>
+          <Text dimColor wrap="wrap">Bấm mã một việc để điền mã đó vào ô nhập.</Text>
         </Box>
       </Box>
     )
