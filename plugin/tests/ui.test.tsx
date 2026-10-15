@@ -41,6 +41,11 @@ function fake(on: On, s: Setup) {
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: s.cwd ?? CWD }))
   on('process.run', async ($, e) => {
+    if (e.argv[1]?.endsWith('receipt.py')) {
+      s.runs.push([...e.argv])
+      const stdout = Array.from({ length: 20 }, (_, i) => `- kiểm ${i + 1}: ✓ đạt`).join('\n')
+      return { value: { exitCode: 0, stdout: `Kiểm tra đã ghi:\n${stdout}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     if (e.argv[1]?.endsWith('ui_status.py')) {
       s.statusStdins?.push(e.init?.stdin ?? '')
       const stdout = 'ctx 23% · 5h 41% · 7d –\n'
@@ -302,4 +307,43 @@ test('/cay ? in chẩn đoán mà không chạy script --pick', async ($, on) =>
   expect(after.text).toContain('[desktop] (1 lần)')
   expect(after.text).toContain('đã bật')
   expect(s.runs.some(r => r.includes('--pick'))).toBe(false)
+})
+
+test('/bien-nhan in biên nhận qua receipt.py show, cắt bớt khi dài', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  const out = await $.command.run({ command: 'bien-nhan', args: '' })
+  expect(s.runs[0]).toEqual(expect.arrayContaining(['show', '--project', CWD]))
+  expect(out.text).toContain('Kiểm tra đã ghi:')
+  expect(out.text).toContain('- kiểm 14: ✓ đạt')
+  expect(out.text).not.toContain('- kiểm 15: ✓ đạt')
+  expect(out.text).toContain('… còn 6 dòng')
+})
+
+test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, kết quả giữ nguyên', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  // Tên file chứa "chot-viec" không được làm toast nói sai loại nhắc.
+  const reasons = [
+    'agent-stack (hook Stop): lượt này đã đổi 2 file (plugin/skills/chot-viec/SKILL.md, a.py) nhưng mục §0 của `PLAN.md` chưa đổi. Cập nhật §0 cho khớp',
+    'agent-stack (hook Stop): lượt này đổi code có mức rủi ro vừa (hook) mà chưa chạy chot-viec. Chạy skill',
+    'agent-stack (hook Stop): lượt này vừa xong việc mà người dùng chưa thấy cây kế hoạch (chạy plan_tree.py',
+    'hook khác chặn: không phải của agent-stack',
+  ]
+  let i = 0
+  on('classic.Stop', () => ({ block: reasons[i++] }))
+  for (const reason of reasons) {
+    const out = await $.classic.Stop({ stop_hook_active: false } as never)
+    expect(out.block).toBe(reason)
+  }
+  expect(toasts).toEqual([
+    'agent-stack: cập nhật §0 của file kế hoạch',
+    'agent-stack: chạy chốt việc trước khi báo xong',
+    'agent-stack: hiện cây kế hoạch cho bạn chọn việc',
+  ])
 })

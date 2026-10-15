@@ -8,6 +8,8 @@ import type { PlanTree, PlanView } from '../types'
 
 const PANE = 'ke-hoach'
 const COMMAND = 'cay'
+const RECEIPT_COMMAND = 'bien-nhan'
+const RECEIPT_LINES = 15
 const CLOSED_KEY = 'planPaneClosed'
 // Mã lá hay mốc của plan_tree.py (T.2, 14, 25.1.2); chặn mọi thứ khác (TM-28, TM-30).
 const CODE = /^[A-Za-z0-9][A-Za-z0-9.]{0,15}$/
@@ -131,6 +133,16 @@ async function refreshStatus($: EngineInterface): Promise<void> {
   }
 }
 
+/** Một dòng tóm tắt cho toast khi hook Stop của agent-stack chặn lượt (lý do đầy đủ vẫn ở transcript). */
+function stopToast(reason: string): string | null {
+  if (!reason.includes('agent-stack (hook Stop)')) return null
+  // Neo vào cụm cố định của stop.py, không vào tên file trong lý do (tên file có thể chứa "chot-viec").
+  if (reason.includes('mà chưa chạy chot-viec')) return 'agent-stack: chạy chốt việc trước khi báo xong'
+  if (reason.includes('chưa đổi. Cập nhật §0')) return 'agent-stack: cập nhật §0 của file kế hoạch'
+  if (reason.includes('mà người dùng chưa thấy cây kế hoạch')) return 'agent-stack: hiện cây kế hoạch cho bạn chọn việc'
+  return 'agent-stack: hook Stop nhắc thêm một bước trước khi xong'
+}
+
 function paneTitle(view: PlanView): string {
   return view.tree ? `Kế hoạch · ${view.tree.project}` : 'Kế hoạch'
 }
@@ -181,6 +193,10 @@ export const register: Register = on => {
     })
     $.clock.every(POLL_MS, () => poll($))
     await $.command.register({
+      name: RECEIPT_COMMAND,
+      description: 'Xem biên nhận kiểm chứng của project (receipt.py show), không gọi model',
+    })
+    await $.command.register({
       name: COMMAND,
       description: 'Mở pane cây kế hoạch; /cay <mã> xem một việc (vd /cay T.2)',
     })
@@ -214,11 +230,41 @@ export const register: Register = on => {
     return { sections: [...composed.sections, UI_SECTION] }
   }).catch(($, e, next) => next(e))
 
+  // Toast chỉ báo thêm; không đổi kết quả của hook Python.
+  on('classic.Stop', async ($, e, next) => {
+    const result = await next(e)
+    const text = result.block ? stopToast(result.block) : null
+    if (text) $.ui.toast(text)
+    return result
+  }).catch(($, e, next) => next(e))
+
+  on('classic.StopFailure', async ($, e, next) => {
+    const result = await next(e)
+    $.ui.toast('agent-stack: lượt dừng vì lỗi API; lượt cuối đã được ghi lại, gõ "làm tiếp" khi sẵn sàng')
+    return result
+  }).catch(($, e, next) => next(e))
+
   // Ghi nhớ lỗi thì vẫn để pane đóng như người dùng muốn.
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE && e.origin.kind === 'person') await $.store.set(CLOSED_KEY, true)
     return next(e)
   }).catch(($, e, next) => next(e))
+
+  on('command.run', { command: RECEIPT_COMMAND }, async $ => {
+    try {
+      const cwd = await $.session.cwd()
+      const run = await $.process.run(
+        ['python3', `${$.plugin.root}/skills/session-keeper/scripts/receipt.py`, 'show', '--project', cwd],
+        { timeoutMs: TIMEOUT_MS },
+      )
+      const lines = run.stdout.trim().split('\n').filter(Boolean)
+      if (lines.length === 0) return { text: firstLine(run.stderr) || 'Chưa có biên nhận nào cho project này.' }
+      const more = lines.length > RECEIPT_LINES ? [`… còn ${lines.length - RECEIPT_LINES} dòng: receipt.py show`] : []
+      return { text: [...lines.slice(0, RECEIPT_LINES), ...more].join('\n') }
+    } catch (err) {
+      return { text: `Không chạy được receipt.py: ${String(err).slice(0, 200)}` }
+    }
+  }).catch(() => ({ text: 'Lệnh /bien-nhan gặp lỗi; xem `claude --debug`.' }))
 
   on('command.run', { command: COMMAND }, async ($, e) => {
     const codes = e.args.split(/[\s,]+/).filter(Boolean)

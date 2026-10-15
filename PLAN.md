@@ -113,6 +113,7 @@
   6. ~~Cài plugin 0.9.1 (`./install.sh --apply --only plugin`).~~ Xong 20:14 14/10/2026 theo lệnh của bạn.
   7. Gõ `/reload-plugins` hay mở lại các phiên đang mở, để widget cây mới (0.9.1) có hiệu lực ở đó. @ban
   8. Gõ `/reload-plugins` (hay mở phiên mới) trong app desktop, xem pane "Kế hoạch" có hiện đủ chữ không (bản sửa `31dda72`), bấm mã một việc có điền vào ô nhập không, rồi báo lại. Không hiện thì đợt 2 chuyển cây sang dải trên ô nhập. @ban
+  10. GĐ26 đợt 3 xong (`/bien-nhan`, toast hook Stop và StopFailure, plugin 0.12.0). Còn: cài bản ghi (`./install.sh --apply --only plugin`) khi bạn muốn. @ban
   9. ~~Kiểm mục `agent-stack:ui` trên desktop.~~ Xong 15/10/2026: pane đóng tay thì không bật (đúng thiết kế); mở lại bằng `/cay` thì `AGENT_STACK_UI=1`. Chẩn đoán bằng `/cay ?`.
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
@@ -126,7 +127,7 @@
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
   - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `Ran 650 tests … OK` (15/10/2026, sau GĐ26 đợt 2); `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
   - `"$(python3 tools/claude_app.py)" plugin validate plugin` → `Validation passed` (binary của app; `claude` brew 2.1.292 cũng đạt)
-  - `"$(python3 tools/claude_app.py)" plugin test plugin` → 14 pass (15/10/2026)
+  - `"$(python3 tools/claude_app.py)" plugin test plugin` → 17 pass (15/10/2026)
   - `python3 evals/run_eval.py --self-test` → 24 dấu ✓ (12/10/2026)
   - `python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl` → 109/109
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status -sb` (phải khớp `origin/main` nếu không có việc dở), `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
@@ -358,5 +359,5 @@ Trang so sánh: https://claude.ai/artifact/Y3LgptJa9GDoQ82Zz4XhvQ. Chọn phươ
 - [x] Đợt 2: phiên có pane thì model thôi vẽ widget cây, hook Stop thôi nhắc (mục `agent-stack:ui`, biến `AGENT_STACK_UI`)
 - [x] Kiểm status line trên desktop (15/10/2026, sau `/reload-plugins`): `state/limits.json` do `ui_status.py` ghi, có session_id của phiên desktop; cảnh báo "Hạn mức tuần đã dùng 95%" hiện được trên desktop
 - [x] Kiểm mục `agent-stack:ui` trên desktop (15/10/2026): `/cay ?` cho thấy nơi vẽ `[desktop]` nhưng pane bị bạn đóng tay nên mod không bật (đúng thiết kế); sau `/cay`, `echo $AGENT_STACK_UI` ra `1`
-- [ ] Đợt 3: toast cho Stop, PreToolUse, StopFailure; lệnh `/bien-nhan`
-- [ ] Cài plugin 0.10.0 (`./install.sh --apply --only plugin`) để ghi bản cài @ban
+- [x] Đợt 3 (15/10/2026, plugin 0.12.0): lệnh `/bien-nhan` (receipt.py show, không gọi model); toast tóm tắt khi hook Stop chặn lượt và khi lượt dừng vì lỗi API. Bỏ toast PreToolUse (hộp hỏi quyền đã hiện lý do). Bằng chứng: `plugin test` 17/17, `claude -p "/bien-nhan"` thật in đúng, review sonnet: toast phân loại nhầm khi tên file chứa "chot-viec", đã sửa kèm test
+- [ ] Cài plugin 0.12.0 (`./install.sh --apply --only plugin`) để ghi bản cài @ban
