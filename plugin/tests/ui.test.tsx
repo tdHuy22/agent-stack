@@ -81,10 +81,12 @@ test('/cay đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop
   expect(s.runs[0]).toContain('--json')
   expect(s.runs[0]).toContain(CWD)
   expect(s.runs[0]).toEqual(expect.arrayContaining(['--leaves', '200']))
-  for (const surface of ['terminal', 'desktop'] as const) {
+  for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ plugin: 'agent-stack', surface, component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
-    expect(await ui.find({ type: 'Text', text: /3\/5 ô đã tick/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /3 · GĐ3 \(1\/2\)/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /▰+▱+ 3\/5 ô đã tick/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^GĐ3$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /▰{5}▱{5} 1\/2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Claude tự làm 1\/2/ })).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'T.2' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /KẾT-THÚC-ĐỦ/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /toàn bộ…/ })).toBeUndefined()

@@ -2,7 +2,7 @@
 // Logic nằm ở script Python; module chỉ gọi script rồi vẽ. Lỗi ở đây không
 // chạm tới hook Python: engine bỏ qua hook hỏng và chạy tiếp.
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Color, EngineInterface, Register } from 'claude-code'
 
 import type { PlanTree, PlanView } from '../types'
 
@@ -101,8 +101,19 @@ function tagText(tags: readonly string[]): string {
   return tags.map(t => TAG_LABEL[t] ?? t).join(', ')
 }
 
-function milestoneCount(done: number | null, total: number | null): string {
-  return done === null || total === null ? '' : ` (${done}/${total})`
+/** Thanh tiến độ bằng ký tự, vẽ được trên mọi surface: ▰▰▰▱▱▱▱▱▱▱ 3/10. */
+function bar(done: number, total: number, width = 10): string {
+  const filled = total > 0 ? Math.min(width, Math.max(0, Math.round((done / total) * width))) : 0
+  return `${'▰'.repeat(filled)}${'▱'.repeat(width - filled)} ${done}/${total}`
+}
+
+// Viền và biểu tượng theo loại mốc, như widget của tien-do (màu là khóa theme nên hợp cả nền sáng lẫn tối).
+const KIND_STYLE: Record<string, { icon: string; color: Color }> = {
+  blocked: { icon: '⚠', color: 'error' },
+  wip: { icon: '◐', color: 'warning' },
+  next: { icon: '➜', color: 'claude' },
+  phase: { icon: '●', color: 'suggestion' },
+  decisions: { icon: '?', color: 'warning' },
 }
 
 export const register: Register = on => {
@@ -168,45 +179,78 @@ export const register: Register = on => {
 
     const phases = tree.done_phases
     return (
-      <Box flexDirection="column">
-        <Text dimColor wrap="wrap">
-          {tree.plan} · {tree.boxes.done}/{tree.boxes.total} ô đã tick
-        </Text>
-        {phases.count > 0 && (
-          <Text dimColor wrap="wrap">
-            ✓ {phases.count} mốc xong{phases.last ? `, gần nhất: ${phases.last}` : ''}
+      <Box flexDirection="column" gap={1}>
+        <Box flexDirection="column">
+          <Text bold wrap="wrap">
+            {tree.project} <Text dimColor>· {tree.plan}</Text>
           </Text>
-        )}
-        {tree.milestones.map(m => (
-          <Box key={`m-${m.id}`} flexDirection="column" marginTop={1}>
-            <Text bold wrap="wrap">
-              {m.id} · {m.title}
-              {milestoneCount(m.done, m.total)}
+          <Text color="success">{bar(tree.boxes.done, tree.boxes.total, 16)} ô đã tick</Text>
+        </Box>
+        {phases.count > 0 && (
+          <Box borderStyle="round" borderColor="success" paddingX={1} flexDirection="column">
+            <Text color="success" wrap="wrap">
+              ✓ {phases.count} mốc xong
+              {phases.first && phases.last ? <Text dimColor> · {phases.first} → {phases.last}</Text> : ''}
             </Text>
-            {m.leaves.map(leaf => (
-              // Nút chỉ mang mã (nút native của desktop giữ nhãn trên một dòng); chữ đầy đủ tự xuống dòng bên cạnh.
-              <Box key={`l-${leaf.id}`} flexDirection="row" paddingLeft={leaf.depth * 2} gap={1}>
-                <Button key={leaf.id} plain onPress={() => fillCode($, leaf.id)}>
-                  {leaf.id}
-                </Button>
+          </Box>
+        )}
+        {tree.milestones.map(m => {
+          const style = KIND_STYLE[m.kind] ?? KIND_STYLE.phase!
+          const own = m.leaves.filter(l => l.tags.length === 0).length
+          return (
+            <Box key={`m-${m.id}`} borderStyle="round" borderColor={style.color} paddingX={1} flexDirection="column">
+              <Box flexDirection="row" gap={1} flexWrap="wrap">
+                <Text color={style.color} bold>
+                  {style.icon} {m.id}
+                </Text>
                 <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                  <Text wrap="wrap">
-                    {leaf.full}
-                    {leaf.tags.length > 0 && <Text dimColor> · {tagText(leaf.tags)}</Text>}
+                  <Text bold wrap="wrap">
+                    {m.title}
                   </Text>
                 </Box>
+                {m.done !== null && m.total !== null ? (
+                  <Text color={style.color}>{bar(m.done, m.total)}</Text>
+                ) : (
+                  <Text dimColor>
+                    Claude tự làm {own}/{m.leaves.length}
+                    {m.hidden > 0 ? ` (+${m.hidden} chưa tải)` : ''}
+                  </Text>
+                )}
               </Box>
-            ))}
-            {m.hidden > 0 && (
-              <Text dimColor>
-                +{m.hidden} việc nữa: /cay {m.id}
-              </Text>
-            )}
-          </Box>
-        ))}
-        <Box marginTop={1}>
-          <Text dimColor wrap="wrap">Bấm mã một việc để điền mã đó vào ô nhập.</Text>
-        </Box>
+              {m.leaves.map(leaf => (
+                // Nút chỉ mang mã (nút native của desktop giữ nhãn trên một dòng); chữ đầy đủ tự xuống dòng bên cạnh.
+                <Box
+                  key={`l-${leaf.id}`}
+                  flexDirection="row"
+                  paddingLeft={leaf.depth * 2}
+                  gap={1}
+                  marginTop={1}
+                  hover={{ backgroundColor: 'subtle' }}
+                >
+                  <Button key={leaf.id} plain onPress={() => fillCode($, leaf.id)}>
+                    {leaf.id}
+                  </Button>
+                  <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="column">
+                    <Text wrap="wrap">{leaf.full}</Text>
+                    {leaf.tags.length > 0 ? (
+                      <Text color="warning">◆ {tagText(leaf.tags)}</Text>
+                    ) : (
+                      <Text color="suggestion">◇ Claude làm</Text>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+              {m.hidden > 0 && (
+                <Text dimColor>
+                  +{m.hidden} việc nữa: /cay {m.id}
+                </Text>
+              )}
+            </Box>
+          )
+        })}
+        <Text dimColor wrap="wrap">
+          Bấm mã một việc để điền mã đó vào ô nhập.
+        </Text>
       </Box>
     )
   })
