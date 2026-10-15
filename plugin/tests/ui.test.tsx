@@ -287,3 +287,19 @@ test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không
   expect(out.sections.map(x => x.id)).toEqual(['intro'])
   expect(envs).toEqual([])
 })
+
+test('/cay ? in chẩn đoán mà không chạy script --pick', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  on('prompt.compose', () => ({ sections: [] }))
+  const before = await $.command.run({ command: 'cay', args: '?' })
+  expect(before.text).toContain('Pane đã được vẽ trong phiên: chưa')
+  expect(before.text).toContain('chưa có lần nào')
+  await $.command.run({ command: 'cay', args: '' })
+  await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
+  const after = await $.command.run({ command: 'cay', args: '?' })
+  expect(after.text).toContain('Pane đã được vẽ trong phiên: có')
+  expect(after.text).toContain('[desktop] (1 lần)')
+  expect(after.text).toContain('đã bật')
+  expect(s.runs.some(r => r.includes('--pick'))).toBe(false)
+})

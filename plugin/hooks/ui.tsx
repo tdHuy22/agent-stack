@@ -35,6 +35,9 @@ const UI_SECTION = {
 } as const
 
 let uiEnvSet = false
+// Chẩn đoán cho `/cay ?`: nơi vẽ ở lần compose gần nhất và số lần compose từ khi nạp module.
+let lastSurfaces: readonly string[] | null = null
+let composeCount = 0
 
 // Lượt làm mới đang chạy: mọi bên gọi cùng chờ nó, không chạy chồng.
 let inflight: Promise<void> | null = null
@@ -200,6 +203,8 @@ export const register: Register = on => {
   // terminal quá hẹp giữ luật cũ (vẽ widget). Cờ giữ tới hết phiên nên mục không bật tắt theo pane (TM-32).
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
+    lastSurfaces = e.surfaces
+    composeCount += 1
     if (e.surfaces.length === 0 || !(await read($, paneShown))) return composed
     if (!uiEnvSet) {
       uiEnvSet = true
@@ -217,6 +222,18 @@ export const register: Register = on => {
 
   on('command.run', { command: COMMAND }, async ($, e) => {
     const codes = e.args.split(/[\s,]+/).filter(Boolean)
+    if (codes.length === 1 && codes[0] === '?') {
+      const view = await read($, plan)
+      return {
+        text: [
+          `Kế hoạch: ${view.tree ? view.tree.plan : view.error ? `lỗi (${view.error})` : 'không có'}`,
+          `Pane đã được vẽ trong phiên: ${(await read($, paneShown)) ? 'có' : 'chưa'}`,
+          `Đã đóng pane bằng tay (không tự mở): ${(await $.store.get(CLOSED_KEY)) ? 'có' : 'không'}`,
+          `Nơi vẽ ở lần compose gần nhất: ${lastSurfaces === null ? 'chưa có lần nào' : `[${lastSurfaces.join(', ')}]`} (${composeCount} lần)`,
+          `Mục agent-stack:ui và AGENT_STACK_UI=1: ${uiEnvSet ? 'đã bật' : 'chưa bật'}`,
+        ].join('\n'),
+      }
+    }
     if (codes.length === 0) {
       await $.store.delete(CLOSED_KEY)
       await refresh($, true)
