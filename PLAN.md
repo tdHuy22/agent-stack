@@ -3,7 +3,7 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 15/10/2026.*
+*Cập nhật 15/10/2026 (hạn mức tuần 95%).*
 
 - **Xong:**
   - GĐ0 đến GĐ11 và mọi việc sau đó nằm trên `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026); đã push lên `origin` (GitHub công khai) ngày 12/10/2026.
@@ -113,7 +113,7 @@
   6. ~~Cài plugin 0.9.1 (`./install.sh --apply --only plugin`).~~ Xong 20:14 14/10/2026 theo lệnh của bạn.
   7. Gõ `/reload-plugins` hay mở lại các phiên đang mở, để widget cây mới (0.9.1) có hiệu lực ở đó. @ban
   8. Gõ `/reload-plugins` (hay mở phiên mới) trong app desktop, xem pane "Kế hoạch" có hiện đủ chữ không (bản sửa `31dda72`), bấm mã một việc có điền vào ô nhập không, rồi báo lại. Không hiện thì đợt 2 chuyển cây sang dải trên ô nhập. @ban
-  9. Sau `/reload-plugins`, kiểm đợt 2 của GĐ26 trên desktop (xem §1).
+  9. Kiểm mục `agent-stack:ui` trên desktop (§1 GĐ26): status line đã chạy; còn mục system prompt chưa xác nhận. Hạn mức tuần đã 95% (15/10/2026): làm tiếp được bằng OpenCode, mọi thay đổi đã commit, không có việc dở.
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
@@ -356,6 +356,7 @@ Trang so sánh: https://claude.ai/artifact/Y3LgptJa9GDoQ82Zz4XhvQ. Chọn phươ
 - [ ] Xem pane trên app desktop sau `/reload-plugins`: hiện không, bấm lá điền mã không @ban
 - [x] Đợt 2: status line trên desktop và cảnh báo hạn mức qua `ui_status.py`; dải router và rút gọn ➡️ bỏ (route.py không khớp phần lớn việc)
 - [x] Đợt 2: phiên có pane thì model thôi vẽ widget cây, hook Stop thôi nhắc (mục `agent-stack:ui`, biến `AGENT_STACK_UI`)
-- [ ] Sau `/reload-plugins`: kiểm system prompt có mục `agent-stack:ui`, `echo $AGENT_STACK_UI` ra 1, status line hiện trên desktop
+- [x] Kiểm status line trên desktop (15/10/2026, sau `/reload-plugins`): `state/limits.json` do `ui_status.py` ghi, có session_id của phiên desktop; cảnh báo "Hạn mức tuần đã dùng 95%" hiện được trên desktop
+- [ ] Kiểm mục `agent-stack:ui` có vào system prompt trên desktop không: `echo $AGENT_STACK_UI` trong Bash ra trống, nhưng chưa kết luận vì shell của Bash có thể khởi động trước khi mod đặt biến (thăm dò `--plugin-dir` cho thấy hook lệnh thấy biến). Cách kiểm rẻ: thêm `/cay ?` in chẩn đoán (nơi vẽ ở lần compose gần nhất, cờ paneShown, đã đặt biến chưa), hay hỏi một câu tiến độ ở phiên mới rồi xem model có vẽ widget không
 - [ ] Đợt 3: toast cho Stop, PreToolUse, StopFailure; lệnh `/bien-nhan`
 - [ ] Cài plugin 0.10.0 (`./install.sh --apply --only plugin`) để ghi bản cài @ban
