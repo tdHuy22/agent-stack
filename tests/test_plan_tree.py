@@ -176,8 +176,20 @@ class PlanTree(TempDirTestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         data = json.loads(out.stdout)
         self.assertNotIn("all_leaves", data["milestones"][0])
+        self.assertEqual(data["path"], str((self.tmp / data["plan"]).resolve()))
         self.assertEqual(run("--pick", "8").returncode, 1)
         self.assertIn("Lá [T.1]", run("--pick", "T.1").stdout)
+
+    def test_json_path_is_absolute_when_project_is_a_subfolder(self):
+        # Mod giao diện stat đúng file này; "plan" chỉ tương đối với gốc project, không với cwd.
+        subprocess.run(["git", "init", "-q", str(self.tmp)], check=True, timeout=30)
+        sub = self.tmp / "src" / "pkg"
+        sub.mkdir(parents=True)
+        out = subprocess.run([sys.executable, str(SCRIPT), "--project", str(sub), "--json"],
+                             capture_output=True, text=True, timeout=30)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["plan"], "PLAN.md")
+        self.assertEqual(data["path"], str((self.tmp / "PLAN.md").resolve()))
 
     def test_nested_steps_and_done_marks(self):
         plan = PLAN.replace("""  1. ~~Dọn thư mục cũ~~

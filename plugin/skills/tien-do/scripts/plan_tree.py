@@ -202,7 +202,7 @@ def build(root: Path, max_leaves: int = MAX_LEAVES) -> dict:
                            "total": phase["done"] + len(phase["open"]) if phase else None})
     done_phases = [p for p in phases if not p["open"]]
     rel = path.relative_to(root).as_posix() if str(path).startswith(str(root)) else str(path)
-    return {"project": root.name, "plan": rel,
+    return {"project": root.name, "plan": rel, "path": str(path),
             "boxes": {"done": sum(p["done"] for p in phases),
                       "total": sum(p["done"] + len(p["open"]) for p in phases)},
             "done_phases": {"count": len(done_phases),

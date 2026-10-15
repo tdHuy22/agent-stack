@@ -19,3 +19,5 @@ plugin/skills/giong-van/samples/*
 vendor/
 plugin/.agent-stack-home
 .venv-skillspector/
+# Kiểu do Claude Code tự ghi cạnh mod khi nạp
+plugin/.claude-plugin/types/

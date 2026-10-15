@@ -534,6 +534,10 @@ python3 plugin/skills/session-keeper/scripts/receipt.py run -- claude plugin val
 ```
 
 ```bash
+python3 plugin/skills/session-keeper/scripts/receipt.py run -- "$(python3 tools/claude_app.py)" plugin test plugin
+```
+
+```bash
 python3 evals/run_eval.py --self-test
 ```
 
