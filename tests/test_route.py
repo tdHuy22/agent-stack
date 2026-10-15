@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import subprocess
 import sys
@@ -143,6 +144,11 @@ class HookSuggestion(TempDirTestCase):
     def test_suggests_switch_once_per_session(self):
         data = {"session_id": "s1", "effort": {"level": "medium"}}
         first = route.hook_suggestion("Review bảo mật hàm đăng nhập này giúp mình", data)
+        # Cho dải của mod: luôn có hai khóa; chỉ là tên model hay mức effort, hoặc None.
+        self.assertIn("switch", first)
+        self.assertIn("effort", first)
+        for key in ("switch", "effort"):
+            self.assertTrue(first[key] is None or re.fullmatch(r"[a-z0-9][a-z0-9.-]*", first[key]), first[key])
         self.assertNotIn("/effort", first["user"])  # reviewer tự chạy effort của nó (N2)
         self.assertIn("agent-stack:reviewer", first["user"])
         self.assertIn("đừng tự đổi", first["context"])

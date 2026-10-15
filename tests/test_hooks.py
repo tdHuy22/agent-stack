@@ -331,6 +331,31 @@ class HookTests(TempDirTestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("plan_tree.py --widget", out["reason"])
 
+    def test_router_suggestion_is_saved_for_the_ui_band_and_cleared_when_none(self):
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+
+        def read(sid):
+            out = subprocess.run(["python3", str(HOOKS / "ui_status.py"), "--router"], input=json.dumps({"session_id": sid}),
+                                 capture_output=True, text=True, timeout=30, env=env)
+            self.assertEqual((out.returncode, out.stderr), (0, ""))
+            return json.loads(out.stdout)
+
+        self.submit("r1", "Review bảo mật hàm đăng nhập này giúp mình")
+        hint = read("r1")
+        self.assertTrue(hint["user"].startswith("🧭 router:"), hint)
+        self.assertIn("switch", hint)
+        self.assertEqual(read("r2"), {})  # phiên khác không đọc được gợi ý của phiên này
+        # Tin sau không có gợi ý: dải không được hiện gợi ý cũ.
+        self.submit("r1", "ok cảm ơn")
+        self.assertEqual(read("r1"), {})
+        # Gợi ý quá hạn (quá 10 phút) bị bỏ.
+        code = ("import sys, time; sys.path.insert(0, sys.argv[1]); import agentstack as A; "
+                "A.record_router('r3', {'user': 'x', 'switch': 'sonnet', 'effort': None}); "
+                "print(A.read_router('r3')['switch'], A.read_router('r3', now=time.time() + A.ROUTER_LAST_TTL + 1))")
+        out = subprocess.run(["python3", "-c", code, str(PLUGIN / "lib")], capture_output=True, text=True, timeout=30,
+                             env=env)
+        self.assertEqual(out.stdout.strip(), "sonnet None", out.stderr)
+
     def test_ui_status_writes_limits_and_prints_a_plain_line(self):
         resets = int(time.time()) + 3600
         payload = {"session_id": "s1", "model": {"id": "claude-opus-5-5"}, "context_window": {"used_percentage": 23.4},

@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register } from 'claude-code'
 
-import type { PlanTree, PlanView } from '../types'
+import type { PlanTree, PlanView, RouterHint } from '../types'
 
 const PANE = 'ke-hoach'
 const COMMAND = 'cay'
@@ -24,6 +24,10 @@ const EMPTY: PlanView = { tree: null, error: null, planPath: null, mtimeMs: 0 }
 
 const plan = atom({ plugin: 'agent-stack', key: 'plan' } as const, EMPTY)
 const paneShown = atom({ plugin: 'agent-stack', key: 'paneShown' } as const, false)
+const routerHint = atom({ plugin: 'agent-stack', key: 'routerHint' } as const, null as RouterHint | null)
+// Giá trị đưa vào ô nhập từ dải: tên model hay mức effort (TM-37).
+const SETTING = /^[a-z0-9][a-z0-9.-]{0,40}$/
+const ROUTER_HINT_MS = 10 * 60_000 // cùng hạn với ROUTER_LAST_TTL của agentstack.py
 
 // Mục system prompt cố định (TM-32): chữ là hằng, thêm từ yêu cầu đầu tiên, không phụ thuộc trạng thái pane, để
 // không làm đổi system prompt giữa phiên (đổi là ghi lại cả context vào prompt cache).
@@ -153,6 +157,40 @@ function stopToast(reason: string): string | null {
   return 'agent-stack: hook Stop nhắc thêm một bước trước khi xong'
 }
 
+/** Đọc gợi ý router của tin vừa gửi (prompt_submit.py ghi, ui_status.py --router in) cho dải trên ô nhập. */
+async function loadRouterHint($: EngineInterface, sessionId: string): Promise<void> {
+  let hint: RouterHint | null = null
+  try {
+    const run = await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`, '--router'], {
+      stdin: JSON.stringify({ session_id: sessionId }),
+      timeoutMs: TIMEOUT_MS,
+    })
+    const data = JSON.parse(run.stdout || '{}') as Partial<RouterHint>
+    if (typeof data.user === 'string' && data.user) {
+      hint = {
+        user: data.user.replace(/^🧭 router: /, '').slice(0, 300),
+        switch: typeof data.switch === 'string' && SETTING.test(data.switch) ? data.switch : null,
+        effort: typeof data.effort === 'string' && SETTING.test(data.effort) ? data.effort : null,
+        loadedAt: await $.clock.now(),
+      }
+    }
+  } catch {
+    hint = null
+  }
+  await update($, routerHint, () => hint)
+}
+
+/** Điền lệnh vào ô nhập trống, không gửi; ô nhập đang có chữ thì chỉ nhắc, không ghi đè. */
+async function fillCommand($: EngineInterface, command: string): Promise<void> {
+  const box = await $.prompt.read()
+  if (box.text.trim()) {
+    $.ui.toast(`Xoá ô nhập rồi bấm lại, hay gõ ${command}`)
+    return
+  }
+  const filled = await $.prompt.fill({ text: command, mode: 'replace' })
+  if (!filled.isFilled) $.ui.toast(`Gõ ${command} để đổi`)
+}
+
 function paneTitle(view: PlanView): string {
   return view.tree ? `Kế hoạch · ${view.tree.project}` : 'Kế hoạch'
 }
@@ -239,8 +277,42 @@ export const register: Register = on => {
     } catch {
       // Router quay về đọc transcript.
     }
-    return next(e)
+    const result = await next(e)
+    // Sau hook Python: gợi ý router của tin này đã ghi ra state; đọc ngoài lượt để tin không phải chờ.
+    const sessionId = e.session_id
+    $.clock.after(0, () => loadRouterHint($, sessionId))
+    return result
   }).catch(($, e, next) => next(e))
+
+  // Dải trên ô nhập: gợi ý router của tin vừa gửi, nút điền /model hay /effort khi router bảo đổi còn rẻ.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const hint = await read($, routerHint)
+    // Gợi ý cũ (máy để qua đêm, đổi model bằng lệnh không qua UserPromptSubmit) thì thôi hiện.
+    if (!hint || e.props.hasSurvey || (await $.clock.now()) - hint.loadedAt > ROUTER_HINT_MS) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" flexWrap="wrap" gap={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Text color="suggestion" wrap="wrap">
+            🧭 {hint.user}
+          </Text>
+        </Box>
+        {hint.switch && (
+          <Button key="router-model" onPress={() => fillCommand($, `/model ${hint.switch}`)}>
+            {`/model ${hint.switch}`}
+          </Button>
+        )}
+        {hint.effort && (
+          <Button key="router-effort" onPress={() => fillCommand($, `/effort ${hint.effort}`)}>
+            {`/effort ${hint.effort}`}
+          </Button>
+        )}
+        <Button key="router-hide" plain dimColor onPress={() => update($, routerHint, () => null)}>
+          Ẩn
+        </Button>
+      </Box>
+    )
+  })
 
   // Chỉ phiên có nơi vẽ (terminal, app desktop) và pane đã thật sự được vẽ mới thêm mục; phiên `-p` (eval) hay
   // terminal quá hẹp giữ luật cũ (vẽ widget). Cờ giữ tới hết phiên nên mục không bật tắt theo pane (TM-32).

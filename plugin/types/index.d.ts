@@ -37,9 +37,18 @@ export type PlanView = {
   mtimeMs: number
 }
 
+/** Gợi ý router của tin vừa gửi (ui_status.py --router), cho dải trên ô nhập. */
+export type RouterHint = {
+  user: string
+  switch: string | null
+  effort: string | null
+  /** Lúc mod nạp gợi ý ($.clock.now, ms); dải bỏ gợi ý quá 10 phút. */
+  loadedAt: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     // paneShown: pane Kế hoạch đã được vẽ ít nhất một lần trong phiên (giữ tới hết phiên).
-    'agent-stack': { plan: PlanView; paneShown: boolean }
+    'agent-stack': { plan: PlanView; paneShown: boolean; routerHint: RouterHint | null }
   }
 }

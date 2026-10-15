@@ -1772,6 +1772,42 @@ def _whole(value) -> int | None:
     return int(value)
 
 
+ROUTER_LAST_TTL = 600  # gợi ý router của tin vừa gửi chỉ dùng cho dải trong 10 phút
+
+
+def router_last_path(session_id: str) -> Path:
+    """Gợi ý router của tin gần nhất trong phiên (dải trên ô nhập của mod); tên là sha1 của session_id."""
+    return state_dir() / "router-last" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
+
+
+def record_router(session_id: str, suggestion) -> None:
+    """Ghi gợi ý router của tin vừa gửi cho mod vẽ dải; tin không có gợi ý thì xoá, để dải không hiện gợi ý cũ."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    path = router_last_path(session_id)
+    try:
+        if not suggestion:
+            path.unlink(missing_ok=True)
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(path, {"session_id": session_id, "ts": time.time(), "user": suggestion.get("user"),
+                                 "switch": suggestion.get("switch"), "effort": suggestion.get("effort")})
+    except OSError:
+        pass
+
+
+def read_router(session_id: str, now: float | None = None):
+    """Gợi ý router còn mới (dưới ROUTER_LAST_TTL giây) của đúng phiên, hay None."""
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    record = read_json(router_last_path(session_id), None)
+    now = time.time() if now is None else now
+    if (not isinstance(record, dict) or record.get("session_id") != session_id
+            or not isinstance(record.get("ts"), (int, float)) or now - record["ts"] > ROUTER_LAST_TTL):
+        return None
+    return {k: record.get(k) for k in ("user", "switch", "effort")}
+
+
 def record_mod_usage(data: dict, at_prompt: bool = False, now: float | None = None) -> bool:
     """Ghi số liệu phiên từ mod. Sau lượt (`at_prompt` False): model, context, `ts` là lúc lượt xong (lần gọi model
     gần nhất). Lúc gửi tin (`at_prompt`): chỉ cập nhật model hiện tại của file đã có, để thấy /model đổi giữa hai

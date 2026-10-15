@@ -29,7 +29,7 @@ const TREE = {
 type Setup = {
   runs: string[][]; fills: string[]; tree?: unknown; exitCode?: number
   cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number; unplaced?: boolean
-  statusStdins?: string[]; statusArgs?: string[][]; statusFails?: boolean
+  statusStdins?: string[]; statusArgs?: string[][]; statusFails?: boolean; routerOut?: string
 }
 
 /** Giả lập phần engine mà module cần: thư mục phiên, script Python, stat, ô nhập. */
@@ -50,7 +50,7 @@ function fake(on: On, s: Setup) {
       s.statusStdins?.push(e.init?.stdin ?? '')
       s.statusArgs?.push([...e.argv])
       if (s.statusFails) return { deny: 'python3 không chạy được' }
-      const stdout = s.statusOut ?? 'ctx 23% · 5h 41%\n'
+      const stdout = e.argv.includes('--router') ? (s.routerOut ?? '{}') : (s.statusOut ?? 'ctx 23% · 5h 41%\n')
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     s.runs.push([...e.argv])
@@ -385,4 +385,65 @@ test('trước hook UserPromptSubmit của Python: ghi model hiện tại qua ui
   }
   // Lỗi khi chạy script (python3 hỏng) không chặn tin nhắn: hook Python vẫn nhận đúng input cả hai lần (TM-36).
   expect(seen).toEqual(['sid-2|sửa lỗi parser', 'sid-2|sửa lỗi parser'])
+})
+
+const BAND = {
+  hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 80,
+  scroll: { top: 0, bodyRows: 4, rows: 4 }, view: {},
+} as const
+
+test('dải trên ô nhập: gợi ý router của tin vừa gửi, nút chỉ điền /model khi ô nhập trống', async ($, on) => {
+  const s: Setup = { runs: [], fills: [], statusArgs: [] }
+  const clock = fake(on, s)
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('classic.UserPromptSubmit', () => ({}))
+  // Dưới mod: engine tự vẽ dải (không có gì) khi mod trả next(e).
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine-band" />
+  })
+  let draft = ''
+  on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  s.routerOut = JSON.stringify({ user: '🧭 router: feature → /model sonnet (rẻ) · skill reuse-best', switch: 'sonnet', effort: 'medium; rm -rf' })
+  await $.classic.UserPromptSubmit({ session_id: 'sid-3', prompt: 'viết tính năng' } as never)
+  await clock.advance(1)
+  expect(s.statusArgs?.at(-1)?.slice(-1)).toEqual(['--router'])
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'agent-stack', surface, component: 'AbovePrompt', props: BAND as never })
+    expect(await ui.find({ type: 'Text', text: /feature → \/model sonnet/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /🧭 router:/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Button', key: 'router-model' })).toBeDefined()
+    // Giá trị effort lạ bị bỏ, không có nút (TM-37).
+    expect(await ui.find({ type: 'Button', key: 'router-effort' })).toBeUndefined()
+    await ui.unmount()
+  }
+  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'AbovePrompt', props: BAND as never })
+  draft = 'đang gõ dở'
+  await ui.press({ key: 'router-model' })
+  expect(s.fills).toEqual([])
+  expect(toasts.at(-1)).toContain('/model sonnet')
+  draft = ''
+  await ui.press({ key: 'router-model' })
+  expect(s.fills).toEqual(['/model sonnet'])
+  await ui.unmount()
+  // Quá 10 phút thì dải thôi hiện gợi ý cũ.
+  await clock.advance(10 * 60_000 + 1)
+  const stale = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'AbovePrompt', props: BAND as never })
+  expect(await stale.find({ type: 'Button', key: 'router-model' })).toBeUndefined()
+  await stale.unmount()
+  // Tin mới có gợi ý thì hiện lại; bấm Ẩn thì tắt.
+  await $.classic.UserPromptSubmit({ session_id: 'sid-3', prompt: 'viết tiếp' } as never)
+  await clock.advance(1)
+  const again = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'AbovePrompt', props: BAND as never })
+  expect(await again.find({ type: 'Button', key: 'router-model' })).toBeDefined()
+  await again.press({ key: 'router-hide' })
+  await again.unmount()
+  const after = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'AbovePrompt', props: BAND as never })
+  expect(await after.find({ type: 'Button', key: 'router-model' })).toBeUndefined()
+  await after.unmount()
 })

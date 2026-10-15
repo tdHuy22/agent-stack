@@ -98,6 +98,7 @@ def main():
             import route  # noqa: E402
             flags = route.turn_flags(prompt, data.get("cwd"))
             suggestion = route.hook_suggestion(prompt, data)
+            A.record_router(sid, suggestion)  # dải gợi ý của mod giao diện; tự bắt lỗi
             if suggestion:
                 context.append(suggestion["context"])
                 user.append(suggestion["user"])

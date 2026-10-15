@@ -473,10 +473,12 @@ def hook_suggestion(prompt: str, data: dict):
                        "task-router. Sang việc mới không cần hội thoại này thì đề nghị /clear rồi mới đổi. Việc cần model "
                        f"mạnh hơn mới làm đúng thì vẫn nên đổi (chất lượng trước chi phí). Dòng ➡️ ghi `Model: giữ {cur}`.")
     # Effort của luật đi kèm model của luật; việc do agent tự làm thì effort cũng nằm ở agent.
+    effort_cmd = None
     effort_differs = hit["effort"] and now_effort and hit["effort"] != now_effort and not own
     if effort_differs and not (advice and not advice["cheap"]) and (
             not now_model or effort_keeps_cache(now_model) or (advice and advice["cheap"])):
         parts_user.append(f"/effort {hit['effort']}")
+        effort_cmd = hit["effort"]
     if hit["agent"]:
         parts_user.append(f"agent {hit['agent']}")
         parts_ctx.append(f"giao cho subagent {hit['agent']}")
@@ -500,7 +502,9 @@ def hook_suggestion(prompt: str, data: dict):
                + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi."
                + (f" {switch_note}" if switch_note else ""))
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)
-    return {"context": context, "user": user, "rule": hit["rule"]}
+    # Cho dải của mod: model chỉ khi đổi còn rẻ, effort chỉ khi đã gợi ý /effort ở trên.
+    switch = model_name(hit["model"]) if advice and advice["cheap"] else None
+    return {"context": context, "user": user, "rule": hit["rule"], "switch": switch, "effort": effort_cmd}
 
 
 def evaluate(path: Path, minimum: float) -> int:
