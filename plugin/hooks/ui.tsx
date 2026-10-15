@@ -15,6 +15,8 @@ const CLOSED_KEY = 'planPaneClosed'
 const CODE = /^[A-Za-z0-9][A-Za-z0-9.]{0,15}$/
 const TIMEOUT_MS = 10_000
 const POLL_MS = 5_000
+// Ghi model trước hook UserPromptSubmit của Python: nhanh hay bỏ, không được giữ tin nhắn lâu (TM-36).
+const PROMPT_TIMEOUT_MS = 2_000
 const TAG_LABEL: Record<string, string> = { ban: 'cần bạn', cho: 'chờ bên ngoài', usd: 'tốn tiền' }
 // Pane tự cuộn nên hiện đủ việc của mỗi mốc, không thu gọn như widget.
 const MAX_LEAVES = '200'
@@ -104,8 +106,9 @@ async function poll($: EngineInterface): Promise<void> {
 }
 
 /** Status line: số liệu context và hạn mức qua ui_status.py, script đó ghi luôn state/limits.json để hook
- *  UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline của terminal không chạy). */
-async function refreshStatus($: EngineInterface): Promise<void> {
+ *  UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline của terminal không chạy). `turnEnd` (sau
+ *  lượt phiên chính) thì script ghi thêm state/session-usage/ cho router: model, context, lúc gọi model gần nhất. */
+async function refreshStatus($: EngineInterface, turnEnd = false): Promise<void> {
   try {
     const usage = await $.session.usage()
     const limits: Record<string, { used_percentage: number; resets_at?: number }> = {}
@@ -119,8 +122,13 @@ async function refreshStatus($: EngineInterface): Promise<void> {
     const payload = {
       session_id: await $.session.id(),
       model: { id: await $.session.model() },
-      context_window: { used_percentage: usage.context.percent ?? null },
+      context_window: {
+        used_percentage: usage.context.percent ?? null,
+        total_input_tokens: usage.context.tokens ?? null,
+        context_window_size: usage.context.window,
+      },
       rate_limits: limits,
+      turn_end: turnEnd,
     }
     const run = await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`], {
       stdin: JSON.stringify(payload),
@@ -207,13 +215,30 @@ export const register: Register = on => {
     const done = await next(e)
     // Lượt của subagent không đổi kế hoạch của phiên chính (TM-29).
     if (!e.agentId) {
+      // Lượt không có usage (bị ngắt trước lần gọi nào, lỗi API) không gọi model: không đóng dấu lúc gọi gần nhất.
+      const called = e.usage !== undefined
       $.clock.after(0, async () => {
         await refresh($)
-        await refreshStatus($)
+        await refreshStatus($, called)
       })
     }
     return done
   })
+
+  // Trước hook Python (router): ghi model hiện tại để router thấy /model đổi giữa hai lượt mà không đọc transcript.
+  // Lỗi hay chậm thì bỏ qua, tin nhắn đi tiếp với `e` nguyên vẹn (TM-36).
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    try {
+      const payload = { session_id: e.session_id, model: { id: await $.session.model() } }
+      await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`, '--prompt'], {
+        stdin: JSON.stringify(payload),
+        timeoutMs: PROMPT_TIMEOUT_MS,
+      })
+    } catch {
+      // Router quay về đọc transcript.
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   // Chỉ phiên có nơi vẽ (terminal, app desktop) và pane đã thật sự được vẽ mới thêm mục; phiên `-p` (eval) hay
   // terminal quá hẹp giữ luật cũ (vẽ widget). Cờ giữ tới hết phiên nên mục không bật tắt theo pane (TM-32).

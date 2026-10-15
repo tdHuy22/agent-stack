@@ -29,7 +29,7 @@ const TREE = {
 type Setup = {
   runs: string[][]; fills: string[]; tree?: unknown; exitCode?: number
   cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number; unplaced?: boolean
-  statusStdins?: string[]
+  statusStdins?: string[]; statusArgs?: string[][]; statusFails?: boolean
 }
 
 /** Giả lập phần engine mà module cần: thư mục phiên, script Python, stat, ô nhập. */
@@ -48,6 +48,8 @@ function fake(on: On, s: Setup) {
     }
     if (e.argv[1]?.endsWith('ui_status.py')) {
       s.statusStdins?.push(e.init?.stdin ?? '')
+      s.statusArgs?.push([...e.argv])
+      if (s.statusFails) return { deny: 'python3 không chạy được' }
       const stdout = 'ctx 23% · 5h 41% · 7d –\n'
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
@@ -254,7 +256,7 @@ test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status
   on('session.usage', () => ({
     value: {
       startedAt: 0,
-      context: { window: 200000, percent: 23 },
+      context: { window: 200000, percent: 23, tokens: 46000 },
       rateLimits: [
         { kind: 'five_hour', percentUsed: 41, resetsAt: '2026-10-15T12:00:00Z' },
         { kind: 'spend_limit', percentUsed: 5 },
@@ -268,11 +270,20 @@ test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status
     return { value: undefined }
   })
   const turn = { reason: 'answer', text: 'xong', answer: 'xong', isAborted: false, durationMs: 1 } as const
-  await $.turn.complete({ ...turn, turnId: 't1' })
+  const usage = { model: 'claude-opus-5-5', input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+  await $.turn.complete({ ...turn, turnId: 't1', usage } as never)
   await clock.advance(1)
+  // Lượt bị ngắt hay lỗi API không có usage: không gọi model nên không đóng dấu lúc gọi gần nhất.
+  await $.turn.complete({ ...turn, reason: 'error', isAborted: false, turnId: 't2' } as never)
+  await clock.advance(1)
+  expect(JSON.parse(stdins[1] ?? '{}').turn_end).toBe(false)
   const sent = JSON.parse(stdins[0] ?? '{}')
   expect(sent.session_id).toBe('sid-1')
   expect(sent.context_window.used_percentage).toBe(23)
+  // Sau lượt phiên chính: số context chính thức và cờ turn_end để ui_status.py ghi state/session-usage/ cho router.
+  expect(sent.context_window.total_input_tokens).toBe(46000)
+  expect(sent.context_window.context_window_size).toBe(200000)
+  expect(sent.turn_end).toBe(true)
   expect(sent.rate_limits.five_hour).toEqual({ used_percentage: 41, resets_at: 1792065600 })
   expect(sent.rate_limits.spend_limit).toBeUndefined()
   expect(statuses).toContain('agent-stack · ctx 23% · 5h 41% · 7d –')
@@ -346,4 +357,26 @@ test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, k
     'agent-stack: chạy chốt việc trước khi báo xong',
     'agent-stack: hiện cây kế hoạch cho bạn chọn việc',
   ])
+})
+
+test('trước hook UserPromptSubmit của Python: ghi model hiện tại qua ui_status.py --prompt, input giữ nguyên', async ($, on) => {
+  const stdins: string[] = []
+  const args: string[][] = []
+  const s: Setup = { runs: [], fills: [], statusStdins: stdins, statusArgs: args }
+  fake(on, s)
+  on('session.model', () => ({ value: 'claude-sonnet-5-5' }))
+  const seen: string[] = []
+  on('classic.UserPromptSubmit', ($, e) => {
+    seen.push(`${e.session_id}|${e.prompt}`)
+    return {}
+  })
+  for (const fails of [false, true]) {
+    s.statusFails = fails
+    await $.classic.UserPromptSubmit({ session_id: 'sid-2', prompt: 'sửa lỗi parser' } as never)
+    expect(args.at(-1)?.slice(-1)).toEqual(['--prompt'])
+    expect(args.at(-1)?.[1]?.endsWith('hooks/ui_status.py')).toBe(true)
+    expect(JSON.parse(stdins.at(-1) ?? '{}')).toEqual({ session_id: 'sid-2', model: { id: 'claude-sonnet-5-5' } })
+  }
+  // Lỗi khi chạy script (python3 hỏng) không chặn tin nhắn: hook Python vẫn nhận đúng input cả hai lần (TM-36).
+  expect(seen).toEqual(['sid-2|sửa lỗi parser', 'sid-2|sửa lỗi parser'])
 })

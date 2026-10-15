@@ -10,6 +10,7 @@ from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase
 ROUTE = PLUGIN / "skills" / "task-router" / "scripts" / "route.py"
 sys.path.insert(0, str(ROUTE.parent))
 import route  # noqa: E402
+import agentstack as A  # noqa: E402
 
 
 class RouterRules(TempDirTestCase):
@@ -237,6 +238,39 @@ class HookSuggestion(TempDirTestCase):
                 "modelId": "claude-haiku-5-5"}}}) + "\n", encoding="utf-8")
         hit = route.hook_suggestion(self.DEBUG, {"session_id": "sw", "transcript_path": str(path)})
         self.assertIn("/model opus (vừa đổi model, cache mới chưa có)", hit["user"])
+
+    def mod_usage(self, sid, model, ctx, age, call_model=None, updated_age=1):
+        """File số liệu do mod giao diện ghi (ui_status.py), như sau một lượt rồi một lần gửi tin."""
+        now = time.time()
+        assert A.record_mod_usage({"session_id": sid, "model": {"id": call_model or model}, "turn_end": True,
+                                   "context_window": {"total_input_tokens": ctx}}, now=now - age)
+        assert A.record_mod_usage({"session_id": sid, "model": model}, at_prompt=True, now=now - updated_age)
+
+    def test_router_prefers_the_mod_figures_over_the_transcript(self):
+        # Transcript nói cache còn ấm (250K, 2 phút trước); số của mod nói lượt cuối đã 2 giờ trước: theo mod.
+        data = {"session_id": "m1", "transcript_path": self.transcript("m1", "claude-sonnet-5-5", 250000, age=120)}
+        self.mod_usage("m1", "claude-sonnet-5-5", 250000, age=2 * 3600)
+        self.assertIn("/model opus (cache đã nguội)", route.hook_suggestion(self.DEBUG, data)["user"])
+        # /model giữa hai lượt (mod ghi lúc gửi tin): đổi tiếp là rẻ, như nhánh transcript.
+        self.mod_usage("m2", "claude-haiku-5-5", 300000, age=60, call_model="claude-sonnet-5-5")
+        hit = route.hook_suggestion(self.DEBUG, {"session_id": "m2", "transcript_path": str(self.tmp / "khong.jsonl")})
+        self.assertIn("/model opus (vừa đổi model, cache mới chưa có)", hit["user"])
+        # Cache còn ấm theo mod mà không có transcript: vẫn khuyên giữ model.
+        self.mod_usage("m3", "claude-sonnet-5-5", 250000, age=60)
+        hit = route.hook_suggestion(self.DEBUG, {"session_id": "m3"})
+        self.assertIn("giữ sonnet (đổi tốn ≈2,00 USD)", hit["user"])
+
+    def test_router_falls_back_to_the_transcript_without_fresh_mod_figures(self):
+        warm = lambda sid: {"session_id": sid,
+                            "transcript_path": self.transcript(sid, "claude-sonnet-5-5", 250000, age=120)}
+        # Không có file (OpenCode, phiên -p): đọc transcript như cũ.
+        self.assertIn("giữ sonnet", route.hook_suggestion(self.DEBUG, warm("f1"))["user"])
+        # File cũ hơn 5 phút, hay của phiên khác: bỏ, đọc transcript (TM-34).
+        self.mod_usage("f2", "claude-sonnet-5-5", 250000, age=2 * 3600, updated_age=400)
+        self.assertIn("giữ sonnet", route.hook_suggestion(self.DEBUG, warm("f2"))["user"])
+        self.mod_usage("khac", "claude-sonnet-5-5", 250000, age=2 * 3600)
+        A.mod_usage_path("khac").rename(A.mod_usage_path("f3"))
+        self.assertIn("giữ sonnet", route.hook_suggestion(self.DEBUG, warm("f3"))["user"])
 
     def test_switch_cost_uses_the_target_price_and_cache_lifetime(self):
         now = time.time()

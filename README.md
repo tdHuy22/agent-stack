@@ -32,7 +32,7 @@ Làm việc nhiều ngày với agent lập trình hay vấp bốn chuyện:
 |---|---|
 | **Mất tiến độ** khi hết hạn mức, crash, compact hay đổi công cụ | Trạng thái nằm trên đĩa: mục §0 "Đang ở đâu, việc tiếp theo" của `PLAN.md`, `.agent/HANDOFF.md`, `.agent/LAST-TURN.md`. Hook tự nạp lại khi mở phiên và tự ghi lúc gửi tin (đang chạy), khi xong lượt và khi lỗi API kết thúc lượt, kể cả ở thư mục không phải project. |
 | **Không biết làm gì tiếp** khi quay lại project sau vài ngày | Skill `tien-do` đọc §0, git, TODO rồi xếp việc theo 5 bậc ưu tiên; cây kế hoạch bấm chọn được. |
-| **Tốn hạn mức** vì chọn model quá mạnh, hoặc làm hỏng việc vì chọn quá yếu | Router gợi ý model, effort, subagent, skill cho từng tin nhắn, dựa trên hồ sơ project và số liệu eval của chính người dùng. Đổi model giữa phiên làm mất prompt cache, nên router đọc transcript và chỉ gợi ý `/model` khi rẻ; lúc khác gợi ý giữ model và giao subagent. Cuối mỗi câu trả lời có dòng `➡️`. |
+| **Tốn hạn mức** vì chọn model quá mạnh, hoặc làm hỏng việc vì chọn quá yếu | Router gợi ý model, effort, subagent, skill cho từng tin nhắn, dựa trên hồ sơ project và số liệu eval của chính người dùng. Đổi model giữa phiên làm mất prompt cache, nên router đọc số liệu phiên (của mod giao diện, không có thì transcript) và chỉ gợi ý `/model` khi rẻ; lúc khác gợi ý giữ model và giao subagent. Cuối mỗi câu trả lời có dòng `➡️`. |
 | **Cài đồ bên thứ ba thiếu kiểm tra** | Skill `vet-skill` ghim commit, quét dấu hiệu độc hại, ghi kết quả vào `vetted.lock`. Hook chặn các lệnh cài quen thuộc khi đích chưa được duyệt. |
 
 Thêm vào đó là các cổng chất lượng: không được nói "xong" khi chưa có biên nhận kiểm chứng, threat model ngắn trước khi code chức năng đụng ranh giới tin cậy, review đối kháng theo mức rủi ro của diff.

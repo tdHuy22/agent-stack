@@ -18,9 +18,9 @@ tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo
 cấu hình kiểm kiểu, biên dịch) mà chưa bật LSP thì được đề xuất bật LSP riêng cho project đó (scope local).
 
 Router chỉ GỢI Ý. Hook không thể đổi model hay effort; người dùng tự đổi bằng /model, /effort. Đổi model giữa phiên
-phải ghi lại cả context vào cache của model mới, nên router đọc phần cuối transcript (model, cỡ context, lúc gọi gần
-nhất) và chỉ gợi ý /model khi rẻ (đầu phiên, context nhỏ, hay cache đã hết hạn); còn lại gợi ý giữ model và giao phần
-việc cho subagent chạy model đó. Đổi effort giữ cache trên các model 5.x nên được gợi ý thoải mái.
+phải ghi lại cả context vào cache của model mới, nên router đọc model, cỡ context và lúc gọi gần nhất (số do mod giao
+diện ghi trong state/session-usage/, không có thì phần cuối transcript) và chỉ gợi ý /model khi rẻ (đầu phiên, context
+nhỏ, hay cache đã hết hạn); còn lại gợi ý giữ model và giao phần việc cho subagent chạy model đó. Đổi effort giữ cache trên các model 5.x nên được gợi ý thoải mái.
 """
 from __future__ import annotations
 
@@ -447,7 +447,8 @@ def hook_suggestion(prompt: str, data: dict):
         return None
     localize(hit, root)
     sid = data.get("session_id", "")
-    usage = A.session_usage(data["transcript_path"]) if data.get("transcript_path") else {}
+    # Số chính thức do mod giao diện ghi (Claude Code có mod); không có hay đã cũ (OpenCode, phiên -p) thì đọc transcript.
+    usage = A.mod_session_usage(sid) or (A.session_usage(data["transcript_path"]) if data.get("transcript_path") else {})
     now_model = (usage.get("model") or current_model(sid) or "").lower()
     now_effort = (data.get("effort") or {}).get("level")
     parts_user, parts_ctx = [], []

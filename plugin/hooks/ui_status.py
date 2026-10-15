@@ -3,7 +3,9 @@
 
 Nhận số liệu dạng statusline của Claude Code qua stdin (mod dựng từ `$.session.usage()`), ghi state/limits.json
 để hook UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline không chạy), rồi in một dòng không
-màu: `ctx 23% · 5h 41% · 7d 12%`. Luôn thoát mã 0.
+màu: `ctx 23% · 5h 41% · 7d 12%`. Payload có `turn_end` (mod gửi sau lượt phiên chính) thì ghi thêm số liệu phiên vào
+state/session-usage/ cho router (A.record_mod_usage). Với `--prompt` (mod gọi trong UserPromptSubmit, trước hook
+Python) chỉ cập nhật model hiện tại của file đó, không in gì. Luôn thoát mã 0.
 """
 import json
 import sys
@@ -29,12 +31,18 @@ def line(data: dict) -> str:
     ])
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
     try:
         data = json.loads(sys.stdin.read() or "{}")
         if not isinstance(data, dict):
             data = {}
+        if "--prompt" in argv:
+            A.record_mod_usage(data, at_prompt=True)
+            return 0
         A.record_limits(data)
+        if data.get("turn_end") is True:
+            A.record_mod_usage(data)
         sys.stdout.write(line(data))
     except Exception as exc:  # noqa: BLE001 (status chỉ là phần thêm, không bao giờ làm lỗi mod)
         A.log_event("hook-error", {"hook": "ui_status", "error": repr(exc)[:300]})

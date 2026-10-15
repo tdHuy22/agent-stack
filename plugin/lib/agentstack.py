@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import subprocess
@@ -1743,6 +1744,81 @@ def session_usage(transcript_path, tail_bytes: int = 2_000_000) -> dict:
     if out["ttl"] is None:
         out["ttl"] = 3600
     return out
+
+
+# Số liệu phiên do mod giao diện (plugin/hooks/ui.tsx) ghi qua ui_status.py: số chính thức của engine thay cho việc
+# đọc transcript (định dạng nội bộ, có thể đổi). OpenCode và phiên `-p` không có mod nên vẫn đọc transcript.
+MOD_USAGE_MAX_AGE = 300
+# Như MODEL_ID_RE, thêm ngoặc vuông cho hậu tố kiểu `[1m]`; tên lạ (không tiền tố claude-) thì bỏ (TM-34).
+MOD_MODEL_RE = re.compile(r"claude-[a-z0-9.\-\[\]]{1,72}")
+
+
+def mod_usage_path(session_id: str) -> Path:
+    """File số liệu của một phiên; tên là sha1 của session_id, không dùng chuỗi gốc (TM-35)."""
+    return state_dir() / "session-usage" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
+
+
+def _mod_model(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip().lower()
+    return value if MOD_MODEL_RE.fullmatch(value) else None
+
+
+def _whole(value) -> int | None:
+    """Số nguyên không âm, hay None (bool, chuỗi, NaN, vô cực, số âm đều bị bỏ)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        return None
+    return int(value)
+
+
+def record_mod_usage(data: dict, at_prompt: bool = False, now: float | None = None) -> bool:
+    """Ghi số liệu phiên từ mod. Sau lượt (`at_prompt` False): model, context, `ts` là lúc lượt xong (lần gọi model
+    gần nhất). Lúc gửi tin (`at_prompt`): chỉ cập nhật model hiện tại của file đã có, để thấy /model đổi giữa hai
+    lượt. Dữ liệu sai dạng thì không ghi. Trả True khi đã ghi."""
+    sid = data.get("session_id")
+    model = _mod_model((data.get("model") or {}).get("id") if isinstance(data.get("model"), dict) else data.get("model"))
+    if not isinstance(sid, str) or not sid or not model:
+        return False
+    now = time.time() if now is None else now
+    path = mod_usage_path(sid)
+    if at_prompt:
+        record = read_json(path, None)
+        if not isinstance(record, dict) or record.get("session_id") != sid:
+            return False  # chưa có lượt nào: không biết lúc gọi model gần nhất, để router đọc transcript
+        record.update(model=model, updated=now)
+    else:
+        ctx = data.get("context_window") if isinstance(data.get("context_window"), dict) else {}
+        tokens = _whole(ctx.get("total_input_tokens"))
+        if tokens is None:
+            return False
+        record = {"session_id": sid, "model": model, "call_model": model, "context": tokens,
+                  "window": _whole(ctx.get("context_window_size")), "ts": now, "updated": now}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(path, record)
+    except OSError:
+        return False
+    return True
+
+
+def mod_session_usage(session_id: str, now: float | None = None, max_age: float = MOD_USAGE_MAX_AGE) -> dict | None:
+    """Usage của phiên chính theo số của mod, cùng dạng với session_usage; None khi không có file, khác phiên, cũ hơn
+    `max_age` giây hay sai dạng (TM-34), để bên gọi quay về đọc transcript. Mod không biết TTL của cache nên lấy 3600
+    như session_usage khi không thấy."""
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    record = read_json(mod_usage_path(session_id), None)
+    if not isinstance(record, dict) or record.get("session_id") != session_id:
+        return None
+    now = time.time() if now is None else now
+    updated, ts = record.get("updated"), record.get("ts")
+    model, call_model = _mod_model(record.get("model")), _mod_model(record.get("call_model"))
+    context = _whole(record.get("context"))
+    if (_whole(updated) is None or _whole(ts) is None or not model or not call_model or context is None
+            or not -5 <= now - updated <= max_age or ts > updated):
+        return None
+    return {"model": model, "context": context, "ts": float(ts), "ttl": 3600, "switched": model != call_model}
 
 
 def last_assistant_text(transcript_path, since: float = 0, tail_bytes: int = 2_000_000) -> str:

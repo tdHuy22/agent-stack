@@ -359,6 +359,28 @@ class HookTests(TempDirTestCase):
         self.assertEqual(subprocess.run(["python3", str(HOOKS / "ui_status.py")], input="{}", capture_output=True,
                                         text=True, timeout=30, env=env).stdout, "ctx – · 5h – · 7d –")
 
+    def test_ui_status_records_session_usage_for_the_router(self):
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+        run = lambda payload, *args: subprocess.run(["python3", str(HOOKS / "ui_status.py"), *args],
+                                                    input=json.dumps(payload), capture_output=True, text=True,
+                                                    timeout=30, env=env)
+        folder = self.state / "session-usage"
+        # Lúc mở phiên (không turn_end): chưa có lần gọi model nào để ghi.
+        base = {"session_id": "u9", "model": {"id": "claude-opus-5-5"},
+                "context_window": {"used_percentage": 30, "total_input_tokens": 60000, "context_window_size": 200000}}
+        self.assertEqual(run(base).stdout, "ctx 30% · 5h – · 7d –")
+        self.assertFalse(folder.exists())
+        out = run({"session_id": "u9", "model": {"id": "claude-sonnet-5-5"}}, "--prompt")
+        self.assertEqual((out.returncode, out.stdout, folder.exists()), (0, "", False))
+        out = run(dict(base, turn_end=True))
+        self.assertEqual((out.returncode, out.stdout), (0, "ctx 30% · 5h – · 7d –"))
+        out = run({"session_id": "u9", "model": {"id": "claude-sonnet-5-5"}}, "--prompt")
+        self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
+        saved = [json.loads(p.read_text()) for p in folder.iterdir()]
+        self.assertEqual([(r["model"], r["call_model"], r["context"]) for r in saved],
+                         [("claude-sonnet-5-5", "claude-opus-5-5", 60000)])
+        self.assertEqual(run("không phải object", "--prompt").returncode, 0)
+
     def test_stop_combines_section0_and_tree_reminders(self):
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"
