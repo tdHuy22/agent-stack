@@ -113,7 +113,7 @@
   6. ~~Cài plugin 0.9.1 (`./install.sh --apply --only plugin`).~~ Xong 20:14 14/10/2026 theo lệnh của bạn.
   7. Gõ `/reload-plugins` hay mở lại các phiên đang mở, để widget cây mới (0.9.1) có hiệu lực ở đó. @ban
   8. Gõ `/reload-plugins` (hay mở phiên mới) trong app desktop, xem pane "Kế hoạch" có hiện đủ chữ không (bản sửa `31dda72`), bấm mã một việc có điền vào ô nhập không, rồi báo lại. Không hiện thì đợt 2 chuyển cây sang dải trên ô nhập. @ban
-  10. GĐ26 đợt 3 xong (`/bien-nhan`, toast hook Stop và StopFailure, plugin 0.12.0). Còn: cài bản ghi (`./install.sh --apply --only plugin`) khi bạn muốn. @ban
+  10. GĐ26 đợt 3 xong (`/bien-nhan`, toast hook Stop và StopFailure, plugin 0.12.0). Đã cài 0.12.0 lúc 16:16 15/10/2026.
   9. ~~Kiểm mục `agent-stack:ui` trên desktop.~~ Xong 15/10/2026: pane đóng tay thì không bật (đúng thiết kế); mở lại bằng `/cay` thì `AGENT_STACK_UI=1`. Chẩn đoán bằng `/cay ?`.
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
@@ -360,4 +360,4 @@ Trang so sánh: https://claude.ai/artifact/Y3LgptJa9GDoQ82Zz4XhvQ. Chọn phươ
 - [x] Kiểm status line trên desktop (15/10/2026, sau `/reload-plugins`): `state/limits.json` do `ui_status.py` ghi, có session_id của phiên desktop; cảnh báo "Hạn mức tuần đã dùng 95%" hiện được trên desktop
 - [x] Kiểm mục `agent-stack:ui` trên desktop (15/10/2026): `/cay ?` cho thấy nơi vẽ `[desktop]` nhưng pane bị bạn đóng tay nên mod không bật (đúng thiết kế); sau `/cay`, `echo $AGENT_STACK_UI` ra `1`
 - [x] Đợt 3 (15/10/2026, plugin 0.12.0): lệnh `/bien-nhan` (receipt.py show, không gọi model); toast tóm tắt khi hook Stop chặn lượt và khi lượt dừng vì lỗi API. Bỏ toast PreToolUse (hộp hỏi quyền đã hiện lý do). Bằng chứng: `plugin test` 17/17, `claude -p "/bien-nhan"` thật in đúng, review sonnet: toast phân loại nhầm khi tên file chứa "chot-viec", đã sửa kèm test
-- [ ] Cài plugin 0.12.0 (`./install.sh --apply --only plugin`) để ghi bản cài @ban
+- [x] Cài plugin 0.12.0 (16:16 15/10/2026, `./install.sh --apply --only plugin` theo lệnh của bạn; nhật ký `state/install-logs/20261015-161630.json`; `claude plugin list` báo 0.12.0 ở cả brew 2.1.292 lẫn app 2.1.295)
