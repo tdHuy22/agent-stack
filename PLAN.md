@@ -109,15 +109,15 @@
   - ~~Mở phiên mới (phiên đang mở vẫn chạy hook cũ) và để ý vài phiên: lượt đầu, câu hỏi tiến độ, lượt tick việc đều phải có widget cây; hook nhắc oan thì báo lại.~~ Xong (bạn xác nhận 11/10/2026): plugin 0.8.20 hiện widget cây đúng; phiên `254034da` vẽ widget ngay ở câu hỏi tiến độ đầu tiên.
   1. ~~Chốt 5 câu của GĐ24 trên trang so sánh, rồi làm GĐ24 (xem §1).~~ Xong 12/10/2026: code, review, commit.
   2. ~~Cài plugin 0.9.0 (`./install.sh --apply`).~~ Xong 15:00 12/10/2026 (chỉ phần plugin).
-  3. Gõ `/reload-plugins` hay mở lại các phiên đang mở (chúng còn chạy 0.8.20, chưa có tự lưu mới và chưa nhắc được). @ban
+  3. Gõ `/reload-plugins` ở các phiên Claude Code đang mở (hay mở phiên mới) để chạy code mới nhất (0.13.0); không cần cài lại vì plugin đọc thẳng từ `plugin/`. @ban
   4. ~~Thử `/advisor` trên một project.~~ Bỏ (bạn quyết 12/10/2026): còn thử nghiệm, advisor đọc transcript không có cache nên tốn kém.
   5. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   6. ~~Cài plugin 0.9.1 (`./install.sh --apply --only plugin`).~~ Xong 20:14 14/10/2026 theo lệnh của bạn.
-  7. Gõ `/reload-plugins` hay mở lại các phiên đang mở, để widget cây mới (0.9.1) có hiệu lực ở đó. @ban
-  8. Gõ `/reload-plugins` (hay mở phiên mới) trong app desktop, xem pane "Kế hoạch" có hiện đủ chữ không (bản sửa `31dda72`), bấm mã một việc có điền vào ô nhập không, rồi báo lại. Không hiện thì đợt 2 chuyển cây sang dải trên ô nhập. @ban
-  11. Cài plugin 0.13.0 (`./install.sh --apply --only plugin`) rồi `/reload-plugins`, để router dùng số liệu của mod (GĐ27). @ban
+  7. ~~Reload để dùng widget 0.9.1.~~ Gộp vào việc 3.
+  8. ~~Xem pane trên desktop.~~ Xong 15/10/2026: pane hiện đủ chữ, bấm mã điền vào ô nhập.
+  11. ~~Cài 0.13.0 rồi reload.~~ Bạn đã `/reload-plugins` 15/10/2026; cài chỉ ghi số phiên bản, không bắt buộc (README §5.4).
   12. Tùy chọn: dải AbovePrompt hiện gợi ý [router] của tin vừa gửi, kèm nút điền `/model` khi switch_advice báo rẻ (GĐ27 bỏ qua vì hạn mức).
-  10. GĐ26 đợt 3 xong (`/bien-nhan`, toast hook Stop và StopFailure, plugin 0.12.0). Đã cài 0.12.0 lúc 16:16 15/10/2026.
+  10. ~~GĐ26 đợt 3.~~ Xong 15/10/2026 (`/bien-nhan`, toast hook Stop và StopFailure), đã cài 0.12.0.
   9. ~~Kiểm mục `agent-stack:ui` trên desktop.~~ Xong 15/10/2026: pane đóng tay thì không bật (đúng thiết kế); mở lại bằng `/cay` thì `AGENT_STACK_UI=1`. Chẩn đoán bằng `/cay ?`.
   - ~~Push lên GitHub.~~ Xong 12/10/2026 theo yêu cầu của bạn: repo công khai https://github.com/tdHuy22/agent-stack (Apache-2.0, README chi tiết, sơ đồ Mermaid hiển thị đúng). Push protection chặn khóa Stripe giả của eval `sec-secrets`, nên theo lựa chọn của bạn đã viết lại lịch sử (`git filter-branch`) đổi giá trị thành `prod_token_...demo` trên 102 commit từ GĐ4; cây chỉ khác đúng dòng đó so với nhánh sao lưu `backup/truoc-viet-lai-khoa-gia` (đã xoá theo lệnh của bạn 12/10/2026). `run_eval.py --self-test` đạt sau khi viết lại. Hash commit cũ trong §0 và các file khác (như `89595dc`) không còn khớp lịch sử mới.
 - **Ghi nhớ (đã xong, không phải việc):**
@@ -369,5 +369,5 @@ Trang so sánh: https://claude.ai/artifact/Y3LgptJa9GDoQ82Zz4XhvQ. Chọn phươ
 ### GĐ27: Router dùng số liệu phiên của mod (15/10/2026)
 - [x] `ui.tsx` ghi model, context, lúc lượt xong vào `state/session-usage/` qua `ui_status.py` (sau lượt và trước hook UserPromptSubmit)
 - [x] `route.py` đọc file đó khi cùng phiên và mới (dưới 5 phút), không có thì đọc transcript; test cả hai nhánh; TM-34..36
-- [ ] Cài plugin 0.13.0 và `/reload-plugins` @ban
+- [x] Cài plugin 0.13.0 và `/reload-plugins`: bạn đã reload 15/10/2026; cài chỉ ghi số phiên bản, không bắt buộc @ban
 - [ ] Tùy chọn: dải AbovePrompt hiện gợi ý [router] kèm nút điền `/model` khi rẻ

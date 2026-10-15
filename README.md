@@ -190,13 +190,15 @@ Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ x
 
 ### 5.4 Cập nhật sau khi sửa plugin
 
-CLI trong terminal nạp plugin tại chỗ, sửa trong repo có hiệu lực từ phiên sau. Desktop app chạy bản chép trong `~/.claude/plugins/cache/`: tăng `version` trong `plugin/.claude-plugin/plugin.json` rồi chạy
+Marketplace `agent-stack-local` là chính thư mục repo, nên Claude Code (CLI lẫn app desktop) đọc plugin thẳng từ `plugin/`: `claude plugin list` ghi "Read from: …/agent-stack/plugin". Sửa trong repo có hiệu lực ở phiên mới, hoặc gõ `/reload-plugins` trong phiên đang mở. Không cần cài lại để code mới chạy.
+
+Sau khi tăng `version` trong `plugin/.claude-plugin/plugin.json`, chạy
 
 ```bash
 ./install.sh --apply --only plugin
 ```
 
-và mở phiên mới. Bản chép tìm về repo nhờ `plugin/.agent-stack-home`, nên `state/` vẫn dùng chung.
+chỉ để Claude Code ghi nhận số phiên bản mới và để `INSTALLED.md` có nhật ký; bỏ qua thì code vẫn chạy đúng. Plugin bên thứ ba trong `vendor/` thì khác: Claude Code chạy bản chép trong cache, nên phải cài lại mới có hiệu lực.
 
 ### 5.5 Gỡ
 

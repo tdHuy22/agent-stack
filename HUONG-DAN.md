@@ -478,14 +478,14 @@ Tùy chọn khác: `--replace-existing` thay file hoặc symlink đang có (có 
 
 ### Sau khi sửa code plugin
 
-- **CLI trong terminal** nạp plugin tại chỗ: sửa trong repo có hiệu lực từ phiên sau.
-- **Desktop app** chạy bản chép trong `~/.claude/plugins/cache/`. Tăng `version` trong `plugin/.claude-plugin/plugin.json`, rồi:
+- Claude Code (CLI lẫn app desktop) đọc plugin thẳng từ thư mục `plugin/` của repo, vì marketplace `agent-stack-local` là chính repo (`claude plugin list` ghi "Read from"). Sửa trong repo có hiệu lực ở phiên mới, hoặc gõ `/reload-plugins` trong phiên đang mở.
+- Sau khi tăng `version` trong `plugin/.claude-plugin/plugin.json`, có thể chạy:
 
 ```bash
 ./install.sh --apply --only plugin
 ```
 
-Mở phiên mới để nạp lại. Bản chép tìm về repo nhờ file `plugin/.agent-stack-home`, nên script và `state/` vẫn dùng chung.
+Lệnh này chỉ ghi nhận số phiên bản mới và ghi nhật ký vào `INSTALLED.md`; không chạy thì code vẫn chạy đúng. Plugin bên thứ ba trong `vendor/` thì phải cài lại, vì Claude Code chạy bản chép trong cache.
 
 Sửa skill của OpenCode hay luật chung thì không cần cài lại, vì đó là symlink.
 
@@ -600,8 +600,8 @@ Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
 | Không thấy dòng 📍 / 🧭 | Plugin chưa bật, hoặc thư mục không có git và file kế hoạch | `claude plugin list`; xem `tail -3 state/sessions.jsonl`; mở phiên mới |
-| Desktop app chạy code plugin cũ | Bản chép trong cache chưa cập nhật | Tăng `version`, `./install.sh --apply --only plugin`, mở phiên mới |
-| Không có cảnh báo hạn mức | Statusline chỉ chạy trong terminal; số liệu quá 30 phút bị bỏ | Mở `claude` trong terminal, hoặc tự theo dõi `/usage` |
+| Phiên đang mở chạy code plugin cũ | Phiên nạp plugin lúc mở | Gõ `/reload-plugins` hay mở phiên mới (không cần cài lại) |
+| Không có cảnh báo hạn mức | Chưa có lượt nào gọi API trong 30 phút qua (số liệu cũ bị bỏ); trên desktop, mod giao diện chưa nạp (Claude Code dưới 2.1.295) | Gõ `/reload-plugins`; xem `state/limits.json`; tự theo dõi `/usage` |
 | `claude -p` báo "OAuth session expired" | CLI hết phiên đăng nhập | `claude /login` trong terminal |
 | Plugin pyright-lsp không chạy trong project đã bật | Chưa có `pyright` | `brew install pyright` |
 | Muốn bật LSP cho một project | LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn | Trong project đó: `claude plugin enable pyright-lsp@claude-plugins-official --scope local` (chỉ còn LSP cho Python; `clangd-lsp` cho C/C++ đã xoá ngày 10/10/2026) |
