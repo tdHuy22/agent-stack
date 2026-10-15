@@ -191,7 +191,7 @@ class HookSuggestion(TempDirTestCase):
                 "transcript_path": self.transcript("w1", "claude-sonnet-5-5", 250000, age=120)}
         hit = route.hook_suggestion(self.DEBUG, data)
         self.assertNotIn("/model", hit["user"])
-        self.assertIn("giữ sonnet (đổi tốn ≈2,00 USD)", hit["user"])  # 250K token × 4 USD/M × 2 (cache 1 giờ)
+        self.assertIn("giữ sonnet · medium (đổi tốn ≈2,00 USD)", hit["user"])  # effort đang dùng; 250K token × 4 USD/M × 2 (cache 1 giờ)
         self.assertIn("subagent opus · medium", hit["user"])
         self.assertIn("Đừng đổi /model lúc này: context ≈250K token", hit["context"])
         self.assertIn('Agent với model "opus", effort "medium"', hit["context"])

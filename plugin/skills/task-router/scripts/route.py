@@ -461,7 +461,9 @@ def hook_suggestion(prompt: str, data: dict):
         parts_user.append(f"/model {model_name(hit['model'])} ({advice['why']})")
     elif advice:
         cur = family(now_model) or now_model
-        parts_user.append(f"giữ {cur} (đổi tốn ≈{usd(advice['cost'])} USD)")
+        # Kèm effort đang dùng của phiên chính để thấy mình đang ở đâu; effort của luật thuộc về subagent bên dưới.
+        keep = f"{cur} · {now_effort}" if now_effort else cur
+        parts_user.append(f"giữ {keep} (đổi tốn ≈{usd(advice['cost'])} USD)")
         parts_user.append(f"subagent {model_effort(hit)}")
         idle = f"{advice['idle'] / 60:.0f} phút trước" if advice["idle"] is not None else "chưa rõ lúc nào"
         switch_note = (f"Đừng đổi /model lúc này: context ≈{advice['context'] // 1000}K token, cache còn ấm (lần gọi model "
