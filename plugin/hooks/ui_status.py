@@ -3,7 +3,7 @@
 
 Nhận số liệu dạng statusline của Claude Code qua stdin (mod dựng từ `$.session.usage()`), ghi state/limits.json
 để hook UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline không chạy), rồi in một dòng không
-màu: `ctx 23% · 5h 41% · 7d 12%`. Payload có `turn_end` (mod gửi sau lượt phiên chính) thì ghi thêm số liệu phiên vào
+màu: `ctx 23% · 5h 41% · 7d 12%` (phần chưa có số liệu thì bỏ). Payload có `turn_end` (mod gửi sau lượt phiên chính) thì ghi thêm số liệu phiên vào
 state/session-usage/ cho router (A.record_mod_usage). Với `--prompt` (mod gọi trong UserPromptSubmit, trước hook
 Python) chỉ cập nhật model hiện tại của file đó, không in gì. Luôn thoát mã 0.
 """
@@ -15,20 +15,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import agentstack as A  # noqa: E402
 
 
-def pct_text(label: str, pct) -> str:
+def pct_text(label: str, pct):
+    """`ctx 23%`; không có số liệu thì None (bỏ phần đó khỏi dòng)."""
     try:
         return f"{label} {float(pct):.0f}%"
     except (TypeError, ValueError):
-        return f"{label} –"
+        return None
 
 
 def line(data: dict) -> str:
+    """Chỉ các phần có số liệu; chưa có gì (phiên mới, chưa gọi API lần nào) thì chuỗi rỗng để mod xoá dòng."""
     limits = data.get("rate_limits") or {}
-    return " · ".join([
+    parts = [
         pct_text("ctx", (data.get("context_window") or {}).get("used_percentage")),
         pct_text("5h", (limits.get("five_hour") or {}).get("used_percentage")),
         pct_text("7d", (limits.get("seven_day") or {}).get("used_percentage")),
-    ])
+    ]
+    return " · ".join(p for p in parts if p)
 
 
 def main(argv=None) -> int:

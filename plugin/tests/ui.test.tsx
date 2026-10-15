@@ -50,7 +50,7 @@ function fake(on: On, s: Setup) {
       s.statusStdins?.push(e.init?.stdin ?? '')
       s.statusArgs?.push([...e.argv])
       if (s.statusFails) return { deny: 'python3 không chạy được' }
-      const stdout = 'ctx 23% · 5h 41% · 7d –\n'
+      const stdout = s.statusOut ?? 'ctx 23% · 5h 41%\n'
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     s.runs.push([...e.argv])
@@ -286,7 +286,13 @@ test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status
   expect(sent.turn_end).toBe(true)
   expect(sent.rate_limits.five_hour).toEqual({ used_percentage: 41, resets_at: 1792065600 })
   expect(sent.rate_limits.spend_limit).toBeUndefined()
-  expect(statuses).toContain('agent-stack · ctx 23% · 5h 41% · 7d –')
+  // Không lặp tên plugin (app đã in tên trước dòng status).
+  expect(statuses).toContain('ctx 23% · 5h 41%')
+  // Chưa có số liệu nào: xoá dòng thay vì in khung trống.
+  s.statusOut = '\n'
+  await $.turn.complete({ ...turn, turnId: 't2' })
+  await clock.advance(1)
+  expect(statuses[statuses.length - 1]).toBeUndefined()
 })
 
 test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không thêm mục, không đặt biến', async ($, on) => {

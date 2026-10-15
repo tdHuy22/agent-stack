@@ -135,9 +135,11 @@ async function refreshStatus($: EngineInterface, turnEnd = false): Promise<void>
       timeoutMs: TIMEOUT_MS,
     })
     const text = run.stdout.trim()
-    if (run.exitCode === 0 && text) $.ui.status(`agent-stack · ${text}`)
+    // App đã in tên plugin trước dòng status, nên không thêm tên; chưa có số liệu thì xoá dòng.
+    if (run.exitCode === 0) $.ui.status(text || undefined)
   } catch {
-    // Status chỉ là phần thêm: lỗi thì giữ dòng cũ.
+    // Status chỉ là phần thêm: không chạy được script hay script thoát mã khác 0 thì giữ dòng cũ (lỗi bên trong
+    // ui_status.py được ghi log và trả chuỗi rỗng, nên dòng bị xoá tới lượt sau).
   }
 }
 
