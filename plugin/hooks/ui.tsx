@@ -109,10 +109,11 @@ async function poll($: EngineInterface): Promise<void> {
   if ((await mtimeOf($, view.planPath)) !== view.mtimeMs) await refresh($)
 }
 
-/** Status line: số liệu context và hạn mức qua ui_status.py, script đó ghi luôn state/limits.json để hook
- *  UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline của terminal không chạy). `turnEnd` (sau
- *  lượt phiên chính) thì script ghi thêm state/session-usage/ cho router: model, context, lúc gọi model gần nhất. */
-async function refreshStatus($: EngineInterface, turnEnd = false): Promise<void> {
+/** Ghi số liệu context và hạn mức qua ui_status.py: state/limits.json để hook UserPromptSubmit cảnh báo hạn mức
+ *  cả trên app desktop (nơi statusline của terminal không chạy). `turnEnd` (sau lượt phiên chính) thì ghi thêm
+ *  state/session-usage/ cho router: model, context, lúc gọi model gần nhất. Không vẽ status line: app desktop đã
+ *  hiện context và hạn mức (bạn quyết 15/10/2026). */
+async function recordUsage($: EngineInterface, turnEnd = false): Promise<void> {
   try {
     const usage = await $.session.usage()
     const limits: Record<string, { used_percentage: number; resets_at?: number }> = {}
@@ -134,16 +135,12 @@ async function refreshStatus($: EngineInterface, turnEnd = false): Promise<void>
       rate_limits: limits,
       turn_end: turnEnd,
     }
-    const run = await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`], {
+    await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`], {
       stdin: JSON.stringify(payload),
       timeoutMs: TIMEOUT_MS,
     })
-    const text = run.stdout.trim()
-    // App đã in tên plugin trước dòng status, nên không thêm tên; chưa có số liệu thì xoá dòng.
-    if (run.exitCode === 0) $.ui.status(text || undefined)
   } catch {
-    // Status chỉ là phần thêm: không chạy được script hay script thoát mã khác 0 thì giữ dòng cũ (lỗi bên trong
-    // ui_status.py được ghi log và trả chuỗi rỗng, nên dòng bị xoá tới lượt sau).
+    // Chỉ là số liệu phụ: lỗi thì cảnh báo hạn mức dùng số cũ, router quay về đọc transcript.
   }
 }
 
@@ -237,7 +234,8 @@ export const register: Register = on => {
       const view = await read($, plan)
       // Không xét e.isInteractive: phiên của app desktop là phiên headless (isInteractive false).
       if (view.tree && !(await $.store.get(CLOSED_KEY))) await openPane($)
-      await refreshStatus($)
+      $.ui.status(undefined) // xoá dòng status của bản mod cũ còn ghim lại
+      await recordUsage($)
     })
     $.clock.every(POLL_MS, () => poll($))
     await $.command.register({
@@ -259,7 +257,7 @@ export const register: Register = on => {
       const called = e.usage !== undefined
       $.clock.after(0, async () => {
         await refresh($)
-        await refreshStatus($, called)
+        await recordUsage($, called)
       })
     }
     return done

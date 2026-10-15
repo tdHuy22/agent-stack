@@ -248,7 +248,7 @@ test('phiên -p (không nơi vẽ, như eval) giữ nguyên system prompt và kh
   expect(envs).toEqual([])
 })
 
-test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status.py', async ($, on) => {
+test('sau mỗi lượt: ghi số liệu hạn mức qua ui_status.py, không vẽ status line', async ($, on) => {
   const stdins: string[] = []
   const s: Setup = { runs: [], fills: [], statusStdins: stdins }
   const clock = fake(on, s)
@@ -286,13 +286,8 @@ test('sau mỗi lượt: status line lấy số liệu hạn mức qua ui_status
   expect(sent.turn_end).toBe(true)
   expect(sent.rate_limits.five_hour).toEqual({ used_percentage: 41, resets_at: 1792065600 })
   expect(sent.rate_limits.spend_limit).toBeUndefined()
-  // Không lặp tên plugin (app đã in tên trước dòng status).
-  expect(statuses).toContain('ctx 23% · 5h 41%')
-  // Chưa có số liệu nào: xoá dòng thay vì in khung trống.
-  s.statusOut = '\n'
-  await $.turn.complete({ ...turn, turnId: 't2' })
-  await clock.advance(1)
-  expect(statuses[statuses.length - 1]).toBeUndefined()
+  // App desktop đã hiện context và hạn mức: mod không vẽ status line.
+  expect(statuses.filter(x => x !== undefined)).toEqual([])
 })
 
 test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không thêm mục, không đặt biến', async ($, on) => {
