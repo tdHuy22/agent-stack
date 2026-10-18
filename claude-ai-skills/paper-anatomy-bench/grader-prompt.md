@@ -30,7 +30,13 @@ Cho điểm 1–5:
 - `do_sau`: giải thích cơ chế và *vì sao*, không chỉ *cái gì*; người đọc có hình dung được cách tái lập;
 - `dung_cau_hoi`: trả lời đúng điều người dùng hỏi, đúng độ rộng (câu hỏi hẹp thì tập trung);
 - `kiem_chung`: người đọc lật PDF kiểm được từng ý quan trọng nhanh và chính xác;
-- `de_doc`: tiếng Việt rõ, thuật ngữ gốc giữ đúng, bố cục giúp hiểu.
+- `de_doc`: tiếng Việt rõ, thuật ngữ gốc giữ đúng, bố cục giúp hiểu;
+- `nam_y_1_phut`: chỉ đọc khoảng 250 từ đầu của câu trả lời (không tính dòng tiêu đề và dòng ghi chú cách đọc,
+  cách kiểm neo): người đọc đã biết bài làm gì, đóng góp chính, và tuyên bố nào đứng vững tới đâu chưa, và các
+  điều đó có đúng với bài không? Với câu hỏi hẹp: 250 từ đầu đã trả lời được ý chính của câu hỏi chưa.
+
+Mục nào có trong câu trả lời (phần đọc nhanh, câu hỏi tự kiểm, mục "dùng được gì") thì chấm như mọi phần khác:
+đúng với bài không, có ích cho người dùng không. Không cộng hay trừ điểm chỉ vì có hay thiếu một mục.
 
 ## Bước 3: so sánh
 Chọn câu trả lời bạn sẽ đưa cho người dùng (`A`, `B` hoặc `hoa`), mức chênh (`ro` hoặc `it`), và lý do 2–4 câu.
@@ -47,7 +53,7 @@ Ghi đúng một file JSON vào `{out_file}` theo dạng:
       "facts": [{{"id": 1, "status": "đủ|một phần|thiếu|sai", "note": "..."}}],
       "spot_checks": [{{"claim": "...", "anchor": "...", "verdict": "đúng|sai|neo sai chỗ|không có trong bài", "note": "..."}}],
       "other_errors": ["..."],
-      "scores": {{"trung_thuc": 0, "do_sau": 0, "dung_cau_hoi": 0, "kiem_chung": 0, "de_doc": 0}},
+      "scores": {{"trung_thuc": 0, "do_sau": 0, "dung_cau_hoi": 0, "kiem_chung": 0, "de_doc": 0, "nam_y_1_phut": 0}},
       "strengths": "...", "weaknesses": "..."
     }},
     "B": {{"...": "giống A"}}

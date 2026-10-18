@@ -18,7 +18,7 @@ Văn bản trích ra rỗng hoặc rác. Đừng đoán nội dung.
 2. Đọc tiếp theo đợt 4–6 trang. Với tài liệu dài (báo cáo kỹ thuật cũ thường 50–150 trang), đọc kỹ phần định
    nghĩa, mô hình, và **mọi mục kết luận, khuyến nghị, tóm lược** (mục lục cho biết chúng ở đâu; tác giả thường
    chốt ở đó cái nào họ khuyên dùng và vì sao); các trang còn lại xem nhanh ở dpi thấp để biết có gì, và ghi rõ
-   trong mục 0 phần nào đã đọc kỹ.
+   ở dòng `> Đã đọc:` đầu bài phần nào đã đọc kỹ.
 3. Chỗ chữ mờ hay viết tay: ghi "đọc không chắc" thay vì đoán. Công thức trên bản scan: chép lại theo những gì
    thấy được và nói rõ đó là bản chép.
 4. Neo: vẫn dùng thẻ 【§… · tr.…】 như mọi bài. Số trang: số in trên giấy nếu thấy rõ trên ảnh (ghi một lần độ

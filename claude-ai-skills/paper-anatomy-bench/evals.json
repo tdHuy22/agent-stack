@@ -37,7 +37,8 @@
       "pdf": "~/Zotero/storage/T8UBK6GF/Debenedetti et al. - 2025 - Defeating Prompt Injections by Design.pdf",
       "file": "camel.pdf",
       "prompt": "Bài CaMeL này dài hơn 100 trang (camel.pdf). Mình cần hiểu kiến trúc của CaMeL: các thành phần, luồng dữ liệu, chính sách bảo mật và capability hoạt động ra sao, đảm bảo bảo mật của nó tới đâu và chỗ nào nó vẫn hở. Giải phẫu giúp mình.",
-      "body_end": 30
+      "body_end": 30,
+      "grader_note": "Bài 125 trang: thân bài là trang PDF 1–29, phụ lục từ trang 30; đọc thân bài và phần phụ lục liên quan tới câu hỏi."
     },
     {
       "id": 5,
@@ -46,7 +47,26 @@
       "tests": "PDF scan 68 trang không có lớp chữ, không có OCR trên máy",
       "pdf": "~/Zotero/storage/P2NY5S7B/[320] Biba - 1975 - Integrity Considerations for Secure Computer Systems.pdf",
       "file": "biba-1975.pdf",
-      "prompt": "Đây là báo cáo kỹ thuật của Biba năm 1975 (biba-1975.pdf), bản scan. Mình muốn nắm cốt lõi mô hình toàn vẹn (integrity) của ông ấy: có những chính sách nào, quy tắc cụ thể của từng chính sách, triết lý đằng sau, kèm số trang để mình tra lại."
+      "prompt": "Đây là báo cáo kỹ thuật của Biba năm 1975 (biba-1975.pdf), bản scan. Mình muốn nắm cốt lõi mô hình toàn vẹn (integrity) của ông ấy: có những chính sách nào, quy tắc cụ thể của từng chính sách, triết lý đằng sau, kèm số trang để mình tra lại.",
+      "grader_note": "Bài scan: paper.txt không có chữ. Đọc ảnh trang ở `{papers}/biba-scanned/img/page-NNN.png` (NNN là số trang PDF, ba chữ số). Số trang in = số trang PDF − 7."
+    },
+    {
+      "id": 6,
+      "name": "roformer-rope-anatomy",
+      "difficulty": "vừa",
+      "tests": "bài ngoài mảng bảo mật, nặng công thức (RoPE); người dùng nói mục đích và hỏi đích danh bốn ý",
+      "pdf": "~/Documents/Claude/pdf-translator/data/roformer-rope.pdf",
+      "file": "roformer.pdf",
+      "prompt": "Mình làm đồ án dịch máy và định cài RoPE vào mô hình của mình. Giải phẫu giúp bài RoFormer (roformer.pdf): RoPE mã hóa vị trí bằng phép quay như thế nào, vì sao từ đó ra được vị trí tương đối, tính chất suy giảm theo khoảng cách có thật sự được chứng minh không, và thực nghiệm có đủ cho thấy nó tốt hơn các cách mã hóa vị trí khác không."
+    },
+    {
+      "id": 7,
+      "name": "flashattention2-anatomy",
+      "difficulty": "vừa",
+      "tests": "bài hệ thống (GPU, thuật toán), chưa từng dùng làm ví dụ trong skill; người dùng nói mục đích và hỏi đích danh ba ý, có một ý về độ vững của con số",
+      "pdf": "~/Documents/Claude/pdf-translator/data/flashattention-2.pdf",
+      "file": "flashattention2.pdf",
+      "prompt": "Mình đang tối ưu tốc độ huấn luyện mô hình ngôn ngữ nhỏ trên GPU của lab. Giải phẫu giúp bài FlashAttention-2 (flashattention2.pdf): nó chia việc giữa các thread block và warp khác bản đầu chỗ nào, tại sao giảm được phép tính không phải nhân ma trận lại tăng tốc, và con số tăng tốc có còn giữ được trên phần cứng khác không."
     }
   ]
 }

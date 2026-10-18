@@ -11,7 +11,13 @@ Kiểm:
   - mục có chứa trang đó không (theo bản đồ mục; không có trong bản đồ thì chỉ cảnh báo);
   - Hình/Bảng/Eq/Thuật toán/Định lý… có được nhắc trên trang đó không;
   - đoạn nguyên văn có nằm trên trang đó không (bỏ qua hoa thường, dấu câu, xuống dòng, chữ ghép).
-Thêm: đoạn văn dài không có neo và không gắn nhãn [suy luận]/[minh họa]/[ngoài bài]; trích dài hơn 15 từ.
+Neo sai chỗ (nội dung đúng nhưng trỏ sai bảng hay trang), chỉ cảnh báo:
+  - Bảng/Hình ghi trong thẻ, hoặc nhắc trong câu đi trước thẻ, có trang chú thích khác trang đã ghi;
+  - con số trong câu đi trước thẻ (có %, có phần thập phân, hay từ 100 trở lên) không có trên trang đã ghi
+    nhưng có ở trang khác.
+Thêm: đoạn văn dài không có neo và không gắn nhãn [suy luận]/[minh họa]/[ngoài bài]; trích dài hơn 15 từ;
+số từ của mục 0 "Đọc trong 1 phút" (tối đa 200, không tính neo) và các chữ tuyệt đối trong đó ("mọi", "chỉ",
+"duy nhất"…), chỗ ý bị nén dễ khái quát quá tay; số mục (tiêu đề ##) nhảy hay dùng chữ cái.
 
 Mã thoát: 0 khi không có lỗi (FAIL), 1 khi có, 2 khi sai cách dùng. Chỉ dùng thư viện chuẩn.
 """
@@ -57,6 +63,63 @@ MENTION = {
 LABELED = re.compile(r"\[(?:suy luận|minh họa|minh hoạ|ngoài bài|ý kiến|inference|illustration)", re.IGNORECASE)
 MIN_QUOTE_CHARS = 12      # sau khi chuẩn hóa; ngắn hơn thì khớp ở đâu cũng được, không đủ để kiểm
 LONG_QUOTE_WORDS = 15
+QUICK_READ_WORDS = 200
+# Chấp nhận các biến thể hay gặp: "##"/"###", chữ đậm, "0." hay "0)", khoảng trắng thừa.
+QUICK_READ = re.compile(r"^#{2,3}[ \t]*\**[ \t]*0[ \t]*[.)][ \t]*\**[ \t]*Đọc[ \t]+trong[ \t]+1[ \t]+phút[^\n]*$",
+                        re.MULTILINE | re.IGNORECASE)
+# Chữ tuyệt đối hay bị thêm khi nén ý. "chỉ" bỏ qua các từ ghép không mang nghĩa "duy nhất" (chỉ ra, chỉ thị…).
+ABSOLUTE = re.compile(r"(?<!\w)(mọi|duy nhất|luôn luôn|luôn|không bao giờ|tất cả|hoàn toàn|"
+                      r"chỉ(?!\s+(?:ra|số|thị|định|dẫn|báo|tiêu|mục|rõ|huy|trích|đạo|tay)(?!\w)))(?!\w)",
+                      re.IGNORECASE)
+# Bảng và Hình có trang chú thích trong pages.json ("objects"); con số lấy từ chúng nên neo vào trang đó.
+HOME_KINDS = {"Table": "Bảng", "Figure": "Hình"}
+# Con số trong câu của người phân tích: không dính chữ (A100, 80GB, 1.3B), không phải số mục (§4.2).
+CLAIM_NUMBER = re.compile(r"(?<![\w.,§])(\d+(?:[.,]\d+)*)(?!\w|[.,]\d)(\s*%)?")
+PAGE_NUMBER = re.compile(r"(?<![\d.,])(\d+(?:[.,]\d+)*)")
+THOUSANDS = re.compile(r"^[1-9]\d{0,2}(?:([.,])\d{3})(?:\1\d{3})*$")
+SENTENCE_END = re.compile(r"[.!?…](?=\s)|\n|\|")
+# Số mục: "## 2. …", "## 2) …", "## 2: …", "## 2 …", "## **2.** …"; không nhận số phân cấp "## 3.1 …". Chữ cái
+# ("## A. …") chỉ nhận khi có dấu ngăn, để tiêu đề thường bắt đầu bằng chữ hoa không bị tính.
+SECTION_HEAD = re.compile(r"^##[ \t]+\**[ \t]*(?:([0-9]{1,2})(?:[.):](?!\d)|[ \t])|([A-Z])[.):](?!\w))", re.MULTILINE)
+# Tên mô hình hay đứng trước số phiên bản (Claude 3.5, Llama-3.3): số thập phân đứng sau chúng không phải số liệu.
+MODEL_NAME = re.compile(r"(?:^|[\s(])(?:Claude|Gemini|Gemma|Llama|GPT|Qwen|Mistral|Mixtral|Phi|DeepSeek|Grok|"
+                        r"Sonnet|Opus|Haiku|PaLM|Vicuna|Falcon|Yi|OLMo|Kimi|GLM|Command)[ -]$", re.IGNORECASE)
+ILLUSTRATIVE = re.compile(r"\[(?:minh họa|minh hoạ|illustration)", re.IGNORECASE)
+# "xem Bảng 6", "see Table 2": câu chỉ đường cho người đọc, không phải lấy số từ bảng đó.
+POINTER = re.compile(r"(?:\bxem|\bsee|\bcf\.?)\s*$", re.IGNORECASE)
+
+
+def number_value(token):
+    """Giá trị số để so. "1.000", "30,000" là số nguyên có dấu phân cách hàng nghìn; còn lại coi dấu phẩy là dấu
+    thập phân (60,2 = 60.2). None nếu không đọc được."""
+    if THOUSANDS.match(token):
+        token = re.sub(r"[.,]", "", token)
+    try:
+        return round(float(token.replace(",", ".")), 6)
+    except ValueError:
+        return None
+
+
+def claim_numbers(claim):
+    """Con số đáng kiểm trong câu: có %, có phần thập phân, hay từ 100 trở lên (trừ năm 1900–2099). Bỏ số đứng
+    sau ≈ hay ~ (người phân tích tự tính) và số trong cụm Bảng/Hình/Eq/tr. (đã kiểm ở phần thẻ)."""
+    text = re.sub(r"§\S+|\btr\.\s*\S+", " ", claim)
+    out = []
+    for m in CLAIM_NUMBER.finditer(text):
+        token, pct = m.group(1), bool(m.group(2))
+        before = text[max(0, m.start() - 25):m.start()]
+        if re.search(r"[≈~]\s*$", before):
+            continue
+        value = number_value(token)
+        if value is None:
+            continue
+        decimal = bool(re.search(r"[.,]", token))
+        if decimal and not pct and MODEL_NAME.search(before):
+            continue  # số phiên bản trong tên mô hình: Claude 3.5, Gemini 2.5, Llama-3.3
+        big = value >= 100 and not (1900 <= value <= 2099 and not decimal)
+        if pct or decimal or big:
+            out.append((token + ("%" if pct else ""), value))
+    return out
 
 
 def squash(s):
@@ -82,6 +145,18 @@ class Paper:
             self.by_label.setdefault(str(p["label"]).lower(), []).append(p["index"])
         self.flat = {p["index"]: squash(p["text"]) for p in self.pages}
         self.scanned = {p["index"] for p in self.pages if len(p["text"].strip()) < 60}
+        self.homes = {}
+        for o in cache.get("objects", []):
+            if o.get("kind") in HOME_KINDS:
+                self.homes.setdefault((o["kind"], str(o["id"]).lower()), []).append(o["page"])
+        self.numbers = {p["index"]: {number_value(t) for t in PAGE_NUMBER.findall(p["text"])} for p in self.pages}
+
+    def home(self, kind, ident):
+        """Trang chú thích của Bảng/Hình (nơi nó được in), [] nếu không biết."""
+        return sorted(self.homes.get((kind, str(ident).lower()), []))
+
+    def pages_with_number(self, value):
+        return [i for i, nums in self.numbers.items() if value in nums]
 
     def resolve(self, pdf_prefix, first, last, extra):
         """Danh sách trang PDF ứng với phần tr.… của thẻ; [] nếu không có trang đó."""
@@ -168,8 +243,10 @@ def parse_anchor(body):
     return out
 
 
-def check_anchor(paper, anchor):
-    """Trả về (trạng thái, các lý do). Trạng thái: OK, WARN, FAIL."""
+def check_anchor(paper, anchor, claim="", illustrative=False):
+    """Trả về (trạng thái, các lý do). Trạng thái: OK, WARN, FAIL. `claim` là câu đi trước thẻ (để dò neo sai
+    chỗ: bảng, hình hay con số nằm ở trang khác). `illustrative`: đoạn có nhãn [minh họa], số trong đó do người
+    phân tích tự tính nên không dò số."""
     a = parse_anchor(anchor)
     reasons, levels = [], ["OK"]
 
@@ -202,6 +279,36 @@ def check_anchor(paper, anchor):
             where = paper.pages_mentioning(kind, ident)
             hint = f"; được nhắc ở trang PDF {', '.join(map(str, where[:5]))}" if where else "; không thấy ở đâu trong bài"
             bump("FAIL", f"{kind} {ident} không có trên trang đã ghi{hint}")
+            continue
+        home = paper.home(kind, ident)
+        if home and not any(p in pages for p in home):
+            bump("WARN", f"{HOME_KINDS[kind]} {ident} in ở trang PDF {', '.join(map(str, home))}; trang đã ghi chỉ "
+                         "nhắc tới nó (con số lấy từ bảng/hình thì neo vào trang đó)")
+    if claim and not scanned:
+        named = {(k, i.lower()) for k, i in a["aux"]}
+        # Thẻ đã ghi một Bảng/Hình thì người viết đã chọn đối tượng chống đỡ; câu nhắc thêm đối tượng khác
+        # thường là để so, không cảnh báo.
+        anchor_has_home = any(k in HOME_KINDS for k, _ in a["aux"])
+        for kind, pat in AUX:
+            if kind not in HOME_KINDS or anchor_has_home:
+                continue
+            for found in re.finditer(pat, claim, re.IGNORECASE):
+                ident = found.group(1).rstrip(".")
+                home = paper.home(kind, ident)
+                if (kind, ident.lower()) in named or not home or any(p in pages for p in home):
+                    continue
+                if POINTER.search(claim[:found.start()]):
+                    continue
+                named.add((kind, ident.lower()))
+                bump("WARN", f"câu nhắc {HOME_KINDS[kind]} {ident} (in ở trang PDF {', '.join(map(str, home))}) "
+                             "nhưng thẻ trỏ trang khác và không ghi nó")
+        on_pages = set().union(*(paper.numbers.get(p, set()) for p in pages))
+        for token, value in ([] if illustrative else claim_numbers(claim)):
+            if value in on_pages:
+                continue
+            elsewhere = paper.pages_with_number(value)
+            if elsewhere:
+                bump("WARN", f"số {token} không có trên trang đã ghi; có ở trang PDF {', '.join(map(str, elsewhere[:3]))}")
     for quote in a["quotes"]:
         if len(quote.split()) > LONG_QUOTE_WORDS:
             bump("WARN", f"trích dài {len(quote.split())} từ (nên ≤ {LONG_QUOTE_WORDS})")
@@ -267,12 +374,54 @@ def long_quotes(text):
     return found
 
 
+def quick_read(text):
+    """Mục 0 "Đọc trong 1 phút": số từ (không tính neo, ký hiệu đầu dòng) và vị trí các chữ tuyệt đối.
+    None khi bản phân tích không có mục này (chế độ hỏi hẹp). Chuẩn hóa NFC trước, vì chữ Việt dạng tổ hợp dấu
+    (NFD) làm cả tiêu đề lẫn chữ tuyệt đối trượt; NFC không đổi dấu xuống dòng nên số dòng vẫn đúng."""
+    text = unicodedata.normalize("NFC", text)
+    head = QUICK_READ.search(text)
+    if not head:
+        return None
+    rest = text[head.end():]
+    nxt = re.search(r"^#{1,2}\s", rest, re.MULTILINE)
+    body = rest[: nxt.start()] if nxt else rest
+    words = [w for w in ANCHOR.sub(" ", body).split() if re.search(r"\w", w)]
+    first_line = text.count("\n", 0, head.end()) + 1
+    absolutes = [{"line": first_line + body.count("\n", 0, m.start()), "word": m.group(1)}
+                 for m in ABSOLUTE.finditer(ANCHOR.sub(lambda a: " " * len(a.group(0)), body))]
+    return {"words": len(words), "limit": QUICK_READ_WORDS, "absolutes": absolutes}
+
+
+def claim_before(text, start, floor):
+    """Câu đi trước thẻ neo: từ dấu hết câu, đầu dòng, ô bảng hay thẻ neo trước (cái nào gần hơn) tới thẻ."""
+    head = text[floor:start]
+    ends = [m.end() for m in SENTENCE_END.finditer(head.rstrip(" \t*_"))]
+    return head[ends[-1]:] if ends else head
+
+
+def section_numbering(text):
+    """Số của các tiêu đề ## có đánh số (bỏ qua khối mã). Trả về (dãy số, lỗi) với lỗi là None, "chữ cái" hay
+    "nhảy"."""
+    text = re.sub(r"^```.*?^```", "", unicodedata.normalize("NFC", text), flags=re.S | re.M)
+    marks = [m.group(1) or m.group(2) for m in SECTION_HEAD.finditer(text)]
+    if not marks:
+        return marks, None
+    if any(not x.isdigit() for x in marks):
+        return marks, "chữ cái"
+    nums = [int(x) for x in marks]
+    return marks, (None if nums == list(range(nums[0], nums[0] + len(nums))) else "nhảy")
+
+
 def run(analysis_text, cache):
     paper = Paper(cache)
-    rows = []
+    rows, prev_end = [], 0
     for m in ANCHOR.finditer(analysis_text):
         line = analysis_text.count("\n", 0, m.start()) + 1
-        status, reasons, parsed = check_anchor(paper, m.group(1))
+        claim = claim_before(analysis_text, m.start(), prev_end)
+        prev_end = m.end()
+        line_start = analysis_text.rfind("\n", 0, m.start()) + 1
+        illustrative = bool(ILLUSTRATIVE.search(analysis_text[line_start:m.start()]))
+        status, reasons, parsed = check_anchor(paper, m.group(1), claim, illustrative)
         rows.append({"line": line, "anchor": m.group(1).strip(), "status": status, "reasons": reasons,
                      "has_quote": bool(parsed["quotes"])})
     counts = {k: sum(r["status"] == k for r in rows) for k in ("OK", "WARN", "FAIL")}
@@ -282,6 +431,8 @@ def run(analysis_text, cache):
         "with_quote": len(quoted), "quote_fail": sum(r["status"] == "FAIL" for r in quoted),
         "unanchored_paragraphs": [{"line": ln, "start": s} for ln, s in unanchored_paragraphs(analysis_text)],
         "long_quotes": long_quotes(analysis_text),
+        "quick_read": quick_read(analysis_text),
+        "numbering": dict(zip(("marks", "problem"), section_numbering(analysis_text))),
         "rows": rows,
     }
 
@@ -302,6 +453,17 @@ def render(result):
                    f"hay nhãn [suy luận] (dòng {lines}); thêm neo nếu đoạn đó nói về nội dung bài")
     if result["long_quotes"]:
         out.append(f"Trích dài hơn {LONG_QUOTE_WORDS} từ: {len(result['long_quotes'])} chỗ, rút ngắn hoặc diễn giải")
+    quick = result.get("quick_read")
+    if quick:
+        verdict = "cắt chữ, không bỏ dòng" if quick["words"] > quick["limit"] else "đạt"
+        out.append(f"Mục 0: {quick['words']} từ (đếm theo âm tiết, không tính neo; tối đa {quick['limit']}): {verdict}")
+    if quick and quick["absolutes"]:
+        found = ", ".join(f"'{a['word']}' dòng {a['line']}" for a in quick["absolutes"][:12])
+        out.append(f"Mục 0 có chữ tuyệt đối, kiểm lại với bảng hay câu gốc: {found}")
+    numbering = result.get("numbering") or {}
+    if numbering.get("problem"):
+        how = "dùng chữ cái" if numbering["problem"] == "chữ cái" else "nhảy"
+        out.append(f"Số mục {how} ({', '.join(numbering['marks'])}): đánh số lại liên tục 0, 1, 2…")
     if result["anchors"] == 0:
         out.append("Không thấy thẻ neo 【…】 nào.")
     return "\n".join(out)

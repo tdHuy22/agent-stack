@@ -30,7 +30,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 BENCH = REPO / ".tmp" / "paper-anatomy-bench"
-ARMS = {"old": BENCH / "skill-snapshot", "new": REPO / "claude-ai-skills" / "paper-anatomy"}
+# old: bản claude.ai lúc nhập; v3: bản 03/10 (commit 5765e3d), chụp trước khi sửa v4; new: bản đang sửa trong repo
+ARMS = {"old": BENCH / "skill-snapshot", "v3": BENCH / "skill-v3",
+        "new": REPO / "claude-ai-skills" / "paper-anatomy"}
 ALLOWED = ("Read Write Edit Grep Glob Bash(python3 *) Bash(python *) Bash(ls *) Bash(ls) Bash(cat *) "
            "Bash(head *) Bash(tail *) Bash(sed *) Bash(wc *) Bash(mkdir *) Bash(grep *)")
 SUFFIX = ("\n\n---\n(Ghi chú của môi trường thử nghiệm, không phải của người dùng) Skill `paper-anatomy` đã được "
@@ -84,9 +86,19 @@ def parse_stream(text: str) -> dict:
     return {"result": result, "tools": tools}
 
 
+def finished(timing_file: Path) -> bool:
+    """Lượt đã chạy xong mà không lỗi. timing.json thiếu, hỏng (bị cắt giữa lúc ghi) hay thiếu khóa is_error
+    đều coi là chưa xong, để lần chạy sau chạy lại thay vì kẹt."""
+    try:
+        timing = json.loads(timing_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(timing, dict) and timing.get("is_error") is False
+
+
 def run_one(ev: dict, arm: str, rep: int, args, work_root: Path, bin_dir: Path, out_root: Path) -> dict:
     run_dir = out_root / ev["name"] / arm / f"run-{rep}"
-    if (run_dir / "timing.json").exists() and not args.force:
+    if not args.force and finished(run_dir / "timing.json"):
         return {"eval": ev["name"], "arm": arm, "rep": rep, "skipped": True}
     work = work_root / f"{ev['name']}-{arm}-{rep}"
     if work.exists():
@@ -141,6 +153,16 @@ def run_one(ev: dict, arm: str, rep: int, args, work_root: Path, bin_dir: Path, 
             "seconds": seconds}
 
 
+def cli_logged_in():
+    """True/False theo `claude auth status`; None khi không đọc được, để không chặn nhầm."""
+    try:
+        out = subprocess.run([os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude"), "auth", "status"],
+                             capture_output=True, text=True, timeout=30)
+        return bool(json.loads(out.stdout).get("loggedIn"))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Bench paper-anatomy (mặc định chỉ in kế hoạch).")
     ap.add_argument("--iteration", type=int, required=True)
@@ -182,10 +204,13 @@ def main(argv=None) -> int:
     if not args.yes:
         print("Chưa chạy. Thêm --yes để chạy thật.")
         return 0
+    if cli_logged_in() is False:
+        print("Không chạy: CLI `claude` chưa đăng nhập (`claude auth status`). Chạy `claude auth login` rồi chạy lại.")
+        return 2
     out_root = BENCH / f"iteration-{args.iteration}"
     out_root.mkdir(parents=True, exist_ok=True)
     bin_dir = make_bin(work_root)
-    rows = []
+    rows, crashed = [], 0
     with cf.ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
         futures = [pool.submit(run_one, e, a, r, args, work_root, bin_dir, out_root) for e, a, r in runs]
         for fut in cf.as_completed(futures):
@@ -193,6 +218,7 @@ def main(argv=None) -> int:
                 row = fut.result()
             except Exception as exc:  # một lượt hỏng (thiếu file…) không được làm mất các lượt khác
                 print(f"✗ lỗi bộ chạy: {exc!r}", flush=True)
+                crashed += 1
                 continue
             rows.append(row)
             if row.get("skipped"):
@@ -204,6 +230,11 @@ def main(argv=None) -> int:
         shutil.rmtree(work_root, ignore_errors=True)
     spent = sum(r.get("cost_usd") or 0 for r in rows)
     print(f"\nTổng: {spent:.2f} USD. Kết quả: {out_root}")
+    failed = len([r for r in rows if not r.get("skipped") and r.get("is_error")]) + crashed
+    if failed:
+        print(f"{failed} lượt lỗi: xem dòng ✗ ở trên, timing.json và transcript.jsonl của lượt đó. Chạy lại cùng lệnh "
+              "thì chỉ chạy lại các lượt lỗi.")
+        return 1
     return 0
 
 
