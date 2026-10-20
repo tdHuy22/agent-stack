@@ -569,6 +569,8 @@ Bạn thấy các trang Artifact quá khó hiểu, và yêu cầu: giải thích
 
 **Review** (`agent-stack:reviewer`, sonnet, 19/10/2026): 0 cao, 3 vừa, 5 thấp; đã sửa cả 8 kèm test. Vừa: kế hoạch một hướng không đánh dấu phương án lọt qua mọi kiểm (nay trang không có phương án phải khai `data-loai="giai-thich"`); chữ mẫu "…" còn sót vẫn qua (nay bắt); người đọc lạ không lạ (như trên). Thấp: dải mã `HC5-HC7`, mã phổ biến như `UTF-8`, chữ dạng NFD, `<code>` trong `<dt>`, dòng `data-vi-pham` rỗng, bảng ví dụ × phương án quá mỏng (NHẮC), tài liệu lệch.
 
+**Đã chốt** (20/10/2026, bạn chọn theo khuyến nghị trên trang https://claude.ai/artifact/MTeDvYTEikKhajnDb746eM): 1A khuôn áp cho mọi trang Artifact để đọc, không chỉ trang có phương án; 2A mã có chữ số và ký hiệu luôn phải định nghĩa, `data-tu-quen` chỉ miễn tên riêng không có số; 3A mọi trang được `nguoi-doc-la` đọc thử một lần, sửa một lượt. Lần đọc thử thật đầu tiên bằng `nguoi-doc-la` (20/10, trang mẫu): hook ghi đã bỏ qua, người đọc xác nhận không thấy bối cảnh phiên, ước hiểu khoảng 70% (so với 65% của lần 19/10 khi hook còn chèn yêu cầu), tốn 38 nghìn token.
+
 **Pattern xấu cần soát:** theo code cũ (tiền lệ không chứng minh đúng), chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro hay lặng lẽ thu hẹp, đi tắt qua cổng kiểm. Phương án vi phạm luật cứng không bao giờ được khuyên; muốn chọn thì sửa luật trước, như một câu chốt riêng.
 
 ---
