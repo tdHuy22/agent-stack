@@ -555,6 +555,22 @@ Bạn thấy tự lưu chưa ổn định, và hỏi cách tránh mất cache kh
 - Theo phản biện của reviewer, không coi `~/Desktop`, `~/Documents`, `~/Downloads` là thư mục chung, vì trái với lựa chọn lưu ngay trong thư mục của bạn. Vẫn coi file kế hoạch là nhạy cảm khi gộp, và dặn subagent không sửa chúng.
 - Chạy lại PoC của `differential-review` trên code đã sửa: `merge_back` ra `can-hoi` cả 6 ca; lượt cuối không ghi đè, không giả dòng, không nạp bản chép sang thư mục khác; hook Stop với bản ghi giả vẫn chặn đúng.
 
+### 6.21 Trang Artifact đọc là hiểu (19/10/2026)
+
+Bạn thấy các trang Artifact quá khó hiểu, và yêu cầu: giải thích chi tiết từ gốc, ít nhất 3 ví dụ cụ thể, xem các đề xuất trong trang có theo ràng buộc của project không, không chiều theo pattern xấu. Luật cũ (`CLAUDE.global.md`, mục "Kế hoạch có nhiều phương án") chỉ nói "đặt phương án cạnh nhau (kèm ví dụ hoặc sơ đồ)", không nói viết cho ai, bao nhiêu ví dụ, kiểm đề xuất thế nào.
+
+**Hai trang thật, 19/10/2026.** "Cổng 0 USD D22" (SCEE): 19 thuật ngữ không giải thích, trong đó 14 mã nội bộ hay ký hiệu (HC5, ν, TP6, G1 tới G5, D22, D27, D36, D38, E1, HC9); kết quả viết nén kiểu "G1 41 · G2 10 · G3 15 · G5 31; cách (ii) 4". "Overlay Kustomize" (archctl): một ví dụ, không có phần nền tảng; lý do theo tiền lệ ("như `helm`"). Không trang nào đối chiếu đề xuất với luật của project.
+
+**Quyết định.** Skill mới `trang-artifact` lo nội dung; `artifact-design` (của Claude Code, bắt buộc khi đăng) vẫn lo trình bày. Luật toàn cục giữ ngắn và trỏ tới skill, kèm đường dẫn dự phòng khi plugin chưa nạp. Không đặt chi tiết vào `CLAUDE.global.md` vì file đó nạp vào mọi phiên của mọi project.
+
+**Dùng lại** (`reuse-best`, 19/10/2026): khuôn lấy ý từ [MADR 4.0.0](https://github.com/adr/madr) (Context and Problem Statement, Decision Drivers, Considered Options, Pros and Cons, Decision Outcome; MIT hoặc CC0) và nguyên tắc "explanation" của [Diátaxis](https://github.com/evildmp/diataxis-documentation-framework) (chỉ học ý, CC-BY-SA). Không linter HTML nào kiểm được thuật ngữ chưa định nghĩa hay phán quyết ràng buộc (`deezer/html-linter` chỉ kiểm style, 60 tháng không cập nhật), nên script tự viết trên `html.parser` của thư viện chuẩn. Phần thêm so với MADR: thang khái niệm từ gốc, thuật ngữ định nghĩa trước khi dùng, ít nhất 3 ví dụ chạy qua từng phương án, bảng ràng buộc có nguồn, soát pattern xấu.
+
+**Cách kiểm.** Khuôn `mau.html` đánh dấu từng phần bằng `data-*`; `check_page.py` báo lỗi khi thiếu phần, dưới 3 ví dụ, mã có chữ số hay ký hiệu Hy Lạp chưa định nghĩa hoặc dùng trước khi định nghĩa (`<dfn>` hay `<dt>` trong bảng thuật ngữ), phương án thiếu phán quyết với một luật, phương án được khuyên mà vi phạm, phương án vi phạm mà thẻ không ghi. Mã có chữ số không được miễn qua `data-tu-quen`, vì chính chúng làm trang cũ khó đọc. Script không đo được độ dễ hiểu, nên bước cuối là một subagent không thấy hội thoại đọc thử một lần (đúng vai người không nhớ phiên), sửa theo một lượt, không lặp; khớp tinh thần "kiểm một lần rồi đăng" của `artifact-design`. Người đọc là subagent `nguoi-doc-la` (chỉ Read); hook SubagentStart bỏ qua nó, vì reviewer chỉ ra hook chèn yêu cầu của người dùng vào mọi subagent, làm người đọc "lạ" hiểu nhờ yêu cầu chứ không nhờ trang. Hai lần đọc thử ngày 19/10 (trang D22 cũ: hiểu 20–25%; trang mẫu mới: 65% trước khi sửa) chạy bằng `general-purpose` khi hook còn chèn bối cảnh, nên con số thứ hai có thể cao hơn thật.
+
+**Review** (`agent-stack:reviewer`, sonnet, 19/10/2026): 0 cao, 3 vừa, 5 thấp; đã sửa cả 8 kèm test. Vừa: kế hoạch một hướng không đánh dấu phương án lọt qua mọi kiểm (nay trang không có phương án phải khai `data-loai="giai-thich"`); chữ mẫu "…" còn sót vẫn qua (nay bắt); người đọc lạ không lạ (như trên). Thấp: dải mã `HC5-HC7`, mã phổ biến như `UTF-8`, chữ dạng NFD, `<code>` trong `<dt>`, dòng `data-vi-pham` rỗng, bảng ví dụ × phương án quá mỏng (NHẮC), tài liệu lệch.
+
+**Pattern xấu cần soát:** theo code cũ (tiền lệ không chứng minh đúng), chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro hay lặng lẽ thu hẹp, đi tắt qua cổng kiểm. Phương án vi phạm luật cứng không bao giờ được khuyên; muốn chọn thì sửa luật trước, như một câu chốt riêng.
+
 ---
 
 ## 7. Thiết kế chi tiết

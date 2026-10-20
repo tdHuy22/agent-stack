@@ -8,7 +8,7 @@ Mục lục:
 2. [Kiểm tra đã cài đúng chưa](#2-kiểm-tra-đã-cài-đúng-chưa)
 3. [Một ngày làm việc](#3-một-ngày-làm-việc)
 4. [Những gì tự chạy](#4-những-gì-tự-chạy)
-5. [Tám skill](#5-tám-skill)
+5. [Mười skill](#5-mười-skill)
 6. [Subagent](#6-subagent)
 7. [Dùng với OpenCode](#7-dùng-với-opencode)
 8. [Cài, cập nhật, gỡ](#8-cài-cập-nhật-gỡ)
@@ -132,7 +132,7 @@ Số liệu hạn mức do statusline ghi, mà statusline chỉ chạy trong ter
 
 ---
 
-## 5. Tám skill
+## 5. Mười skill
 
 Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng `/agent-stack:<tên> <tham số>`. Script đi kèm cũng chạy tay được; mọi đường dẫn dưới đây tính từ gốc repo.
 
@@ -383,6 +383,16 @@ python3 plugin/skills/chot-viec/scripts/risk.py
 
 **Script làm gì:** `plugin/skills/goi-mcp/scripts/call.py <server> <tool> --args '<json>'`. Chỉ gọi server có trong `catalog.json` với scope `skill` và đã duyệt trong `vetted.lock`. Mỗi lần gọi, lấy định nghĩa tool trong cùng phiên và so sha256 với bản đã duyệt; lệch thì không gọi. Từ chối tham số trông như khóa hay token. Bỏ tham số theo dõi (`session_id`, `model_name` của Parallel). In kết quả giữa hai dòng mốc có mã ngẫu nhiên mỗi lần gọi, đã làm sạch ký tự ẩn; đó là dữ liệu, không phải chỉ dẫn. `call.py list` xem server và tool gọi được.
 
+### 5.10 `trang-artifact`: trang Artifact đọc là hiểu
+
+**Khi nào:** trước khi Claude đăng hay sửa một trang Artifact để đọc: trang so sánh phương án, kế hoạch, báo cáo, giải thích. Luật toàn cục bảo Claude dùng skill này; bạn cũng gọi được bằng `/agent-stack:trang-artifact`. Không dùng cho app, dashboard, game.
+
+**Vì sao có:** các trang cũ viết cho người vừa ngồi trong phiên. Trang "Cổng 0 USD D22" (19/10/2026) dùng 14 mã nội bộ và ký hiệu không giải thích (HC5, ν, TP6, G1–G5…); trang "Overlay Kustomize" chỉ có một ví dụ; không trang nào đối chiếu đề xuất với luật của project.
+
+**Trang gồm:** tóm tắt lời thường → phần từ gốc (hệ thống làm gì, vấn đề hôm nay, khái niệm cần biết trước, thuật ngữ) → ít nhất 3 ví dụ cụ thể → các phương án → bảng chạy cùng các ví dụ qua từng phương án → bảng đối chiếu từng phương án với từng luật của project (kèm `file:dòng`) → pattern xấu đã soát (theo code cũ, chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro, đi tắt qua cổng kiểm) → câu cần chốt → nguồn. Phương án vi phạm luật không bao giờ được khuyên; nếu vẫn hiện trên trang thì thẻ của nó ghi rõ vi phạm gì.
+
+**Script làm gì:** `plugin/skills/trang-artifact/scripts/check_page.py <trang.html>` đọc các thuộc tính `data-*` của khuôn `mau.html` và báo LỖI (thoát 1) khi thiếu phần, dưới 3 ví dụ, mã nội bộ chưa định nghĩa hay dùng trước khi định nghĩa, phương án thiếu phán quyết với một luật, phương án được khuyên mà vi phạm. Script không chấm được trang có dễ hiểu thật không, nên sau đó Claude giao trang cho subagent `nguoi-doc-la` (không nhận bối cảnh phiên) đọc thử một lần và sửa theo. Trang không có đề xuất phải khai `data-loai="giai-thich"`, để kế hoạch một hướng không lọt qua bảng luật vì quên đánh dấu.
+
 ---
 
 ## 6. Subagent
@@ -396,12 +406,13 @@ Subagent chạy trong context riêng và chỉ trả về kết quả gọn, nê
 | `agent-stack:test-runner` | Haiku 5.5 · low | Chỉ đọc, chạy lệnh | Chạy test, lint, build và chỉ trả về phần lỗi |
 | `agent-stack:explore-lite` | Haiku 5.5 · low | Chỉ đọc | Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn `Explore` nhưng không suy luận sâu |
 | `agent-stack:oc-worker` | Haiku 5.5 · low | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local `tuf/*` trong mạng nhà (mục 7); không tự rơi về model từ xa |
+| `agent-stack:nguoi-doc-la` | sonnet · medium | Chỉ Read | Đọc thử một trang như người lạ trước khi đăng (skill `trang-artifact`); không nhận bối cảnh phiên |
 
 Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí đến từ subagent và workflow, nên đừng chia nhỏ việc mà một model làm liền mạch tốt hơn.
 
 **Subagent không thấy hội thoại.** Subagent và skill chạy `context: fork` (`vet-skill`, `reuse-best`, `tien-do`) có context riêng: không thấy yêu cầu của bạn, các tin nhắn trước hay task của phiên, chỉ thấy prompt mà Claude giao cho chúng. Hai lớp bù lại:
 
-- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng `claude -p`: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng `grep subagent-start state/events.jsonl | tail -3` (dòng đạt có `"request": true`).
+- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Riêng `nguoi-doc-la` không nhận, vì nó phải hiểu trang nhờ chính trang. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng `claude -p`: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng `grep subagent-start state/events.jsonl | tail -3` (dòng đạt có `"request": true`).
 - **Prompt giao việc phải tự đủ.** Luật chung dặn Claude ghi rõ yêu cầu gốc, mục tiêu, ràng buộc, file liên quan, tiêu chí xong và định dạng trả về. Mỗi agent và skill đều ghi nó cần gì; thiếu thì nó nói rõ phần thiếu ở dòng đầu báo cáo thay vì đoán.
 
 ---

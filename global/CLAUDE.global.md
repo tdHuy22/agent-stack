@@ -42,9 +42,10 @@ Model trong bảng là model hợp với việc, không phải lệnh đổi nga
 - Việc dài trên 30 phút, sửa nhiều file, hợp model khác: Agent với `isolation: "worktree"`, dặn subagent commit trong worktree và không sửa file kế hoạch hay cấu hình agent (phiên chính cập nhật §0 sau khi gộp); xong chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/merge_back.py --worktree <đường dẫn hay nhánh> --test "<lệnh test>"`. Script tự gộp khi test đạt và fast-forward được; mã thoát 2 thì hỏi bạn.
 - Skill có `model:` trong frontmatter mà không có `context: fork` là một lần đổi model cho lượt đó: đừng thêm loại skill này.
 
-## Kế hoạch có nhiều phương án
+## Trang Artifact
 
-- Kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng trang Artifact riêng tư đặt phương án cạnh nhau (kèm ví dụ hoặc sơ đồ) và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay không có công cụ Artifact, thì giữ trong chat.
+- Kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng trang Artifact riêng tư đặt phương án cạnh nhau và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay không có công cụ Artifact, thì giữ trong chat.
+- Mọi trang Artifact để đọc (so sánh, kế hoạch, báo cáo, giải thích; không tính app, dashboard, game) viết theo skill `trang-artifact` (chưa thấy skill thì đọc `~/Documents/Claude/agent-stack/plugin/skills/trang-artifact/SKILL.md`): giải thích từ gốc cho người không nhớ phiên, ít nhất 3 ví dụ cụ thể, đối chiếu mỗi đề xuất với luật của project và không khuyên phương án vi phạm; `check_page.py` đạt rồi mới đăng.
 
 ## Subagent
 

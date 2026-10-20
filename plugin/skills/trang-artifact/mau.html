@@ -1,0 +1,235 @@
+<title>Tên trang</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<!--
+  Khuôn của skill trang-artifact. Chép file này, thay mọi chữ "…" bằng nội dung thật, rồi chạy check_page.py.
+  Giữ các thuộc tính data-*: script kiểm dựa vào chúng. Đổi màu và chữ cho hợp chủ đề theo skill artifact-design.
+  Thứ tự: tóm tắt → nền tảng (bối cảnh, vấn đề, khái niệm, thuật ngữ) → ví dụ → phương án → ví dụ × phương án
+  → ràng buộc → pattern xấu → câu cần chốt → nguồn. Kế hoạch một hướng vẫn giữ đúng một thẻ phương án.
+  Trang chỉ giải thích hay báo cáo: bỏ từ "Các phương án" tới "Câu cần chốt" và đổi <main> thành
+  <main data-loai="giai-thich">.
+-->
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Tên project · ngày</div>
+    <h1>Câu hỏi của trang, viết bằng lời thường</h1>
+  </header>
+
+  <!-- 3–5 câu, không mã nội bộ: trang này về gì, vì sao phải quyết bây giờ, khuyến nghị, bạn cần chốt gì. -->
+  <section class="summary" data-phan="tom-tat">
+    <h2>Tóm tắt</h2>
+    <p>…</p>
+  </section>
+
+  <!-- Từ gốc: người đọc không nhớ phiên làm việc. Đi từ cái họ đã biết tới cái cần quyết. -->
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>…</p>
+    <!-- Có luồng hay nhiều thành phần thì vẽ; artifact vẽ mermaid sẵn, không cần thư viện. -->
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  A[…] --> B[…]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>…</p>
+    <h3>Cần biết trước</h3>
+    <!-- Xếp từ gốc lên: khái niệm sau dựa trên khái niệm trước. Mỗi khái niệm: định nghĩa, ví dụ, cần cho phần nào. -->
+    <ol class="ladder">
+      <li><b>…</b>: … Ví dụ: … Cần để hiểu: …</li>
+    </ol>
+    <!-- Mọi mã nội bộ, viết tắt, ký hiệu dùng trong trang phải nằm ở đây hoặc trong <dfn> trước lần dùng đầu. -->
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>…</dt><dd>…</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Ít nhất 3 ví dụ cụ thể, dữ liệu thật: ca thường gặp, ca biên, ca hỏng hay phản ví dụ. -->
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: …</h3>
+        <p>Tình huống: …</p>
+        <pre><code>…</code></pre>
+        <p>Hôm nay: … Vì sao quan trọng: …</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: …</h3>
+        <p>…</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: …</h3>
+        <p>…</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Mỗi phương án phải là thứ một người giỏi có thể chọn. data-khuyen chỉ đặt trên phương án không vi phạm luật nào. -->
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · … <span class="chip">khuyên</span></h3>
+        <p>Một câu lời thường: phương án này làm gì.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>…</dd>
+          <dt>Được</dt><dd>…</dd>
+          <dt>Mất</dt><dd>…</dd>
+          <dt>Chi phí lâu dài</dt><dd>…</dd>
+          <dt>Đảo ngược</dt><dd>…</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · …</h3>
+        <p>…</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>…</dd>
+          <dt>Được</dt><dd>…</dd>
+          <dt>Mất</dt><dd>…</dd>
+          <dt>Chi phí lâu dài</dt><dd>…</dd>
+          <dt>Đảo ngược</dt><dd>…</dd>
+        </dl>
+        <!-- Chỉ khi phương án vi phạm một ràng buộc: nói rõ trên thẻ, không giấu trong bảng. -->
+        <p class="violation" data-vi-pham>Vi phạm …: không khuyên.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Cùng các ví dụ ở trên, chạy qua từng phương án: ô ghi kết quả cụ thể, không ghi "tốt hơn". -->
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A</th><th>B</th></tr></thead>
+        <tbody>
+          <tr><th>Ví dụ 1</th><td data-cho="A">…</td><td data-cho="B">…</td></tr>
+          <tr><th>Ví dụ 2</th><td data-cho="A">…</td><td data-cho="B">…</td></tr>
+          <tr><th>Ví dụ 3</th><td data-cho="A">…</td><td data-cho="B">…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Mỗi hàng là một luật có thật, data-nguon là file:dòng. data-ket-qua: dat, vi-pham, can-duyet, khong-lien-quan. -->
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ …</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:…">
+            <th>… <span class="src">CLAUDE.md:…</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: …</td>
+            <td data-cho="B" data-ket-qua="vi-pham">Vi phạm: …</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Nêu từng pattern đã soát và kết quả, kể cả khi không thấy gì. -->
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> …</li>
+      <li><b>Chiều theo người dùng:</b> …</li>
+      <li><b>Chọn vì ít công:</b> …</li>
+      <li><b>Phương án bù nhìn:</b> …</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> …</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> …</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần bạn chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: …?</h3>
+      <p>Lựa chọn: … Khuyên: … vì … Nếu chọn khác: …</p>
+    </div>
+    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>…</li>
+    </ul>
+  </footer>
+</main>

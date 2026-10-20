@@ -792,6 +792,17 @@ class HookTests(TempDirTestCase):
             self.submit("cmd", text)
         self.assertEqual(self.last_request("cmd")["prompt"], "Đổi tên hàm foo thành bar trong utils.py và cập nhật nơi gọi")
 
+    def test_subagent_start_gives_no_context_to_the_cold_reader(self):
+        # Người đọc lạ của skill trang-artifact phải hiểu trang nhờ chính trang, không nhờ yêu cầu của người dùng.
+        self.with_plan()
+        self.submit("cold", "Viết trang so sánh hai cách đọc overlay")
+        for agent_type in ("nguoi-doc-la", "agent-stack:nguoi-doc-la"):
+            with self.subTest(agent_type=agent_type):
+                payload = {"session_id": "cold", "cwd": str(self.project), "transcript_path": "/x/t.jsonl",
+                           "hook_event_name": "SubagentStart", "agent_id": "ag-2", "agent_type": agent_type}
+                self.assertIsNone(self.run_hook("subagent_start.py", payload))
+        self.assertIn("Viết trang so sánh", self.start_subagent("cold"))  # subagent khác vẫn nhận bối cảnh
+
     def test_subagent_start_with_neither_request_nor_plan_gives_only_intro_and_closing(self):
         self.assertEqual(self.start_subagent("none-1"), SUBAGENT_BARE)
 

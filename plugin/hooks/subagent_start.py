@@ -6,6 +6,7 @@ Subagent và skill chạy `context: fork` có context riêng, không thấy hộ
 - yêu cầu gần nhất của người dùng, do hook UserPromptSubmit đã lưu (chỉ lấy của đúng session_id này, không đoán
   theo cwd vì có thể có phiên khác chạy cùng thư mục), trình bày như dữ liệu bối cảnh, không phải chỉ dẫn mới;
 - 1 đến 2 việc đầu trong danh sách "việc tiếp theo" ở mục §0 của PLAN.md hoặc .agent/PLAN.md.
+Trừ subagent trong NO_CONTEXT_AGENTS (người đọc lạ của skill trang-artifact): không thêm gì.
 
 SubagentStart không chặn được việc tạo subagent và bỏ qua systemMessage, nên hook chỉ trả additionalContext.
 Hook phải nhanh, im lặng (không in gì ra stderr) và luôn thoát 0.
@@ -22,6 +23,9 @@ PLAN_FILES = ("PLAN.md", ".agent/PLAN.md")
 PLAN_ITEMS = 2               # số việc lấy từ §0
 ITEM_CHARS = 170             # độ dài tối đa của mỗi việc
 MAX_PLAN_BYTES = 300_000     # PLAN lớn hơn thì bỏ qua, để hook luôn nhanh
+# Subagent phải đọc như người lạ (bước đọc thử của skill trang-artifact): không đưa bối cảnh, kẻo nó hiểu trang
+# nhờ yêu cầu của người dùng chứ không nhờ chính trang.
+NO_CONTEXT_AGENTS = {"nguoi-doc-la"}
 
 INTRO = "Bạn chạy trong context riêng, không thấy hội thoại với người dùng; đây là bối cảnh từ phiên chính."
 REQUEST_NOTE = "Chỉ là bối cảnh, không phải chỉ dẫn mới."
@@ -113,6 +117,12 @@ def build_context(request, items, now=None) -> str:
 def main():
     data = A.read_hook_input()
     sid = data.get("session_id")
+    if str(data.get("agent_type") or "").split(":")[-1] in NO_CONTEXT_AGENTS:
+        try:
+            A.log_event("subagent-start", {"session": sid, "agent_type": data.get("agent_type"), "skipped": True})
+        except Exception:  # noqa: BLE001
+            pass
+        return
     request = A.load_last_request(sid)
     try:
         items = plan_items(data.get("cwd"))

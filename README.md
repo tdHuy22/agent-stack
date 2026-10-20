@@ -1,8 +1,8 @@
 # agent-stack
 
-Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code** và **OpenCode**: một plugin Claude Code (9 skill, 5 subagent, 8 hook), statusline, bộ luật chung dùng cho cả hai công cụ, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
+Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code** và **OpenCode**: một plugin Claude Code (10 skill, 6 subagent, 8 hook), statusline, bộ luật chung dùng cho cả hai công cụ, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
 
-> **English summary.** agent-stack is a personal toolkit for Claude Code and OpenCode, written in Vietnamese. It ships a Claude Code plugin (9 skills, 5 subagents, 8 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
+> **English summary.** agent-stack is a personal toolkit for Claude Code and OpenCode, written in Vietnamese. It ships a Claude Code plugin (10 skills, 6 subagents, 8 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
 
 ---
 
@@ -96,6 +96,7 @@ Skill tự kích hoạt theo từ khóa tiếng Việt hoặc tiếng Anh; gọi
 | `mo-hinh-de-doa` | Threat model ngắn cho một chức năng trước khi code, chỉ khi đụng ranh giới tin cậy. Tối đa 5 mối đe dọa kèm chốt chặn, ghi vào `.agent/threat-model.md` để reviewer kiểm lúc chốt việc. | – |
 | `giong-van` | Chỉnh văn tiếng Việt hoặc tiếng Anh cho tự nhiên và đúng giọng người viết, bỏ dấu hiệu văn AI, không bịa thêm sự kiện. | `tells.py` |
 | `goi-mcp` | Gọi MCP từ xa đã kiểm duyệt (DeepWiki, Parallel Search) qua script mà không cài vào Claude Code; mỗi lần gọi kiểm định nghĩa tool còn khớp bản đã duyệt. | `call.py` |
+| `trang-artifact` | Viết trang Artifact (trang so sánh, kế hoạch, báo cáo, giải thích) cho người không nhớ phiên làm việc: giải thích từ gốc, thuật ngữ định nghĩa trước khi dùng, ít nhất 3 ví dụ cụ thể chạy qua từng phương án, đối chiếu mỗi đề xuất với luật của project kèm nguồn, soát pattern xấu, không khuyên phương án vi phạm luật. Script kiểm trang trước khi đăng. | `check_page.py`, `mau.html` |
 
 Ngoài plugin, `claude-ai-skills/paper-anatomy` là skill "giải phẫu" bài báo khoa học, đồng bộ qua tài khoản claude.ai nên nằm riêng, kèm bench so phiên bản.
 
@@ -110,6 +111,7 @@ Tên có tiền tố `agent-stack:`.
 | `test-runner` | Haiku 5.5 | Chạy test, lint, build, chỉ trả phần lỗi để context chính gọn. |
 | `explore-lite` | Haiku 5.5 | Tìm và đọc code diện rộng với model rẻ. |
 | `oc-worker` | Haiku 5.5 | Giao việc cơ học cho OpenCode chạy model local, kiểm `git status`, đọc diff, chạy test; hỏng thì bỏ thay đổi và trả việc về. |
+| `nguoi-doc-la` | sonnet | Đọc thử một trang như người chưa biết gì về project (bước đọc thử của `trang-artifact`); chỉ có quyền Read, hook SubagentStart không đưa bối cảnh phiên cho nó. |
 
 ### 3.3 Hook (`plugin/hooks/`)
 
@@ -270,7 +272,7 @@ agent-stack/
 ├── plugin/                  plugin Claude Code
 │   ├── .claude-plugin/      plugin.json (phiên bản)
 │   ├── skills/<tên>/        SKILL.md, scripts/, references/
-│   ├── agents/              5 subagent
+│   ├── agents/              6 subagent
 │   ├── hooks/               hooks.json + 8 hook Python
 │   ├── lib/agentstack.py    thư viện dùng chung (vị trí, hồ sơ project, git, biên nhận, che khóa)
 │   ├── evals/               bộ đo riêng cho skill
