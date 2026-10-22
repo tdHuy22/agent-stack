@@ -10,12 +10,11 @@ Mục lục:
 4. [Những gì tự chạy](#4-những-gì-tự-chạy)
 5. [Mười skill](#5-mười-skill)
 6. [Subagent](#6-subagent)
-7. [Dùng với OpenCode](#7-dùng-với-opencode)
-8. [Cài, cập nhật, gỡ](#8-cài-cập-nhật-gỡ)
-9. [Bảo trì và eval](#9-bảo-trì-và-eval)
-10. [Tùy chỉnh](#10-tùy-chỉnh)
-11. [Khi có trục trặc](#11-khi-có-trục-trặc)
-12. [Tra cứu nhanh](#12-tra-cứu-nhanh)
+7. [Cài, cập nhật, gỡ](#7-cài-cập-nhật-gỡ)
+8. [Bảo trì và eval](#8-bảo-trì-và-eval)
+9. [Tùy chỉnh](#9-tùy-chỉnh)
+10. [Khi có trục trặc](#10-khi-có-trục-trặc)
+11. [Tra cứu nhanh](#11-tra-cứu-nhanh)
 
 ---
 
@@ -30,7 +29,7 @@ Bộ này giải quyết bốn chuyện hay gặp khi làm việc với Claude C
 
 Ngoài ra có bốn skill phụ: `giong-van` để chỉnh văn cho đúng giọng mình, `reuse-best` để tìm thứ có sẵn trước khi tự viết, `mo-hinh-de-doa` để làm threat model ngắn trước khi code chức năng đụng ranh giới tin cậy, và `chot-viec` để agent tự kiểm trước khi báo xong.
 
-Mọi thứ nằm trong repo này. Các file ngoài repo (`~/.claude/CLAUDE.md`, skill của OpenCode...) chỉ là symlink trỏ về đây, nên sửa trong repo là đủ.
+Mọi thứ nằm trong repo này. Các file ngoài repo (`~/.claude/CLAUDE.md`, bản plugin trong cache của Claude Code...) chỉ là symlink hoặc bản chép từ đây, nên sửa trong repo là đủ.
 
 ---
 
@@ -96,7 +95,7 @@ Skill `reuse-best` tìm theo thứ tự: tính năng sẵn có, code trong proje
 
 Skill `session-keeper` cập nhật §0 với đã xong gì, đang dở gì, việc tiếp theo, mốc kiểm tra. Hết hạn mức thì cứ để đó; phiên sau tự đọc lại §0.
 
-**Khi chuyển sang OpenCode.** Nói "bàn giao sang OpenCode". Claude viết `.agent/HANDOFF.md`, rồi bạn chạy `opencode` trong thư mục project và nhắn "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1".
+**Khi bàn giao cho phiên khác.** Nói "bàn giao". Claude viết `.agent/HANDOFF.md`; phiên Claude Code mới trong thư mục project tự nạp file này. Công cụ không có hook thì nhắn "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1".
 
 **Trước khi commit.** Nếu thay đổi chạm tới xác thực, input, đường dẫn file, secret hay cấu hình, nhờ "review trước khi commit". Subagent `agent-stack:reviewer` (opus · high, chỉ đọc) sẽ xem.
 
@@ -258,7 +257,7 @@ Claude không tự duyệt. PASS chỉ có nghĩa là không thấy dấu hiệu
 | `note <khóa> --recommend <cài\|có-điều-kiện\|thử-1-project\|không-cài> --text "..."` | Ghi nhận xét đọc tay; giữ được qua các lần quét lại |
 | `drift [--remote]` | So plugin đã cài với bản đã kiểm (hook SessionStart chạy bản không mạng). `--remote` thêm MCP từ xa: lấy lại định nghĩa tool, so hash đã duyệt, và báo MCP scope user không qua catalog |
 
-Báo cáo đầy đủ nằm trong `vet-reports/`. Sau khi duyệt, chạy `./install.sh --apply` để cài các mục mới (mục 8).
+Báo cáo đầy đủ nằm trong `vet-reports/`. Sau khi duyệt, chạy `./install.sh --apply` để cài các mục mới (mục 7).
 
 **Bản vá cục bộ** (từ 10/10/2026). Khi plugin đã duyệt có lỗi mà upstream chưa sửa, có thể vá trong agent-stack thay vì chờ. File vá nằm trong `patches/<tên plugin>/`. Mục của plugin trong `vetted.lock` ghi `local_patches`: đường dẫn file vá, sha256 của nó, sha256 từng file sau khi vá, lý do và link upstream. `install.sh` xuất đúng commit đã duyệt vào `vendor/`, kiểm sha256 file vá, áp bằng `git apply`, rồi so tập file bị đổi với lock; lệch chỗ nào thì không chép, không cài. Kiểm lệch chấp nhận file đã vá khi khớp đúng sha256 trong lock. Bản vá chỉ được sửa nội dung file văn bản, tạo file thường hay xóa file; symlink, đổi quyền chạy, đổi tên hay file nhị phân bị từ chối. Vet lại cùng commit thì giữ bản vá; vet commit mới thì bỏ, và `vet.py` cảnh báo trong tóm tắt, báo cáo và lúc duyệt, để bạn kiểm upstream đã sửa chưa; đã sửa thì chỉ cần vet commit đó, chưa thì làm lại bản vá. Hiện có một bản vá: `static-analysis`, lỗi Semgrep bỏ qua file khi gốc repo có file trùng glob (trailofbits/skills#297).
 
@@ -405,61 +404,26 @@ Subagent chạy trong context riêng và chỉ trả về kết quả gọn, nê
 | `agent-stack:researcher` | sonnet · medium | Không sửa file | Tra docs, so sánh công cụ, kiểm chứng một nhận định; trả về có dẫn nguồn |
 | `agent-stack:test-runner` | Haiku 5.5 · low | Chỉ đọc, chạy lệnh | Chạy test, lint, build và chỉ trả về phần lỗi |
 | `agent-stack:explore-lite` | Haiku 5.5 · low | Chỉ đọc | Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn `Explore` nhưng không suy luận sâu |
-| `agent-stack:oc-worker` | Haiku 5.5 · low | Chạy lệnh | Giao việc cơ học cho OpenCode chạy model local `tuf/*` trong mạng nhà (mục 7); không tự rơi về model từ xa |
 | `agent-stack:nguoi-doc-la` | sonnet · medium | Chỉ Read | Đọc thử một trang như người lạ trước khi đăng (skill `trang-artifact`); không nhận bối cảnh phiên |
 
 Subagent vẫn tính vào hạn mức. Theo `BASELINE.md`, khoảng 70% chi phí đến từ subagent và workflow, nên đừng chia nhỏ việc mà một model làm liền mạch tốt hơn.
 
 **Subagent không thấy hội thoại.** Subagent và skill chạy `context: fork` (`vet-skill`, `reuse-best`, `tien-do`) có context riêng: không thấy yêu cầu của bạn, các tin nhắn trước hay task của phiên, chỉ thấy prompt mà Claude giao cho chúng. Hai lớp bù lại:
 
-- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Riêng `nguoi-doc-la` không nhận, vì nó phải hiểu trang nhờ chính trang. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 8). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng `claude -p`: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng `grep subagent-start state/events.jsonl | tail -3` (dòng đạt có `"request": true`).
+- **Hook SubagentStart** (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Riêng `nguoi-doc-la` không nhận, vì nó phải hiểu trang nhờ chính trang. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 7). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng `claude -p`: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng `grep subagent-start state/events.jsonl | tail -3` (dòng đạt có `"request": true`).
 - **Prompt giao việc phải tự đủ.** Luật chung dặn Claude ghi rõ yêu cầu gốc, mục tiêu, ràng buộc, file liên quan, tiêu chí xong và định dạng trả về. Mỗi agent và skill đều ghi nó cần gì; thiếu thì nó nói rõ phần thiếu ở dòng đầu báo cáo thay vì đoán.
-
----
-
-## 7. Dùng với OpenCode
-
-OpenCode đọc cùng bộ luật và skill, qua symlink:
-
-- `~/.config/opencode/AGENTS.md` → `global/AGENTS.global.md`, file ghép từ luật chung `SHARED.global.md` và phần riêng OpenCode `OPENCODE.global.md` (OpenCode không hiểu `@import`)
-- `~/.config/opencode/skills/<tên>` → skill trong `plugin/skills/` (và `vendor/skills/` nếu bạn cài lại skill vendor)
-- `~/.config/opencode/agents/worker.md` → `opencode/agents/worker.md`
-
-OpenCode không có hook, nên đầu phiên Claude (hoặc model trong OpenCode) phải tự chạy:
-
-```bash
-python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py --session .
-```
-
-Lệnh này in hồ sơ project, gợi ý skill và lượt cuối (`.agent/LAST-TURN.md`) do hook Stop của Claude Code ghi. Phần riêng OpenCode của luật (`OPENCODE.global.md`) đã dặn việc này, nên thường không cần nhắc. OpenCode không có hook Stop, nên lượt làm trong OpenCode không được ghi lại. Lượt cuối của thư mục chung nằm trong `state/last-turn/`; lệnh trên vẫn đọc được vì cùng thư mục `state/`.
-
-### Agent `worker`
-
-`worker` chạy model local `tuf/coder-fast` (miễn phí, chỉ chạy được khi ở mạng nhà), được sửa file nhưng gần như không được chạy lệnh ngoài vài lệnh kiểm tra như `git diff`. Dùng cho việc cơ học: đổi tên hàng loạt, định dạng, boilerplate, dịch tài liệu, test đơn giản.
-
-Từ Claude Code, giao qua subagent `agent-stack:oc-worker`. Nó kiểm tra `git status` sạch, gọi worker, đọc diff, chạy test; hỏng thì thử lại một lần với `tuf/gpt-oss-medium`, vẫn hỏng thì bỏ thay đổi và trả việc về phiên chính. Gọi tay:
-
-```bash
-opencode run --agent worker -m tuf/coder-fast --format json --auto "<việc + tiêu chí xong + file được phép sửa>"
-```
-
-Thêm `--standalone` nếu báo lỗi không kết nối được service.
 
 ### Quyền riêng tư với model từ xa
 
-Model chạy qua OpenRouter hay model miễn phí của OpenCode nhận toàn bộ prompt và nội dung file. Riêng `opencode/muse-spark-1.3-contributor-free` (đang là model mặc định trong `~/.config/opencode/opencode.jsonc` của máy này) đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của Meta, theo trang OpenCode Zen (02/10/2026). Vì vậy luật chung và `oc-worker` quy định: không giao file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa; nếu model local `tuf` không dùng được (ngoài mạng nhà), dừng và hỏi bạn thay vì tự rơi về model từ xa. Muốn đổi model mặc định của OpenCode thì sửa `opencode.jsonc` (repo này không tự sửa).
+Model chạy qua OpenRouter hay dịch vụ model miễn phí nhận toàn bộ prompt và nội dung file, và nhiều dịch vụ miễn phí còn được dùng dữ liệu đó để huấn luyện model. Vì vậy luật chung quy định: không giao file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa; việc như vậy làm ngay trong Claude Code, không có cách an toàn thì dừng và hỏi bạn.
 
-### Làm tiếp việc của Claude trong OpenCode
+### Việc cơ học hàng loạt
 
-1. Trong Claude Code: "bàn giao sang OpenCode".
-2. Trong terminal: `cd` vào project, chạy `opencode`.
-3. Nhắn: "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1".
-
-Trong OpenCode, dòng ➡️ ghi Subagent là `build`, `plan` hoặc `worker`.
+Đổi tên hàng loạt, định dạng, boilerplate, dịch tài liệu: router gợi ý `claude-haiku-5-5 · low` và không giao subagent riêng. Đổi model giữa phiên không rẻ thì giao subagent `general-purpose` chạy model đó; chỉ dùng model rẻ khi có kiểm tra tự động (test, lint), trượt thì làm lại ở mức cao hơn.
 
 ---
 
-## 8. Cài, cập nhật, gỡ
+## 7. Cài, cập nhật, gỡ
 
 Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ xem trước.
 
@@ -477,13 +441,12 @@ Các bước có thể chọn riêng bằng `--only`, ngăn cách bằng dấu p
 
 | Bước | Cài gì |
 |---|---|
-| `rules` | Symlink luật chung cho Claude Code và OpenCode |
+| `rules` | Symlink `~/.claude/CLAUDE.md` tới luật chung |
 | `plugin` | Marketplace local và plugin `agent-stack` |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
 | `tools` | Công cụ dòng lệnh mà mục đã duyệt cần (khóa `brew` trong `catalog.json`, hiện là `semgrep` cho `static-analysis`), cài bằng Homebrew; gỡ được bằng `--rollback` |
 | `catalog` | Plugin chính thức, plugin và skill bên thứ ba đã duyệt; bên thứ ba được chép đúng commit đã kiểm vào `vendor/` (không theo HEAD), mục scope project chỉ được chép rồi in lệnh cài trong project |
-| `opencode` | Symlink skill và agent cho OpenCode |
 
 Tùy chọn khác: `--replace-existing` thay file hoặc symlink đang có (có sao lưu); `--restore-workflow-warning` bỏ khóa `skipWorkflowUsageWarning`.
 
@@ -498,7 +461,7 @@ Tùy chọn khác: `--replace-existing` thay file hoặc symlink đang có (có 
 
 Lệnh này chỉ ghi nhận số phiên bản mới và ghi nhật ký vào `INSTALLED.md`; không chạy thì code vẫn chạy đúng. Plugin bên thứ ba trong `vendor/` thì phải cài lại, vì Claude Code chạy bản chép trong cache.
 
-Sửa skill của OpenCode hay luật chung thì không cần cài lại, vì đó là symlink.
+Sửa luật chung thì không cần cài lại, vì `~/.claude/CLAUDE.md` là symlink.
 
 ### Gỡ
 
@@ -516,7 +479,7 @@ Lần gỡ không đụng tới `vetted.lock`, `vet-reports/`, `state/`, `.vet-c
 
 ---
 
-## 9. Bảo trì và eval
+## 8. Bảo trì và eval
 
 ### Mỗi tháng
 
@@ -524,7 +487,7 @@ Lần gỡ không đụng tới `vetted.lock`, `vet-reports/`, `state/`, `.vet-c
 python3 tools/maintain.py
 ```
 
-Script kiểm tra: phiên bản Claude Code và OpenCode; đồ bên thứ ba đã có commit mới chưa (có thì phải kiểm duyệt lại trước khi cập nhật); test và `claude plugin validate`; độ dài mô tả skill; mức dùng 7 ngày so với `BASELINE.md`; dung lượng `.vet-cache`; công cụ dòng lệnh khuyến nghị đã cài chưa. Chỉ đọc, trừ khi thêm `--clean-cache`. `--offline` bỏ bước gọi GitHub, `--skip-tests` bỏ chạy test.
+Script kiểm tra: phiên bản Claude Code; đồ bên thứ ba đã có commit mới chưa (có thì phải kiểm duyệt lại trước khi cập nhật); test và `claude plugin validate`; độ dài mô tả skill; mức dùng 7 ngày so với `BASELINE.md`; dung lượng `.vet-cache`; công cụ dòng lệnh khuyến nghị đã cài chưa. Chỉ đọc, trừ khi thêm `--clean-cache`. `--offline` bỏ bước gọi GitHub, `--skip-tests` bỏ chạy test.
 
 ### Xem mức dùng token
 
@@ -586,19 +549,18 @@ Trần 3 USD chỉ đủ khoảng 11 trên 13 ca; chạy nốt phần còn lại
 
 ---
 
-## 10. Tùy chỉnh
+## 9. Tùy chỉnh
 
 | Muốn đổi | Sửa ở đâu |
 |---|---|
 | Ngưỡng cảnh báo hạn mức | Biến môi trường `AGENT_STACK_WARN_5H` (mặc định 90) và `AGENT_STACK_WARN_7D` (mặc định 80) |
-| Luật chung cho mọi project | `global/SHARED.global.md` (dùng chung), `global/CLAUDE.global.md` (riêng Claude Code, có bảng chọn cho dòng ➡️), `global/OPENCODE.global.md` (riêng OpenCode). Sửa SHARED hay OPENCODE xong thì chạy `python3 tools/build_rules.py` để ghép lại `global/AGENTS.global.md` cho OpenCode; quên thì test báo |
+| Luật chung cho mọi project | `global/SHARED.global.md` (dùng chung), `global/CLAUDE.global.md` (riêng Claude Code, có bảng chọn cho dòng ➡️). Sửa xong có hiệu lực ở phiên mới |
 | Luật router | `plugin/skills/task-router/rules.json`, rồi chạy lại `route.py --eval evals/router-prompts.jsonl` |
 | Giọng văn | `plugin/skills/giong-van/style-card.md` và `samples/` (chung); `.agent/giong-van/` trong từng project viết luận |
 | Danh sách dấu hiệu văn AI tiếng Việt | `plugin/skills/giong-van/vi-ai-tells.md` |
-| Model của worker OpenCode | `opencode/agents/worker.md` |
 | Mẫu PLAN và HANDOFF | `plugin/skills/session-keeper/templates/` |
 
-Sửa xong luật router hay skill thì chạy test. Nếu dùng desktop app, nhớ tăng version và cài lại plugin (mục 8).
+Sửa xong luật router hay skill thì chạy test. Nếu dùng desktop app, nhớ tăng version và cài lại plugin (mục 7).
 
 ### Đưa project khác vào nếp
 
@@ -606,7 +568,7 @@ Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch
 
 ---
 
-## 11. Khi có trục trặc
+## 10. Khi có trục trặc
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
@@ -616,7 +578,6 @@ Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch
 | `claude -p` báo "OAuth session expired" | CLI hết phiên đăng nhập | `claude /login` trong terminal |
 | Plugin pyright-lsp không chạy trong project đã bật | Chưa có `pyright` | `brew install pyright` |
 | Muốn bật LSP cho một project | LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn | Trong project đó: `claude plugin enable pyright-lsp@claude-plugins-official --scope local` (chỉ còn LSP cho Python; `clangd-lsp` cho C/C++ đã xoá ngày 10/10/2026) |
-| `oc-worker` báo không kết nối được | Model local chỉ chạy ở mạng nhà, hoặc service OpenCode chưa chạy | Thêm `--standalone`, hoặc để phiên chính tự làm |
 | `vet.py scan` thoát mã 3 | Lỗi mạng hoặc đích không tồn tại | Kiểm tra lại `owner/repo@ref`, thử `--no-scanner` |
 | §0 lệch với thực tế | Quên lưu trước khi dừng | `/agent-stack:session-keeper tiep-tuc` để so và báo chỗ lệch |
 
@@ -638,7 +599,7 @@ rồi đọc §0 của `PLAN.md`. Muốn quay về trạng thái trước khi c�
 
 ---
 
-## 12. Tra cứu nhanh
+## 11. Tra cứu nhanh
 
 | Muốn | Nói hoặc gõ |
 |---|---|
@@ -646,7 +607,7 @@ rồi đọc §0 của `PLAN.md`. Muốn quay về trạng thái trước khi c�
 | Xem mọi project | `/agent-stack:tien-do all` |
 | Lưu tiến độ | "lưu tiến độ" · `/agent-stack:session-keeper luu` |
 | Làm tiếp sau khi bị ngắt | `/agent-stack:session-keeper tiep-tuc` |
-| Chuyển sang OpenCode | `/agent-stack:session-keeper ban-giao` |
+| Bàn giao cho phiên khác | `/agent-stack:session-keeper ban-giao` |
 | Project mới chưa có kế hoạch | `/agent-stack:session-keeper khoi-tao` |
 | Hỏi nên dùng model nào | `/agent-stack:task-router <việc>` |
 | Kiểm tra skill/plugin trước khi cài | `/agent-stack:vet-skill <owner/repo>` |

@@ -1,8 +1,8 @@
 # agent-stack
 
-Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code** và **OpenCode**: một plugin Claude Code (10 skill, 6 subagent, 8 hook), statusline, bộ luật chung dùng cho cả hai công cụ, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
+Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệm hạn mức với **Claude Code**: một plugin Claude Code (10 skill, 5 subagent, 8 hook), statusline, bộ luật chung nạp vào mọi phiên, bộ eval để chọn model và effort, cùng quy trình kiểm duyệt mọi skill, plugin, MCP của bên thứ ba trước khi cài.
 
-> **English summary.** agent-stack is a personal toolkit for Claude Code and OpenCode, written in Vietnamese. It ships a Claude Code plugin (10 skills, 6 subagents, 8 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
+> **English summary.** agent-stack is a personal toolkit for Claude Code, written in Vietnamese. It ships a Claude Code plugin (10 skills, 5 subagents, 8 hooks) that keeps work state on disk so sessions survive usage limits, crashes and compaction; suggests the cheapest model, effort, subagent and skill per task; nudges the agent to back "done" with verified test receipts and risk-scaled review; and blocks known install commands for third-party skills, plugins or MCP servers until they pass a security vetting step pinned to a commit (a guard rail for the agent, not a security boundary). Everything is Python standard library only, hooks fail safe and never hang a session, and global activation goes through a reversible `install.sh` (dry run by default, full rollback). It is tuned for one person's machine (macOS, Vietnamese prompts), so treat it as a reference design rather than a drop-in product.
 
 ---
 
@@ -14,13 +14,12 @@ Bộ công cụ cá nhân để làm việc lâu dài, an toàn và tiết kiệ
 4. [Yêu cầu](#4-yêu-cầu)
 5. [Cài đặt](#5-cài-đặt)
 6. [Một ngày làm việc](#6-một-ngày-làm-việc)
-7. [Dùng với OpenCode](#7-dùng-với-opencode)
-8. [Nguyên tắc thiết kế](#8-nguyên-tắc-thiết-kế)
-9. [Cấu trúc repo](#9-cấu-trúc-repo)
-10. [Phát triển và kiểm tra](#10-phát-triển-và-kiểm-tra)
-11. [Bảo mật và giới hạn](#11-bảo-mật-và-giới-hạn)
-12. [Tài liệu khác](#12-tài-liệu-khác)
-13. [Giấy phép](#13-giấy-phép)
+7. [Nguyên tắc thiết kế](#7-nguyên-tắc-thiết-kế)
+8. [Cấu trúc repo](#8-cấu-trúc-repo)
+9. [Phát triển và kiểm tra](#9-phát-triển-và-kiểm-tra)
+10. [Bảo mật và giới hạn](#10-bảo-mật-và-giới-hạn)
+11. [Tài liệu khác](#11-tài-liệu-khác)
+12. [Giấy phép](#12-giấy-phép)
 
 ---
 
@@ -62,22 +61,18 @@ flowchart LR
         RC[biên nhận kiểm chứng]
     end
 
-    OC[OpenCode]
-
     G -- symlink --> CC
-    G -- AGENTS.md ghép --> OC
     P -- plugin --> CC
-    P -- symlink skill --> OC
     S --> CC
     V --> H3
     E --> H2
     H1 <--> PL
     H4 --> AG
     P --> RC
-    AG --> OC
+    AG --> CC
 ```
 
-Mọi file ngoài repo (`~/.claude/CLAUDE.md`, skill của OpenCode...) chỉ là symlink hoặc bản chép do `install.sh` tạo, nên sửa trong repo là đủ.
+Mọi file ngoài repo (`~/.claude/CLAUDE.md`, bản plugin trong cache của Claude Code...) chỉ là symlink hoặc bản chép do `install.sh` tạo, nên sửa trong repo là đủ.
 
 ## 3. Thành phần
 
@@ -89,7 +84,7 @@ Skill tự kích hoạt theo từ khóa tiếng Việt hoặc tiếng Anh; gọi
 |---|---|---|
 | `session-keeper` | Lưu và khôi phục trạng thái: cập nhật §0, viết `HANDOFF.md` khi bàn giao, chạy bước kiểm sau khi bị ngắt. Ghi biên nhận kiểm chứng gắn với nội dung code lúc chạy, để phiên sau biết kết quả còn đúng hay code đã đổi. | `state.py`, `receipt.py` |
 | `tien-do` | Tiến độ và việc nên làm tiếp (chặn đường, dang dở, giai đoạn hiện tại, nợ TODO, bị bỏ quên), kèm gợi ý model và câu `/goal`. `--all` cho mọi project. Vẽ cây kế hoạch dạng widget có ô tick. | `collect.py`, `plan_tree.py` |
-| `task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (ngôn ngữ, test, CI, code nhạy cảm) và việc tiếp theo trong §0. Tính chi phí ghi lại cache trước khi gợi ý đổi model. `merge_back.py` gộp nhánh worktree của subagent khi test đạt và fast-forward được, dừng khi đụng file nhạy cảm. `--session` cho công cụ không có hook như OpenCode. | `route.py`, `rules.json`, `merge_back.py` |
+| `task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (ngôn ngữ, test, CI, code nhạy cảm) và việc tiếp theo trong §0. Tính chi phí ghi lại cache trước khi gợi ý đổi model. `merge_back.py` gộp nhánh worktree của subagent khi test đạt và fast-forward được, dừng khi đụng file nhạy cảm. `--session` in hồ sơ project cho công cụ không có hook. | `route.py`, `rules.json`, `merge_back.py` |
 | `vet-skill` | Kiểm duyệt skill, plugin, MCP, marketplace của bên thứ ba: ghim commit, quét dấu hiệu độc hại (tải rồi chạy mã, đọc khóa, prompt injection, ký tự ẩn, hook tự chạy), chạy thử trong sandbox, chạy SkillSpector, kiểm lệch so với bản đã duyệt, ghi `vetted.lock`. | `vet.py`, `redflags.py`, `dynamic.py`, `drift.py`, `mcp_remote.py`, `spector.py` |
 | `reuse-best` | Trước khi tự làm tool, tính năng, thuật toán: tìm thứ có sẵn tốt nhất theo thứ tự tính năng sẵn có, code trong project, skill đã duyệt, GitHub, bài nghiên cứu SOTA; kiểm từng tiêu chí bằng bằng chứng rồi quyết định dùng lại, điều chỉnh hay tự viết, và nêu phần còn phải làm. | `scout.py` |
 | `chot-viec` | Cổng kiểm trước khi báo xong hay commit: nêu lại ý định, chấm rủi ro của diff (kể cả ranh giới tin cậy bị đụng), chạy kiểm chứng có biên nhận, tái hiện như người dùng sẽ dùng, review ở context mới với độ sâu theo rủi ro, rà tài liệu. | `risk.py` |
@@ -110,7 +105,6 @@ Tên có tiền tố `agent-stack:`.
 | `researcher` | sonnet | Nghiên cứu web và tài liệu, trả bản tóm tắt có nguồn; không sửa file. |
 | `test-runner` | Haiku 5.5 | Chạy test, lint, build, chỉ trả phần lỗi để context chính gọn. |
 | `explore-lite` | Haiku 5.5 | Tìm và đọc code diện rộng với model rẻ. |
-| `oc-worker` | Haiku 5.5 | Giao việc cơ học cho OpenCode chạy model local, kiểm `git status`, đọc diff, chạy test; hỏng thì bỏ thay đổi và trả việc về. |
 | `nguoi-doc-la` | sonnet | Đọc thử một trang như người chưa biết gì về project (bước đọc thử của `trang-artifact`); chỉ có quyền Read, hook SubagentStart không đưa bối cảnh phiên cho nó. |
 
 ### 3.3 Hook (`plugin/hooks/`)
@@ -134,19 +128,18 @@ Tất cả viết bằng Python thư viện chuẩn, bắt mọi lỗi, thoát m
 |---|---|---|
 | Statusline | `statusline/statusline.py` | `Opus 5.5 · high · ctx 23% · 5h 41% · 7d 12%`, đổi màu khi gần ngưỡng; ghi `state/limits.json` cho hook cảnh báo hạn mức. Chỉ chạy trong CLI terminal. |
 | Mod giao diện | `plugin/hooks/ui.tsx` | Chỉ Claude Code 2.1.295 trở lên. Pane "Kế hoạch" vẽ cây từ `plan_tree.py --json`, tự mở khi project có file kế hoạch, tự làm mới sau mỗi lượt và khi file kế hoạch đổi; bấm một việc thì điền mã (như `T.2`) vào ô nhập. `/cay` mở lại pane, `/cay T.2` in chi tiết một việc, `/cay ?` in chẩn đoán, `/bien-nhan` in biên nhận kiểm chứng; các lệnh này không gọi model. Toast tóm tắt khi hook Stop chặn lượt hay lượt dừng vì lỗi API. Dải trên ô nhập hiện gợi ý `[router]` của tin vừa gửi, kèm nút điền `/model` (chỉ khi đổi còn rẻ) hay `/effort` vào ô nhập trống. Phiên có pane thì model thôi vẽ widget cây (mục `agent-stack:ui` trong system prompt, hằng nên không làm mất prompt cache; hook Stop đọc biến `AGENT_STACK_UI=1` do mod đặt, đừng tự đặt biến này). Sau mỗi lượt, `plugin/hooks/ui_status.py` ghi `state/limits.json` (cảnh báo hạn mức chạy cả trên app desktop) và số liệu phiên cho router; mod không vẽ status line vì app đã hiện context và hạn mức. Logic vẫn ở Python, module chỉ vẽ. |
-| Luật chung | `global/` | `SHARED.global.md` (chung), `CLAUDE.global.md` (riêng Claude Code, import SHARED), `OPENCODE.global.md`; `AGENTS.global.md` là file ghép cho OpenCode, sinh bằng `tools/build_rules.py`. |
+| Luật chung | `global/` | `SHARED.global.md` (chung), `CLAUDE.global.md` (riêng Claude Code, import SHARED, có bảng chọn cho dòng ➡️). |
 | Bảng định tuyến | `routing-table.md` | Thang effort, model theo loại việc, mỗi dòng ghi căn cứ: số đo của người dùng (E), tài liệu Anthropic (A) hay phán đoán (P). |
 | Eval | `evals/` | 24 việc (coding, debug khó, đọc tài liệu, review bảo mật, QA bằng mutation, viết, reuse có bẫy) để chọn cấu hình rẻ nhất mà vẫn giữ chất lượng; chạy trong thư mục tạm cách ly. |
 | Kiểm duyệt | `vetted.lock`, `vet-reports/`, `catalog.json` | Kết quả kiểm duyệt từng mục bên thứ ba (commit, giấy phép, cờ đỏ, quyết định của người dùng) và danh mục được phép cài. |
-| Agent OpenCode | `opencode/agents/worker.md` | Worker chạy model local, gần như chỉ được chạy lệnh kiểm tra. |
-| Công cụ | `tools/` | `install.py` (sau `install.sh`), `maintain.py` (kiểm tra hằng tháng), `usage_snapshot.py` (mức dùng token), `build_rules.py`, `srt/` (sandbox runtime). |
+| Công cụ | `tools/` | `install.py` (sau `install.sh`), `maintain.py` (kiểm tra hằng tháng), `usage_snapshot.py` (mức dùng token), `srt/` (sandbox runtime). |
 
 ## 4. Yêu cầu
 
 - macOS (đã dùng thật trên macOS; Linux chưa kiểm).
 - **Python 3.11** trong `PATH` dưới tên `python3`. Chỉ dùng thư viện chuẩn. Không chạy trên Python 3.9 của hệ thống macOS.
 - **Claude Code** (đã dùng với 2.1.28x), CLI hoặc desktop app.
-- Tùy chọn: OpenCode, Homebrew (để `install.sh` cài `semgrep` cho plugin `static-analysis` đã duyệt), `gh` cho phần kiểm duyệt dùng GitHub API, `uv` cho SkillSpector.
+- Tùy chọn: Homebrew (để `install.sh` cài `semgrep` cho plugin `static-analysis` đã duyệt), `gh` cho phần kiểm duyệt dùng GitHub API, `uv` cho SkillSpector.
 
 ## 5. Cài đặt
 
@@ -182,13 +175,12 @@ Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ x
 
 | Bước | Cài gì |
 |---|---|
-| `rules` | Symlink luật chung cho Claude Code và OpenCode |
+| `rules` | Symlink `~/.claude/CLAUDE.md` tới luật chung |
 | `plugin` | Marketplace local `agent-stack-local` và plugin `agent-stack` |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
 | `catalog` | Plugin chính thức và đồ bên thứ ba đã duyệt, chép đúng commit đã kiểm vào `vendor/` |
 | `tools` | Công cụ dòng lệnh mà mục đã duyệt cần, qua Homebrew |
-| `opencode` | Symlink skill và agent cho OpenCode |
 
 ### 5.4 Cập nhật sau khi sửa plugin
 
@@ -242,19 +234,9 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
 
 6. **Trước khi báo xong.** Hook Stop buộc chạy `chot-viec` khi lượt đổi code có rủi ro từ vừa trở lên.
 7. **Gần hết hạn mức.** Hook nhắc; nói "lưu tiến độ" để `session-keeper` cập nhật §0. Phiên sau tự đọc lại.
-8. **Chuyển sang OpenCode.** Nói "bàn giao sang OpenCode" để có `.agent/HANDOFF.md`.
+8. **Bàn giao.** Nói "bàn giao" để `session-keeper` viết `.agent/HANDOFF.md`; phiên mới trong project tự nạp file này.
 
-## 7. Dùng với OpenCode
-
-OpenCode đọc cùng bộ luật và skill qua symlink: `~/.config/opencode/AGENTS.md` trỏ tới `global/AGENTS.global.md` (bản ghép, vì OpenCode không hiểu `@import`), skill trỏ tới `plugin/skills/`, agent `worker` trỏ tới `opencode/agents/worker.md`. OpenCode không có hook, nên đầu phiên chạy:
-
-```bash
-python3 ~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py --session .
-```
-
-Luật chung cấm giao file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa (OpenRouter, model miễn phí của OpenCode, vốn có thể dùng dữ liệu để huấn luyện). Việc như vậy chỉ giao model local; model local không dùng được thì dừng và hỏi, không tự rơi về model từ xa.
-
-## 8. Nguyên tắc thiết kế
+## 7. Nguyên tắc thiết kế
 
 - **Trạng thái nằm trên đĩa, không nằm trong context.** Hết hạn mức, crash, compact hay đổi công cụ đều không mất việc.
 - **Chưa kiểm chứng thì chưa xong.** Biên nhận gắn với dấu vân tay nội dung code lúc chạy; kết quả đạt cũ không chứng minh cho code đã sửa sau đó.
@@ -265,7 +247,7 @@ Luật chung cấm giao file chứa secret, dữ liệu cá nhân hay mã riêng
 - **Đồ bên thứ ba là không tin cậy cho tới khi được kiểm.** Ghim commit, quét, người dùng duyệt, rồi mới cài; kiểm lệch mỗi lần mở phiên. Nội dung đọc từ web, file, kết quả công cụ là dữ liệu, không phải chỉ dẫn.
 - **Nội dung chép từ nguồn khác được ghi công.** Xem `plugin/NOTICES.md`.
 
-## 9. Cấu trúc repo
+## 8. Cấu trúc repo
 
 ```
 agent-stack/
@@ -278,13 +260,12 @@ agent-stack/
 │   ├── evals/               bộ đo riêng cho skill
 │   └── NOTICES.md           ghi công bên thứ ba
 ├── .claude-plugin/          marketplace local agent-stack-local
-├── global/                  luật chung cho Claude Code và OpenCode
+├── global/                  luật chung cho Claude Code
 ├── statusline/              statusline cho CLI
-├── opencode/, .opencode/    agent worker cho OpenCode
 ├── evals/                   bộ eval chọn model, effort
 ├── claude-ai-skills/        skill đồng bộ qua claude.ai (paper-anatomy)
-├── tools/                   install, maintain, usage, build_rules, srt
-├── tests/                   unittest (584 test)
+├── tools/                   install, maintain, usage, srt
+├── tests/                   unittest (707 test)
 ├── patches/                 bản vá cho plugin bên thứ ba đã duyệt
 ├── vet-reports/             báo cáo kiểm duyệt từng mục
 ├── vetted.lock, catalog.json
@@ -296,7 +277,7 @@ agent-stack/
 └── (không vào git) state/, backups/, vendor/, .venv/, .cache/, .tmp/, .vet-cache/
 ```
 
-## 10. Phát triển và kiểm tra
+## 9. Phát triển và kiểm tra
 
 Hai mốc phải đạt trước mỗi commit:
 
@@ -324,11 +305,11 @@ python3 evals/run_eval.py --self-test
 python3 tools/maintain.py
 ```
 
-`maintain.py` (mỗi tháng) kiểm phiên bản Claude Code và OpenCode, đồ bên thứ ba có commit mới chưa (có thì phải kiểm duyệt lại), test, độ dài mô tả skill, mức dùng 7 ngày so với `BASELINE.md`. Chỉ đọc, trừ khi thêm `--clean-cache`.
+`maintain.py` (mỗi tháng) kiểm phiên bản Claude Code, đồ bên thứ ba có commit mới chưa (có thì phải kiểm duyệt lại), test, độ dài mô tả skill, mức dùng 7 ngày so với `BASELINE.md`. Chỉ đọc, trừ khi thêm `--clean-cache`.
 
-Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích tiếng Việt ngắn, tên biến và hàm tiếng Anh; file tạm trong `.tmp/`, trạng thái chạy trong `state/`. Tên skill kebab-case tối đa 64 ký tự, `description` tối đa 1.024 ký tự để OpenCode cũng đọc được. Chi tiết trong `CLAUDE.md`.
+Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích tiếng Việt ngắn, tên biến và hàm tiếng Anh; file tạm trong `.tmp/`, trạng thái chạy trong `state/`. Tên skill kebab-case tối đa 64 ký tự, `description` tối đa 1.024 ký tự (giới hạn của chuẩn Agent Skills). Chi tiết trong `CLAUDE.md`.
 
-## 11. Bảo mật và giới hạn
+## 10. Bảo mật và giới hạn
 
 - **Hook PreToolUse là lớp nhắc, không phải ranh giới bảo mật.** Nó so chuỗi lệnh với mẫu, nên lệnh viết vòng qua biến hay script trung gian vẫn lọt. Ranh giới thật là quyền của Claude Code, việc người dùng duyệt, và bước kiểm lệch lúc mở phiên.
 - **Che khóa là nỗ lực tốt nhất.** Yêu cầu và câu trả lời được che token, khóa API theo mẫu trước khi ghi ra `state/` và `.agent/`, nhưng đừng dán secret vào chat.
@@ -336,15 +317,16 @@ Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích ti�
 - **`merge_back.py` chạy toàn bộ mã của nhánh** (test, `conftest.py`) dưới quyền người dùng. Chỉ dùng cho nhánh do subagent của chính phiên tạo.
 - **Mẫu văn riêng của người dùng** trong `plugin/skills/giong-van/samples/` bị loại khỏi git; chỉ văn mẫu thuộc phạm vi công cộng được đưa vào.
 - **Chuỗi trông như secret trong repo đều là dữ liệu thử.** Ví dụ khóa giả trong `evals/tasks/sec-secrets/` (bài kiểm review bảo mật) và mẫu khóa SSH giả trong `vet-skill/scripts/dynamic.py` (mồi nhử khi chạy thử skill trong sandbox).
-- **Bộ này viết cho một người, một máy.** Luật và hướng dẫn bằng tiếng Việt; model local `tuf/*` là máy trong mạng nhà của tác giả; vài đường dẫn mặc định giả định `~/Documents/Claude/agent-stack`. Dùng lại thì nên đọc `KE-HOACH.md` và chỉnh cho hợp.
+- **Luật chung cấm gửi file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa** (OpenRouter, dịch vụ model miễn phí, vốn có thể dùng dữ liệu để huấn luyện). Việc như vậy làm ngay trong Claude Code; không có cách an toàn thì dừng và hỏi người dùng.
+- **Bộ này viết cho một người, một máy.** Luật và hướng dẫn bằng tiếng Việt; vài đường dẫn mặc định giả định `~/Documents/Claude/agent-stack`. Dùng lại thì nên đọc `KE-HOACH.md` và chỉnh cho hợp.
 
 Phát hiện lỗ hổng: mở issue trên GitHub, đừng kèm secret hay mã khai thác chạy được.
 
-## 12. Tài liệu khác
+## 11. Tài liệu khác
 
 | File | Nội dung |
 |---|---|
-| [`HUONG-DAN.md`](HUONG-DAN.md) | Hướng dẫn sử dụng đầy đủ: từng skill, hook, cảnh báo hạn mức, OpenCode, xử lý trục trặc, tra cứu nhanh |
+| [`HUONG-DAN.md`](HUONG-DAN.md) | Hướng dẫn sử dụng đầy đủ: từng skill, hook, cảnh báo hạn mức, xử lý trục trặc, tra cứu nhanh |
 | [`KE-HOACH.md`](KE-HOACH.md) | Thiết kế, lý do chọn từng thứ, kết quả nghiên cứu công cụ, lộ trình theo giai đoạn |
 | [`routing-table.md`](routing-table.md) | Bảng định tuyến model và effort đầy đủ, kèm căn cứ |
 | [`evals/README.md`](evals/README.md) | Bộ eval và cách chấm |
@@ -353,7 +335,7 @@ Phát hiện lỗ hổng: mở issue trên GitHub, đừng kèm secret hay mã k
 | [`INSTALLED.md`](INSTALLED.md) | Nhật ký cài trên máy tác giả, kèm lệnh gỡ từng mục. `install.sh --apply` ghi đè file này bằng nhật ký của máy bạn |
 | [`plugin/NOTICES.md`](plugin/NOTICES.md) | Ghi công và giấy phép của nguồn bên thứ ba |
 
-## 13. Giấy phép
+## 12. Giấy phép
 
 Apache License 2.0, xem [`LICENSE`](LICENSE). Copyright 2026 tdHuy22.
 
