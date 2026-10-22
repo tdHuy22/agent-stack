@@ -12,7 +12,7 @@ context: fork
 
 Mục tiêu là không tự viết lại thứ người khác đã làm tốt, và khi phải tự làm thì đứng trên kết quả tốt nhất hiện có. Skill này chỉ tìm và đề xuất. Nó không thu hẹp nhu cầu, không bỏ tính năng thay người dùng, và "đã có thứ chạy được" không phải lý do để dừng tìm hay làm ít hơn yêu cầu.
 
-Script `${CLAUDE_SKILL_DIR}/scripts/scout.py` tìm repo trên GitHub (`github`), xem kỹ một repo (`repo`) và tìm bài nghiên cứu (`papers`), rồi in bảng có số liệu. Nếu đường dẫn script ở câu trên chưa phải đường dẫn tuyệt đối (ví dụ khi OpenCode đọc thẳng file này), dùng `~/Documents/Claude/agent-stack/plugin/skills/reuse-best/scripts/scout.py`. Chạy script và dùng kết quả; cuối mỗi kết quả có dòng "Tiếp:" là lệnh nên chạy tiếp, tên đã điền sẵn. Chỉ đọc mã nguồn của script khi kết quả không đủ.
+Script `${CLAUDE_SKILL_DIR}/scripts/scout.py` tìm repo trên GitHub (`github`), xem kỹ một repo (`repo`) và tìm bài nghiên cứu (`papers`), rồi in bảng có số liệu. Nếu đường dẫn script ở câu trên chưa phải đường dẫn tuyệt đối (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/reuse-best/scripts/scout.py`. Chạy script và dùng kết quả; cuối mỗi kết quả có dòng "Tiếp:" là lệnh nên chạy tiếp, tên đã điền sẵn. Chỉ đọc mã nguồn của script khi kết quả không đủ.
 
 Mỗi lần gọi Bash chỉ chạy một lệnh đơn: không nối bằng `;`, `&&` hay `|`, không dùng biến shell hay vòng lặp. Lệnh ghép hay bị chặn quyền và làm mất lượt. Đọc file bằng Read, tìm trong project bằng Grep và Glob.
 

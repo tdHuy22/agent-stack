@@ -17,7 +17,7 @@
 {"prompt": "con task nao dang do khong", "expect": "progress"}
 {"prompt": "what's next on this project after the refactor?", "expect": "progress"}
 {"prompt": "Sắp hết limit rồi, lưu tiến độ để mai làm tiếp", "expect": "session-save"}
-{"prompt": "ban giao viec nay sang OpenCode giup minh", "expect": "session-save"}
+{"prompt": "ban giao viec nay sang cong cu khac giup minh", "expect": "session-save"}
 {"prompt": "write a handoff so another agent can continue tomorrow", "expect": "session-save"}
 {"prompt": "Chạy test rồi báo lại test nào đang hỏng", "expect": "tests"}
 {"prompt": "viet unit test cho ham slugify", "expect": "tests"}

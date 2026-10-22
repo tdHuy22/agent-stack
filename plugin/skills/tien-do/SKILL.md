@@ -10,7 +10,7 @@ context: fork
 
 # Tiến độ và việc nên làm tiếp
 
-Script chỉ đọc project, không sửa gì trong project. Nó chỉ ghi một snapshot nhỏ vào `state/` của agent-stack để lần sau báo phần đã đổi. Đường dẫn: `${CLAUDE_SKILL_DIR}/scripts/collect.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/collect.py`.
+Script chỉ đọc project, không sửa gì trong project. Nó chỉ ghi một snapshot nhỏ vào `state/` của agent-stack để lần sau báo phần đã đổi. Đường dẫn: `${CLAUDE_SKILL_DIR}/scripts/collect.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/collect.py`.
 
 ## Các bước
 

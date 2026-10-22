@@ -78,7 +78,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
 | Sửa nhỏ mô tả chính xác (vài dòng, chính tả, thông báo) | `sonnet · low`, dặn chạy test | `sonnet · medium` | — | — | A: `low` cho thay đổi nhỏ; ở `low` model dễ bỏ bước tự kiểm |
-| Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `claude-haiku-5-5 · low` | `claude-haiku-5-5 · medium`, rồi `sonnet · low` | agent-stack:oc-worker | — | A; P cho Haiku 5.5 |
+| Việc cơ học hàng loạt (đổi tên, định dạng, dịch) | `claude-haiku-5-5 · low` | `claude-haiku-5-5 · medium`, rồi `sonnet · low` | — | — | A; P cho Haiku 5.5 |
 | Tính năng thông thường, đặc tả rõ | `sonnet · medium`; project có test: `claude-haiku-5-5 · low` | `sonnet · medium`, rồi `sonnet · high` | — | reuse-best nếu không tầm thường | E: sonnet 6/6; Haiku 5.5 · low 9/9 việc có test, 18/18 lượt (mục 8) |
 | Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán, chạy lệnh) | `sonnet · medium` | `sonnet · high` | — | mo-hinh-de-doa trước khi code; reuse-best | P: tìm lỗi thiết kế khi còn rẻ; luật `feature-boundary` của router (09/10/2026), chưa đo |
 | Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · medium` | `sonnet · high`, rồi `opus · medium` | — | — | E: cron và diff tối thiểu, sonnet 4/4, Haiku 4.5 0/4 |
@@ -127,7 +127,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Tin nhắn, email ngắn | `sonnet · low` | `sonnet · medium` | — | giong-van | A: `low` cho việc không phải code |
 | Viết lại, sửa giọng | `sonnet · medium` | — | — | giong-van | E: 2/2, có hay không `humanizer` đều đạt (mục 8) |
 | Văn bản dài (luận văn, báo cáo, tài liệu kỹ thuật) | `sonnet · high` | `opus · medium` | — | giong-van | P |
-| Dịch tài liệu | `claude-haiku-5-5 · low` | `sonnet · low` | agent-stack:oc-worker | — | P |
+| Dịch tài liệu | `claude-haiku-5-5 · low` | `sonnet · low` | — | — | P |
 
 ### Vận hành
 

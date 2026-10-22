@@ -50,7 +50,7 @@ def limit_notes(sid: str):
         user.append(f"⚠️ Hạn mức {label} đã dùng {pct:.0f}% (reset lúc {when}).")
         if window == "seven_day":
             context.append(f"Hạn mức tuần đã dùng {pct:.0f}%. Cập nhật ngay mục §0 trong file kế hoạch (đang dở, "
-                           "việc tiếp theo, mốc kiểm tra) để có thể làm tiếp bằng OpenCode nếu hết hạn mức. "
+                           "việc tiếp theo, mốc kiểm tra) để phiên sau làm tiếp được nếu hết hạn mức. "
                            "Ưu tiên việc quan trọng; giao việc cơ học cho subagent rẻ hơn.")
         else:
             context.append(f"Hạn mức 5 giờ đã dùng {pct:.0f}%. Ghi checkpoint vào §0 trước khi bắt đầu bước dài tiếp theo.")

@@ -506,7 +506,7 @@ class ProjectAware(ProjectFixtures):
 
 
 class SessionCliForToolsWithoutHooks(ProjectFixtures):
-    """OpenCode không chèn được ngữ cảnh lúc mở phiên, nên luật chung dặn chạy route.py --session."""
+    """route.py --session in hồ sơ project cho công cụ không có hook SessionStart."""
 
     def run_cli(self, *args):
         return subprocess.run([sys.executable, str(ROUTE), *args], capture_output=True, text=True, timeout=30,
@@ -530,8 +530,3 @@ class SessionCliForToolsWithoutHooks(ProjectFixtures):
         self.assertNotIn("differential-review", data["skills"])
         self.assertIn("security-review", data["skills"])
         self.assertNotIn("c-review", json.dumps(data))
-
-    def test_opencode_rules_tell_tools_without_hooks_to_run_it(self):
-        # OpenCode đọc AGENTS.global.md, file ghép từ SHARED.global.md và OPENCODE.global.md
-        opencode = (REPO / "global" / "AGENTS.global.md").read_text(encoding="utf-8")
-        self.assertIn("route.py --session <thư mục project>", opencode)

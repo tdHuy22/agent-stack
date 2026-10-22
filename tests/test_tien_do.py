@@ -745,7 +745,7 @@ class AllModeChanges(SnapshotCase):
 class RouteText(TempDirTestCase):
     def test_shows_model_id_effort_and_agent(self):
         item = {"route": {"model": "haiku", "model_id": "claude-haiku-5-5", "effort": "low",
-                          "agent": "agent-stack:oc-worker"}}
-        self.assertEqual(collect.route_text(item), " · claude-haiku-5-5 · low · agent-stack:oc-worker")
+                          "agent": "agent-stack:test-runner"}}
+        self.assertEqual(collect.route_text(item), " · claude-haiku-5-5 · low · agent-stack:test-runner")
         self.assertEqual(collect.route_text({"route": {"model": "sonnet", "effort": "medium"}}), " · sonnet · medium")
         self.assertEqual(collect.route_text({}), "")

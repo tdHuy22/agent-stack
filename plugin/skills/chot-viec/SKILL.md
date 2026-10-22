@@ -9,7 +9,7 @@ argument-hint: "[--base <ref>]"
 
 Mục tiêu: bạn chỉ cần bỏ công ở đầu việc (nói rõ muốn gì) và ở cuối việc (quyết những điểm cần con người). Phần giữa do agent tự kiểm, có bằng chứng, nên bạn không phải đọc mọi diff.
 
-Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/chot-viec/scripts/risk.py`. Biên nhận kiểm chứng: `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py`.
+Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/chot-viec/scripts/risk.py`. Biên nhận kiểm chứng: `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py`.
 
 ## Các bước
 

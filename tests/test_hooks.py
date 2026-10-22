@@ -147,7 +147,7 @@ class HookTests(TempDirTestCase):
         self.write_limits(85)
         out = self.run_hook("prompt_submit.py", {"session_id": "p", "prompt": "làm tiếp"})
         self.assertIn("Hạn mức tuần đã dùng 85%", out["systemMessage"])
-        self.assertIn("OpenCode", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("làm tiếp được", out["hookSpecificOutput"]["additionalContext"])
         again = self.run_hook("prompt_submit.py", {"session_id": "p", "prompt": "câu khác"})
         self.assertTrue(again is None or "tuần" not in again.get("systemMessage", ""))
         self.write_limits(96)
@@ -688,7 +688,7 @@ class HookTests(TempDirTestCase):
         self.write_limits(85)
         out = self.submit("ps1", "làm tiếp")
         self.assertIn("Hạn mức tuần đã dùng 85%", out["systemMessage"])  # đầu ra cũ không đổi
-        self.assertIn("OpenCode", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("làm tiếp được", out["hookSpecificOutput"]["additionalContext"])
         saved = self.last_request("ps1")
         self.assertEqual((saved["prompt"], saved["cwd"]), ("làm tiếp", str(self.project)))
         self.assertLess(time.time() - saved["ts"], 60)

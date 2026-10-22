@@ -2,7 +2,7 @@
 """Kiểm tra định kỳ (mỗi tháng khoảng 30 phút) cho agent-stack. Chỉ đọc, trừ khi có --clean-cache.
 
 Kiểm tra:
-  1. Phiên bản Claude Code và OpenCode (cần Claude Code ≥ 2.1.277 để đọc AGENTS.md)
+  1. Phiên bản Claude Code (cần Claude Code ≥ 2.1.277 để đọc AGENTS.md)
   2. Đồ bên thứ ba trong vetted.lock đã có commit mới chưa (cần kiểm duyệt lại trước khi cập nhật)
   3. Test và `claude plugin validate`
   4. Ngân sách mô tả skill (description quá dài làm Claude Code cắt bớt)
@@ -58,8 +58,6 @@ def check_versions(lines: list) -> None:
     v = version_tuple(out)
     status = "?" if v is None else ("đủ mới" if v >= MIN_CLAUDE else "cũ, nên nâng cấp: `brew upgrade --cask claude-code`")
     lines.append(f"- Claude Code CLI: `{out.splitlines()[0] if out else '?'}` → {status}")
-    code, out = sh("opencode", "--version")
-    lines.append(f"- OpenCode: `{out.splitlines()[0] if out else '?'}`")
 
 
 def upstream_drift(lock: dict, resolve) -> list:

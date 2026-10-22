@@ -1,6 +1,6 @@
 # HANDOFF: {project}
 
-*Cập nhật {date}.* Tạo bởi skill session-keeper. File này để một phiên khác (Claude Code hoặc OpenCode) làm tiếp mà không phải hỏi lại.
+*Cập nhật {date}.* Tạo bởi skill session-keeper. File này để một phiên khác (Claude Code hoặc công cụ khác) làm tiếp mà không phải hỏi lại.
 
 ## 0. Đang ở đâu, việc tiếp theo
 
@@ -24,4 +24,4 @@
 ## Làm tiếp bằng công cụ khác
 
 - **Claude Code:** mở phiên mới trong thư mục project. Hook của agent-stack sẽ tự nạp file này.
-- **OpenCode:** chạy `opencode` trong thư mục project rồi nhắn: "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1."
+- **Công cụ không có hook:** mở trong thư mục project rồi nhắn: "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1."

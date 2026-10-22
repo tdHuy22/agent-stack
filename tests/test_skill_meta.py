@@ -1,4 +1,4 @@
-"""Mọi skill trong plugin phải hợp lệ cho cả Claude Code lẫn OpenCode; agent reviewer phải còn chỉ đọc."""
+"""Mọi skill trong plugin phải hợp lệ theo chuẩn Agent Skills; agent reviewer phải còn chỉ đọc."""
 import re
 import sys
 import unittest
@@ -26,7 +26,7 @@ class SkillMetadata(unittest.TestCase):
                 self.assertLessEqual(len(fm["name"]), 64)
                 desc = fm.get("description", "")
                 self.assertGreater(len(desc), 40, "description quá ngắn để kích hoạt đúng")
-                self.assertLessEqual(len(desc), 1024, "OpenCode giới hạn description 1.024 ký tự")
+                self.assertLessEqual(len(desc), 1024, "chuẩn Agent Skills giới hạn description 1.024 ký tự")
                 combined = len(desc) + len(fm.get("when_to_use", ""))
                 self.assertLessEqual(combined, 1536, "Claude Code cắt description + when_to_use ở 1.536 ký tự")
 

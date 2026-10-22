@@ -18,7 +18,7 @@ Việc cần gợi ý: `$ARGUMENTS`
 python3 "${CLAUDE_SKILL_DIR}/scripts/route.py" "<mô tả việc>"
 ```
 
-Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py`.
+Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py`.
 
 ## Bước 2: điều chỉnh theo các nguyên tắc sau
 

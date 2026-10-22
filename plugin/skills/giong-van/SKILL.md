@@ -21,7 +21,7 @@ Skill này dùng cho văn bản của chính người dùng: bản nháp, ý ch�
 - `${CLAUDE_SKILL_DIR}/vi-ai-tells.md`: dấu hiệu văn AI trong tiếng Việt, cách sửa, và nguồn nghiên cứu.
 - `${CLAUDE_SKILL_DIR}/scripts/tells.py`: dò dấu hiệu, so từ vựng với bài mẫu cùng ngôn ngữ, cho điểm trên 1.000 từ. Chạy script và dùng kết quả; chỉ đọc mã nguồn khi kết quả không đủ để sửa.
 
-Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/giong-van/`.
+Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/giong-van/`.
 
 ## Chỉnh một văn bản
 

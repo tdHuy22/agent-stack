@@ -1,7 +1,7 @@
 ---
 name: session-keeper
-description: Lưu và khôi phục trạng thái công việc, để không mất tiến độ khi hết hạn mức, crash, compact hoặc khi đổi sang OpenCode. Cập nhật mục §0 "Đang ở đâu, việc tiếp theo" trong PLAN.md, viết .agent/HANDOFF.md khi bàn giao, và chạy các bước kiểm tra sau khi bị ngắt. Dùng khi người dùng nói lưu tiến độ, dừng phiên, sắp hết limit, bàn giao, handoff, làm tiếp việc dở, resume, hoặc khi project chưa có file kế hoạch.
-when_to_use: lưu lại, checkpoint, save progress, hết hạn mức, usage limit, chuyển sang OpenCode, mở lại phiên, tiếp tục từ hôm qua, tạo PLAN.md
+description: Lưu và khôi phục trạng thái công việc, để không mất tiến độ khi hết hạn mức, crash, compact hoặc khi đổi sang phiên khác. Cập nhật mục §0 "Đang ở đâu, việc tiếp theo" trong PLAN.md, viết .agent/HANDOFF.md khi bàn giao, và chạy các bước kiểm tra sau khi bị ngắt. Dùng khi người dùng nói lưu tiến độ, dừng phiên, sắp hết limit, bàn giao, handoff, làm tiếp việc dở, resume, hoặc khi project chưa có file kế hoạch.
+when_to_use: lưu lại, checkpoint, save progress, hết hạn mức, usage limit, bàn giao phiên, mở lại phiên, tiếp tục từ hôm qua, tạo PLAN.md
 argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao]"
 ---
 
@@ -11,7 +11,7 @@ Nguyên tắc: **trạng thái nằm trên đĩa, không nằm trong context.** 
 
 Ngoài §0, hook của agent-stack tự ghi `.agent/LAST-TURN.md` của thư mục làm việc: lúc bạn gửi tin (trạng thái đang chạy), khi lượt xong (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi), và khi lỗi API kết thúc lượt (hook StopFailure). Thư mục không phải project cũng được ghi; thư mục chung như home hay thư mục gom nhiều project thì ghi vào `state/last-turn/`. Hook SessionStart nạp bản ghi vào phiên mới, kể cả khi lượt cuối chưa xong (kèm file đã đổi từ lúc đó) và một dòng cho mỗi phiên khác trong 24 giờ; bản không mang chữ ký HMAC của máy này thì bỏ qua. Đây là bản máy ghi, không thay §0: đừng sửa tay, đừng chép nó vào §0. Khi lượt có đổi file mà §0 chưa đổi, hook Stop nhờ cập nhật §0 trước khi kết thúc lượt; lúc đó chỉ sửa §0 cho khớp việc vừa làm, ngắn gọn, rồi dừng.
 
-Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ (`receipt.py show` để xem; `forget <tên>` xoá một biên nhận, `prune` xoá biên nhận trượt của test đã bị xoá khỏi project). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ trong OpenCode), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
+Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ (`receipt.py show` để xem; `forget <tên>` xoá một biên nhận, `prune` xoá biên nhận trượt của test đã bị xoá khỏi project). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
 
 Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời người dùng.
 
@@ -39,7 +39,7 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 1. Chạy `luu` trước.
 2. Chạy `state.py handoff`. Script tạo `.agent/HANDOFF.md`, điền sẵn §0 và trạng thái git.
 3. Điền các chỗ `<!-- điền -->`: mục tiêu, các quyết định đã chốt kèm lý do.
-4. Nói cho người dùng cách làm tiếp. OpenCode: chạy `opencode` trong thư mục project rồi nhắn "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1".
+4. Nói cho người dùng cách làm tiếp: mở phiên mới trong thư mục project (hook tự nạp file); công cụ không có hook thì nhắn "Đọc .agent/HANDOFF.md rồi làm tiếp bước 1".
 
 ## `khoi-tao`: project chưa có file kế hoạch
 

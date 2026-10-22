@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Kích hoạt agent-stack ở mức toàn cục cho Claude Code và OpenCode.
+"""Kích hoạt agent-stack ở mức toàn cục cho Claude Code.
 
 MẶC ĐỊNH CHỈ IN KẾ HOẠCH, không sửa gì. Thêm --apply để thực hiện. Mỗi lần --apply đều
 sao lưu cấu hình trước, và ghi nhật ký vào state/install-logs/ để --rollback hoàn tác.
 
 Các bước (chạy theo thứ tự; --only để chọn một phần):
   rules       ~/.claude/CLAUDE.md -> global/CLAUDE.global.md
-              ~/.config/opencode/AGENTS.md -> global/AGENTS.global.md
   plugin      marketplace cục bộ agent-stack-local + plugin agent-stack (scope user)
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
@@ -15,7 +14,6 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
               (kind mcp-remote): `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt và định
               nghĩa tool lấy lại ngay trước khi cài còn khớp hash đã duyệt
   tools       công cụ dòng lệnh mà mục đã duyệt cần (khóa "brew" trong catalog.json), cài bằng Homebrew
-  opencode    symlink skill (agent-stack + vendor) vào ~/.config/opencode/skills/, agent vào ~/.config/opencode/agents/
 
 Mã thoát: 0 = cài đủ; 1 = có bước lỗi; 2 = không lỗi nhưng có mục bị bỏ qua (cài chưa đủ).
 Cài một phần không phải là thành công: phần tổng kết cuối luôn liệt kê mục bị bỏ qua và mục lỗi.
@@ -46,7 +44,7 @@ import time
 from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
-STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "tools", "opencode")
+STEPS = ("rules", "plugin", "statusline", "autocontinue", "catalog", "tools")
 MARKETPLACE = "agent-stack-local"
 VENDOR_MARKETPLACE = "agent-stack-vendor-local"
 VENDOR_PLUGIN = "agent-stack-vendor"
@@ -212,7 +210,6 @@ class Installer:
         self.restore_workflow_warning = restore_workflow_warning
         self.home = Path.home()
         self.claude_dir = self.home / ".claude"
-        self.oc_dir = self.home / ".config" / "opencode"
         self.claude_bin = os.environ.get("AGENT_STACK_CLAUDE_BIN", "claude")
         base, n = time.strftime("%Y%m%d-%H%M%S"), 1
         stamp = base
@@ -367,9 +364,8 @@ class Installer:
     # ------------------------------------------------------------ các bước
 
     def step_rules(self) -> None:
-        self.say("[rules] luật chung cho Claude Code và OpenCode")
+        self.say("[rules] luật chung cho Claude Code")
         self.link(HOME_STACK / "global" / "CLAUDE.global.md", self.claude_dir / "CLAUDE.md")
-        self.link(HOME_STACK / "global" / "AGENTS.global.md", self.oc_dir / "AGENTS.md")
 
     def step_plugin(self) -> None:
         self.say("[plugin] marketplace cục bộ và plugin agent-stack")
@@ -655,17 +651,6 @@ class Installer:
                 self.skipped.append(f"{name}: cần Homebrew")
                 continue
             self.run([brew, "install", name], undo=[brew, "uninstall", name])
-
-    def step_opencode(self) -> None:
-        self.say("[opencode] skill và agent cho OpenCode")
-        # OpenCode v2 theo dõi ~/.config/opencode/skills; glob của nó đi theo symlink.
-        skills_dir = self.oc_dir / "skills"
-        sources = sorted((HOME_STACK / "plugin" / "skills").glob("*/SKILL.md"))
-        sources += sorted((HOME_STACK / "vendor" / "skills").glob("*/SKILL.md"))
-        for skill_md in sources:
-            self.link(skill_md.parent, skills_dir / skill_md.parent.name)
-        for agent in sorted((HOME_STACK / "opencode" / "agents").glob("*.md")):
-            self.link(agent, self.oc_dir / "agents" / agent.name)
 
     # ------------------------------------------------------------ chạy
 

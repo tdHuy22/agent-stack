@@ -10,7 +10,7 @@
     "price_in_long": {"haiku": 0.5},
     "long_from": 100000,
     "effort_keeps_cache": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-    "agents_doing_the_work": ["agent-stack:reviewer", "agent-stack:researcher", "agent-stack:oc-worker"]
+    "agents_doing_the_work": ["agent-stack:reviewer", "agent-stack:researcher"]
   },
   "model_ids": {
     "_note": "Alias còn trỏ bản cũ thì ghi ID đầy đủ. Kiểm 08/10/2026 bằng claude 2.1.285: sonnet → claude-sonnet-5-5, opus → claude-opus-5-5, fable → claude-fable-5-1, nhưng haiku → claude-haiku-4-5 (không có effort).",
@@ -441,7 +441,6 @@
         "dung phien",
         "lam tiep tu",
         "checkpoint",
-        "chuyen sang opencode",
         "mai lam tiep"
       ]
     },
@@ -564,7 +563,6 @@
     },
     {
       "id": "mechanical",
-      "agent": "agent-stack:oc-worker",
       "model": "haiku",
       "effort": "low",
       "match": [

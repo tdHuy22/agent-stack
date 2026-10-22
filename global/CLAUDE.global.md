@@ -11,7 +11,7 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Hỏi nhanh, tra cú pháp, sửa vài dòng, tin nhắn ngắn | sonnet·low | – | – (giong-van khi viết tin nhắn) |
 | Xem tiến độ; lưu tiến độ, bàn giao | sonnet·low | – | tien-do; session-keeper |
 | Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite chạy Haiku 5.5, rẻ hơn) | – |
-| Việc cơ học hàng loạt có kiểm tra tự động, dịch tài liệu | claude-haiku-5-5·low | oc-worker | – |
+| Việc cơ học hàng loạt có kiểm tra tự động, dịch tài liệu | claude-haiku-5-5·low | – | – |
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
 | Nghiên cứu sâu nhiều nguồn, sai thì đắt | opus·medium | researcher | – |
 | Đọc sâu bài báo; phản biện bài báo | sonnet·medium; sonnet·high | – | paper-anatomy |

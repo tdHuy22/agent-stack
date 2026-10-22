@@ -82,13 +82,11 @@ class InstallTests(TempDirTestCase):
         self.home = self.tmp / "home"
         self.home.mkdir()
         self.stack = self.tmp / "stack"
-        for rel in ("global", "plugin/skills", "statusline", "opencode/agents", ".claude-plugin"):
+        for rel in ("global", "plugin/skills", "statusline", ".claude-plugin"):
             (self.stack / rel).mkdir(parents=True)
         (self.stack / "global" / "CLAUDE.global.md").write_text("# luật claude\n")
-        (self.stack / "global" / "AGENTS.global.md").write_text("# luật chung\n")
         (self.stack / "plugin" / "skills" / "tien-do").mkdir()
         (self.stack / "plugin" / "skills" / "tien-do" / "SKILL.md").write_text("---\nname: tien-do\n---\n")
-        (self.stack / "opencode" / "agents" / "worker.md").write_text("---\nmode: all\n---\n")
         (self.stack / "statusline" / "statusline.py").write_text("print('x')\n")
         shutil.copy(REPO / ".claude-plugin" / "marketplace.json", self.stack / ".claude-plugin" / "marketplace.json")
         self.lock = {"version": 1, "entries": {}}
@@ -129,9 +127,7 @@ class InstallTests(TempDirTestCase):
         self.assertIn("THỰC HIỆN", out)
         claude_md = self.home / ".claude" / "CLAUDE.md"
         self.assertEqual(os.readlink(claude_md), str(self.stack / "global" / "CLAUDE.global.md"))
-        self.assertTrue((self.home / ".config" / "opencode" / "AGENTS.md").is_symlink())
-        self.assertTrue((self.home / ".config" / "opencode" / "skills" / "tien-do").is_symlink())
-        self.assertTrue((self.home / ".config" / "opencode" / "agents" / "worker.md").is_symlink())
+        self.assertFalse((self.home / ".config" / "opencode").exists())
         data = json.loads(settings.read_text())
         self.assertEqual(data["model"], "sonnet")
         self.assertIn("statusline.py", data["statusLine"]["command"])
@@ -181,12 +177,11 @@ class InstallTests(TempDirTestCase):
             {"key": "p/q", "kind": "claude-plugin", "scope": "project", "install": {"marketplace": "m", "plugin": "q"}},
         ]
         self.save()
-        out = self.run_install("--apply", "--only", "catalog,opencode")
+        out = self.run_install("--apply", "--only", "catalog")
         self.assertIn("chờ duyệt: x/y", out)
         self.assertIn("project: tự cài khi cần", out)
         self.assertTrue((self.stack / "vendor" / "skills" / "demo" / "SKILL.md").exists())
         self.assertFalse((self.stack / "vendor" / "skills" / "demo" / ".claude-plugin").exists())
-        self.assertTrue((self.home / ".config" / "opencode" / "skills" / "demo").is_symlink())
         mp = json.loads((self.stack / ".claude-plugin" / "marketplace.json").read_text())
         self.assertNotIn("agent-stack-vendor", [p["name"] for p in mp["plugins"]])  # file trong git không bị sửa
         vendor_mp = json.loads((self.stack / "vendor" / ".claude-plugin" / "marketplace.json").read_text())
