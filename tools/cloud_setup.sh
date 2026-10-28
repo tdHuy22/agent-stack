@@ -94,13 +94,20 @@ EOF
     has_core "$tmp"
 }
 
-restore_state() {
-    [ -d "$1/state" ] && [ -d "$DEST" ] && [ ! -e "$DEST/state" ] && mv "$1/state" "$DEST/state"
+# state/ (nhật ký của hook, không có trong bản tải) đi theo bản cũ vào $DEST.old; chuyển sang bản đang dùng.
+move_state() {
+    [ -d "$DEST.old/state" ] && [ ! -L "$DEST.old/state" ] && [ -d "$DEST" ] && [ ! -e "$DEST/state" ] \
+        && mv "$DEST.old/state" "$DEST/state"
 }
 
 # Tải bản mới vào thư mục tạm cạnh đích, đủ file cốt lõi mới thay bản cũ.
 install_repo() {
     local parent tmp
+    # Lần trước bị ngắt giữa các bước thay thư mục: lấy lại bản cũ, hay state/ còn nằm trong bản cũ.
+    if [ ! -e "$DEST" ] && [ ! -L "$DEST" ] && [ -d "$DEST.old" ]; then
+        mv "$DEST.old" "$DEST" && say "đã lấy lại bản cũ từ $DEST.old"
+    fi
+    move_state
     if [ -d "$DEST/.git" ] && command -v git >/dev/null 2>&1; then
         git -C "$DEST" remote set-url origin "$REPO_URL" 2>/dev/null
         if limited 120 git -C "$DEST" fetch --quiet --depth 1 origin "$REF" \
@@ -125,17 +132,15 @@ install_repo() {
             return 1
         fi
     fi
-    # state/ không có trong bản tải: chuyển sang bản mới để hook giữ được nhật ký.
-    [ -d "$DEST/state" ] && [ ! -L "$DEST/state" ] && mv "$DEST/state" "$tmp/state"
     if [ -e "$DEST" ] || [ -L "$DEST" ]; then
-        rm -rf "$DEST.old" && mv "$DEST" "$DEST.old" || { restore_state "$tmp"; rm -rf "$tmp"; return 1; }
+        rm -rf "$DEST.old" && mv "$DEST" "$DEST.old" || { rm -rf "$tmp"; return 1; }
     fi
     if ! mv "$tmp" "$DEST"; then
         [ -e "$DEST.old" ] && mv "$DEST.old" "$DEST"
-        restore_state "$tmp"
         rm -rf "$tmp"
         return 1
     fi
+    move_state
     rm -rf "$DEST.old"
 }
 

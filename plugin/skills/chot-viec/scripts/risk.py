@@ -261,12 +261,14 @@ def collect(root, base: str = None) -> list:
         a, d, path = parts
         changes.append({"path": path, "added": None if a == "-" else int(a), "deleted": 0 if d == "-" else int(d),
                          "text": texts.get(path, "")})
-    for path in git(root, "ls-files", "--others", "--exclude-standard", "-z").stdout.split("\0"):
+    # --full-name: đường dẫn tính từ gốc repo như của git diff, để dấu đã chấm khớp dù chạy từ thư mục con.
+    top = Path(checked(root, "rev-parse", "--show-toplevel").strip())
+    for path in git(root, "ls-files", "--others", "--exclude-standard", "--full-name", "-z").stdout.split("\0"):
         if not path:
             continue
         try:
-            size = (root / path).stat().st_size
-            data = (root / path).read_bytes() if size <= MAX_UNTRACKED_BYTES else b""
+            size = (top / path).stat().st_size
+            data = (top / path).read_bytes() if size <= MAX_UNTRACKED_BYTES else b""
         except OSError:
             continue
         if size > MAX_UNTRACKED_BYTES or b"\0" in data[:8192]:
@@ -304,22 +306,54 @@ def render(r: dict, base: str = "HEAD") -> str:
     return "\n".join(lines)
 
 
+def fresh_changes(changes, seen: dict):
+    """Bỏ các dòng đã qua lần chấm trước (dấu băm trong `seen`, theo file). File đã có dấu chỉ giữ dòng mới và
+    nằm trong tập trả về thứ hai, để `assess` không tính lại luật theo đường dẫn; file chưa có dấu giữ nguyên."""
+    picked, reviewed = [], set()
+    for c in changes:
+        known = seen.get(c["path"])
+        if isinstance(known, list):
+            known = set(known)
+            fresh = [line for line in (c.get("text") or "").splitlines()
+                     if line.strip() and line_hashes(line)[0] not in known]
+            if not fresh:
+                continue
+            c = dict(c, text="\n".join(fresh), added=len(fresh), deleted=0)
+            reviewed.add(c["path"])
+        picked.append(c)
+    return picked, frozenset(reviewed)
+
+
+def previous_marks(root) -> dict:
+    """Dấu băm theo file của lần chạy trước; thiếu thư viện agent-stack hay chưa chạy lần nào thì rỗng."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+        import agentstack
+        return agentstack.chot_viec_mark(agentstack.project_root(Path(root).resolve())).get("files") or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Chấm mức rủi ro của thay đổi chưa commit (chỉ đọc).")
     ap.add_argument("root", nargs="?", default=".")
     ap.add_argument("--base", help="so với ref này thay vì HEAD, ví dụ main")
+    ap.add_argument("--new", action="store_true",
+                    help="chỉ chấm dòng thêm sau lần chạy trước, ví dụ phần sửa theo review")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     try:
         changes = collect(args.root, args.base)
-        result = assess(changes)
+        result = assess(*fresh_changes(changes, previous_marks(args.root))) if args.new else assess(changes)
     except NotARepo:
         print(f"Không phải git repo: {args.root}. Script cần git để đọc thay đổi.")
         return 2
     except GitError as exc:
         print(f"Không chấm được: {exc}. Kiểm lại --base hoặc trạng thái repo.")
         return 2
-    mark_ran(args.root, changes)
+    # Diff rỗng (thường do quên --base sau khi commit) thì không ghi dấu: dấu rỗng sẽ làm hook Stop tưởng đã chốt việc.
+    if changes:
+        mark_ran(args.root, changes)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=1))
     else:

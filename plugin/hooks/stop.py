@@ -115,21 +115,7 @@ def chot_viec_gate(root: Path, turn: dict, changed: list):
     top = (A.git_out(root, "rev-parse", "--show-prefix") or "").strip()
     mine = set(changed) | {top + c for c in changed}
     seen = (A.chot_viec_mark(root).get("files") or {})
-    picked, reviewed = [], set()
-    for c in changes:
-        if c["path"] not in mine:
-            continue
-        known = seen.get(c["path"])
-        if isinstance(known, list):
-            known = set(known)
-            fresh = [line for line in (c.get("text") or "").splitlines()
-                     if line.strip() and risk.line_hashes(line)[0] not in known]
-            if not fresh:
-                continue
-            c = dict(c, text="\n".join(fresh), added=len(fresh), deleted=0)
-            reviewed.add(c["path"])
-        picked.append(c)
-    result = risk.assess(picked, frozenset(reviewed))
+    result = risk.assess(*risk.fresh_changes([c for c in changes if c["path"] in mine], seen))
     return None if result["empty"] or result["level"] == "thap" else result
 
 
@@ -140,14 +126,19 @@ def foreign_filters(root: Path) -> bool:
     return any(line.split("\t", 1)[0] in ("local", "worktree", "command") for line in out.splitlines())
 
 
-def gate_reason(result: dict, plan_rel: str) -> str:
+def gate_reason(result: dict, plan_rel: str, base: str = None) -> str:
+    """`base`: HEAD lúc bắt đầu lượt, khi lượt đã commit (diff so với HEAD hiện tại không còn phần đã commit)."""
     level = {"vua": "vừa", "cao": "cao"}[result["level"]]
     why = "; ".join(result["reasons"][:3])
-    return (f"agent-stack (hook Stop): lượt này đổi code có mức rủi ro {level} ({why}) mà chưa chạy chot-viec. "
-            "Chạy skill chot-viec ngay cho phần việc của lượt này: nó tự chạy mo-hinh-de-doa nếu đụng ranh giới tin "
-            f"cậy, review theo mức rủi ro, và cập nhật §0 của `{plan_rel}`. Rồi kết thúc lượt bằng báo cáo ngắn của "
-            "chot-viec. Nếu các file này không do lượt này đổi (ví dụ phiên khác đang làm cùng repo), trả lời đúng "
-            "một câu nói vậy và không làm gì thêm.")
+    cmd = "risk.py --new" + (f" --base {base[:12]}" if base else "")
+    committed = (f" Lượt đã commit nên chot-viec chạy risk.py với `--base {base[:12]}` (HEAD lúc bắt đầu lượt); không "
+                 "có `--base` thì diff rỗng và phần đã commit không được chấm." if base else "")
+    return (f"agent-stack (hook Stop): lượt này đổi hay commit code có dòng chưa qua chốt việc, mức rủi ro {level} "
+            f"({why}), mà chưa chạy chot-viec. Dòng thêm sau lần chạy chot-viec trước (ví dụ sửa theo review) cũng "
+            f"tính; xem chúng bằng `{cmd}`.{committed} Chạy skill chot-viec ngay cho phần đó: nó tự chạy mo-hinh-de-doa "
+            f"nếu đụng ranh giới tin cậy, review theo mức rủi ro, và cập nhật §0 của `{plan_rel}`. Rồi kết thúc lượt "
+            "bằng báo cáo ngắn của chot-viec. Chỉ khi các dòng này do phiên khác hay người khác viết (không phải "
+            "phiên này, kể cả ở lượt trước), trả lời đúng một câu nói vậy và không làm gì thêm.")
 
 
 def plan_state(digest_now, plan_updated, should_block, gate, changed) -> str:
@@ -229,7 +220,9 @@ def main():
     tree_extra = tree_after(tree_block) if tree_block else ""
 
     if gate is not None:
-        A.emit_block(gate_reason(gate, plan_rel) + tree_extra,
+        head_now = (A.git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip()
+        base = turn.get("head") if turn.get("head") and turn.get("head") != head_now else None
+        A.emit_block(gate_reason(gate, plan_rel, base) + tree_extra,
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
                      "Claude chạy chot-viec trước khi xong.")
     elif should_block:

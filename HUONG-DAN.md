@@ -356,6 +356,8 @@ Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua `vet-skill`.
 python3 plugin/skills/chot-viec/scripts/risk.py
 ```
 
+Mỗi lần chạy, script ghi dấu các dòng đã chấm. Thêm `--new` thì chỉ chấm dòng thêm sau lần chạy trước, ví dụ phần sửa theo review. `chot-viec` dùng cờ này sau khi sửa, rồi giao reviewer xem lại phần sửa nếu mức từ vừa trở lên. Hook Stop cũng chỉ chấm các dòng chưa có dấu: dòng sửa sau lần chấm mà chưa chấm lại thì lượt sau, kể cả lượt chỉ commit, vẫn bị nhắc.
+
 Điểm cộng khi đụng phần nhạy cảm (xác thực, secret, mã hóa, thanh toán, quyền, sandbox), schema, hook, cài đặt, phụ thuộc, file chỉ dẫn cho agent; khi dòng thêm vào có dấu hiệu secret, chạy lệnh qua shell, xóa file, tải rồi chạy mã, SQL ghép chuỗi; khi thay đổi lớn, đổi code mà không đổi test, hoặc bớt test. Đây là gợi ý thô để quyết review sâu tới đâu, không thay review.
 
 Ý tưởng lấy từ pipeline `no-mistakes` của Kun Chen (video "L8 Principal's Agentic Engineering Workflow", MIT). Phần tự push, mở PR và trông CI không lấy.

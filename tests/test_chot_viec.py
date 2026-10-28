@@ -16,6 +16,21 @@ def change(path, added=1, deleted=0, text=""):
     return {"path": path, "added": added, "deleted": deleted, "text": text}
 
 
+class FreshChanges(unittest.TestCase):
+    def test_keeps_only_lines_not_seen_and_marks_file_reviewed(self):
+        old = "a = 1\nb = 2\n"
+        seen = {"app.py": risk.line_hashes(old)}
+        picked, reviewed = risk.fresh_changes(
+            [change("app.py", 3, 0, old + "eval(x)\n"), change("new.py", 2, 0, "x = 1\ny = 2\n")], seen)
+        self.assertEqual([(c["path"], c["text"], c["added"]) for c in picked],
+                         [("app.py", "eval(x)", 1), ("new.py", "x = 1\ny = 2\n", 2)])
+        self.assertEqual(reviewed, frozenset({"app.py"}))
+
+    def test_file_with_no_new_lines_is_dropped(self):
+        seen = {"app.py": risk.line_hashes("a = 1\n")}
+        self.assertEqual(risk.fresh_changes([change("app.py", 1, 0, "a = 1\n")], seen), ([], frozenset()))
+
+
 class Assess(unittest.TestCase):
     def test_docs_only_is_low(self):
         r = risk.assess([change("README.md", 40, 10), change("docs/guide.md", 5)])

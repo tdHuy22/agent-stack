@@ -99,6 +99,50 @@ class CloudSetupTest(TempDirTestCase):
         self.assertTrue((self.dest / "state" / "events.jsonl").is_file())
         self.assertFalse(Path(f"{self.dest}.old").exists())
 
+    def test_interrupted_swap_recovers_old_copy_with_state(self):
+        raw = self.make_raw()
+        self.run_setup(raw_base=f"file://{raw}")
+        (self.dest / "state").mkdir()
+        (self.dest / "state" / "events.jsonl").write_text("{}\n", encoding="utf-8")
+        self.dest.rename(f"{self.dest}.old")  # bị ngắt sau mv DEST DEST.old, trước mv tmp DEST
+        out = self.run_setup(raw_base=f"file://{raw}")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("lấy lại bản cũ", out.stdout)
+        self.assertTrue((self.dest / "state" / "events.jsonl").is_file())
+        self.assertFalse(Path(f"{self.dest}.old").exists())
+
+    def test_interrupted_before_state_move_keeps_state(self):
+        raw = self.make_raw()
+        self.run_setup(raw_base=f"file://{raw}")
+        (self.dest / "state").mkdir()
+        (self.dest / "state" / "events.jsonl").write_text("{}\n", encoding="utf-8")
+        # bị ngắt sau mv tmp DEST, trước khi chuyển state/ từ bản cũ sang
+        self.dest.rename(f"{self.dest}.old")
+        self.run_setup()  # không tải được gì: lấy lại bản cũ
+        Path(f"{self.dest}.old").mkdir()
+        (self.dest / "state").rename(Path(f"{self.dest}.old") / "state")
+        out = self.run_setup(raw_base=f"file://{raw}")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertTrue((self.dest / "state" / "events.jsonl").is_file())
+        self.assertFalse(Path(f"{self.dest}.old").exists())
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root xóa được thư mục chỉ đọc")
+    def test_undeletable_old_copy_keeps_current_copy_and_state(self):
+        raw = self.make_raw()
+        self.run_setup(raw_base=f"file://{raw}")
+        (self.dest / "state").mkdir()
+        (self.dest / "state" / "events.jsonl").write_text("{}\n", encoding="utf-8")
+        stuck = Path(f"{self.dest}.old") / "ro"
+        stuck.mkdir(parents=True)
+        (stuck / "f").write_text("x", encoding="utf-8")
+        stuck.chmod(0o555)
+        self.addCleanup(stuck.chmod, 0o755)
+        out = self.run_setup(raw_base=f"file://{raw}")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("dùng bản đã có", out.stdout)
+        self.assertTrue((self.dest / "state" / "events.jsonl").is_file())
+        self.assert_linked()
+
     def test_ref_can_pin_full_commit_sha(self):
         src = self.make_repo()
         sha = git(src, "rev-parse", "HEAD").strip()

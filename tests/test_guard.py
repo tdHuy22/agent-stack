@@ -3,6 +3,7 @@ trên cây bẩn, chặn ghi báo cáo lỗ hổng vào project, nhắc threat m
 khi lượt đổi code có rủi ro."""
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -300,6 +301,47 @@ class StopRequiresChotViec(GuardBase):
         out = self.stop("d3")
         self.assertEqual(out["decision"], "block")
         self.assertIn("eval", out["reason"])
+
+    def test_fix_after_review_is_flagged_until_rescored_with_new(self):
+        # Tái hiện 28/10/2026: chốt việc chạy risk.py, sửa theo review thêm dòng nguy hiểm trong cùng lượt (hook im vì
+        # risk.py đã chạy trong lượt), lượt sau chỉ commit thì bị nhắc; agent tưởng nhắc sai.
+        self.turn("f1")
+        (self.project / "app" / "auth").mkdir()
+        login = self.project / "app" / "auth" / "login.py"
+        login.write_text(LOGIN)
+        self.chot()
+        login.write_text(login.read_text() + "    eval(user)\n")
+        self.assertIsNone(self.stop("f1"))
+        self.turn("f2")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-qm", "chỉ commit")
+        out = self.stop("f2")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("đổi hay commit", out["reason"])
+        self.assertIn("mà chưa chạy chot-viec", out["reason"], "mod giao diện nhận câu nhắc theo cụm này")
+        cmd = re.search(r"`risk\.py (--new --base [0-9a-f]{12})`", out["reason"])
+        self.assertIsNotNone(cmd, "lượt đã commit: câu nhắc phải in sẵn --base")
+        # Quên --base: diff rỗng, không được tính là đã chốt việc.
+        empty = subprocess.run(["python3", str(RISK), str(self.project), "--new"],
+                               capture_output=True, text=True, env=self.env(), timeout=30)
+        self.assertIn("Không có thay đổi", empty.stdout)
+        self.assertEqual(self.stop("f2")["decision"], "block")
+        done = subprocess.run(["python3", str(RISK), str(self.project), *cmd.group(1).split()],
+                              capture_output=True, text=True, env=self.env(), timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("1 file, +1/−0", done.stdout, "chỉ chấm dòng sửa sau lần chấm trước")
+        self.assertIn("eval", done.stdout)
+        self.assertIsNone(self.stop("f2"))
+
+    def test_new_from_a_subdirectory_reads_the_project_marks(self):
+        self.turn("g1")
+        (self.project / "app" / "auth").mkdir()
+        (self.project / "app" / "auth" / "login.py").write_text(LOGIN)
+        self.chot()
+        done = subprocess.run(["python3", str(RISK), str(self.project / "app"), "--new"],
+                              capture_output=True, text=True, env=self.env(), timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("Không có thay đổi", done.stdout, "dòng đã chấm ở gốc project không bị chấm lại")
 
     def test_diff_programs_from_repo_config_never_run_and_content_is_still_scored(self):
         ext, conv = self.tmp / "ext-ran", self.tmp / "textconv-ran"
