@@ -77,6 +77,11 @@ def tree_due(root: Path, turn, data: dict) -> list:
     # Khác file kế hoạch (read_plan chọn file sửa gần nhất) thì hai số không so được.
     if now["path"] == start.get("path") and now["count"] > start["count"]:
         reasons.append("done")
+    # /cay in cây dạng chữ (cloud, nơi pane không hiện): trong lượt thì đủ mọi lý do; trước lượt trong cùng phiên thì
+    # người dùng đã thấy cây, chỉ còn lý do "first" là thừa.
+    seen = A.tree_shown_at(data.get("session_id"))
+    if seen is not None:
+        reasons = [] if seen >= turn["ts"] else [r for r in reasons if r != "first"]
     if not reasons or tree_shown(turn, data):
         return []
     return reasons

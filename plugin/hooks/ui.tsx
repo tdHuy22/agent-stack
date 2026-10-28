@@ -202,12 +202,26 @@ async function isCloud($: EngineInterface): Promise<boolean> {
   }
 }
 
+/** Ghi dấu người dùng đã thấy cây (hook Stop thôi nhắc hiện cây). Lỗi thì bỏ qua: chỉ tốn thêm một lời nhắc. */
+async function markTreeShown($: EngineInterface): Promise<void> {
+  try {
+    await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`, '--tree-shown'], {
+      stdin: JSON.stringify({ session_id: await $.session.id() }),
+      timeoutMs: PROMPT_TIMEOUT_MS,
+    })
+  } catch {
+    // Không ghi được thì hook Stop vẫn nhắc như cũ.
+  }
+}
+
 /** Cây dạng chữ cho nơi pane không hiện (cloud, `claude -p`, pane chưa đặt được). */
 async function textTree($: EngineInterface, note = ''): Promise<{ text: string }> {
   const cwd = await $.session.cwd()
   try {
     const run = await $.process.run(['python3', script($), '--project', cwd, '--text'], { timeoutMs: TIMEOUT_MS })
-    const tree = run.stdout.trim() || firstLine(run.stderr) || 'Project này chưa có file kế hoạch.'
+    const tree = run.stdout.trim()
+    if (!tree) return { text: firstLine(run.stderr) || 'Project này chưa có file kế hoạch.' }
+    await markTreeShown($)
     return { text: note ? `${note}\n${tree}` : tree }
   } catch (err) {
     return { text: `Không chạy được plan_tree.py: ${String(err).slice(0, 200)}` }

@@ -5,7 +5,8 @@ Nhận số liệu dạng statusline của Claude Code qua stdin (mod dựng t�
 để hook UserPromptSubmit cảnh báo hạn mức cả trên app desktop (nơi statusline không chạy), rồi in một dòng không
 màu: `ctx 23% · 5h 41% · 7d 12%` (phần chưa có số liệu thì bỏ). Payload có `turn_end` (mod gửi sau lượt phiên chính) thì ghi thêm số liệu phiên vào
 state/session-usage/ cho router (A.record_mod_usage). Với `--router`: in gợi ý router của tin vừa gửi (JSON) cho dải trên ô nhập. Với `--prompt` (mod gọi trong UserPromptSubmit, trước hook
-Python) chỉ cập nhật model hiện tại của file đó, không in gì. Luôn thoát mã 0.
+Python) chỉ cập nhật model hiện tại của file đó, không in gì. Với `--tree-shown` (mod gọi sau khi /cay in cây dạng
+chữ) ghi dấu đã hiện cây cho hook Stop. Luôn thoát mã 0.
 """
 import json
 import sys
@@ -45,6 +46,9 @@ def main(argv=None) -> int:
             return 0
         if "--prompt" in argv:
             A.record_mod_usage(data, at_prompt=True)
+            return 0
+        if "--tree-shown" in argv:
+            A.mark_tree_shown(data.get("session_id"))
             return 0
         A.record_limits(data)
         if data.get("turn_end") is True:

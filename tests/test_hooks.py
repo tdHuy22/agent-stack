@@ -331,6 +331,36 @@ class HookTests(TempDirTestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("plan_tree.py --widget", out["reason"])
 
+    def test_stop_skips_the_tree_after_cay_printed_it_as_text(self):
+        # Tái hiện cloud 28/10/2026: người dùng gõ /cay (mod in cây chữ, không qua lượt model), rồi hỏi một câu khác;
+        # hook Stop từng nhắc hiện cây vì đây là câu trả lời đầu tiên của phiên.
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text("")
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+
+        def cay(sid):
+            out = subprocess.run(["python3", str(HOOKS / "ui_status.py"), "--tree-shown"],
+                                 input=json.dumps({"session_id": sid}), capture_output=True, text=True, timeout=30,
+                                 env=env)
+            self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
+
+        cay("c1")
+        time.sleep(1.1)
+        self.submit("c1", "giải thích parser")
+        self.assertIsNone(self.stop("c1", "Parser đọc từng dòng.", transcript_path=str(transcript)))
+        # Hỏi tiến độ sau đó: /cay cũ không đủ, phải hiện cây mới; gõ /cay trong lượt thì đủ.
+        self.submit("c1", "làm gì tiếp theo")
+        out = self.stop("c1", "Còn hai việc.", transcript_path=str(transcript))
+        self.assertIn("câu hỏi về tiến độ", out["reason"])
+        self.submit("c1", "tiến độ tới đâu rồi")
+        cay("c1")
+        self.assertIsNone(self.stop("c1", "Cây ở trên.", transcript_path=str(transcript)))
+        # Phiên khác không được tính nhờ dấu của c1.
+        self.submit("c2", "giải thích parser")
+        self.assertEqual(self.stop("c2", "Parser đọc từng dòng.", transcript_path=str(transcript))["decision"],
+                         "block")
+
     def test_router_suggestion_is_saved_for_the_ui_band_and_cleared_when_none(self):
         env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
 

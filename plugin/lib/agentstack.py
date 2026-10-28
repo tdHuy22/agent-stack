@@ -1772,6 +1772,31 @@ def _whole(value) -> int | None:
     return int(value)
 
 
+def tree_shown_path(session_id: str) -> Path:
+    """Lúc người dùng thấy cây kế hoạch dạng chữ qua lệnh /cay của mod (nơi pane không hiện, như cloud session)."""
+    return state_dir() / "tree-shown" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
+
+
+def mark_tree_shown(session_id) -> None:
+    """Mod gọi (qua ui_status.py --tree-shown) sau khi /cay in cây dạng chữ; hook Stop đọc để thôi nhắc hiện cây."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    path = tree_shown_path(session_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(path, {"ts": time.time()})
+    except OSError:
+        pass
+
+
+def tree_shown_at(session_id):
+    """Lần gần nhất /cay in cây dạng chữ trong phiên (giây epoch), hay None."""
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    ts = (read_json(tree_shown_path(session_id)) or {}).get("ts")
+    return ts if isinstance(ts, (int, float)) and not isinstance(ts, bool) else None
+
+
 ROUTER_LAST_TTL = 600  # gợi ý router của tin vừa gửi chỉ dùng cho dải trong 10 phút
 
 

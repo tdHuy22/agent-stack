@@ -41,6 +41,7 @@ function fake(on: On, s: Setup) {
   on('turn.complete', () => ({ text: '' }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: s.cwd ?? CWD }))
+  on('session.id', () => ({ value: 'sid-1' }))
   on('env.get', ($, e) => {
     if (s.envFails) throw new Error('hỏng')
     return { value: e.name === 'CLAUDE_CODE_REMOTE' && s.remote ? 'true' : undefined }
@@ -119,11 +120,16 @@ test('/cay đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop
 })
 
 async function cayWithoutPane($: Parameters<Parameters<typeof test>[1]>[0], on: On, s: Setup) {
+  s.statusArgs = []
+  s.statusStdins = []
   fake(on, s)
   const out = await $.command.run({ command: 'cay', args: '' })
   expect(out.text).toContain('T.1 Chạy test')
   expect(s.runs.some(r => r.includes('--text') && r.includes(CWD))).toBe(true)
   expect(s.opens ?? 0).toBe(0)
+  // Ghi dấu đã hiện cây cho hook Stop, đúng phiên.
+  expect(s.statusArgs.some(a => a.includes('--tree-shown'))).toBe(true)
+  expect(s.statusStdins).toContain(JSON.stringify({ session_id: 'sid-1' }))
 }
 
 test('/cay trong cloud session trả cây dạng chữ, không mở pane', async ($, on) => {
@@ -299,7 +305,6 @@ test('sau mỗi lượt: ghi số liệu hạn mức qua ui_status.py, không v�
       ],
     },
   }))
-  on('session.id', () => ({ value: 'sid-1' }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('ui.status', ($, e) => {
     statuses.push(e.text)
