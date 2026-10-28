@@ -483,9 +483,9 @@ Lần gỡ không đụng tới `vetted.lock`, `vet-reports/`, `state/`, `.vet-c
 
 Cloud session (claude.ai/code, `claude --cloud`, môi trường Cloud của app desktop) chạy trên máy ảo mới với bản clone của project. Nó không đọc `~/.claude/` của Mac và không cài plugin khai báo trong `settings.json`, kể cả của repo. Muốn có agent-stack ở đó:
 
-1. Trên claude.ai/code, tạo một environment riêng (đừng dùng environment chia sẻ), quyền mạng **Trusted**.
+1. Trên claude.ai/code, ở màn hình phiên mới, bấm nút environment dưới ô nhập, chọn **New environment**, đặt tên `agent-stack` (environment riêng, đừng dùng environment chia sẻ). **Network access**: giao diện ngày 28/10/2026 có None, Limited, Full; chọn **Limited**, giữ ô "Allow package managers", thêm `github.com` và `raw.githubusercontent.com` vào Allowed domains.
 2. Dán nguyên nội dung `tools/cloud_setup.sh` vào ô **Setup script**. Script tải agent-stack vào `~/Documents/Claude/agent-stack` (clone, proxy GitHub chặn thì tải từng file theo `tools/cloud-files.txt` qua `raw.githubusercontent.com`), trỏ `~/.claude/CLAUDE.md` tới luật chung và `~/.claude/skills/agent-stack` tới `plugin/`. Script luôn thoát 0; tải không được thì phiên vẫn chạy, chỉ thiếu agent-stack.
-3. Nếu plugin không nạp (gõ `/context` hay hỏi Claude có thấy skill `agent-stack:tien-do` không), thêm biến môi trường `CLAUDE_CODE_PLUGIN_DIRS=/root/Documents/Claude/agent-stack/plugin` cho environment.
+3. Bấm **Add environment**, rồi mở phiên với environment này. Đã chạy thật ngày 28/10/2026 trên repo `tdHuy22/agent-stack`: clone được (có `.git`), `CLAUDE.md` và plugin skills-dir đều nạp (10 skill, 5 subagent `agent-stack:`), hook SessionStart đưa §0 và hồ sơ project vào, hook Stop chạy, Python 3.13. Nếu sau này plugin không nạp, thêm biến môi trường `CLAUDE_CODE_PLUGIN_DIRS=/root/Documents/Claude/agent-stack/plugin` cho environment.
 
 Máy ảo lưu kết quả setup khoảng 7 ngày, nên bản agent-stack trên cloud có thể cũ hơn `main` tới một tuần; sửa setup script là chạy lại ngay. Muốn ghim một commit thì sửa dòng `REF=` ở đầu script. Phiên gắn nhiều repo và thread trong Claude Project không chạy hook của repo; hook của agent-stack nạp qua plugin nên không bị ảnh hưởng, nhưng chưa kiểm. `state/` trên cloud mất khi máy ảo bị thu hồi; phần cần mang theo nằm ở §0 của `PLAN.md`, đi theo git.
 
