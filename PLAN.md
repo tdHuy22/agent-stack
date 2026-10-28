@@ -130,6 +130,10 @@
   7. ~~Reload để dùng widget 0.9.1.~~ Gộp vào việc 3.
   8. ~~Xem pane trên desktop.~~ Xong 15/10/2026: pane hiện đủ chữ, bấm mã điền vào ô nhập.
   11. ~~Cài 0.13.0 rồi reload.~~ Bạn đã `/reload-plugins` 15/10/2026; cài chỉ ghi số phiên bản, không bắt buộc (README §5.4).
+  12. Gõ `/reload-plugins` ở các phiên Claude Code đang mở trên Mac để dùng plugin 0.16.3 (phiên mới tự dùng). @ban
+  13. Quyết TM-42 trong `.agent/threat-model.md`: chấp nhận việc setup script cloud chạy mã từ `main` bằng root trong máy ảo, hay ghim một commit ở dòng `REF=` của environment `agent-stack`. @ban
+  14. Tùy chọn, tốn hạn mức: thử agent-stack trên phiên cloud gắn nhiều repo và trên thread của Claude Project (chưa kiểm). @ban
+  15. Tùy chọn: lưu trữ hay xoá 4 phiên cloud thử ngày 28/10/2026 trên claude.ai/code (`session_01SFmJWbPZCrm4cZC1njyA3d`, `…dYoPPUZw4dJwAPBfZ`, `…cJTAM1BBmURSR4v3x`, `…abNqFkEnrZxwJRSYf`). @ban
   12. ~~Dải gợi ý router.~~ Xong 15/10/2026 (plugin 0.14.0): gõ `/reload-plugins` để dùng.
   10. ~~GĐ26 đợt 3.~~ Xong 15/10/2026 (`/bien-nhan`, toast hook Stop và StopFailure), đã cài 0.12.0.
   9. ~~Kiểm mục `agent-stack:ui` trên desktop.~~ Xong 15/10/2026: pane đóng tay thì không bật (đúng thiết kế); mở lại bằng `/cay` thì `AGENT_STACK_UI=1`. Chẩn đoán bằng `/cay ?`.
