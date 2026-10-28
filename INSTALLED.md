@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 15:16 28/10/2026 từ commit `b5ba28f` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 16:03 28/10/2026 từ commit `fd671e0` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -486,6 +486,17 @@
 
 - Nhật ký máy đọc: `state/install-logs/20261028-151619.json`
 - Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261028-151619`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: plugin
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 16:03 28/10/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261028-160319.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261028-160319`, gồm bản chụp `pristine/` của cấu hình trước khi cài
 - Bước đã chạy: plugin
 - Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
 
