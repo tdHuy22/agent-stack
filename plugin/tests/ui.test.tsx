@@ -30,6 +30,7 @@ type Setup = {
   runs: string[][]; fills: string[]; tree?: unknown; exitCode?: number
   cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number; unplaced?: boolean
   statusStdins?: string[]; statusArgs?: string[][]; statusFails?: boolean; routerOut?: string
+  remote?: boolean; envFails?: boolean
 }
 
 /** Giả lập phần engine mà module cần: thư mục phiên, script Python, stat, ô nhập. */
@@ -40,6 +41,10 @@ function fake(on: On, s: Setup) {
   on('turn.complete', () => ({ text: '' }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: s.cwd ?? CWD }))
+  on('env.get', ($, e) => {
+    if (s.envFails) throw new Error('hỏng')
+    return { value: e.name === 'CLAUDE_CODE_REMOTE' && s.remote ? 'true' : undefined }
+  })
   on('process.run', async ($, e) => {
     if (e.argv[1]?.endsWith('receipt.py')) {
       s.runs.push([...e.argv])
@@ -54,6 +59,9 @@ function fake(on: On, s: Setup) {
       return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     s.runs.push([...e.argv])
+    if (e.argv.includes('--text')) {
+      return { value: { exitCode: 0, stdout: 'GĐ0 → GĐ28 ✓\nT.1 Chạy test\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     if (s.gate) await s.gate
     const pick = e.argv.includes('--pick')
     return { value: {
@@ -108,6 +116,34 @@ test('/cay đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop
     expect(await ui.find({ type: 'Text', text: /\+2 việc nữa/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+async function cayWithoutPane($: Parameters<Parameters<typeof test>[1]>[0], on: On, s: Setup) {
+  fake(on, s)
+  const out = await $.command.run({ command: 'cay', args: '' })
+  expect(out.text).toContain('T.1 Chạy test')
+  expect(s.runs.some(r => r.includes('--text') && r.includes(CWD))).toBe(true)
+  expect(s.opens ?? 0).toBe(0)
+}
+
+test('/cay trong cloud session trả cây dạng chữ, không mở pane', async ($, on) => {
+  await cayWithoutPane($, on, { runs: [], fills: [], remote: true })
+})
+
+test('/cay khi pane không đặt được (-p, terminal hẹp) in thêm cây dạng chữ', async ($, on) => {
+  const s: Setup = { runs: [], fills: [], unplaced: true }
+  fake(on, s)
+  const out = await $.command.run({ command: 'cay', args: '' })
+  expect(out.text).toContain('chưa hiện được')
+  expect(out.text).toContain('T.1 Chạy test')
+})
+
+test('/cay khi đọc biến môi trường lỗi vẫn mở pane như cũ', async ($, on) => {
+  const s: Setup = { runs: [], fills: [], envFails: true }
+  fake(on, s)
+  const out = await $.command.run({ command: 'cay', args: '' })
+  expect(out.text).toContain('Đã mở pane')
+  expect(s.opens).toBe(1)
 })
 
 test('bấm một lá chỉ điền mã lá, không điền chữ của lá', async ($, on) => {

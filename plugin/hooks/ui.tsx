@@ -192,6 +192,28 @@ function paneTitle(view: PlanView): string {
   return view.tree ? `Kế hoạch · ${view.tree.project}` : 'Kế hoạch'
 }
 
+/** Cloud session: máy ảo đặt CLAUDE_CODE_REMOTE=true; mod chạy nhưng pane không hiện, kể cả khi có client web
+ * gắn vào. Đọc lỗi thì coi như không phải cloud (giữ hành vi pane). */
+async function isCloud($: EngineInterface): Promise<boolean> {
+  try {
+    return (await $.env.get('CLAUDE_CODE_REMOTE')) === 'true'
+  } catch {
+    return false
+  }
+}
+
+/** Cây dạng chữ cho nơi pane không hiện (cloud, `claude -p`, pane chưa đặt được). */
+async function textTree($: EngineInterface, note = ''): Promise<{ text: string }> {
+  const cwd = await $.session.cwd()
+  try {
+    const run = await $.process.run(['python3', script($), '--project', cwd, '--text'], { timeoutMs: TIMEOUT_MS })
+    const tree = run.stdout.trim() || firstLine(run.stderr) || 'Project này chưa có file kế hoạch.'
+    return { text: note ? `${note}\n${tree}` : tree }
+  } catch (err) {
+    return { text: `Không chạy được plan_tree.py: ${String(err).slice(0, 200)}` }
+  }
+}
+
 /** Mở pane; đã được vẽ thì ghi cờ paneShown cho cả phiên (mục system prompt và biến AGENT_STACK_UI dựa vào nó). */
 async function openPane($: EngineInterface) {
   const opened = await $.ui.open({ id: PANE, title: paneTitle(await read($, plan)) })
@@ -377,12 +399,15 @@ export const register: Register = on => {
         ].join('\n'),
       }
     }
+    if (codes.length === 0 && (await isCloud($))) return textTree($)
     if (codes.length === 0) {
       await $.store.delete(CLOSED_KEY)
       await refresh($, true)
       const view = await read($, plan)
       if (!view.tree) return { text: view.error ? `Không đọc được kế hoạch: ${view.error}` : 'Project này chưa có file kế hoạch.' }
-      await openPane($)
+      // Pane chưa đặt được (`claude -p` không có nơi vẽ, terminal hẹp) thì in thêm cây dạng chữ.
+      const opened = await openPane($)
+      if (!opened.isPlaced) return textTree($, 'Pane Kế hoạch chưa hiện được ở đây; cây dạng chữ:')
       return { text: 'Đã mở pane Kế hoạch. Bấm mã một việc để điền mã đó vào ô nhập.' }
     }
     const bad = codes.filter(c => !CODE.test(c))
