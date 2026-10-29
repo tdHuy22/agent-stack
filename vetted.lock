@@ -430,59 +430,59 @@
     },
     "mcp:mcp.exa.ai/mcp": {
       "human_review": {
-        "at": "2026-10-10T15:53:11Z",
-        "note": "Bạn duyệt trong chat 10/10/2026 sau khi đọc tóm tắt báo cáo: REVIEW, không dấu hiệu tool poisoning, không có instructions, định nghĩa tool 2.372 ký tự; câu tìm kiếm và URL gửi tới Exa (đã chấp nhận khi chọn A2).",
+        "at": "2026-10-28T16:22:22Z",
+        "note": "28/10/2026: người dùng duyệt lại sau khi lệch. Quét REVIEW, không dấu hiệu; tham số không đổi so với 90f51c5b65f2, thêm instructions 458 ký tự hướng dẫn dùng tool.",
         "status": "approved"
       },
-      "instructions_sha": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "instructions_sha": "99255da06d495d1d311441492073bcf6a1dfdb8fd45f73b0c3ec19fc49212ae7",
       "kind": "mcp-remote",
       "redflags": {},
       "ref": null,
-      "report": "vet-reports/mcp__mcp.exa.ai__mcp@90f51c5b65f2.md",
+      "report": "vet-reports/mcp__mcp.exa.ai__mcp@f77c44aae0bd.md",
       "reviews": [],
       "server": {
         "name": "exa-search-server",
         "protocol": "2025-06-18",
-        "version": "3.4.2"
+        "version": "3.5.0"
       },
-      "sha": "90f51c5b65f227bbb61f19d58f729572a257c1650e237cda17ccf69aebc011ed",
+      "sha": "f77c44aae0bded02ed8b80a6f1fabb5d09c6a8a96f01e68742da5fc458aa3b42",
       "source": "mcp:https://mcp.exa.ai/mcp",
       "subpath": "",
       "tool": "vet.py/1",
       "tools": {
-        "web_fetch_exa": "b4ae2a49a95f5441ae0d1e05f035e60aa653b2b033e4027d8a5576a3cc687d00",
-        "web_search_exa": "f2679f78100e92a5ff7d07dbabda6225c6cc960ae881bb84b3021fff4e5834e3"
+        "web_fetch_exa": "2a81a6baf5cd5dde226f2ec81acbbd343baabd9280c1283acb659566689db6dc",
+        "web_search_exa": "3df864f96f08f6023b577a1b437f5b409186aacbe48f62ff588cce4fa29c03fb"
       },
       "verdict": "REVIEW",
-      "vetted_at": "2026-10-10"
+      "vetted_at": "2026-10-28"
     },
     "mcp:search.parallel.ai/mcp": {
       "human_review": {
-        "at": "2026-10-11T02:37:14Z",
-        "note": "Bạn chọn trong chat 11/10/2026 cách 2: không cài vào Claude Code, gọi qua skill goi-mcp khi việc hợp; đã đọc tóm tắt báo cáo (REVIEW, không dấu hiệu tool poisoning) và chấp nhận việc gửi câu hỏi tới hãng.",
+        "at": "2026-10-28T16:22:21Z",
+        "note": "28/10/2026: người dùng duyệt lại sau khi lệch. Quét REVIEW, không dấu hiệu; tham số gửi đi không đổi so với 5cbcbcc6244e, chỉ đổi mô tả/schema. Giữ lựa chọn 11/10/2026: không cài vào Claude Code, gọi qua skill goi-mcp (pi gọi qua web_search của extensions/web.ts, cùng script).",
         "status": "approved"
       },
       "instructions_sha": "6ff1160819714320799e1c2f5697dfb6c3e63db97521b960072aa6e7b2c0b316",
       "kind": "mcp-remote",
       "redflags": {},
       "ref": null,
-      "report": "vet-reports/mcp__search.parallel.ai__mcp@5cbcbcc6244e.md",
+      "report": "vet-reports/mcp__search.parallel.ai__mcp@2837ba7d0d55.md",
       "reviews": [],
       "server": {
-        "name": "Parallel Web Search MCP Server",
+        "name": "Parallel MCP",
         "protocol": "2025-06-18",
-        "version": "1.27.0"
+        "version": ""
       },
-      "sha": "5cbcbcc6244e2cbf2241460d156e95942222fed9fcfc160ed0a8e2690755dc23",
+      "sha": "2837ba7d0d55d19ca73cf754cbd63087455f4d5201e50c62214a40cc74271d76",
       "source": "mcp:https://search.parallel.ai/mcp",
       "subpath": "",
       "tool": "vet.py/1",
       "tools": {
-        "web_fetch": "7de2001e6717a31773c62144743d9c88b09fe73e2793b27ad0b9bb7954e254ea",
-        "web_search": "1828515eca68e29073fb8ff3f140a13b9d73cce59cbe59092117c0f7241574d6"
+        "web_fetch": "1ce1e3cc726da6dc1239fda8850aa2f61c99b83c2cf74672b4769ec617c139e9",
+        "web_search": "f82d40d5be99460ab5463fc12650f0ba84abac0c0d88cf042edaccd33611f5be"
       },
       "verdict": "REVIEW",
-      "vetted_at": "2026-10-10"
+      "vetted_at": "2026-10-28"
     },
     "obra/superpowers": {
       "archived": false,
