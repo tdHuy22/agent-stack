@@ -219,6 +219,10 @@ def clip(text: str, limit: int) -> str:
 # ---------------------------------------------------------------- file kế hoạch
 
 PLAN_CANDIDATES = (".agent/HANDOFF.md", "PLAN.md", ".agent/PLAN.md", "PROGRESS.md", "TODO.md")
+# §0 dài hơn mức này (khoảng 4K token) thì nhắc dời việc đã xong sang nhật ký: agent đọc §0 mỗi phiên.
+SECTION0_LONG_CHARS = 12_000
+HISTORY_REL = ".agent/NHAT-KY.md"  # nhật ký việc đã xong, do `state.py trim` của session-keeper ghi
+TRIM_CMD = "~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py trim"
 
 
 def project_root(cwd) -> Path:
@@ -1936,3 +1940,309 @@ def plugin_staleness():
     if run_t and inst_t and run_t < inst_t:
         return running, installed
     return None
+
+
+# ---------------------------------------------------------------- dời lịch sử của file kế hoạch ra nhật ký
+# Lõi của `state.py trim` (session-keeper). tien-do và hook Stop chạy thử nó để chỉ nhắc trim khi trim rút được §0.
+
+TRIM_DONE_STARTS = ("xong", "da xong", "hoan thanh", "done")
+_LIST_RE = re.compile(r"^([ \t]*)(?:[-*]|\d+[.)])\s+")
+_BOX_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s")
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+# Ngày ở dòng đầu mục Xong: đủ năm (28/10/2026, 2026-10-28), hay thiếu năm khi đứng trong ngoặc, sau "ngày" hay đầu
+# mục ("(05/10)", "ngày 5/10", "- 27/10: ..."); "18/18", "12/12" giữa câu thường là điểm số nên không tính.
+_FULL_DATE_RE = re.compile(r"(?<![\d/])(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})/(\d{1,2})/(\d{4}))(?![\d/])")
+_SHORT_DATE_RE = re.compile(r"(?i)(?:\(|ngày\s+|^\s*(?:[-*]|\d+[.)])\s+(?:\*\*)?)(\d{1,2})/(\d{1,2})(?![\d/])")
+
+
+class TrimOrderUnknown(ValueError):
+    """Mục Xong không đủ ngày để biết mới nhất ở trên hay ở dưới: phải chọn rõ bằng cờ."""
+
+
+def _fence_mask(lines: list) -> list:
+    """True cho dòng nằm trong khối code (kể cả hai dòng ``` hay ~~~ mở, đóng)."""
+    mask, fence = [], None
+    for line in lines:
+        m = _FENCE_RE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+            mask.append(bool(m))
+        else:
+            mask.append(True)
+            if m and m.group(1) == fence:
+                fence = None
+    return mask
+
+
+def _levels(lines: list, mask: list) -> list:
+    """Cấp tiêu đề của từng dòng, None nếu không phải tiêu đề hay nằm trong khối code (`# chú thích` của bash)."""
+    out = []
+    for line, code in zip(lines, mask):
+        m = None if code else HEADING_RE.match(line)
+        out.append(len(m.group(1)) if m else None)
+    return out
+
+
+def _bold_label(line: str):
+    m = re.match(r"^[-*]\s+\*\*([^*]+?)\*\*", line)
+    return m.group(1) if m else None
+
+
+TRIM_POINTER_LABEL = "Xong trước đó"
+
+
+def _is_pointer(line: str) -> bool:
+    """Dòng trỏ sang nhật ký do trim_plan thêm vào §0."""
+    return _bold_label(line.lstrip()) == f"{TRIM_POINTER_LABEL}:" and HISTORY_REL in line
+
+
+def _is_done_bullet(line: str) -> bool:
+    """Mục cấp đầu của §0 có nhãn đậm bắt đầu bằng "Xong" (kể cả "Xong (28/10/2026): ..."); dòng trỏ nhật ký thì không."""
+    label = _bold_label(line)
+    if not label or _is_pointer(line):
+        return False
+    return fold(re.sub(r"\([^)]*\)", " ", label)).strip().startswith(TRIM_DONE_STARTS)
+
+
+def _is_next_bullet(line: str) -> bool:
+    label = _bold_label(line)
+    return bool(label) and classify_label(label) == "next"
+
+
+def _top_blocks(lines: list, mask: list, levels: list) -> list:
+    """Chia thân §0 thành khối [start, end). Khối mới mở ở mục cột 0, ở tiêu đề, ở dòng ``` cột 0, và ở đoạn văn cột 0
+    đứng sau dòng trống (đoạn văn ngay dưới mục, không dòng trống, là dòng nối tiếp của mục đó)."""
+    starts = [0]
+    for i, line in enumerate(lines):
+        if i == 0 or not line.strip() or line[:1].isspace():
+            continue
+        if mask[i] and not (_FENCE_RE.match(line) and not mask[i - 1]):
+            continue
+        if (levels[i] or _FENCE_RE.match(line) or (_LIST_RE.match(line) and not mask[i])
+                or not lines[i - 1].strip()):
+            starts.append(i)
+    starts.append(len(lines))
+    return [(s, e) for s, e in zip(starts, starts[1:]) if e > s]
+
+
+def _child_spans(lines: list, mask: list, start: int, end: int) -> list:
+    """Mục con cấp đầu của khối [start, end): [(s, e)], theo độ thụt nhỏ nhất của các dòng mở mục con."""
+    opens = [i for i in range(start + 1, end) if not mask[i] and lines[i][:1].isspace() and _LIST_RE.match(lines[i])]
+    if not opens:
+        return []
+    indent = min(len(_LIST_RE.match(lines[i]).group(1)) for i in opens)
+    firsts = [i for i in opens if len(_LIST_RE.match(lines[i]).group(1)) == indent]
+    return [(s, firsts[k + 1] if k + 1 < len(firsts) else end) for k, s in enumerate(firsts)]
+
+
+def _span_text(lines: list, spans: list) -> list:
+    out = []
+    for a, b in spans:
+        chunk = lines[a:b]
+        while chunk and not chunk[-1].strip():
+            chunk.pop()
+        pad = min((len(x) - len(x.lstrip()) for x in chunk if x.strip()), default=0)
+        out += [x[pad:] for x in chunk]
+    return out
+
+
+def _item_dates(first_lines: list) -> list:
+    """Ngày mới nhất ghi ở dòng đầu từng mục (năm, tháng, ngày), None nếu không có; mục nhắc ngày cũ hơn ("sửa hồi quy
+    của bản 01/09/2026 (29/10)") lấy ngày làm. Ngày thiếu năm lấy năm của mục có năm gần nhất (trên trước, rồi dưới),
+    không có thì năm nay. Bỏ ngày sau hôm nay (lệch múi giờ thì cho thêm một ngày)."""
+    now = time.localtime(time.time() + 86400)
+    today = (now.tm_year, now.tm_mon, now.tm_mday)
+    raw = []
+    for line in first_lines:
+        full, short = [], []
+        for m in _FULL_DATE_RE.finditer(line):
+            y, mo, d = ((m.group(1), m.group(2), m.group(3)) if m.group(1) else (m.group(6), m.group(5), m.group(4)))
+            if 1 <= int(mo) <= 12 and 1 <= int(d) <= 31:
+                full.append((int(y), int(mo), int(d)))
+        for m in _SHORT_DATE_RE.finditer(line):
+            if 1 <= int(m.group(2)) <= 12 and 1 <= int(m.group(1)) <= 31:
+                short.append((int(m.group(2)), int(m.group(1))))
+        full = [f for f in full if f <= today]
+        raw.append((max(full) if full else None, short))
+    years = [f[0] if f else None for f, _ in raw]
+    out = []
+    for i, (full, short) in enumerate(raw):
+        year = (full[0] if full else None) or next((y for y in reversed(years[:i]) if y), None) \
+            or next((y for y in years[i + 1:] if y), None) or time.localtime().tm_year
+        cands = ([full] if full else []) + [(year, mo, d) for mo, d in short]
+        cands = [c for c in cands if c <= today]  # ngày hẹn trong tương lai ("hạn 30/11") không phải ngày làm
+        out.append(max(cands) if cands else None)
+    return out
+
+
+def _section0_span(lines: list, levels: list):
+    """[start, end) của §0, tính cả dòng tiêu đề; None nếu không có. Cùng cách nhận §0 với section0()."""
+    for i, level in enumerate(levels):
+        if level and SECTION0_RE.search(fold(HEADING_RE.match(lines[i]).group(2))):
+            end = next((j for j in range(i + 1, len(lines)) if levels[j] and levels[j] <= level), len(lines))
+            return i, end
+    return None
+
+
+def _trim_section0(lines: list, keep: int, order, pointer: str) -> dict:
+    mask = _fence_mask(lines)
+    levels = _levels(lines, mask)
+    items, steps = [], []  # items: (start, end, khối cha hay None)
+    for s, e in _top_blocks(lines, mask, levels):
+        if _is_done_bullet(lines[s]):
+            kids = _child_spans(lines, mask, s, e)
+            items += [(a, b, (s, e)) for a, b in kids] if kids else [(s, e, None)]
+        elif _is_next_bullet(lines[s]):
+            steps += [(a, b) for a, b in _child_spans(lines, mask, s, e)
+                      if step_done(_LIST_RE.sub("", lines[a], count=1))]
+    moved = []
+    if len(items) > keep and order:
+        moved = items[keep:] if order == "first" else items[:len(items) - keep]
+    elif len(items) > keep:
+        # Không tin vào thứ tự trong file (nhiều file vừa nối xuống dưới vừa chèn lên trên): giữ các mục có ngày mới
+        # nhất. Mục cùng ngày với mục thứ `keep` thì giữ cả, vì không biết mục nào viết sau. Không đủ mục có ngày thì
+        # không đoán.
+        dates = _item_dates([lines[a] for a, _, _ in items])
+        dated = [i for i, d in enumerate(dates) if d]
+        if len(dated) < keep or (keep and not dated):
+            raise TrimOrderUnknown("mục Xong không ghi đủ ngày để biết mục nào mới nhất")
+        cut = sorted((dates[i] for i in dated), reverse=True)[keep - 1] if keep else None
+        newest = {i for i in dated if cut is not None and dates[i] >= cut}
+        moved = [item for i, item in enumerate(items) if i not in newest]
+    kept = [lines[a] for a, b, p in items if (a, b, p) not in moved]
+    drop = set()
+    for a, b in [(a, b) for a, b, _ in moved] + steps:
+        while b > a + 1 and not lines[b - 1].strip():
+            b -= 1  # giữ dòng trống ở cuối, kẻo đoạn văn sau đó dính vào mục phía trên
+        drop.update(range(a, b))
+    for s, e in {p for _, _, p in moved if p}:  # khối cha chỉ còn dòng nhãn rỗng: bỏ luôn
+        rest = [i for i in range(s + 1, e) if i not in drop and lines[i].strip()]
+        if not rest and not re.sub(r"^[-*]\s+\*\*[^*]+?\*\*:?\s*", "", lines[s]).strip():
+            drop.update(range(s, e))
+    # Dòng trỏ là mục cấp đầu: đặt ở chỗ mục dời đầu tiên, hay ngay trên nhãn cha nếu nhãn đó còn mục con ở lại (đặt
+    # giữa nhãn và mục con thì mục con thành con của dòng trỏ, và lần trim sau không dời được nữa).
+    head = min(moved, default=None, key=lambda item: item[0])
+    first = None
+    if head is not None:
+        first = head[2][0] if head[2] and head[2][0] not in drop else head[0]
+        while first - 1 in drop:
+            first -= 1
+    has_pointer = any(_is_pointer(x) for x in lines)
+    new, gap = [], False
+    for i, line in enumerate(lines):
+        if i == first and not has_pointer:
+            new.append(pointer)
+        if i in drop:
+            gap = True
+            continue
+        if gap and not line.strip() and new and not new[-1].strip():
+            continue  # gộp dòng trống liền nhau do phần đã dời để lại
+        gap = gap and not line.strip()
+        new.append(line)
+    return {"lines": new, "done": _span_text(lines, [(a, b) for a, b, _ in moved]), "n_done": len(moved),
+            "steps": _span_text(lines, steps), "n_steps": len(steps), "kept": kept,
+            "moved": [lines[a] for a, _, _ in moved] + [lines[a] for a, _ in steps]}
+
+
+def _done_phases(lines: list, levels: list, sec0: tuple) -> list:
+    """Mốc ngoài §0 đã xong hết: [(start, end)] gồm cả tiêu đề con. Mốc là tiêu đề có ô checkbox ngay dưới nó (như
+    plan_tree.py); xong hết là cả cây con có ít nhất một ô [x] và không còn ô [ ]. Chỉ lấy mốc ngoài cùng."""
+    heads = [i for i, lv in enumerate(levels) if lv]
+    spans = []
+    for k, s in enumerate(heads):
+        if sec0[0] <= s < sec0[1] or (spans and s < spans[-1][1]):
+            continue
+        direct_end = heads[k + 1] if k + 1 < len(heads) else len(lines)
+        end = next((h for h in heads[k + 1:] if levels[h] <= levels[s]), len(lines))
+        if s < sec0[0] < end:
+            continue  # tiêu đề bao ngoài §0 (như "# PLAN" có ô tick ngay dưới): dời nó là dời cả §0
+        if not any(_BOX_RE.match(x) for x in lines[s + 1:direct_end]):
+            continue
+        boxes = [_BOX_RE.match(x).group(1) for x in lines[s + 1:end] if _BOX_RE.match(x)]
+        if all(b.strip() for b in boxes):
+            spans.append((s, end))
+    return spans
+
+
+def trim_plan(text: str, keep: int = 3, when: str = "", plan_rel: str = "PLAN.md", order=None) -> dict:
+    """Dời lịch sử ra khỏi file kế hoạch, không xóa chữ nào. Trả {"text": bản kế hoạch mới, "part": đợt nhật ký mới
+    ("" nếu không có gì để dời), "n_done", "n_steps", "n_phases", "kept", "moved", "section0_chars": độ dài §0 sau khi
+    dời}. Giữ `keep` mục Xong mới nhất: `order` "first"/"last" nói mục mới nhất ở trên hay dưới; None thì theo ngày ghi
+    ở dòng đầu mục, không đủ mục có ngày thì ném TrimOrderUnknown. Dời thêm bước đã gạch hay ✅ của "Việc tiếp theo" và mốc ngoài §0
+    đã xong hết."""
+    lines = text.split("\n")
+    span = _section0_span(lines, _levels(lines, _fence_mask(lines)))
+    empty = {"text": text, "part": "", "n_done": 0, "n_steps": 0, "n_phases": 0, "kept": [], "moved": [],
+             "section0_chars": len(section0(text)[1]) if section0(text) else 0}
+    if not span:
+        return empty
+    pointer = f"- **{TRIM_POINTER_LABEL}:** ở `{HISTORY_REL}` (chuyển bằng `state.py trim`)."
+    sec = _trim_section0(lines[span[0] + 1:span[1]], keep, order, pointer)
+    lines = lines[:span[0] + 1] + sec["lines"] + lines[span[1]:]
+    mask = _fence_mask(lines)
+    levels = _levels(lines, mask)
+    phases = _done_phases(lines, levels, _section0_span(lines, levels))
+    moved_phases = []
+    for s, e in phases:
+        while e > s + 1 and not lines[e - 1].strip():
+            e -= 1
+        shift = 4 - levels[s]
+        moved_phases += [("#" * min(6, levels[i] + shift) + lines[i].lstrip("#")) if levels[i] else lines[i]
+                         for i in range(s, e)] + [""]
+    drop = {i for s, e in phases for i in range(s, e)}
+    lines = [x for i, x in enumerate(lines) if i not in drop]
+    if not sec["n_done"] and not sec["n_steps"] and not phases:
+        return {**empty, "kept": sec["kept"]}
+    part = [f"## Đợt {when}".rstrip(), ""]
+    if sec["done"]:
+        part += [f"### Từ §0 của `{plan_rel}`: Xong", ""] + sec["done"] + [""]
+    if sec["steps"]:
+        part += [f"### Từ §0 của `{plan_rel}`: bước đã xong của Việc tiếp theo", ""] + sec["steps"] + [""]
+    if moved_phases:
+        part += [f"### Từ `{plan_rel}`: mốc đã xong hết", ""] + moved_phases
+    new_text = "\n".join(lines)
+    found = section0(new_text)
+    return {"text": new_text, "part": "\n".join(part).rstrip() + "\n", "n_done": sec["n_done"],
+            "n_steps": sec["n_steps"], "n_phases": len(phases), "kept": sec["kept"],
+            "moved": sec["moved"] + [x for x in moved_phases if x.startswith("#")],
+            "section0_chars": len(found[1]) if found else 0}
+
+
+def trim_target(root: Path):
+    """(đường dẫn, nội dung) của PLAN.md hay .agent/PLAN.md có §0, file mới sửa hơn; None nếu không có. Không trim
+    HANDOFF.md: nó là bản chép tạm của §0."""
+    best = None
+    for rel in ("PLAN.md", ".agent/PLAN.md"):
+        path = Path(root) / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+            mtime = path.stat().st_mtime
+        except (OSError, UnicodeDecodeError):
+            continue
+        if section0(text) and (best is None or mtime > best[0]):
+            best = (mtime, path, text)
+    return best[1:] if best else None
+
+
+def trim_advice(text: str):
+    """Lời khuyên ngắn khi §0 dài hơn SECTION0_LONG_CHARS, hay None. Chạy thử trim_plan để chỉ khuyên trim khi trim
+    rút được §0; trim không giúp được thì khuyên rút gọn tay. Trả (lời khuyên, trim có giúp không)."""
+    found = section0(text)
+    before = len(found[1]) if found else 0
+    if before <= SECTION0_LONG_CHARS:
+        return None
+    cmd = f"`python3 {TRIM_CMD}`"
+    try:
+        after = trim_plan(text)["section0_chars"]
+    except TrimOrderUnknown:
+        return (f"§0 dài {before // 1000}K ký tự, agent đọc lại mỗi phiên: chạy {cmd} với `--newest-first` hay "
+                "`--newest-last` (mục Xong không ghi ngày nên không đoán được mục nào mới nhất)", True)
+    except Exception:  # noqa: BLE001 (lời khuyên là phần phụ, không được làm hỏng tóm tắt)
+        return None
+    if after >= before:
+        return (f"§0 dài {before // 1000}K ký tự, agent đọc lại mỗi phiên, mà trim không dời được (lịch sử không nằm "
+                f"dưới nhãn **Xong**): rút gọn tay, chuyển lịch sử sang `{HISTORY_REL}`", False)
+    rest = "" if after <= SECTION0_LONG_CHARS else f", còn {after // 1000}K thì rút gọn tay phần còn lại"
+    return (f"§0 dài {before // 1000}K ký tự, agent đọc lại mỗi phiên: chạy {cmd} để dời việc đã xong sang "
+            f"`{HISTORY_REL}`{rest}", True)

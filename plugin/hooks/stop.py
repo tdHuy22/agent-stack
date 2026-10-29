@@ -23,11 +23,20 @@ sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402
 
 
-def block_reason(changed, plan_rel) -> str:
+def trim_hint(advice) -> str:
+    """Nhắc chạy trim khi §0 dài và trim rút được nó (A.trim_advice); trim không giúp được thì không nhắc ở đây, kẻo lượt
+    nào cũng nhắc mà §0 không đổi (tien-do và SessionStart đã báo người dùng)."""
+    if not advice or not advice[1]:
+        return ""
+    return f" Sửa xong thì làm theo: {advice[0]}."
+
+
+def block_reason(changed, plan_rel, advice=None) -> str:
     names = ", ".join(changed[:5]) + (" …" if len(changed) > 5 else "")
     return (f"agent-stack (hook Stop): lượt này đã đổi {len(changed)} file ({names}) nhưng mục §0 của `{plan_rel}` "
             "chưa đổi. Cập nhật §0 cho khớp việc vừa làm: Xong (kèm bằng chứng), Đang dở, Việc tiếp theo, Quyết định "
-            "còn treo; ngắn gọn, giữ định dạng, không chép lại cả câu trả lời. Không làm thêm việc khác, rồi kết thúc "
+            "còn treo; ngắn gọn (mỗi mục Xong vài dòng, chi tiết để ở commit), giữ định dạng, không chép lại cả câu "
+            f"trả lời.{trim_hint(advice)} Không làm thêm việc khác, rồi kết thúc "
             "lượt bằng một câu ngắn. Nếu các file này không do lượt này đổi (ví dụ phiên khác đang làm cùng repo) "
             "hoặc thay đổi quá nhỏ để ghi, trả lời đúng một câu nói vậy và không sửa gì.")
 
@@ -231,7 +240,12 @@ def main():
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
                      "Claude chạy chot-viec trước khi xong.")
     elif should_block:
-        A.emit_block(block_reason(changed, plan_rel) + tree_extra,
+        try:
+            target = A.trim_target(root)  # đúng file `state.py trim` sẽ sửa, không phải HANDOFF.md
+            advice = A.trim_advice(target[1]) if target else None
+        except Exception:  # noqa: BLE001
+            advice = None
+        A.emit_block(block_reason(changed, plan_rel, advice) + tree_extra,
                      f"📝 Lượt này đổi {len(changed)} file mà §0 chưa đổi: nhờ Claude cập nhật §0 trước khi xong.")
     elif tree_block:
         A.emit_block(tree_alone(tree_block),

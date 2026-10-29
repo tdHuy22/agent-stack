@@ -46,7 +46,7 @@ Mỗi mối ghi:
 
 ## 3. Ghi lại
 
-Thêm một mục vào `.agent/threat-model.md` của project (tạo file nếu chưa có, giữ các mục cũ):
+Thêm một mục vào cuối `.agent/threat-model.md` của project (tạo file nếu chưa có, giữ các mục cũ). File gom mọi chức năng cũ nên đừng đọc cả file: lấy ID lớn nhất bằng `grep -o 'TM-[0-9]*' .agent/threat-model.md | sort -t- -k2 -n | tail -1`, rồi nối mục mới bằng `cat >> .agent/threat-model.md <<'EOF'`:
 
 ```markdown
 ## <ngày YYYY-MM-DD> · <tên chức năng>

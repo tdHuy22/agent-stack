@@ -20,12 +20,13 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 1. Chạy `state.py show` để xem §0 hiện tại và trạng thái git.
 2. Sửa mục §0 trong file kế hoạch, giữ nguyên định dạng. Viết cụ thể đến mức người khác làm tiếp được mà không phải hỏi:
    - **Cập nhật** = ngày hôm nay, dạng `*Cập nhật DD/MM/YYYY.*`
-   - **Xong:** kết quả kèm bằng chứng (commit, kết quả test).
+   - **Xong:** kết quả kèm bằng chứng (commit, kết quả test), vài dòng mỗi mục, ngày ở dòng đầu (`Xong (29/10/2026): …`) để `state.py trim` biết mục nào mới nhất; chi tiết để ở commit.
    - **Đang dở:** việc gì, ở file nào, nhánh nào, còn thiếu gì.
    - **Việc tiếp theo, theo thứ tự:** danh sách đánh số; mỗi bước bắt đầu bằng một động từ.
    - **Quyết định còn treo:** điều cần người dùng chốt.
    - **Mốc kiểm tra:** lệnh và kết quả mong đợi, đúng với lần chạy gần nhất. Chạy lệnh đó qua `receipt.py run` để có biên nhận.
-3. Cho người dùng xem diff của §0. Chỉ commit khi project cho phép (xem CLAUDE.md của project) hoặc khi người dùng yêu cầu.
+3. §0 dài hơn khoảng 12K ký tự (tien-do và hook SessionStart cảnh báo) thì chạy `state.py trim`.
+4. Cho người dùng xem diff của §0. Chỉ commit khi project cho phép (xem CLAUDE.md của project) hoặc khi người dùng yêu cầu.
 
 ## `tiep-tuc`: làm tiếp sau khi bị ngắt
 
@@ -49,6 +50,6 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 ## Không làm
 
 - Không chép §0 sang file khác. Các file khác chỉ trỏ tới §0.
-- Không xóa lịch sử trong file kế hoạch. Chỉ cập nhật §0 và tick checkbox kèm ngày.
+- Không xóa lịch sử trong file kế hoạch. Chỉ cập nhật §0 và tick checkbox kèm ngày. Lịch sử cũ thì dời, không xóa: `state.py trim` chuyển mục Xong ngoài 3 mục mới nhất (theo ngày ghi trong mục), bước đã gạch hay ✅ của "Việc tiếp theo" và mốc đã xong hết sang `.agent/NHAT-KY.md` (đợt mới nhất ở trên; `--dry-run` để xem trước). Mục không ghi ngày thì script từ chối, chạy lại với `--newest-first` hay `--newest-last`; lịch sử không nằm dưới nhãn **Xong** thì rút gọn tay. Agent đọc §0 mỗi phiên, nên §0 phình to là tốn token mỗi phiên.
 - Việc mới ghi thành ô `- [ ]` dưới tiêu đề mốc của nó ở §1 (mốc mới thì thêm tiêu đề `###`), kèm nhãn `@ban`, `@cho`, `@usd` khi việc cần người dùng, chờ bên ngoài hay tốn tiền. Như vậy `tien-do/scripts/plan_tree.py` dựng được cây để chọn việc tiếp theo.
 - Không ghi "xong" khi chưa có bằng chứng.

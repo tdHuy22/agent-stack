@@ -5,13 +5,19 @@ Lệnh:
   state.py show    [--project DIR] [--json]   in mục §0, tiến độ checkbox và trạng thái git
   state.py init    [--project DIR]            tạo .agent/PLAN.md từ mẫu (project chưa có file kế hoạch)
   state.py handoff [--project DIR]            tạo .agent/HANDOFF.md, điền sẵn §0 và trạng thái git
+  state.py trim    [--project DIR] [--keep N] [--dry-run] [--newest-first | --newest-last]
+                                              chuyển mục "Xong" cũ, bước đã xong của §0 và mốc đã xong hết sang
+                                              .agent/NHAT-KY.md, để file kế hoạch ngắn (agent đọc nó mỗi phiên)
 
-Script không bao giờ sửa file kế hoạch đang có. `handoff` sao lưu HANDOFF.md cũ trước khi ghi mới.
+Chỉ `trim` sửa file kế hoạch, và không xóa gì: phần chuyển đi nằm nguyên văn trong nhật ký, đợt mới nhất ở trên.
+`handoff` sao lưu HANDOFF.md cũ trước khi ghi mới.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -21,6 +27,7 @@ sys.path.insert(0, str(HERE.parents[3] / "lib"))
 import agentstack as A  # noqa: E402
 
 TEMPLATES = HERE.parents[1] / "templates"
+HISTORY_REL = A.HISTORY_REL
 
 
 def today() -> str:
@@ -100,17 +107,83 @@ def cmd_handoff(root: Path) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- trim: dời lịch sử ra nhật ký
+
+def merge_history(old: str, part: str, project: str, plan_rel: str) -> str:
+    """Chèn đợt mới lên trên các đợt cũ (sau phần mở đầu)."""
+    if not old.strip():
+        return (f"# Nhật ký: {project}\n\nViệc đã xong, chuyển ra khỏi `{plan_rel}` bằng `state.py trim` để file kế "
+                "hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.\n\n" + part)
+    m = re.search(r"(?m)^## ", old)
+    if not m:
+        return old.rstrip() + "\n\n" + part
+    return old[:m.start()] + part + "\n" + old[m.start():]
+
+
+def write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    if path.exists():
+        os.chmod(tmp, path.stat().st_mode & 0o777)
+    os.replace(tmp, path)
+
+
+def cmd_trim(root: Path, keep: int, dry_run: bool, order) -> int:
+    found = A.trim_target(root)
+    if not found:
+        print("Không có PLAN.md hay .agent/PLAN.md có mục §0: không có gì để chuyển.")
+        return 1
+    path, text = found
+    plan_rel = path.relative_to(root).as_posix()
+    try:
+        res = A.trim_plan(text, keep, time.strftime("%d/%m/%Y %H:%M"), plan_rel, order)
+    except A.TrimOrderUnknown:
+        print("Mục Xong trong §0 không ghi đủ ngày nên không biết mục nào mới nhất. Chạy lại với --newest-first (mục "
+              "mới nhất ở trên) hoặc --newest-last (mục mới nhất ở dưới). Chưa ghi gì.")
+        return 2
+    if not res["part"]:
+        print(f"`{plan_rel}` đã gọn: không có mục Xong nào ngoài {keep} mục mới nhất, bước nào đã xong, mốc nào đã xong hết.")
+        return 0
+    print(f"Chuyển {res['n_done']} mục Xong, {res['n_steps']} bước đã xong và {res['n_phases']} mốc đã xong hết sang "
+          f"`{HISTORY_REL}`; `{plan_rel}` từ {len(text):,} còn {len(res['text']):,} ký tự, §0 còn "
+          f"{res['section0_chars']:,} ký tự.")
+    if dry_run:
+        print("Giữ trong §0:")
+        print("\n".join(f"  {A.clip(x.strip(), 100)}" for x in res["kept"]) or "  (không có mục Xong)")
+        print("Dời (dòng đầu):")
+        shown = res["moved"][:12]
+        print("\n".join(f"  {A.clip(x.strip(), 100)}" for x in shown)
+              + (f"\n  … và {len(res['moved']) - len(shown)} mục khác" if len(res["moved"]) > len(shown) else ""))
+        print("(chạy thử: chưa ghi gì)")
+        return 0
+    history = root / HISTORY_REL
+    history.parent.mkdir(parents=True, exist_ok=True)
+    old = history.read_text(encoding="utf-8") if history.exists() else ""
+    write_atomic(history, merge_history(old, res["part"], root.name, plan_rel))  # ghi nhật ký trước: lỡ ngắt thì chỉ thừa
+    write_atomic(path, res["text"])
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Trạng thái công việc của project.")
-    ap.add_argument("cmd", choices=("show", "init", "handoff"))
+    ap.add_argument("cmd", choices=("show", "init", "handoff", "trim"))
     ap.add_argument("--project", default=".", help="thư mục project (mặc định: thư mục hiện tại)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--keep", type=int, default=3, help="trim: số mục Xong mới nhất giữ lại trong §0 (mặc định 3)")
+    ap.add_argument("--dry-run", action="store_true", help="trim: chỉ báo sẽ giữ gì, dời gì")
+    order = ap.add_mutually_exclusive_group()
+    order.add_argument("--newest-first", dest="order", action="store_const", const="first",
+                       help="trim: mục Xong mới nhất ở trên (mặc định đoán theo ngày ghi trong mục)")
+    order.add_argument("--newest-last", dest="order", action="store_const", const="last",
+                       help="trim: mục Xong mới nhất ở dưới")
     args = ap.parse_args(argv)
     root = A.project_root(Path(args.project).expanduser().resolve())
     if args.cmd == "show":
         return cmd_show(root, args.json)
     if args.cmd == "init":
         return cmd_init(root)
+    if args.cmd == "trim":
+        return cmd_trim(root, max(0, args.keep), args.dry_run, args.order)
     return cmd_handoff(root)
 
 

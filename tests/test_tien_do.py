@@ -749,3 +749,14 @@ class RouteText(TempDirTestCase):
         self.assertEqual(collect.route_text(item), " · claude-haiku-5-5 · low · agent-stack:test-runner")
         self.assertEqual(collect.route_text({"route": {"model": "sonnet", "effort": "medium"}}), " · sonnet · medium")
         self.assertEqual(collect.route_text({}), "")
+
+
+class LongSection0Warning(TempDirTestCase):
+    def test_warns_when_section0_is_long_and_not_when_short(self):
+        self.write("PLAN.md", PLAN)
+        self.assertFalse([w for w in collect.warnings(collect.collect(self.tmp, scan_todos=False)) if "§0 dài" in w])
+        filler = "".join(f"  - việc cũ {i}: " + "x" * 200 + "\n" for i in range(80))
+        self.write("PLAN.md", PLAN.replace("- **Việc tiếp theo", "- **Xong cũ:**\n" + filler + "- **Việc tiếp theo", 1))
+        found = [w for w in collect.warnings(collect.collect(self.tmp, scan_todos=False)) if "§0 dài" in w]
+        self.assertEqual(len(found), 1)
+        self.assertIn("state.py trim", found[0])

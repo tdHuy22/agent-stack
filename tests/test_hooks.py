@@ -1021,3 +1021,21 @@ class HooksConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StopTrimHint(unittest.TestCase):
+    """Nhắc `state.py trim` chỉ khi §0 dài: §0 ngắn thì lời nhắc cập nhật §0 không kéo thêm lệnh nào."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("stop_hook_trim", PLUGIN / "hooks" / "stop.py")
+        cls.hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.hook)
+
+    def test_hint_only_when_trim_helps(self):
+        self.assertNotIn("state.py trim", self.hook.block_reason(["a.py"], "PLAN.md", None))
+        helps = ("§0 dài 20K ký tự: chạy `python3 x/state.py trim`", True)
+        self.assertIn("state.py trim", self.hook.block_reason(["a.py"], "PLAN.md", helps))
+        # trim không rút được §0 thì không nhắc mỗi lượt (SessionStart và tien-do đã báo người dùng).
+        useless = ("§0 dài 50K ký tự mà trim không dời được: rút gọn tay", False)
+        self.assertNotIn("rút gọn tay", self.hook.block_reason(["a.py"], "PLAN.md", useless))

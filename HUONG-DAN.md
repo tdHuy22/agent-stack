@@ -171,7 +171,7 @@ Thêm `--gh` để lấy cả PR và CI trên GitHub (cần mạng, cần `gh` �
 | `ban-giao` | Chạy `luu`, rồi tạo `.agent/HANDOFF.md` có sẵn §0 và trạng thái git |
 | `khoi-tao` | Tạo `.agent/PLAN.md` từ mẫu cho project chưa có file kế hoạch |
 
-**Nguyên tắc của §0:** chỉ có một nguồn sự thật. Các file khác chỉ trỏ tới §0, không chép. Không xóa lịch sử trong file kế hoạch; chỉ cập nhật §0 và tick checkbox.
+**Nguyên tắc của §0:** chỉ có một nguồn sự thật. Các file khác chỉ trỏ tới §0, không chép. Không xóa lịch sử trong file kế hoạch; chỉ cập nhật §0 và tick checkbox. §0 phải ngắn vì agent đọc nó mỗi phiên (một §0 dài 80K ký tự tốn khoảng 25K token mỗi lần mở phiên): lịch sử cũ dời sang `.agent/NHAT-KY.md` bằng `state.py trim`.
 
 **Chạy tay:**
 
@@ -179,7 +179,7 @@ Thêm `--gh` để lấy cả PR và CI trên GitHub (cần mạng, cần `gh` �
 python3 plugin/skills/session-keeper/scripts/state.py show --project <thư mục>
 ```
 
-`state.py` có ba lệnh: `show`, `init`, `handoff`.
+`state.py` có bốn lệnh: `show`, `init`, `handoff`, `trim`. `trim` giữ 3 mục Xong mới nhất của §0 theo ngày ghi ở dòng đầu mục (`--keep N` để đổi; mục không ghi ngày thì cần `--newest-first` hay `--newest-last`), chuyển các mục Xong còn lại, bước đã gạch hay ✅ của "Việc tiếp theo" và mốc đã xong hết (không còn ô `- [ ]` nào, kể cả ở tiêu đề con) sang `.agent/NHAT-KY.md`, đợt mới nhất ở trên; không xóa chữ nào. Chỉ đụng `PLAN.md` hay `.agent/PLAN.md`, không đụng `HANDOFF.md`. `--dry-run` in mục sẽ giữ và mục sẽ dời. tien-do và hook SessionStart cảnh báo khi §0 dài hơn 12K ký tự; hook Stop chỉ nhắc trim khi trim rút được §0, còn §0 dài vì lịch sử không nằm dưới nhãn **Xong** thì cần rút gọn tay.
 
 #### Biên nhận kiểm tra (`receipt.py`)
 

@@ -210,8 +210,11 @@ def collect(root: Path, use_gh: bool = False, scan_todos: bool = True) -> dict:
     activity = []
     if found:
         path, text, sec = found
+        target = A.trim_target(root)  # lời khuyên tính trên đúng file `state.py trim` sẽ sửa
+        advice = A.trim_advice(target[1]) if target else None
         data.update(plan=str(path), section0=sec, progress=A.checkbox_progress(text),
-                    baseline=sec["fields"].get("checks") or A.baseline_anywhere(text))
+                    baseline=sec["fields"].get("checks") or A.baseline_anywhere(text),
+                    trim_advice=advice[0] if advice else None)
         try:
             data["plan_mtime"] = path.stat().st_mtime
             activity.append(data["plan_mtime"])
@@ -302,6 +305,8 @@ def warnings(d: dict) -> list:
     sec = d.get("section0") or {}
     if d.get("plan") and not sec.get("heading"):
         out.append("file kế hoạch chưa có mục §0 \"Đang ở đâu, việc tiếp theo\"")
+    if d.get("trim_advice"):
+        out.append(d["trim_advice"])
     if d.get("unmerged"):
         out.append("nhánh chưa merge: " + ", ".join(d["unmerged"]))
     if git.get("stash"):

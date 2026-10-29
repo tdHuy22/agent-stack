@@ -6,7 +6,7 @@
 ## Trạng thái việc
 
 - Có `PLAN.md` (mục §0 "Đang ở đâu, việc tiếp theo"), `.agent/PLAN.md` hoặc `.agent/HANDOFF.md` thì đọc §0 trước mọi việc khác.
-- Cập nhật §0 trước khi dừng phiên, khi được nhắc sắp hết hạn mức, và sau mỗi mốc lớn: đã xong gì (kèm bằng chứng), đang dở gì (file, nhánh), việc tiếp theo theo thứ tự, mốc kiểm tra.
+- Cập nhật §0 trước khi dừng phiên, khi được nhắc sắp hết hạn mức, và sau mỗi mốc lớn: đã xong gì (kèm bằng chứng), đang dở gì (file, nhánh), việc tiếp theo theo thứ tự, mốc kiểm tra. Giữ §0 ngắn vì phiên nào cũng đọc: mỗi mục Xong vài dòng; lịch sử cũ dời sang `.agent/NHAT-KY.md` bằng `state.py trim` của session-keeper.
 - Bàn giao sang công cụ khác thì viết `.agent/HANDOFF.md` theo mẫu của skill `session-keeper`.
 - Người dùng sửa một lỗi agent dễ lặp lại thì đề nghị ghi bài học thành luật ngắn trong `CLAUDE.md` hoặc `AGENTS.md` của project; chỉ cần cho một loại việc thì ghi vào skill, cho file nhớ gọn.
 
