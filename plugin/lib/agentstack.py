@@ -1958,6 +1958,21 @@ class TrimOrderUnknown(ValueError):
     """Mục Xong không đủ ngày để biết mới nhất ở trên hay ở dưới: phải chọn rõ bằng cờ."""
 
 
+class TrimUnsafe(ValueError):
+    """Dời xong thì mốc kiểm tra mà hook và tien-do đọc được bị đổi: không dời gì."""
+
+
+def _mentions_checks(lines: list) -> bool:
+    """Đoạn có nhắc mốc kiểm tra ("Mốc kiểm tra:", "MỐC KIỂM TRA", "Mốc test"): giữ lại trong §0, kẻo mốc mà hook và
+    tien-do đọc được đi theo một bước đã xong sang nhật ký (archctl 29/10/2026)."""
+    return any("moc kiem tra" in fold(x) or "moc test" in fold(x) for x in lines)
+
+
+def _plan_checks(text: str):
+    """Mốc kiểm tra như tien-do và hook SessionStart đọc: trường của §0, không có thì tìm cả file."""
+    return parse_section0(text)["fields"].get("checks") or baseline_anywhere(text)
+
+
 def _fence_mask(lines: list) -> list:
     """True cho dòng nằm trong khối code (kể cả hai dòng ``` hay ~~~ mở, đóng)."""
     mask, fence = [], None
@@ -2094,7 +2109,7 @@ def _trim_section0(lines: list, keep: int, order, pointer: str) -> dict:
             items += [(a, b, (s, e)) for a, b in kids] if kids else [(s, e, None)]
         elif _is_next_bullet(lines[s]):
             steps += [(a, b) for a, b in _child_spans(lines, mask, s, e)
-                      if step_done(_LIST_RE.sub("", lines[a], count=1))]
+                      if step_done(_LIST_RE.sub("", lines[a], count=1)) and not _mentions_checks(lines[a:b])]
     moved = []
     if len(items) > keep and order:
         moved = items[keep:] if order == "first" else items[:len(items) - keep]
@@ -2109,6 +2124,7 @@ def _trim_section0(lines: list, keep: int, order, pointer: str) -> dict:
         cut = sorted((dates[i] for i in dated), reverse=True)[keep - 1] if keep else None
         newest = {i for i in dated if cut is not None and dates[i] >= cut}
         moved = [item for i, item in enumerate(items) if i not in newest]
+    moved = [item for item in moved if not _mentions_checks(lines[item[0]:item[1]])]
     kept = [lines[a] for a, b, p in items if (a, b, p) not in moved]
     drop = set()
     for a, b in [(a, b) for a, b, _ in moved] + steps:
@@ -2201,6 +2217,9 @@ def trim_plan(text: str, keep: int = 3, when: str = "", plan_rel: str = "PLAN.md
     if moved_phases:
         part += [f"### Từ `{plan_rel}`: mốc đã xong hết", ""] + moved_phases
     new_text = "\n".join(lines)
+    if _plan_checks(new_text) != _plan_checks(text):
+        raise TrimUnsafe(f"mốc kiểm tra sẽ đổi từ «{clip(_plan_checks(text) or '', 80)}» thành "
+                         f"«{clip(_plan_checks(new_text) or '', 80)}»")
     found = section0(new_text)
     return {"text": new_text, "part": "\n".join(part).rstrip() + "\n", "n_done": sec["n_done"],
             "n_steps": sec["n_steps"], "n_phases": len(phases), "kept": sec["kept"],
@@ -2237,6 +2256,9 @@ def trim_advice(text: str):
     except TrimOrderUnknown:
         return (f"§0 dài {before // 1000}K ký tự, agent đọc lại mỗi phiên: chạy {cmd} với `--newest-first` hay "
                 "`--newest-last` (mục Xong không ghi ngày nên không đoán được mục nào mới nhất)", True)
+    except TrimUnsafe:
+        return (f"§0 dài {before // 1000}K ký tự, agent đọc lại mỗi phiên; trim sẽ dời mất mốc kiểm tra: ghi mốc vào "
+                f"dòng `- **Mốc kiểm tra:**` của §0 rồi chạy {cmd}", False)
     except Exception:  # noqa: BLE001 (lời khuyên là phần phụ, không được làm hỏng tóm tắt)
         return None
     if after >= before:

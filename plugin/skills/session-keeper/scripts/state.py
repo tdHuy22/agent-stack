@@ -137,6 +137,9 @@ def cmd_trim(root: Path, keep: int, dry_run: bool, order) -> int:
     plan_rel = path.relative_to(root).as_posix()
     try:
         res = A.trim_plan(text, keep, time.strftime("%d/%m/%Y %H:%M"), plan_rel, order)
+    except A.TrimUnsafe as exc:
+        print(f"Dời xong thì {exc}. Ghi mốc kiểm tra vào dòng `- **Mốc kiểm tra:**` của §0 rồi chạy lại. Chưa ghi gì.")
+        return 3
     except A.TrimOrderUnknown:
         print("Mục Xong trong §0 không ghi đủ ngày nên không biết mục nào mới nhất. Chạy lại với --newest-first (mục "
               "mới nhất ở trên) hoặc --newest-last (mục mới nhất ở dưới). Chưa ghi gì.")

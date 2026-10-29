@@ -300,3 +300,34 @@ class TrimStructure(TempDirTestCase):
         for kept in ("  - b (27/10", "  - c (27/10", "  - d (27/10"):
             self.assertIn(kept, text)
         self.assertNotIn("  - a (25/10", text)
+
+
+class TrimKeepsChecks(TempDirTestCase):
+    """archctl 29/10/2026: dòng MỐC KIỂM TRA nằm trong một bước đã gạch, bị dời theo sang nhật ký."""
+
+    def trim(self, *extra):
+        return run_script(STATE, "trim", "--project", str(self.tmp), *extra)
+
+    def test_done_step_or_item_that_holds_the_checks_stays(self):
+        p = self.write("PLAN.md", plan(
+            "- **Xong:**\n  - a (28/10/2026)\n  - b (27/10/2026): Mốc test `12 passed`\n  - c (20/10/2026)\n"
+            "- **Việc tiếp theo:**\n  1. Làm X\n  7. ~~Đợt 7 Terraform~~ xong.\n"
+            "     MỐC KIỂM TRA: `python3 bench/oracle.py --require terraform` khớp hết\n  8. ✅ Dọn rác\n"))
+        self.assertEqual(self.trim("--keep", "1").returncode, 0)
+        text = p.read_text()
+        self.assertIn("MỐC KIỂM TRA: `python3 bench/oracle.py", text)
+        self.assertIn("Mốc test `12 passed`", text)
+        self.assertNotIn("Dọn rác", text)
+        self.assertNotIn("  - c (20/10", text)
+        self.assertEqual(A.baseline_anywhere(text), "12 passed")  # mốc đọc được không đổi
+
+    def test_refuses_when_the_checks_would_still_change(self):
+        # Mốc chỉ nằm trong một mốc đã xong hết ngoài §0: dời nó là mất mốc, nên không dời gì.
+        body = plan("- **Việc tiếp theo:**\n  1. Làm X\n",
+                    "\n## 1. Giai đoạn\n\n### GĐ1\n- [x] cài, Mốc kiểm tra `pytest` → `5 passed`\n")
+        p = self.write("PLAN.md", body)
+        out = self.trim()
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("Mốc kiểm tra", out.stdout)
+        self.assertEqual(p.read_text(), body)
+        self.assertFalse((self.tmp / ".agent" / "NHAT-KY.md").exists())

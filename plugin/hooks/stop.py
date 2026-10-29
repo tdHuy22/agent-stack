@@ -5,6 +5,8 @@
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
+- §0 vừa được cập nhật trong lượt mà dài quá ngưỡng, và `state.py trim` rút được nó: chạy trim (chạy xong thì §0 gọn
+  nên lần sau không nhắc lại);
 - lượt trả lời câu hỏi tiến độ trong project có kế hoạch mà người dùng chưa thấy cây: hiện cây để người dùng chọn việc tiếp theo (gộp
   vào lời nhắc ở trên nếu có). Chạy plan_tree.py để tự đọc không tính: phải có lời gọi show_widget với HTML của cây,
   hay cây chữ trong câu trả lời cuối khi phiên không có công cụ widget.
@@ -28,6 +30,20 @@ def trim_hint(advice) -> str:
     if not advice or not advice[1]:
         return ""
     return f" Sửa xong thì làm theo: {advice[0]}."
+
+
+def trim_alone(advice) -> str:
+    return (f"agent-stack (hook Stop): §0 vừa được cập nhật trong lượt này. {advice[0]}. Chỉ làm việc đó (không sửa tay "
+            "§0), rồi kết thúc lượt bằng một câu ngắn.")
+
+
+def current_trim_advice(root: Path):
+    """A.trim_advice trên đúng file `state.py trim` sẽ sửa (không phải HANDOFF.md); lỗi thì None."""
+    try:
+        target = A.trim_target(root)
+        return A.trim_advice(target[1]) if target else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def block_reason(changed, plan_rel, advice=None) -> str:
@@ -231,16 +247,18 @@ def main():
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
                      "Claude chạy chot-viec trước khi xong.")
     elif should_block:
-        try:
-            target = A.trim_target(root)  # đúng file `state.py trim` sẽ sửa, không phải HANDOFF.md
-            advice = A.trim_advice(target[1]) if target else None
-        except Exception:  # noqa: BLE001
-            advice = None
+        advice = current_trim_advice(root)
         A.emit_block(block_reason(changed, plan_rel, advice) + tree_extra,
                      f"📝 Lượt này đổi {len(changed)} file mà §0 chưa đổi: nhờ Claude cập nhật §0 trước khi xong.")
     elif tree_block:
         A.emit_block(tree_alone(tree_block),
                      f"🌳 Lượt này {join_why(tree_block, TREE_SHORT)}: nhờ Claude hiện cây để bạn chọn việc tiếp theo.")
+    elif plan_updated and not active:
+        # §0 vừa được cập nhật (lúc nó phình thêm) mà vượt ngưỡng: nhờ trim ngay. Chỉ khi trim rút được §0, nên
+        # chạy trim xong thì lần sau không nhắc lại; §0 dài vì phần trim không dời được thì SessionStart báo.
+        advice = current_trim_advice(root)
+        if advice and advice[1]:
+            A.emit_block(trim_alone(advice), "✂️ §0 vừa cập nhật mà dài quá: nhờ Claude dời việc đã xong sang nhật ký.")
 
 
 if __name__ == "__main__":

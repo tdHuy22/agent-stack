@@ -6,7 +6,7 @@ import time
 import unittest
 from pathlib import Path
 
-from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
+from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git, run_script
 from tests.test_agentstack_lib import PLAN, A, secret_samples
 
 HOOKS = PLUGIN / "hooks"
@@ -424,6 +424,29 @@ class HookTests(TempDirTestCase):
         self.assertIn("thay cho câu kết ngắn", out["reason"])
         self.assertIn("plan_tree.py --widget", out["reason"])
         self.assertIn("câu hỏi về tiến độ", out["reason"])
+
+    def test_stop_asks_for_trim_once_when_section0_grows_past_the_limit(self):
+        self.with_plan()
+        STATE_PY = PLUGIN / "skills" / "session-keeper" / "scripts" / "state.py"
+        plan = self.project / "PLAN.md"
+        history = "".join(f"  - việc cũ {i} ({1 + i % 28:02d}/09/2026): " + "x" * 300 + "\n" for i in range(50))
+        # Lượt cập nhật §0 làm nó vượt ngưỡng: nhắc trim một lần.
+        self.submit("g1", "ghi tiến độ")
+        plan.write_text(plan.read_text().replace("- **Việc tiếp theo", "- **Xong:**\n" + history + "- **Việc tiếp theo", 1))
+        out = self.stop("g1", "Đã ghi §0.")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("state.py trim", out["reason"])
+        self.assertIsNone(self.stop("g1", "Đã ghi §0.", stop_hook_active=True))
+        # Chạy trim xong thì §0 gọn: lượt cập nhật §0 sau không nhắc nữa.
+        done = run_script(STATE_PY, "trim", "--project", str(self.project))
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.submit("g1", "ghi tiến độ tiếp")
+        self.update_section0()
+        self.assertIsNone(self.stop("g1", "Đã ghi §0."))
+        # §0 ngắn mà cập nhật: không nhắc.
+        self.submit("g2", "ghi tiến độ")
+        self.update_section0()
+        self.assertIsNone(self.stop("g2", "Đã ghi §0."))
 
     def test_stop_does_not_block_a_turn_without_changes_or_with_section0_updated(self):
         self.with_plan()
