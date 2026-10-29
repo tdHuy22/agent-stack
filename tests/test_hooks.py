@@ -154,6 +154,15 @@ class HookTests(TempDirTestCase):
         higher = self.run_hook("prompt_submit.py", {"session_id": "p", "prompt": "câu thứ ba"})
         self.assertIn("96%", higher["systemMessage"])
 
+    def test_prompt_submit_skips_limits_when_host_is_pi(self):
+        # Hạn mức là của Claude Code; cầu nối pi đặt AGENT_STACK_HOST=pi nên không được nhắc
+        self.write_limits(99)
+        out = self.run_hook("prompt_submit.py", {"session_id": "pi1", "prompt": "đọc notes.txt"},
+                            env_extra={"AGENT_STACK_HOST": "pi"})
+        self.assertNotIn("Hạn mức", json.dumps(out or {}, ensure_ascii=False))
+        out = self.run_hook("prompt_submit.py", {"session_id": "cc1", "prompt": "đọc notes.txt"})
+        self.assertIn("Hạn mức tuần đã dùng 99%", out["systemMessage"])
+
     def test_prompt_submit_ignores_stale_limits(self):
         self.write_limits(99, age=3600)
         out = self.run_hook("prompt_submit.py", {"session_id": "q", "prompt": "x"})
