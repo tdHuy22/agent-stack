@@ -30,7 +30,7 @@
 
 ## Cây kế hoạch để chọn việc tiếp theo
 
-- Hiện cây (mốc là thân, việc là lá) ngay trước dòng ➡️ khi: câu trả lời đầu tiên của phiên trong project có file kế hoạch, vừa xong (tick, gạch) một việc hay một mốc, hoặc người dùng hỏi làm gì tiếp. Câu trả lời khác chỉ có dòng ➡️.
+- Hiện cây (mốc là thân, việc là lá) ngay trước dòng ➡️ khi: câu trả lời đầu tiên của phiên trong project có file kế hoạch, hoặc người dùng hỏi tiến độ, làm gì tiếp. Xong một việc thì không hiện cây: dòng ➡️ đã nêu việc tiếp theo. Câu trả lời khác chỉ có dòng ➡️.
 - Cách hiện: chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget`, đưa nguyên kết quả vào công cụ vẽ widget (như `show_widget`) nếu có; không có thì chạy với `--text` và in trong khối code. Đã vẽ widget thì không chép lại cây bằng chữ. Chạy script để tự đọc, tả cây bằng lời, hay in cây chữ khi có công cụ widget đều chưa phải hiện cây.
 - Ngoại lệ, chỉ Claude Code: system prompt có mục `agent-stack:ui` (mod giao diện, pane "Kế hoạch" đã hiện cây và tự cập nhật) thì không chạy `--widget` hay vẽ widget cây; thay vào đó viết một dòng nhắc xem pane Kế hoạch (hoặc gõ `/cay`). Dòng ➡️ vẫn ghi đủ.
 - Đã hiện cây thì dòng ➡️ ghi việc đầu tiên trên cây mà Claude tự làm được.

@@ -118,7 +118,7 @@ Tất cả viết bằng Python thư viện chuẩn, bắt mọi lỗi, thoát m
 | `PreToolUse` | Trước Bash và mỗi lần ghi, sửa file | Chặn cài đồ chưa vet (mỗi lần); hỏi trước marketplace lạ và `git checkout` trên cây bẩn; khi router thấy lượt đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa mã nguồn đầu tiên để chạy `mo-hinh-de-doa`; chặn lần tạo tag git hay `gh release create` đầu tiên cho tới khi người dùng trả lời đã audit cả repo chưa. |
 | `SubagentStart` | Mỗi subagent, skill `context: fork` | Đưa yêu cầu gần nhất và 1–2 việc đầu trong §0 cho subagent, vì chúng không thấy hội thoại. |
 | `PreCompact` | Trước compact | Nhắc nếu §0 đã lâu chưa cập nhật; không chặn compact. |
-| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `chot-viec` thì chặn một lần; nếu có đổi file mà §0 chưa cập nhật thì chặn một lần; nhắc vẽ cây kế hoạch khi cần. |
+| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `chot-viec` thì chặn một lần; nếu có đổi file mà §0 chưa cập nhật thì chặn một lần; nhắc vẽ cây kế hoạch ở câu trả lời đầu phiên và khi bạn hỏi tiến độ (không còn sau mỗi việc xong). |
 | `StopFailure` | Lỗi API kết thúc lượt | Ghi lượt cuối ở trạng thái "dừng vì lỗi", kèm file đã đổi và phần trả lời dở. |
 | `SessionEnd` | Đóng phiên | Ghi `state/sessions.jsonl` để `tien-do` gợi ý `claude --resume`. |
 

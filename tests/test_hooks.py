@@ -237,51 +237,21 @@ class HookTests(TempDirTestCase):
         return json.dumps({"type": "assistant", "timestamp": stamp, "message": {"content": [
             {"type": "tool_use", "name": name, "input": tool_input}]}}) + "\n"
 
-    def test_stop_asks_for_the_plan_tree_after_a_task_is_ticked(self):
+    def test_stop_no_longer_asks_for_the_plan_tree_after_a_task_is_ticked(self):
+        # Bỏ từ 29/10/2026: mỗi lần là một lượt thêm và ≈5 KB HTML, mà dòng ➡️ đã nêu việc tiếp theo.
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"
-        transcript.write_text("")
+        transcript.write_text(self.tool_entry("mcp__visualize__show_widget",
+                                              {"widget_code": '<div class="pt" data-plan-tree>…</div>'}))
         self.open_session("t1", transcript)
+        self.submit("t1", "chào")
+        self.assertIsNone(self.stop("t1", "Cây ở trên.", transcript_path=str(transcript)))
+        transcript.write_text("")
         self.submit("t1", "làm phần thiết kế")
         plan = self.project / "PLAN.md"
         plan.write_text(plan.read_text().replace("- [ ] Viết phần thiết kế", "- [x] Viết phần thiết kế"))
-        out = self.stop("t1", transcript_path=str(transcript))
-        self.assertEqual(out["decision"], "block")
-        self.assertIn("plan_tree.py --widget", out["reason"])
-        self.assertIn("vừa xong việc trong kế hoạch", out["reason"])
-        self.assertNotIn("đầu tiên", out["reason"])
-        self.assertIn("🌳", out["systemMessage"])
-        self.assertIsNone(self.stop("t1", transcript_path=str(transcript), stop_hook_active=True))
-        # Chỉ chạy plan_tree.py để tự đọc (Bash, người dùng không thấy): vẫn nhắc.
-        self.submit("t1", "làm thử nghiệm")
-        plan.write_text(plan.read_text().replace("- [ ] Thử nghiệm", "- [x] Thử nghiệm"))
-        transcript.write_text(self.tool_entry("Bash", {"command": "python3 plan_tree.py --text"}))
-        self.assertEqual(self.stop("t1", transcript_path=str(transcript))["decision"], "block")
-        # Đã vẽ widget của cây trong lượt: không nhắc. Widget khác (không có dấu của cây) không tính.
-        self.submit("t1", "làm tiếp phần đánh giá")
-        plan.write_text(plan.read_text().replace("- [ ] Viết phần thiết kế", "- [x] Viết phần thiết kế")
-                        .replace("- [x] Thử nghiệm", "- [x] Thử nghiệm\n- [x] Đánh giá"))
-        transcript.write_text(self.tool_entry("mcp__visualize__show_widget", {"widget_code": "<svg>biểu đồ</svg>"}))
-        self.assertEqual(self.stop("t1", transcript_path=str(transcript))["decision"], "block")
-        self.submit("t1", "làm tiếp phần kết luận")
-        plan.write_text(plan.read_text().replace("- [x] Đánh giá", "- [x] Đánh giá\n- [x] Kết luận"))
-        transcript.write_text(self.tool_entry("mcp__visualize__show_widget",
-                                              {"widget_code": '<div class="pt" data-plan-tree>…</div>'}))
-        self.assertIsNone(self.stop("t1", transcript_path=str(transcript)))
-        # Lượt không xong việc nào, không hỏi tiến độ: không nhắc.
-        transcript.write_text("")
-        self.submit("t1", "giải thích kế hoạch")
-        self.assertIsNone(self.stop("t1", "Kế hoạch có hai giai đoạn.", transcript_path=str(transcript)))
-        # Đầu lượt đếm trên file kế hoạch khác (HANDOFF.md mới hơn), cuối lượt trên PLAN.md: không so, không nhắc.
-        handoff = self.project / ".agent" / "HANDOFF.md"
-        handoff.parent.mkdir(exist_ok=True)
-        handoff.write_text("# HANDOFF\n")
-        later = time.time() + 5
-        os.utime(handoff, (later, later))
-        self.submit("t1", "cập nhật §0")
         self.update_section0()
-        os.utime(plan, (later + 5, later + 5))
-        self.assertIsNone(self.stop("t1", transcript_path=str(transcript)))
+        self.assertIsNone(self.stop("t1", "Xong phần thiết kế.", transcript_path=str(transcript)))
 
     def test_stop_asks_for_the_plan_tree_on_first_answer_and_progress_questions(self):
         transcript = self.tmp / "transcript.jsonl"
@@ -456,15 +426,14 @@ class HookTests(TempDirTestCase):
         self.touch("design.md")
         out = self.stop("c1", transcript_path=str(transcript))
         self.assertIn("§0 của `PLAN.md`", out["reason"])
-        self.assertIn("thay cho câu kết ngắn", out["reason"])
-        self.assertIn("plan_tree.py --widget", out["reason"])
-        self.assertIn("bỏ qua cả cây", out["reason"])
+        self.assertNotIn("plan_tree.py", out["reason"])  # xong việc không còn kéo theo cây
         # Lượt đầu phiên gộp với nhắc §0: cây phải hiện dù file do ai đổi.
         self.submit("c2", "làm phần thiết kế")
         self.touch("design2.md")
         out = self.stop("c2", transcript_path=str(transcript))
+        self.assertIn("thay cho câu kết ngắn", out["reason"])
+        self.assertIn("plan_tree.py --widget", out["reason"])
         self.assertIn("câu trả lời đầu tiên của phiên", out["reason"])
-        self.assertNotIn("bỏ qua cả cây", out["reason"])
 
     def test_stop_does_not_block_a_turn_without_changes_or_with_section0_updated(self):
         self.with_plan()
