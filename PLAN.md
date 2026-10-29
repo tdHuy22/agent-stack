@@ -39,4 +39,5 @@
 ### GĐ29: Rút gọn file kế hoạch để bớt token mỗi phiên (29/10/2026)
 - [x] `state.py trim`, cảnh báo §0 dài, hook Stop chỉ nhắc khi trim giúp được, chot-viec và mo-hinh-de-doa đọc đúng mục threat model.
 - [x] Hook Stop thôi ép vẽ cây sau mỗi việc xong (bạn quyết 29/10/2026; còn ở câu trả lời đầu phiên và khi hỏi tiến độ), plugin 0.17.1.
+- [x] Bỏ luôn nhắc vẽ cây ở lượt đầu phiên (bạn quyết 29/10/2026; 5 phiên giao việc đều tốn một lượt chỉ để nói nhắc không hợp): giờ chỉ nhắc khi hỏi tiến độ, plugin 0.17.2, chưa cài.
 - [x] Rút gọn §0 các project khác, mỗi repo một phiên riêng (29/10/2026), đã commit trong từng repo, chưa push: matcha-latte §0 54K→10K (`4a563a0`), SCEE 43K→7,6K (`c10aead`), archctl 58K→4,6K (`9627917`), paper-graph 54K→6,9K (`8763e31`), english (không phải git) 1,4K→1,1K. Kiểm lại: không mất dòng nào, trừ 4 dòng các phiên chủ ý sửa (ngày cập nhật, trạng thái đã commit).

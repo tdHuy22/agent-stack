@@ -253,44 +253,40 @@ class HookTests(TempDirTestCase):
         self.update_section0()
         self.assertIsNone(self.stop("t1", "Xong phần thiết kế.", transcript_path=str(transcript)))
 
-    def test_stop_asks_for_the_plan_tree_on_first_answer_and_progress_questions(self):
+    def test_stop_asks_for_the_plan_tree_only_on_progress_questions(self):
         transcript = self.tmp / "transcript.jsonl"
         transcript.write_text("")
-        # Project không có kế hoạch: lượt đầu không nhắc.
+        # Project không có kế hoạch: hỏi tiến độ cũng không nhắc.
         git(self.project, "init", "-q")
-        self.submit("f0", "giải thích parser")
-        self.assertIsNone(self.stop("f0", "Parser đọc từng dòng.", transcript_path=str(transcript)))
+        self.submit("f0", "làm gì tiếp theo")
+        self.assertIsNone(self.stop("f0", "Chưa có kế hoạch.", transcript_path=str(transcript)))
         self.with_plan()
-        # Lượt đầu của phiên trong project có kế hoạch, chưa hiện cây: nhắc một lần.
+        # Lượt đầu phiên không còn nhắc (29/10/2026): phiên giao việc từng tốn một lượt chỉ để nói nhắc không hợp.
         self.submit("f1", "giải thích parser")
-        out = self.stop("f1", "Parser đọc từng dòng.", transcript_path=str(transcript))
-        self.assertEqual(out["decision"], "block")
-        self.assertIn("câu trả lời đầu tiên của phiên", out["reason"])
-        self.assertIn("plan_tree.py --widget", out["reason"])
-        self.assertIsNone(self.stop("f1", transcript_path=str(transcript), stop_hook_active=True))
-        # Lượt sau của cùng phiên: không còn là lượt đầu. Câu debug có "đang do" không phải hỏi tiến độ.
+        self.assertIsNone(self.stop("f1", "Parser đọc từng dòng.", transcript_path=str(transcript)))
+        # Câu debug có "đang do" không phải hỏi tiến độ.
         self.submit("f1", "lỗi đang do hàm parse gây ra, sửa giúp tôi")
         self.assertIsNone(self.stop("f1", "Parser đọc từng dòng.", transcript_path=str(transcript)))
-        # Hỏi tiến độ: nhắc; trả lời có cây chữ thì không.
+        # Hỏi tiến độ: nhắc một lần; trả lời có cây chữ thì không.
         self.submit("f1", "làm gì tiếp theo")
         out = self.stop("f1", "Còn hai việc.", transcript_path=str(transcript))
+        self.assertEqual(out["decision"], "block")
         self.assertIn("câu hỏi về tiến độ", out["reason"])
+        self.assertIn("plan_tree.py --widget", out["reason"])
+        self.assertIsNone(self.stop("f1", transcript_path=str(transcript), stop_hook_active=True))
         self.submit("f1", "tiến độ tới đâu rồi")
         self.assertIsNone(self.stop("f1", self.TREE_TEXT, transcript_path=str(transcript)))
         # "Làm tiếp" không phải câu hỏi tiến độ.
         self.submit("f1", "làm tiếp đi")
         self.assertIsNone(self.stop("f1", "Đã đọc §0.", transcript_path=str(transcript)))
-        # Lượt đầu đã hiện cây chữ, phiên không có công cụ widget: không nhắc.
-        self.submit("f2", "chào")
-        self.assertIsNone(self.stop("f2", self.TREE_TEXT, transcript_path=str(transcript)))
         # Phiên có công cụ widget (danh sách công cụ ở đầu transcript): cây chữ không đủ, phải vẽ widget.
         offered = self.tmp / "offered.jsonl"
         offered.write_text(json.dumps({"type": "attachment", "attachment": {
             "type": "deferred_tools_delta", "addedNames": ["mcp__visualize__show_widget"]}}) + "\n")
-        self.submit("f3", "chào")
+        self.submit("f3", "tiến độ tới đâu rồi")
         out = self.stop("f3", self.TREE_TEXT, transcript_path=str(offered))
         self.assertIn("in cây chữ khi phiên có công cụ widget", out["reason"])
-        self.submit("f4", "chào")
+        self.submit("f4", "tiến độ tới đâu rồi")
         with offered.open("a") as fh:
             fh.write(self.tool_entry("mcp__visualize__show_widget", {"widget_code": '<div class="pt" data-plan-tree>'}))
         self.assertIsNone(self.stop("f4", "Cây ở trên.", transcript_path=str(offered)))
@@ -302,17 +298,16 @@ class HookTests(TempDirTestCase):
         transcript.write_text("")
         payload = {"session_id": "u1", "cwd": str(self.project), "last_assistant_message": "Parser đọc từng dòng.",
                    "transcript_path": str(transcript)}
-        self.submit("u1", "giải thích parser")
+        self.submit("u1", "làm gì tiếp theo")
         self.assertIsNone(self.run_hook("stop.py", payload, env_extra={"AGENT_STACK_UI": "1"}))
         # Giá trị khác 1 (đặt nhầm) vẫn nhắc như phiên không có mod.
-        self.submit("u2", "giải thích parser")
+        self.submit("u2", "làm gì tiếp theo")
         out = self.run_hook("stop.py", dict(payload, session_id="u2"), env_extra={"AGENT_STACK_UI": "yes"})
         self.assertEqual(out["decision"], "block")
         self.assertIn("plan_tree.py --widget", out["reason"])
 
     def test_stop_skips_the_tree_after_cay_printed_it_as_text(self):
-        # Tái hiện cloud 28/10/2026: người dùng gõ /cay (mod in cây chữ, không qua lượt model), rồi hỏi một câu khác;
-        # hook Stop từng nhắc hiện cây vì đây là câu trả lời đầu tiên của phiên.
+        # Người dùng gõ /cay (mod in cây chữ, không qua lượt model): trong cùng lượt thì đã thấy cây.
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"
         transcript.write_text("")
@@ -324,11 +319,7 @@ class HookTests(TempDirTestCase):
                                  env=env)
             self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
 
-        cay("c1")
-        time.sleep(1.1)
-        self.submit("c1", "giải thích parser")
-        self.assertIsNone(self.stop("c1", "Parser đọc từng dòng.", transcript_path=str(transcript)))
-        # Hỏi tiến độ sau đó: /cay cũ không đủ, phải hiện cây mới; gõ /cay trong lượt thì đủ.
+        # Hỏi tiến độ: /cay cũ không đủ, phải hiện cây mới; gõ /cay trong lượt thì đủ.
         self.submit("c1", "làm gì tiếp theo")
         out = self.stop("c1", "Còn hai việc.", transcript_path=str(transcript))
         self.assertIn("câu hỏi về tiến độ", out["reason"])
@@ -336,9 +327,8 @@ class HookTests(TempDirTestCase):
         cay("c1")
         self.assertIsNone(self.stop("c1", "Cây ở trên.", transcript_path=str(transcript)))
         # Phiên khác không được tính nhờ dấu của c1.
-        self.submit("c2", "giải thích parser")
-        self.assertEqual(self.stop("c2", "Parser đọc từng dòng.", transcript_path=str(transcript))["decision"],
-                         "block")
+        self.submit("c2", "tiến độ tới đâu rồi")
+        self.assertEqual(self.stop("c2", "Còn hai việc.", transcript_path=str(transcript))["decision"], "block")
 
     def test_router_suggestion_is_saved_for_the_ui_band_and_cleared_when_none(self):
         env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
@@ -427,13 +417,13 @@ class HookTests(TempDirTestCase):
         out = self.stop("c1", transcript_path=str(transcript))
         self.assertIn("§0 của `PLAN.md`", out["reason"])
         self.assertNotIn("plan_tree.py", out["reason"])  # xong việc không còn kéo theo cây
-        # Lượt đầu phiên gộp với nhắc §0: cây phải hiện dù file do ai đổi.
-        self.submit("c2", "làm phần thiết kế")
+        # Câu hỏi tiến độ gộp với nhắc §0.
+        self.submit("c1", "tiến độ tới đâu rồi")
         self.touch("design2.md")
-        out = self.stop("c2", transcript_path=str(transcript))
+        out = self.stop("c1", transcript_path=str(transcript))
         self.assertIn("thay cho câu kết ngắn", out["reason"])
         self.assertIn("plan_tree.py --widget", out["reason"])
-        self.assertIn("câu trả lời đầu tiên của phiên", out["reason"])
+        self.assertIn("câu hỏi về tiến độ", out["reason"])
 
     def test_stop_does_not_block_a_turn_without_changes_or_with_section0_updated(self):
         self.with_plan()

@@ -5,8 +5,7 @@
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
-- lượt cần hiện cây kế hoạch (câu trả lời đầu tiên của phiên trong project có kế hoạch, hay người dùng hỏi tiến độ)
-  mà người dùng chưa thấy cây: hiện cây để người dùng chọn việc tiếp theo (gộp
+- lượt trả lời câu hỏi tiến độ trong project có kế hoạch mà người dùng chưa thấy cây: hiện cây để người dùng chọn việc tiếp theo (gộp
   vào lời nhắc ở trên nếu có). Chạy plan_tree.py để tự đọc không tính: phải có lời gọi show_widget với HTML của cây,
   hay cây chữ trong câu trả lời cuối khi phiên không có công cụ widget.
 
@@ -47,11 +46,11 @@ WIDGET_TOOL = "show_widget"  # đuôi tên công cụ vẽ widget (mcp__visualiz
 TREE_HOW = ("chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget` rồi "
             "đưa nguyên kết quả vào công cụ vẽ widget nếu có (không có thì chạy với `--text` và in trong khối code), "
             "rồi kết thúc lượt bằng dòng ➡️")
-# Không ép vẽ cây sau mỗi việc xong (29/10/2026): mỗi lần là một lượt thêm, ≈5 KB HTML model viết ra và hướng dẫn
-# widget ≈12K token nếu chưa nạp, mà dòng ➡️ đã nêu việc tiếp theo.
-TREE_WHY = {"first": "là câu trả lời đầu tiên của phiên trong project có file kế hoạch",
-            "progress": "trả lời câu hỏi về tiến độ hay việc tiếp theo"}
-TREE_SHORT = {"first": "là câu trả lời đầu tiên của phiên", "progress": "trả lời câu hỏi tiến độ"}
+# Chỉ nhắc cây khi người dùng hỏi tiến độ (29/10/2026). Không ép sau mỗi việc xong hay ở lượt đầu phiên: mỗi lần là
+# một lượt thêm, ≈5 KB HTML model viết ra và hướng dẫn widget ≈12K token nếu chưa nạp, mà dòng ➡️ đã nêu việc tiếp
+# theo; phiên do phiên khác giao việc còn tốn thêm một lượt chỉ để nói nhắc không hợp.
+TREE_WHY = {"progress": "trả lời câu hỏi về tiến độ hay việc tiếp theo"}
+TREE_SHORT = {"progress": "trả lời câu hỏi tiến độ"}
 
 
 def join_why(reasons, table) -> str:
@@ -70,20 +69,19 @@ def tree_after(reasons) -> str:
 
 
 def tree_due(root: Path, turn, data: dict) -> list:
-    """Lý do lượt này phải hiện cây kế hoạch ("first", "progress") mà người dùng chưa thấy cây; rỗng nếu không cần.
-    Chỉ xét project có file kế hoạch."""
+    """Lý do lượt này phải hiện cây kế hoạch (["progress"]) mà người dùng chưa thấy cây; rỗng nếu không cần. Chỉ xét
+    project có file kế hoạch."""
     start = (turn or {}).get("plan_done")
     if not isinstance(start, dict) or not isinstance(start.get("count"), int):
         return []
     now = A.plan_done_count(root)
     if not now:
         return []
-    reasons = [key for key in ("first", "progress") if turn.get(key) is True]
-    # /cay in cây dạng chữ (cloud, nơi pane không hiện): trong lượt thì đủ mọi lý do; trước lượt trong cùng phiên thì
-    # người dùng đã thấy cây, chỉ còn lý do "first" là thừa.
+    reasons = ["progress"] if turn.get("progress") is True else []
+    # /cay in cây dạng chữ (cloud, nơi pane không hiện) trong lượt: người dùng đã thấy cây.
     seen = A.tree_shown_at(data.get("session_id"))
-    if seen is not None:
-        reasons = [] if seen >= turn["ts"] else [r for r in reasons if r != "first"]
+    if seen is not None and seen >= turn["ts"]:
+        return []
     if not reasons or tree_shown(turn, data):
         return []
     return reasons

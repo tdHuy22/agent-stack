@@ -1047,7 +1047,6 @@ def start_turn(session_id, cwd, extra=None):
             return None
         root = project_root(cwd)
         record = {"ts": time.time(), "root": str(root), "plan_digest": section0_digest(root),
-                  "first": not path.exists(),  # lượt đầu của phiên: hook Stop nhắc hiện cây kế hoạch
                   "plan_done": plan_done_count(root),
                   "head": (git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip() or None}
         record.update(extra or {})
