@@ -36,7 +36,7 @@ def main():
         A.write_json_atomic(sessions / name, {"session": sid, "model": data.get("model"),
                                               "effort": (data.get("effort") or {}).get("level"),
                                               "cwd": str(root), "ts": time.time()})
-    try:  # cloud: kéo bản agent-stack mới ở nền, tối đa một lần mỗi giờ (không chờ)
+    try:  # cloud: kéo bản agent-stack mới ở nền, tối đa một lần mỗi 10 phút (không chờ)
         import cloud_update  # noqa: E402
         cloud_update.maybe_start(A.home_dir())
     except Exception:  # việc phụ: lỗi ở đây không được làm mất phần còn lại của hook

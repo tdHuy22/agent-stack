@@ -2,7 +2,7 @@
 """Tự kéo bản agent-stack mới trên cloud session (claude.ai/code).
 
 Setup script của environment clone agent-stack một lần rồi máy ảo cache khoảng 7 ngày, nên bản trên cloud cũ
-dần. Hook SessionStart gọi `maybe_start`: trên cloud, tối đa một lần mỗi giờ, khởi tiến trình nền chạy file
+dần. Hook SessionStart gọi `maybe_start`: trên cloud, tối đa một lần mỗi 10 phút, khởi tiến trình nền chạy file
 này với `--run` để fetch nhánh mà setup script đã tải rồi `reset --keep` sang commit mới. Hook không chờ;
 bản mới có tác dụng từ lần gọi hook sau, skill mới từ phiên sau. Threat model: TM-43 đến TM-46.
 """
@@ -18,7 +18,7 @@ import agentstack as A  # noqa: E402
 
 REPO_URL = "https://github.com/tdHuy22/agent-stack.git"  # khớp REPO_URL của tools/cloud_setup.sh
 CORE_FILES = (".agent-stack-root", "plugin/.claude-plugin/plugin.json", "global/CLAUDE.global.md")
-INTERVAL = 3600  # giây giữa hai lần kiểm
+INTERVAL = 600  # giây giữa hai lần kiểm; đĩa máy ảo giữ giữa các phiên nên dấu này cũng vậy
 LOCK_STALE = 600  # khoá cũ hơn mức này là của tiến trình đã chết
 FETCH_TIMEOUT = 60
 NO_BACKGROUND_ENV = "AGENT_STACK_NO_BACKGROUND"  # test luôn đặt, để không gọi mạng thật
