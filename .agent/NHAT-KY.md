@@ -2,6 +2,23 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 30/10/2026 08:20
+
+### Từ §0 của `PLAN.md`: Xong
+
+- **Xong (28/10/2026): sửa lỗ hổng của chot-viec khi sửa theo review (plugin 0.16.1, commit `b5ba28f`; đã cài lúc 15:16 28/10/2026 theo lệnh của bạn, nhật ký `state/install-logs/20261028-151619.json`, `claude plugin list` báo 0.16.1, bản cache giống hệt `plugin/`; đã push). Phiên mở trước 15:16 cần `/reload-plugins`.** Nguyên nhân: sửa theo review sau khi `risk.py` đã chạy thì không ai chấm lại hay review lại phần sửa; hook Stop nhắc ở lượt sau (kể cả lượt chỉ commit) và câu nhắc dễ bị hiểu là nhắc sai. Đã làm: `risk.py --new` (chỉ chấm dòng thêm sau lần chấm trước; `fresh_changes` dùng chung với `stop.py`), câu nhắc mới của hook Stop ("đổi hay commit", chỉ được gạt khi dòng do phiên khác viết), `chot-viec` bước 5 chấm lại phần sửa và review lại nếu mức từ vừa; `cloud_setup.sh` lấy lại `$DEST.old` khi lần trước bị ngắt; HUONG-DAN 5.7. Kiểm: reviewer (sonnet) xem 13 dòng sửa của `cloud_setup.sh`: 0 lỗi; `tests.test_chot_viec tests.test_guard tests.test_hooks` 122 test đạt, `tests.test_cloud_setup` 15 test đạt (biên nhận). Reviewer opus·high tìm 1 cao (lượt đã commit: `risk.py --new` không `--base` cho diff rỗng mà vẫn ghi dấu, hook im, tức vẫn gạt được), 2 thấp (`previous_marks` không qua `project_root`; lấy lại `.old` không mang `state/`); đã sửa: câu nhắc in sẵn `--new --base <HEAD đầu lượt>`, diff rỗng không ghi dấu, file chưa track dùng đường dẫn từ gốc repo (`--full-name`, lộ ra khi viết test thư mục con), `cloud_setup.sh` đổi thứ tự thay thư mục rồi mới chuyển `state/`. Cả bộ test, `plugin validate`, `plugin test` đạt (biên nhận). Reviewer xem lại phần sửa: 0 lỗi.
+- **Xong (28/10/2026): `/cay` trên cloud và soát theo Claude Code mới (plugin 0.16.2; đã cài lúc 16:03 28/10/2026 theo lệnh của bạn, nhật ký `state/install-logs/20261028-160319.json`; đã push `a9846f9`).** Trên cloud session và `claude -p`, hook của mod chạy nhưng pane không hiện (docs "Where mods run"), nên `/cay` báo "Đã mở pane" mà không thấy gì. Sửa: cloud (`CLAUDE_CODE_REMOTE=true`) thì `/cay` in `plan_tree.py --text`; nơi khác vẫn mở pane, pane không đặt được (`-p`, terminal hẹp) thì in thêm cây chữ; đọc biến lỗi thì giữ hành vi pane. Kiểm: `plugin test` 22 đạt (3 test mới), `plugin validate` đạt; chạy thật bằng binary app 2.1.309, 0 lượt model: HEAD cũ in "Đã mở pane", bản mới in cây ở cloud và `-p`. Reviewer sonnet: 0 lỗi; đã làm 2 ghi nhận (bỏ phụ thuộc `surfaces()` để desktop headless không mất pane, bắt lỗi đọc biến); phần sửa sau review mức thấp theo `risk.py --new`. Soát changelog 2.1.299–2.1.312 (đọc 28/10/2026): không mục nào làm hỏng agent-stack. Đã làm mới cache của environment `agent-stack` (thêm dòng chú thích `# Làm mới cache: 2026-10-28 (plugin 0.16.2)…` cuối setup script, "Environment updated"); phiên cloud mới `session_01SFmJWdYoPPUZw4dJwAPBfZ` gõ `/cay` in cây dạng chữ ngay.
+- Bên thứ ba: 24 mục đã kiểm duyệt: 21 duyệt, 3 từ chối, không còn mục chờ. Ngày 03/10/2026 bạn quyết ba mục cuối theo khuyến nghị: `sandbox-runtime` duyệt có điều kiện (chỉ dùng cục bộ trong `.cache/srt`), `claude-security` duyệt có điều kiện (chỉ gọi tay, cài theo project khi cần; chưa cài), `plugin-dev` từ chối. Duyệt không có nghĩa là đã cài. Ngày 28/10/2026 bạn duyệt lại MCP Exa (3.5.0, `f77c44aae0bd`, thêm `instructions` 458 ký tự) và Parallel (`2837ba7d0d55`, chỉ đổi mô tả) sau khi lệch, trong phiên pi-agent; tham số gửi tới hãng không đổi, `vet.py drift --remote` báo khớp.
+
+### Từ `PLAN.md`: mốc đã xong hết
+
+#### GĐ29: Rút gọn file kế hoạch để bớt token mỗi phiên (29/10/2026)
+- [x] `state.py trim`, cảnh báo §0 dài, hook Stop chỉ nhắc khi trim giúp được, chot-viec và mo-hinh-de-doa đọc đúng mục threat model.
+- [x] Hook Stop thôi ép vẽ cây sau mỗi việc xong (bạn quyết 29/10/2026; còn ở câu trả lời đầu phiên và khi hỏi tiến độ), plugin 0.17.1.
+- [x] Bỏ luôn nhắc vẽ cây ở lượt đầu phiên (bạn quyết 29/10/2026; 5 phiên giao việc đều tốn một lượt chỉ để nói nhắc không hợp): giờ chỉ nhắc khi hỏi tiến độ, plugin 0.17.2.
+- [x] Trim giữ mốc kiểm tra; hook Stop nhắc trim ngay khi §0 vừa cập nhật mà dài (plugin 0.17.3, chưa cài).
+- [x] Rút gọn §0 các project khác, mỗi repo một phiên riêng (29/10/2026), đã commit trong từng repo, chưa push: matcha-latte §0 54K→10K (`4a563a0`), SCEE 43K→7,6K (`c10aead`), archctl 58K→4,6K (`9627917`), paper-graph 54K→6,9K (`8763e31`), english (không phải git) 1,4K→1,1K. Kiểm lại: không mất dòng nào, trừ 4 dòng các phiên chủ ý sửa (ngày cập nhật, trạng thái đã commit).
+
 ## Đợt 29/10/2026
 
 ### Từ §0 của `PLAN.md`: Xong
