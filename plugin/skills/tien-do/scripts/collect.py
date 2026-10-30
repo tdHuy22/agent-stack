@@ -236,6 +236,10 @@ def collect(root: Path, use_gh: bool = False, scan_todos: bool = True) -> dict:
     return data
 
 
+# Biên nhận trượt cũ có thể do lệnh đã bỏ hay chạy sai thư mục: chỉ cách gỡ để nó không kẹt ở "Chặn đường".
+STALE_HINT = "nếu lệnh đã bỏ hay lần đó chạy sai thư mục thì xoá biên nhận bằng `receipt.py forget <tên>`"
+
+
 def rank(d: dict) -> list:
     actions = []
     sec = d.get("section0") or {"fields": {}, "next": []}
@@ -252,7 +256,7 @@ def rank(d: dict) -> list:
             continue
         detail = f": {A.clip(rec['summary'], 80)}" if rec.get("summary") else ""
         if rec.get("fresh") is False:
-            actions.append((1, f"Chạy lại kiểm tra `{label}`: lần gần nhất trượt{detail}, code đã đổi sau đó",
+            actions.append((1, f"Chạy lại kiểm tra `{label}`: lần gần nhất trượt{detail}, code đã đổi sau đó; {STALE_HINT}",
                             "chưa biết bản sửa có làm kiểm tra đạt lại không"))
         else:
             actions.append((1, f"Sửa kiểm tra đang trượt `{label}`{detail}", "lần chạy gần nhất trượt và code chưa đổi từ đó"))
@@ -290,7 +294,7 @@ def rank(d: dict) -> list:
         item = {"tier": tier, "label": TIER_LABEL[tier], "text": text, "why": why}
         if suggest:
             try:
-                item["route"] = suggest(text)
+                item["route"] = suggest(text.replace(STALE_HINT, ""))  # lời chỉ cách gỡ không phải việc cần định tuyến
             except Exception:  # noqa: BLE001
                 pass
         out.append(item)

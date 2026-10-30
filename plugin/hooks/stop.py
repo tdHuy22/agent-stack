@@ -106,8 +106,9 @@ def tree_due(root: Path, turn, data: dict) -> list:
 def tree_shown(turn: dict, data: dict) -> bool:
     """Người dùng đã thấy cây trong lượt: lời gọi show_widget với HTML của cây, hay cây chữ trong câu trả lời cuối
     khi phiên không có công cụ widget (luật chung: có widget thì vẽ widget). Phiên có mod giao diện (ui.tsx đặt
-    AGENT_STACK_UI=1, chỉ ở phiên có nơi vẽ) thì cây đã nằm sẵn ở pane Kế hoạch."""
-    if os.environ.get("AGENT_STACK_UI") == "1":
+    AGENT_STACK_UI=1, chỉ ở phiên có nơi vẽ) hay mod đã ghi dấu pane đang hiện (biến chỉ đặt lúc ghép system prompt,
+    nên pane mở bằng /cay giữa các lượt hay sau khi nạp lại mod có thể chưa có biến) thì cây đã nằm sẵn ở pane."""
+    if os.environ.get("AGENT_STACK_UI") == "1" or A.pane_open(data.get("session_id")):
         return True
     transcript = data.get("transcript_path")
     if A.tool_used_since(transcript, turn["ts"], TREE_WIDGET_MARK, tool_suffix=WIDGET_TOOL):
@@ -186,11 +187,21 @@ def main():
     if turn and turn.get("root") != str(root):
         turn = None  # lượt bắt đầu ở thư mục khác: không so được
     changed = A.changed_since(root, turn["ts"]) if turn else []
+    # File phiên khác đang làm cùng project sửa trong lúc lượt này chạy: không nhắc §0 hay chot-viec cho chúng.
+    foreign = set()
+    if changed:
+        try:
+            foreign = A.foreign_files(root, sid, turn["ts"], changed, data.get("transcript_path"))
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "foreign_files", "error": repr(exc)[:300]})
+    changed = [c for c in changed if c not in foreign]
     digest_now = A.section0_digest(root)
     plan_updated = bool(turn) and digest_now is not None and digest_now != turn.get("plan_digest")
     found = A.read_plan(root)
     plan_rel = str(found[0].relative_to(root)) if found and str(found[0]).startswith(str(root)) else "PLAN.md"
-    plan_block = bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
+    # Lượt chỉ commit phần sửa ở lượt trước (§0 đã ghi lúc đó) thì không nhắc §0; chot-viec vẫn chấm phần commit.
+    plan_block = (bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
+                  and any(c not in foreign for c in A.changed_since(root, turn["ts"], edited_only=True)))
 
     # Lần Stop thứ hai của cùng lượt: giữ câu trả lời thật của lần đầu.
     message = data.get("last_assistant_message")

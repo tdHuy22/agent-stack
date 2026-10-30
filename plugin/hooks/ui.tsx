@@ -228,11 +228,30 @@ async function textTree($: EngineInterface, note = ''): Promise<{ text: string }
   }
 }
 
-/** Mở pane; đã được vẽ thì ghi cờ paneShown cho cả phiên (mục system prompt và biến AGENT_STACK_UI dựa vào nó). */
+/** Mở pane; đã được vẽ thì ghi cờ paneShown cho cả phiên (mục system prompt và biến AGENT_STACK_UI dựa vào nó) và dấu
+ * pane đang hiện cho hook Stop. */
 async function openPane($: EngineInterface) {
   const opened = await $.ui.open({ id: PANE, title: paneTitle(await read($, plan)) })
-  if (opened.isPlaced) await update($, paneShown, () => true)
+  if (opened.isPlaced) {
+    await update($, paneShown, () => true)
+    await markPane($, true)
+  } else if (!(await read($, paneShown))) {
+    await markPane($, false) // dấu "open" cũ của phiên tiếp tục ở nơi pane không vẽ được
+  }
   return opened
+}
+
+/** Ghi dấu pane đang hiện hay đã đóng (ui_status.py --pane-open/--pane-closed). Biến AGENT_STACK_UI chỉ đặt lúc ghép
+ * system prompt, nên hook Stop đọc thêm dấu này. Lỗi thì bỏ qua: chỉ tốn thêm một lời nhắc. */
+async function markPane($: EngineInterface, open: boolean): Promise<void> {
+  try {
+    await $.process.run(['python3', `${$.plugin.root}/hooks/ui_status.py`, open ? '--pane-open' : '--pane-closed'], {
+      stdin: JSON.stringify({ session_id: await $.session.id() }),
+      timeoutMs: PROMPT_TIMEOUT_MS,
+    })
+  } catch {
+    // Không ghi được thì hook Stop dựa vào AGENT_STACK_UI như cũ.
+  }
 }
 
 /** Điền mã việc vào ô nhập, không gửi (TM-28). */
@@ -270,6 +289,9 @@ export const register: Register = on => {
       const view = await read($, plan)
       // Không xét e.isInteractive: phiên của app desktop là phiên headless (isInteractive false).
       if (view.tree && !(await $.store.get(CLOSED_KEY))) await openPane($)
+      // Không mở pane: xoá dấu cũ trên đĩa nếu phiên chưa vẽ pane (phiên tiếp tục ở process mới). Sau /reload-plugins
+      // thì paneShown còn giữ và pane cũ vẫn có thể đang hiện, nên giữ dấu.
+      else if (!(await read($, paneShown))) await markPane($, false)
       $.ui.status(undefined) // xoá dòng status của bản mod cũ còn ghim lại
       await recordUsage($)
     })
@@ -380,6 +402,7 @@ export const register: Register = on => {
   // Ghi nhớ lỗi thì vẫn để pane đóng như người dùng muốn.
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE && e.origin.kind === 'person') await $.store.set(CLOSED_KEY, true)
+    if (e.id === PANE) await markPane($, false)
     return next(e)
   }).catch(($, e, next) => next(e))
 

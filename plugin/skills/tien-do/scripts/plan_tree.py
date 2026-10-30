@@ -124,7 +124,8 @@ def failing_checks(root: Path) -> list:
     for label, rec in (A.receipt_status(root) or {}).items():
         if rec.get("ok"):
             continue
-        when = "code đã đổi sau lần trượt" if rec.get("fresh") is False else "code chưa đổi từ lần trượt"
+        when = ("code đã đổi sau lần trượt; nếu lệnh đã bỏ hay lần đó chạy sai thư mục thì xoá biên nhận bằng `receipt.py forget <tên>`" if rec.get("fresh") is False
+                else "code chưa đổi từ lần trượt")
         out.append(f"Chạy lại và sửa kiểm tra `{label}` (lần gần nhất trượt, {when})")
     return out
 

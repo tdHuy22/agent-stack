@@ -6,7 +6,8 @@ Nhận số liệu dạng statusline của Claude Code qua stdin (mod dựng t�
 màu: `ctx 23% · 5h 41% · 7d 12%` (phần chưa có số liệu thì bỏ). Payload có `turn_end` (mod gửi sau lượt phiên chính) thì ghi thêm số liệu phiên vào
 state/session-usage/ cho router (A.record_mod_usage). Với `--router`: in gợi ý router của tin vừa gửi (JSON) cho dải trên ô nhập. Với `--prompt` (mod gọi trong UserPromptSubmit, trước hook
 Python) chỉ cập nhật model hiện tại của file đó, không in gì. Với `--tree-shown` (mod gọi sau khi /cay in cây dạng
-chữ) ghi dấu đã hiện cây cho hook Stop. Luôn thoát mã 0.
+chữ) ghi dấu đã hiện cây cho hook Stop. Với `--pane-open`, `--pane-closed` ghi pane Kế hoạch đang hiện hay đã
+đóng trong phiên, cũng cho hook Stop. Luôn thoát mã 0.
 """
 import json
 import sys
@@ -49,6 +50,9 @@ def main(argv=None) -> int:
             return 0
         if "--tree-shown" in argv:
             A.mark_tree_shown(data.get("session_id"))
+            return 0
+        if "--pane-open" in argv or "--pane-closed" in argv:
+            A.mark_pane(data.get("session_id"), "--pane-open" in argv)
             return 0
         A.record_limits(data)
         if data.get("turn_end") is True:

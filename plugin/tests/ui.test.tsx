@@ -30,12 +30,12 @@ type Setup = {
   runs: string[][]; fills: string[]; tree?: unknown; exitCode?: number
   cwd?: string; stats?: string[]; mtime?: number; gate?: Promise<void>; opens?: number; unplaced?: boolean
   statusStdins?: string[]; statusArgs?: string[][]; statusFails?: boolean; routerOut?: string
-  remote?: boolean; envFails?: boolean
+  remote?: boolean; envFails?: boolean; store?: Record<string, unknown>
 }
 
 /** Giả lập phần engine mà module cần: thư mục phiên, script Python, stat, ô nhập. */
 function fake(on: On, s: Setup) {
-  mock.store(on)
+  mock.store(on, s.store)
   const clock = mock.clock(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.complete', () => ({ text: '' }))
@@ -137,11 +137,12 @@ test('/cay trong cloud session trả cây dạng chữ, không mở pane', async
 })
 
 test('/cay khi pane không đặt được (-p, terminal hẹp) in thêm cây dạng chữ', async ($, on) => {
-  const s: Setup = { runs: [], fills: [], unplaced: true }
+  const s: Setup = { runs: [], fills: [], unplaced: true, statusArgs: [] }
   fake(on, s)
   const out = await $.command.run({ command: 'cay', args: '' })
   expect(out.text).toContain('chưa hiện được')
   expect(out.text).toContain('T.1 Chạy test')
+  expect(s.statusArgs!.some(a => a.includes('--pane-open'))).toBe(false)  // pane không vẽ được: không ghi dấu
 })
 
 test('/cay khi đọc biến môi trường lỗi vẫn mở pane như cũ', async ($, on) => {
@@ -222,6 +223,25 @@ test('phiên headless của app desktop vẫn tự mở pane khi có kế hoạc
   await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
   await clock.advance(1)
   expect(s.opens).toBe(1)
+})
+
+test('dấu pane cho hook Stop: ghi khi pane vẽ được', async ($, on) => {
+  // Lỗi ở applerar: pane mở bằng /cay giữa các lượt, rồi /reload-plugins; AGENT_STACK_UI chưa tới hook Stop.
+  const s: Setup = { runs: [], fills: [], statusArgs: [], statusStdins: [] }
+  fake(on, s)
+  await $.command.run({ command: 'cay', args: '' })
+  const marks = () => s.statusArgs!.filter(a => a.includes('--pane-open') || a.includes('--pane-closed')).map(a => a[2])
+  expect(marks()).toEqual(['--pane-open'])
+  expect(s.statusStdins).toContain(JSON.stringify({ session_id: 'sid-1' }))
+})
+
+test('nạp mod khi pane đã đóng bằng tay: xoá dấu cũ của phiên, không mở pane', async ($, on) => {
+  const s: Setup = { runs: [], fills: [], opens: 0, statusArgs: [], store: { planPaneClosed: true } }
+  const clock = fake(on, s)
+  await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+  await clock.advance(1)
+  expect(s.opens).toBe(0)
+  expect(s.statusArgs!.some(a => a.includes('--pane-closed'))).toBe(true)
 })
 
 test('/cay gõ lúc đang làm mới vẫn chờ và thấy cây', async ($, on) => {

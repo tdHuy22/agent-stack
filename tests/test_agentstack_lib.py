@@ -865,5 +865,32 @@ class TranscriptUsage(TempDirTestCase):
             self.assertIsNone(A.plugin_staleness())
 
 
+
+class TouchedSince(TempDirTestCase):
+    @staticmethod
+    def entry(name, tool_input, ts):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + ".000Z"
+        return json.dumps({"type": "assistant", "timestamp": stamp, "message": {"content": [
+            {"type": "tool_use", "name": name, "input": tool_input}]}}) + "\n"
+
+    def test_reads_edits_and_bash_since_the_turn_start(self):
+        path = self.tmp / "t.jsonl"
+        now = time.time()
+        path.write_text(self.entry("Edit", {"file_path": "/x/old.py"}, now - 100)
+                        + self.entry("Edit", {"file_path": "/x/new.py"}, now)
+                        + self.entry("Bash", {"command": "ls"}, now))
+        paths, commands = A.touched_since(str(path), now - 10)
+        self.assertEqual(paths, {os.path.realpath("/x/new.py")})
+        self.assertEqual(commands, ["ls"])
+
+    def test_returns_none_when_the_tail_misses_the_turn_start(self):
+        # Lượt rất dài: phần đọc không tới đầu lượt, không được coi là phiên này không sửa gì.
+        path = self.tmp / "t.jsonl"
+        now = time.time()
+        path.write_text(self.entry("Edit", {"file_path": "/x/early.py"}, now - 5)
+                        + "".join(self.entry("Bash", {"command": "echo " + "y" * 200}, now) for _ in range(50)))
+        self.assertIsNone(A.touched_since(str(path), now - 10, tail_bytes=2000))
+        self.assertIsNotNone(A.touched_since(str(path), now - 10))
+
 if __name__ == "__main__":
     unittest.main()

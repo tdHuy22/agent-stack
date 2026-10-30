@@ -49,6 +49,10 @@ CONTINUE_RE = re.compile(r"^(ok[a-z]*[ ,.!]*)?(tiep tuc|lam tiep|tiep di|tiep th
 PROGRESS_RE = re.compile(r"\b(tien do|lam gi tiep|viec gi tiep|viec tiep theo (la gi|nao)|con (viec |gi )+(chua lam|dang do"
                          r"|nua)|dang o dau|toi dau roi|lam toi dau|what'?s next|what next)\b|^status\b")
 PROGRESS_MAX_WORDS = 12
+# "lưu/ghi/cập nhật tiến độ", "tiến độ đã lưu chưa" là việc ghi lại (session-save), không phải hỏi tiến độ: bỏ cụm này
+# trước khi dò. "cập nhật tiến độ giúp tôi" theo nghĩa nhờ báo tiến độ cũng bị bỏ: chấp nhận, vì nghĩa ghi phổ biến hơn.
+SAVE_PROGRESS_RE = re.compile(r"\b(luu|ghi|cap nhat|update|save)( lai| het| lai het| het lai)? (tien do|progress)\b"
+                              r"|\b(tien do|progress)( da)?( duoc)? (luu|ghi|cap nhat)\b")
 # Skill có sẵn trong Claude Code, không cần cài.
 BUILTIN_SKILLS = ("verify", "code-review", "security-review")
 
@@ -427,7 +431,7 @@ def is_progress_question(prompt: str) -> bool:
     """Người dùng hỏi tiến độ hay việc tiếp theo ("làm tiếp" thì không: đó là lệnh làm việc trong §0)."""
     text = A.fold(prompt or "")
     return (len(text.split()) <= PROGRESS_MAX_WORDS and not CONTINUE_RE.match(text)
-            and bool(PROGRESS_RE.search(text)))
+            and bool(PROGRESS_RE.search(SAVE_PROGRESS_RE.sub(" ", text))))
 
 
 def hook_suggestion(prompt: str, data: dict):

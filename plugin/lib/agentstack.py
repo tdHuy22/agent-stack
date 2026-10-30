@@ -1104,9 +1104,123 @@ def save_turn(session_id, record: dict) -> None:
         write_json_atomic(path, record)
 
 
-def changed_since(root: Path, since: float) -> list:
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+# Lệnh Bash có dấu hiệu ghi file. Với phiên khác chỉ tính lệnh như vậy: `grep`, `cat`, `git diff` một file không phải
+# là sửa nó. Vẫn là xấp xỉ.
+BASH_WRITE_RE = re.compile(r"\bsed\s+(-\S*\s+)*-i|(?<![0-9&])>(?!&)|\btee\b|\b(mv|cp|rm|touch|patch|truncate)\b|\bgit\s+(checkout|restore|"
+                           r"apply|mv|rm|stash|reset)\b|\b(python3?|perl|ruby|node)\b|write_text|open\(")
+
+
+def touched_since(transcript_path, since: float, tail_bytes: int = 2_000_000):
+    """Từ thời điểm `since` trong transcript: (đường dẫn tuyệt đối mà Edit/Write/MultiEdit/NotebookEdit sửa, chữ các
+    lệnh Bash). Chỉ đọc phần cuối file; lỗi đọc, hay phần đọc không tới được `since` (lượt rất dài), thì None."""
+    try:
+        path = Path(transcript_path)
+        cut = path.stat().st_size > tail_bytes
+        lines = _transcript_tail(transcript_path, tail_bytes)
+    except (OSError, TypeError, ValueError):
+        return None
+    paths, commands, earliest = set(), [], None
+    for line in lines:
+        if '"timestamp"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        stamp = _stamp(entry) if isinstance(entry, dict) else None
+        if stamp is None:
+            continue
+        earliest = stamp if earliest is None else min(earliest, stamp)
+        if stamp < since or '"tool_use"' not in line:
+            continue
+        for block in ((entry.get("message") or {}).get("content")) or []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use" or not isinstance(block.get("input"), dict):
+                continue
+            name, data = str(block.get("name") or ""), block["input"]
+            target = data.get("file_path") or data.get("notebook_path")
+            if name in EDIT_TOOLS and isinstance(target, str):
+                paths.add(os.path.realpath(target))
+            elif name == "Bash" and isinstance(data.get("command"), str):
+                commands.append(data["command"])
+    if cut and (earliest is None or earliest > since):
+        return None
+    return paths, commands
+
+
+def _session_touched(transcript_path, since: float):
+    """Như touched_since, gộp cả transcript của subagent (thư mục <phiên>/subagents/ cạnh transcript chính)."""
+    main = touched_since(transcript_path, since)
+    if main is None:
+        return None
+    paths, commands = main
+    sub_dir = Path(str(transcript_path)[: -len(".jsonl")]) / "subagents" if str(transcript_path).endswith(".jsonl") else None
+    try:
+        subs = [p for p in sub_dir.glob("*.jsonl") if p.stat().st_mtime >= since] if sub_dir else []
+    except OSError:
+        subs = []
+    for sub in subs:
+        got = touched_since(str(sub), since)
+        if got is None:
+            return None
+        paths |= got[0]
+        commands += got[1]
+    return paths, commands
+
+
+def _mentions(touched, root: Path, rel: str, writes_only: bool) -> bool:
+    """`touched` có sửa `rel`: Edit/Write đúng file, hay lệnh Bash nhắc tên file theo ranh giới đường dẫn (không khớp
+    `a.py` trong `data.py`). `writes_only`: chỉ tính lệnh Bash có dấu hiệu ghi."""
+    paths, commands = touched
+    full = os.path.realpath(root / rel)
+    if full in paths:
+        return True
+    name = re.compile(r"(?<![\w.\-/])(" + re.escape(rel) + "|" + re.escape(full) + r")(?![\w.\-/])")
+    return any(name.search(cmd) and (not writes_only or BASH_WRITE_RE.search(cmd)) for cmd in commands)
+
+
+def foreign_files(root: Path, session_id, since: float, files: list, own_transcript) -> set:
+    """File trong `files` (tương đối với project) mà phiên khác đang làm cùng project đã sửa từ `since` (Edit, Write,
+    hay lệnh Bash có dấu hiệu ghi nhắc tới tên file), còn phiên này (transcript chính và của subagent) không nhắc tới.
+    File không ai nhắc vẫn tính cho phiên này như trước. Không đọc được hết lượt của phiên này thì không loại gì. Phiên
+    này sửa bằng lệnh không nêu tên file (formatter, script sinh file) mà phiên kia cũng ghi file đó thì bị loại oan."""
+    if not files or not isinstance(own_transcript, str):
+        return set()
+    own = _turn_path(session_id)
+    others = []
+    try:
+        records = list((state_dir() / TURN_DIR).glob("*.json"))
+    except OSError:
+        return set()
+    for path in records:
+        if path == own:
+            continue
+        rec = read_json(path)
+        if not isinstance(rec, dict) or rec.get("root") != str(root) or not isinstance(rec.get("transcript"), str):
+            continue
+        try:
+            if (Path(rec["transcript"]).stat().st_mtime < since
+                    or os.path.realpath(rec["transcript"]) == os.path.realpath(own_transcript)):
+                continue  # phiên đó không làm gì trong lượt này
+        except OSError:
+            continue
+        touched = _session_touched(rec["transcript"], since)
+        if touched and (touched[0] or touched[1]):
+            others.append(touched)
+    if not others:
+        return set()
+    mine = _session_touched(own_transcript, since)
+    if mine is None:
+        return set()
+    return {rel for rel in files
+            if any(_mentions(t, root, rel, writes_only=True) for t in others)
+            and not _mentions(mine, root, rel, writes_only=False)}
+
+def changed_since(root: Path, since: float, edited_only: bool = False) -> list:
     """File trong project đổi sau thời điểm `since`: file chưa commit có mtime mới hơn, cộng file trong các commit
-    tạo sau đó. Bỏ file kế hoạch và chính LAST-TURN.md. File đã xóa không xét được thời điểm nên bỏ qua."""
+    tạo sau đó. Bỏ file kế hoạch và chính LAST-TURN.md. File đã xóa không xét được thời điểm nên bỏ qua.
+    `edited_only`: file trong commit chỉ tính khi có mtime mới hơn (lượt sửa chứ không chỉ commit phần sửa ở lượt
+    trước) hay không còn trên đĩa (coi là xoá trong lượt). Đổi tên bằng `git mv` giữ mtime nên không tính."""
     skip = set(PLAN_CANDIDATES) | {LAST_TURN_REL}
     found = []
     top_out = git_out(root, "rev-parse", "--show-toplevel")
@@ -1136,6 +1250,14 @@ def changed_since(root: Path, since: float) -> list:
         if line.startswith("@"):
             recent = line[1:].strip().isdigit() and int(line[1:].strip()) >= int(since)
         elif line.strip() and recent and line.strip() not in skip and line.strip() not in found:
+            if edited_only:
+                try:
+                    if (root / line.strip()).stat().st_mtime <= since:
+                        continue
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    continue
             found.append(line.strip())
     return found
 
@@ -1799,6 +1921,32 @@ def tree_shown_at(session_id):
     ts = (read_json(tree_shown_path(session_id)) or {}).get("ts")
     return ts if isinstance(ts, (int, float)) and not isinstance(ts, bool) else None
 
+
+
+def pane_path(session_id: str) -> Path:
+    """Pane Kế hoạch của mod đang hiện trong phiên hay không (mod ghi qua ui_status.py --pane-open/--pane-closed)."""
+    return state_dir() / "ui-pane" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
+
+
+def mark_pane(session_id, is_open: bool) -> None:
+    """Mod gọi khi pane được vẽ, khi pane đóng và đầu mỗi lần nạp mod (xoá dấu cũ của phiên tiếp tục ở process mới).
+    Hook Stop đọc dấu này thay cho AGENT_STACK_UI khi biến không tới được nó."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    path = pane_path(session_id)
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_json_atomic(path, {"open": bool(is_open), "ts": time.time()})
+        prune(path.parent, TURN_DAYS)
+    except OSError:
+        pass
+
+
+def pane_open(session_id) -> bool:
+    """Mod đã ghi là pane Kế hoạch đang hiện trong phiên."""
+    if not isinstance(session_id, str) or not session_id:
+        return False
+    return (read_json(pane_path(session_id)) or {}).get("open") is True
 
 ROUTER_LAST_TTL = 600  # gợi ý router của tin vừa gửi chỉ dùng cho dải trong 10 phút
 

@@ -112,7 +112,10 @@ def main():
         remember_request(sid, data.get("cwd"), prompt)  # ghi sau khi xử lý như cũ, kể cả khi bước trên lỗi
         A.mark_user_message(sid, prompt)  # cổng nhắc audit trước phát hành; tự bắt lỗi
         if sid and data.get("cwd"):
-            A.start_turn(sid, data.get("cwd"), flags)  # tự bắt lỗi, không bao giờ văng
+            # transcript: hook Stop của phiên khác cùng project đọc để biết file nào do phiên này sửa.
+            transcript = data.get("transcript_path")
+            extra = dict(flags or {}, **({"transcript": transcript} if isinstance(transcript, str) else {}))
+            A.start_turn(sid, data.get("cwd"), extra)  # tự bắt lỗi, không bao giờ văng
         A.mark_turn_running(sid, data.get("cwd"), prompt)  # sau cùng vì chậm nhất (vài lệnh git); tự bắt lỗi
 
 

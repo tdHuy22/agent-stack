@@ -33,9 +33,13 @@ class RouterRules(TempDirTestCase):
         self.assertEqual(route.turn_flags("sửa lỗi parser đọc sai ngày", str(self.tmp)), {})
         for prompt in ("lỗi đang do hàm parse gây ra, sửa giúp tôi", "giải thích đoạn code này đang do ai gọi",
                        "refactor module thanh toán, việc tiếp theo là viết test", "sửa màu status bar",
-                       "có vẻ như nhiều lúc claude vẫn quên vẽ tree graph cho tiến độ, như các phiên khác đang làm"):
+                       "có vẻ như nhiều lúc claude vẫn quên vẽ tree graph cho tiến độ, như các phiên khác đang làm",
+                       # hỏi đã lưu chưa, hay bảo lưu: việc của session-keeper, không phải hỏi tiến độ (lỗi ở applerar)
+                       "đã lưu tiến độ chưa", "lưu lại tiến độ đi", "cập nhật tiến độ vào PLAN.md",
+                       "tiến độ đã lưu chưa", "tiến độ đã được lưu chưa", "lưu lại hết tiến độ đi"):
             self.assertFalse(route.is_progress_question(prompt), prompt)
-        for prompt in ("còn việc gì đang dở", "what's next?", "status", "đang ở đâu rồi"):
+        for prompt in ("còn việc gì đang dở", "what's next?", "status", "đang ở đâu rồi",
+                       "đã lưu tiến độ chưa, làm gì tiếp?", "tiến độ đã lưu tới đâu rồi"):
             self.assertTrue(route.is_progress_question(prompt), prompt)
 
     def test_word_boundaries(self):

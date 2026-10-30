@@ -306,6 +306,78 @@ class HookTests(TempDirTestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("plan_tree.py --widget", out["reason"])
 
+    def test_stop_ignores_files_another_session_edits_in_the_same_project(self):
+        # Lỗi ở pdf-translator: phiên khác đang sửa app.py song song, hook bắt phiên này chốt việc và ghi §0 cho nó.
+        self.with_plan()
+        mine, theirs = self.tmp / "mine.jsonl", self.tmp / "theirs.jsonl"
+        mine.write_text("")
+        theirs.write_text("")
+        self.submit("other", "sửa app", transcript_path=str(theirs))
+        self.submit("me", "hỏi một câu", transcript_path=str(mine))
+        with theirs.open("a") as fh:
+            fh.write(self.tool_entry("Edit", {"file_path": str(self.project / "app.py"), "old_string": "a",
+                                              "new_string": "b"}))
+            fh.write(self.tool_entry("Bash", {"command": "sed -i '' s/a/b/ lib/util.py"}))
+        self.touch("app.py")
+        self.touch("lib/util.py")
+        self.assertIsNone(self.stop("me", "Trả lời.", transcript_path=str(mine)))
+        self.assertIn("**File đổi trong lượt:** không có", self.last_turn())
+        # File phiên này cũng sửa (qua Bash nhắc tên) vẫn tính cho phiên này.
+        self.submit("me", "sửa util", transcript_path=str(mine))
+        with mine.open("a") as fh:
+            fh.write(self.tool_entry("Bash", {"command": "python3 fix.py lib/util.py"}))
+        with theirs.open("a") as fh:
+            fh.write(self.tool_entry("Write", {"file_path": str(self.project / "lib/util.py"), "content": "x"}))
+        self.touch("lib/util.py")
+        out = self.stop("me", "Đã sửa.", transcript_path=str(mine))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("lib/util.py", out["reason"])
+        # Không phiên nào nhắc tới file: vẫn tính cho phiên này như trước.
+        self.submit("me", "sửa tiếp", transcript_path=str(mine))
+        self.touch("new.py")
+        self.assertIn("new.py", self.stop("me", "Xong.", transcript_path=str(mine))["reason"])
+        # Phiên kia chỉ đọc file (grep, cat data.py không phải a.py): file vẫn là của phiên này.
+        self.submit("me", "sửa a và readme bằng script", transcript_path=str(mine))
+        with theirs.open("a") as fh:
+            fh.write(self.tool_entry("Bash", {"command": "grep -n x README.md 2>/dev/null; cat data.py"}))
+        self.touch("README.md")
+        self.touch("a.py")
+        out = self.stop("me", "Xong.", transcript_path=str(mine))
+        self.assertIn("README.md", out["reason"])
+        self.assertIn("a.py", out["reason"])
+        # Phiên này sửa qua subagent (transcript ở <phiên>/subagents/): vẫn là của phiên này dù phiên kia cũng ghi.
+        self.submit("me", "giao subagent sửa b.py", transcript_path=str(mine))
+        sub = self.tmp / "mine" / "subagents" / "agent-x.jsonl"
+        sub.parent.mkdir(parents=True)
+        sub.write_text(self.tool_entry("Edit", {"file_path": str(self.project / "b.py"), "old_string": "a",
+                                                "new_string": "b"}))
+        with theirs.open("a") as fh:
+            fh.write(self.tool_entry("Write", {"file_path": str(self.project / "b.py"), "content": "x"}))
+        self.touch("b.py")
+        self.assertIn("b.py", self.stop("me", "Xong.", transcript_path=str(mine))["reason"])
+
+    def test_stop_skips_the_tree_when_the_mod_marked_the_pane_open(self):
+        # Lỗi ở applerar: pane mở bằng /cay giữa các lượt, rồi /reload-plugins; hook không có AGENT_STACK_UI.
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text("")
+        env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
+
+        def mark(sid, flag):
+            out = subprocess.run(["python3", str(HOOKS / "ui_status.py"), flag], input=json.dumps({"session_id": sid}),
+                                 capture_output=True, text=True, timeout=30, env=env)
+            self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
+
+        mark("p1", "--pane-open")
+        self.submit("p1", "tiến độ tới đâu rồi")
+        self.assertIsNone(self.stop("p1", "Còn hai việc.", transcript_path=str(transcript)))
+        # Phiên khác không được tính nhờ dấu của p1; pane đóng thì nhắc lại.
+        self.submit("p2", "tiến độ tới đâu rồi")
+        self.assertEqual(self.stop("p2", "Còn hai việc.", transcript_path=str(transcript))["decision"], "block")
+        mark("p1", "--pane-closed")
+        self.submit("p1", "tiến độ tới đâu rồi")
+        self.assertEqual(self.stop("p1", "Còn hai việc.", transcript_path=str(transcript))["decision"], "block")
+
     def test_stop_skips_the_tree_after_cay_printed_it_as_text(self):
         # Người dùng gõ /cay (mod in cây chữ, không qua lượt model): trong cùng lượt thì đã thấy cây.
         self.with_plan()
@@ -476,6 +548,26 @@ class HookTests(TempDirTestCase):
         git(self.project, "add", "mod.py")
         git(self.project, "commit", "-q", "-m", "thêm mod")
         out = self.stop("c1")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("mod.py", out["reason"])
+
+    def test_stop_does_not_ask_for_section0_when_the_turn_only_commits_earlier_work(self):
+        # Lỗi thấy ở applerar, applecleaner: §0 đã ghi ở lượt sửa, lượt "commit đi" vẫn bị nhắc cập nhật §0.
+        self.with_plan()
+        mod = self.project / "mod.py"
+        mod.write_text("y = 2\n")
+        past = time.time() - 3600
+        os.utime(mod, (past, past))
+        self.submit("c2", "commit đi")
+        git(self.project, "add", "mod.py")
+        git(self.project, "commit", "-q", "-m", "thêm mod")
+        self.assertIsNone(self.stop("c2", "Đã commit."))
+        self.assertIn("mod.py", self.last_turn())  # vẫn ghi là file của lượt
+        # Xoá file rồi commit trong lượt vẫn là sửa: nhắc §0.
+        self.submit("c3", "xoá mod.py rồi commit")
+        git(self.project, "rm", "-q", "mod.py")
+        git(self.project, "commit", "-q", "-m", "xoá mod")
+        out = self.stop("c3", "Đã xoá.")
         self.assertEqual(out["decision"], "block")
         self.assertIn("mod.py", out["reason"])
 

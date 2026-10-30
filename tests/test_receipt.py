@@ -194,6 +194,11 @@ class TienDoUsesReceipts(Base):
         self.assertIn((1, "Sửa kiểm tra đang trượt `unit`: FAILED (failures=1)"), self.actions())
         self.write("proj/app.py", "print('đã sửa')\n")
         self.assertTrue(any(t == 1 and "Chạy lại kiểm tra `unit`" in x for t, x in self.actions()))
+        # Biên nhận trượt cũ (lệnh đã bỏ, chạy sai thư mục) chỉ cách gỡ, để không kẹt ở "Chặn đường" mãi.
+        stale = [a for a in collect.collect(self.repo, scan_todos=False)["actions"] if a["tier"] == 1][0]
+        self.assertIn("receipt.py forget", stale["text"])
+        if stale.get("route"):
+            self.assertNotEqual(stale["route"]["rule"], "debug-hard")  # lời chỉ cách gỡ không đổi định tuyến
 
     def test_old_pass_does_not_prove_new_code(self):
         self.run_check(PASS)
