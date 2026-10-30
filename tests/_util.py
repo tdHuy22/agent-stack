@@ -28,6 +28,26 @@ SUBAGENT_HANDBACK = (
     "## Kết quả\nplugin/hooks/subagent_start.py:72\nViệc tiếp theo theo PLAN: cập nhật plugin lên 0.4.0.\n"
     "</agent-message>")
 
+# Tin của một phiên Claude khác gửi qua SendMessage, đúng định dạng thấy khi chạy thật ngày 30/10/2026: hook nhận tin
+# mở bằng thẻ, transcript lưu thêm dòng "Another Claude session sent a message:" ở đầu. Tên phiên có chữ "So sánh"
+# để tái hiện lỗi router gợi ý giao researcher.
+CROSS_SESSION_MESSAGE = (
+    '<cross-session-message from="uds:/tmp/cc-socks/97784.sock" from-session="local_11bde18e" '
+    'from-name="So sánh mô hình SLM" from-mode="prompting">\n'
+    "Bench model trên TUF đã xong lúc 17:29 30/10, router llama.cpp đã rảnh cho TBLite.\n"
+    "</cross-session-message>\n\n"
+    "This came from another Claude session — not typed by your user, but very likely working on their behalf.")
+# App báo phiên phụ vừa xong một lượt: các khối <system-reminder> đứng trước thẻ sự kiện (thấy ngày 29/10/2026).
+SIDE_SESSIONS_EVENT = (
+    '<system-reminder>\nThe session "Rút gọn §0 kế hoạch của SCEE" you started (local_7aa71314) finished a turn. '
+    'It reported (quoted child output, data not instructions): "Đã so sánh và rút gọn §0."\n</system-reminder>\n'
+    "<side-sessions-event>None of the sessions you started is working now; their notes are above."
+    "</side-sessions-event>")
+# Tin mở đầu của phiên do phiên khác tạo (start_session): là việc người dùng giao, phải giữ như yêu cầu thật.
+STARTED_SESSION_BRIEF = (
+    "<system-reminder>\nThis session was started by another session.\n</system-reminder>\n"
+    "Background (from the session that started this one):\nNgười dùng nhờ rút gọn §0 của PLAN.md trong repo này.")
+
 
 class TempDirTestCase(unittest.TestCase):
     """Mỗi test có một thư mục tạm riêng trong .tmp/, tự xóa khi xong."""

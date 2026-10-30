@@ -6,7 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
-from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git, run_script
+from tests._util import (CROSS_SESSION_MESSAGE, PLUGIN, REPO, SIDE_SESSIONS_EVENT, STARTED_SESSION_BRIEF,
+                         SUBAGENT_HANDBACK, TempDirTestCase, git, run_script)
 from tests.test_agentstack_lib import PLAN, A, secret_samples
 
 HOOKS = PLUGIN / "hooks"
@@ -699,7 +700,8 @@ class HookTests(TempDirTestCase):
         self.with_plan()
         self.submit("r3", "sửa parser")
         self.stop("r3")
-        for text in ("/compact", SUBAGENT_HANDBACK, "<task-notification>xong</task-notification>"):
+        for text in ("/compact", SUBAGENT_HANDBACK, "<task-notification>xong</task-notification>",
+                     CROSS_SESSION_MESSAGE, SIDE_SESSIONS_EVENT):
             self.submit("r3", text)
             self.assertIn("**Trạng thái:** xong", self.last_turn(), text[:20])
 
@@ -850,6 +852,26 @@ class HookTests(TempDirTestCase):
         self.assertIn(request, second)
         for leak in ("agent-message", "hand-back", "a5de6b714c1b1d7c1", "subagent_start.py"):
             self.assertNotIn(leak, second)
+
+    def test_messages_from_other_sessions_neither_replace_the_request_nor_trigger_the_router(self):
+        # Lỗi thấy khi chạy thật (30/10/2026): tin của phiên khác (SendMessage) và tin app báo phiên phụ xong lượt bị
+        # coi là lời người dùng: router gợi ý giao researcher vì tên phiên gửi có chữ "So sánh", LAST-TURN.md ghi tin
+        # đó làm "Yêu cầu", và subagent nhận nó như yêu cầu của người dùng.
+        request = "Thêm tính năng xuất CSV cho trang báo cáo"
+        self.submit("cs", request)
+        for text in (CROSS_SESSION_MESSAGE, "Another Claude session sent a message:\n" + CROSS_SESSION_MESSAGE,
+                     SIDE_SESSIONS_EVENT):
+            with self.subTest(text=text[:30]):
+                self.assertIsNone(self.submit("cs", text))  # không gợi ý router, không cảnh báo nào
+                self.assertEqual(self.last_request("cs")["prompt"], request)
+                ctx = self.start_subagent("cs")
+                self.assertIn(request, ctx)
+                for leak in ("cross-session", "TUF", "side-sessions", "SCEE"):
+                    self.assertNotIn(leak, ctx)
+
+    def test_brief_of_a_session_started_by_another_session_is_the_real_request(self):
+        self.submit("br", STARTED_SESSION_BRIEF)
+        self.assertIn("rút gọn §0 của PLAN.md", self.last_request("br")["prompt"])
 
     # ---------------------------------------------------------------- SubagentStart
 

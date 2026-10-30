@@ -716,8 +716,13 @@ SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 # mở bằng thẻ <agent-message from="...">, kèm dòng "[Subagent hand-back] ... NOT a message from the user" (thấy khi
 # chạy thật ngày 03/10/2026).
 AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER INPUT", "[Subagent hand-back]")
-# Chỉ tính khi đứng đầu tin: người dùng nhắc tới thẻ này giữa câu vẫn là lời của họ.
-AUTOMATED_PREFIXES = ("<agent-message",)
+# Chỉ tính khi đứng đầu tin: người dùng nhắc tới thẻ này giữa câu vẫn là lời của họ. Gồm tin của phiên Claude khác
+# (SendMessage), tin app báo phiên phụ xong lượt và tin theo dõi CI (thấy khi chạy thật ngày 29–30/10/2026).
+AUTOMATED_PREFIXES = ("<agent-message", "<cross-session-message", "<side-sessions-event", "<ci-monitor-event")
+# Phần app có thể đặt trước các thẻ trên: khối <system-reminder> và dòng "Another Claude session sent a message:".
+# Tin mở đầu của phiên do phiên khác tạo cũng có khối nhắc đứng trước, nhưng sau đó là việc được giao: vẫn là yêu cầu.
+AUTOMATED_LEAD_RE = re.compile(
+    r"\A(?:\s*<system-reminder>.*?</system-reminder>)*\s*(?:Another Claude session sent a message:\s*)?", re.S)
 # Khóa và token có dấu hiệu nhận biết. (?<![A-Za-z0-9]) để không bắt giữa một từ khác (như "task-" hay "risk-").
 SECRET_PATTERNS = (
     r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}",                  # sk-ant-..., sk-proj-..., sk-...
@@ -745,11 +750,14 @@ def is_command_prompt(prompt) -> bool:
 
 
 def is_automated_prompt(prompt) -> bool:
-    """True với tin do hệ thống hay agent khác tạo (thông báo tác vụ nền, báo cáo của subagent), không phải lời của
-    người dùng."""
+    """True với tin do hệ thống hay agent khác tạo (thông báo tác vụ nền, báo cáo của subagent, tin của phiên khác),
+    không phải lời của người dùng. Tin chỉ có khối <system-reminder> cũng vậy: không có chữ nào của người dùng."""
     if not isinstance(prompt, str):
         return False
-    return prompt.lstrip().startswith(AUTOMATED_PREFIXES) or any(marker in prompt for marker in AUTOMATED_MARKERS)
+    if any(marker in prompt for marker in AUTOMATED_MARKERS):
+        return True
+    rest = prompt[AUTOMATED_LEAD_RE.match(prompt).end():]
+    return rest.startswith(AUTOMATED_PREFIXES) or (not rest.strip() and bool(prompt.strip()))
 
 
 def _mask_long_run(match) -> str:

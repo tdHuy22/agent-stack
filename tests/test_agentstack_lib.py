@@ -8,7 +8,8 @@ from unittest import mock
 
 from pathlib import Path
 
-from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase, git
+from tests._util import (CROSS_SESSION_MESSAGE, PLUGIN, REPO, SIDE_SESSIONS_EVENT, STARTED_SESSION_BRIEF,
+                         SUBAGENT_HANDBACK, TempDirTestCase, git)
 
 sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402
@@ -359,7 +360,12 @@ class LastRequest(TempDirTestCase):
                      # báo cáo của subagent, thấy khi chạy thật; kể cả khi có khoảng trắng đầu dòng hay mất thẻ
                      SUBAGENT_HANDBACK, "\n  " + SUBAGENT_HANDBACK,
                      SUBAGENT_HANDBACK.split("\n", 1)[1],
-                     '<agent-message from="abc">\nmột tin bất kỳ từ agent khác</agent-message>']
+                     '<agent-message from="abc">\nmột tin bất kỳ từ agent khác</agent-message>',
+                     # tin của phiên khác, có hay không có dòng app đặt trước, có hay không có khối nhắc đứng trước
+                     CROSS_SESSION_MESSAGE, "Another Claude session sent a message:\n" + CROSS_SESSION_MESSAGE,
+                     "<system-reminder>\nnhắc của app\n</system-reminder>\n" + CROSS_SESSION_MESSAGE,
+                     SIDE_SESSIONS_EVENT, "<ci-monitor-event>PR #12: CI đỏ</ci-monitor-event>",
+                     "<system-reminder>\nchỉ có khối nhắc, không có chữ của người dùng\n</system-reminder>"]
         for text in automated:
             with self.subTest(text=text[:25]):
                 self.assertTrue(A.is_automated_prompt(text))
@@ -371,7 +377,10 @@ class LastRequest(TempDirTestCase):
                      "ghi chú [system notification] viết thường",
                      # người dùng nhắc tới thẻ giữa câu, hay viết thường: vẫn là lời của người dùng
                      "Thẻ <agent-message> trong log là gì vậy?", "hook lưu nhầm agent-message vào last-request, sửa giúp",
-                     "subagent hand-back là gì, nó đi về đâu"):
+                     "subagent hand-back là gì, nó đi về đâu",
+                     # nhắc tới thẻ giữa câu, hay phiên do phiên khác tạo (tin mở đầu là việc được giao)
+                     "Thẻ <cross-session-message> nghĩa là gì?", "side-sessions-event có vào router không?",
+                     STARTED_SESSION_BRIEF, "<system-reminder>\nnhắc\n</system-reminder>\nviết lại hàm này"):
             with self.subTest(text=text):
                 self.assertFalse(A.is_automated_prompt(text))
 
