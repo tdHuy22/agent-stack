@@ -36,6 +36,11 @@ def main():
         A.write_json_atomic(sessions / name, {"session": sid, "model": data.get("model"),
                                               "effort": (data.get("effort") or {}).get("level"),
                                               "cwd": str(root), "ts": time.time()})
+    try:  # cloud: kéo bản agent-stack mới ở nền, tối đa một lần mỗi giờ (không chờ)
+        import cloud_update  # noqa: E402
+        cloud_update.maybe_start(A.home_dir())
+    except Exception:  # việc phụ: lỗi ở đây không được làm mất phần còn lại của hook
+        pass
     try:  # bản tóm tắt giàu hơn của skill tien-do; không có thì dùng bản của thư viện
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "tien-do" / "scripts"))
         import collect  # noqa: E402

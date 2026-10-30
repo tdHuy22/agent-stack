@@ -41,6 +41,7 @@ plugin/evals/vet-marketplace/graders/skill-fired.md
 plugin/evals/vet-marketplace/prompt.md
 plugin/evals/writing-rewrite/graders/skill-fired.md
 plugin/evals/writing-rewrite/prompt.md
+plugin/hooks/cloud_update.py
 plugin/hooks/hooks.json
 plugin/hooks/pre_compact.py
 plugin/hooks/pretool_guard.py
