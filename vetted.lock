@@ -91,6 +91,54 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "anthropics/claude-plugins-community:html-plan": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-11-01",
+      "redflags": {
+        "high": 1
+      },
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-community__html-plan@06ec7b6a0a82.md",
+      "reviews": [
+        {
+          "at": "2026-11-01T15:06:11Z",
+          "by": "claude-opus-5.5",
+          "recommend": "có-điều-kiện",
+          "sha": "06ec7b6a0a82bdc4bec44bd82d4368c42f20d7c1",
+          "text": "Đọc tay tại 06ec7b6a. Tác giả Thariq Shihipar (tác giả bài blog HTML của đội Claude Code), MIT, nằm ở chợ cộng đồng (Anthropic quét tự động, không phải Anthropic viết). Cờ credential-access ở pack.mjs:40 là danh sách CHẶN file bí mật (.ssh, .env, id_rsa…) để không chép vào trang: báo nhầm. child_process chỉ chạy git rev-parse và git cat-file, tắt hook và fsmonitor (pack.mjs:52-54). pack.mjs đọc file trong --root hay thư mục trang, bỏ file có dấu khóa (SECRET_TEXT), ghi .packed.html. htmlplan.js không gọi mạng (liveOn=false), chỉ dùng localStorage để giữ câu trả lời và clipboard. Điều kiện: cần node; chỉ chạy pack.mjs trên trang do agent viết; --root chỉ trỏ vào checkout của project."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "critical": 1,
+          "info": 1,
+          "medium": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "06ec7b6a0a82bdc4bec44bd82d4368c42f20d7c1",
+      "source": "github:anthropics/claude-plugins-community",
+      "spector": {
+        "score": null,
+        "status": "lỗi: html-plan: FileNotFoundError",
+        "version": null
+      },
+      "stars": 4805,
+      "subpath": "html-plan",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-01"
+    },
     "anthropics/claude-plugins-official:external_plugins/context7": {
       "archived": false,
       "human_review": {
@@ -243,6 +291,51 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "anthropics/claude-plugins-official:plugins/playground": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-11-01",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-playground@a7ba5b93db0c.md",
+      "reviews": [
+        {
+          "at": "2026-11-01T15:06:10Z",
+          "by": "claude-opus-5.5",
+          "recommend": "cài",
+          "sha": "a7ba5b93db0c7c8d17f3f1d25853adca79598a1a",
+          "text": "Đọc tay tại a7ba5b93. Chỉ có SKILL.md và 6 khuôn markdown (design, data-explorer, concept-map, document-critique, diff-review, code-map); không có script, hook, MCP. Trang sinh ra là một file HTML tự chứa, không tải gì từ mạng; chỉ dùng clipboard. Bước 4 của skill chạy `open <file>.html` để mở trình duyệt: vô hại. plugin.json ghi tác giả Anthropic. Mặc định giao diện tối: trang làm cho agent-stack vẫn theo luật sáng tối của artifact-design."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "a7ba5b93db0c7c8d17f3f1d25853adca79598a1a",
+      "source": "github:anthropics/claude-plugins-official",
+      "spector": {
+        "score": null,
+        "status": "lỗi: playground: FileNotFoundError",
+        "version": null
+      },
+      "stars": 45663,
+      "subpath": "plugins/playground",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-01"
+    },
     "anthropics/claude-plugins-official:plugins/plugin-dev": {
       "archived": false,
       "human_review": {
@@ -283,6 +376,53 @@
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-02"
+    },
+    "anthropics/claude-plugins-official:plugins/project-artifact": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE: Apache-2.0",
+        "LICENSE: Apache-2.0"
+      ],
+      "pushed_at": "2026-11-01",
+      "redflags": {
+        "high": 1
+      },
+      "ref": "main",
+      "report": "vet-reports/anthropics__claude-plugins-official__plugins-project-artifact@a7ba5b93db0c.md",
+      "reviews": [
+        {
+          "at": "2026-11-01T15:06:11Z",
+          "by": "claude-opus-5.5",
+          "recommend": "cài",
+          "sha": "a7ba5b93db0c7c8d17f3f1d25853adca79598a1a",
+          "text": "Đọc tay tại a7ba5b93. Cờ prompt-injection ở SKILL.md:43 là báo nhầm (câu 'Don't ask the user to paste content… as a substitute for fetching it yourself'). Không có script; 'file chạy được' là template.html (trang có một script đổi tab). Skill dùng gh/git để đọc PR, ghi cấu hình từng project vào ${CLAUDE_PLUGIN_DATA}/artifacts/<slug>/ và đăng qua công cụ Artifact (trang riêng tư). SKILL.md:168 tự dặn coi nội dung PR là dữ liệu. Tác giả Anthropic."
+        }
+      ],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "a7ba5b93db0c7c8d17f3f1d25853adca79598a1a",
+      "source": "github:anthropics/claude-plugins-official",
+      "spector": {
+        "score": null,
+        "status": "lỗi: project-artifact: FileNotFoundError",
+        "version": null
+      },
+      "stars": 45664,
+      "subpath": "plugins/project-artifact",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-01"
     },
     "anthropics/claude-plugins-official:plugins/pyright-lsp": {
       "archived": false,
@@ -359,6 +499,48 @@
       "tool": "vet.py/1",
       "verdict": "REVIEW",
       "vetted_at": "2026-10-02"
+    },
+    "anthropics/skills:skills/frontend-design": {
+      "archived": false,
+      "human_review": {
+        "at": null,
+        "note": null,
+        "status": "pending"
+      },
+      "license": "none",
+      "license_files": [
+        "LICENSE.txt: Apache-2.0"
+      ],
+      "pushed_at": "2026-10-28",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/anthropics__skills__skills-frontend-design@ca45fc496a34.md",
+      "reviews": [
+        {
+          "at": "2026-11-01T15:06:11Z",
+          "by": "claude-opus-5.5",
+          "recommend": "cài",
+          "sha": "ca45fc496a3436251f191354091d557da31c15b5",
+          "text": "PASS tại ca45fc49. Chỉ có SKILL.md (hướng dẫn thiết kế, không script). Trùng phần lớn với hướng dẫn artifact-design có sẵn trong app; dùng cho giao diện cần nhận diện riêng (landing, poster, UI sản phẩm)."
+        }
+      ],
+      "scanner": {
+        "counts": {},
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "ca45fc496a3436251f191354091d557da31c15b5",
+      "source": "github:anthropics/skills",
+      "spector": {
+        "score": null,
+        "status": "lỗi: frontend-design: FileNotFoundError",
+        "version": null
+      },
+      "stars": 186161,
+      "subpath": "skills/frontend-design",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-11-01"
     },
     "anthropics/skills:skills/webapp-testing": {
       "archived": false,

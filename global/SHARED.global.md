@@ -20,6 +20,19 @@
 - Chọn giải pháp theo chất lượng, độ bền, độ dễ bảo trì, không theo công làm (model hay ước công theo tốc độ người viết code nên thổi phồng nó, rồi chọn cách rẻ mà kém).
 - Chỉ dùng model rẻ hơn hay effort thấp hơn khi có kiểm tra tự động; kiểm tra trượt thì làm lại ở mức cao hơn.
 
+## File cho người đọc viết bằng HTML
+
+- File viết ra để người đọc (báo cáo, kế hoạch, so sánh, giải thích, review, kết quả đo, hướng dẫn, ghi chú học) là một file `.html` tự chứa: CSS, JS, hình SVG nằm sẵn trong file, mở thẳng bằng trình duyệt, đọc được trên điện thoại. Không viết file `.md` cho những việc này. Viết theo skill `trang-artifact` và qua `check_page.py` của nó (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026; bạn chọn ngày 01/11/2026).
+- Chỉ giữ `.md` khi file bắt buộc là Markdown:
+  - agent hay công cụ đọc nó: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `SKILL.md` và mọi file trong thư mục skill, file định nghĩa subagent hay lệnh, file nhớ; file trạng thái `PLAN.md`, `PROGRESS.md`, `TODO.md`, `.agent/*.md` (HANDOFF, LAST-TURN, NHAT-KY, threat-model);
+  - nền tảng ngoài đòi Markdown: `README`, `CHANGELOG`, `CONTRIBUTING`, `SECURITY`, `LICENSE`, mẫu trong `.github/`, mô tả PR và issue, commit; tài liệu của site dựng từ Markdown (MkDocs, Docusaurus) hay project đã quy ước Markdown trong `CLAUDE.md`, `AGENTS.md`;
+  - script hay test của project đọc nó như Markdown;
+  - người dùng gọi đúng tên file `.md` hay xin Markdown.
+- Câu trả lời trong chat vẫn là chữ. Ở phiên chính, khi câu trả lời cho người dùng dài hơn khoảng một màn hình và cần bảng so sánh, sơ đồ, biểu đồ, thì viết thành trang HTML; trong chat chỉ tóm tắt và đưa đường dẫn. Subagent gửi báo cáo về phiên chính bằng chữ, không viết trang.
+- Trang của phiên (kế hoạch, báo cáo, review) cần giữ thì đặt trong `.agent/trang/` của project, không cần giữ thì trong thư mục tạm; tài liệu của project đặt đúng chỗ file `.md` lẽ ra nằm.
+- Script tự sinh báo cáo cho người đọc thì sinh `.html` (vẫn in tóm tắt chữ ra terminal). Chữ lấy từ nguồn không tin cậy (repo lạ, log, web) phải qua `html.escape` hay cách làm sạch tương đương trước khi vào trang.
+- File `.md` cũ cho người đọc chưa đổi thì cứ để; khi sửa lớn file đó thì hỏi người dùng có chuyển sang HTML không.
+
 ## Dòng ➡️ cuối mỗi câu trả lời
 
 - Cuối mọi câu trả lời, kể cả câu trả lời ngắn, thêm đúng một dòng: `➡️ Tiếp: <việc> · Model: <tên|giữ tên> · Effort: <mức> · Subagent: <tên (model·effort)|không> · Skill: <tên|không>`.

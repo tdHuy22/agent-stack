@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Kiểm tĩnh một trang Artifact (HTML) trước khi đăng, theo khuôn của skill trang-artifact.
+"""Kiểm tĩnh một trang HTML cho người đọc (file trong project hay trang Artifact), theo khuôn của skill trang-artifact.
 
   python3 check_page.py <trang.html>
 
+Trang báo cáo (data-loai="bao-cao") chỉ cần tóm tắt và nguồn; trang công cụ (data-loai="cong-cu") cần tóm tắt
+và nút xuất data-xuat. Trang đề xuất và trang giải thích kiểm đủ như dưới.
 Kiểm phần có đếm hay so được: có tóm tắt và phần nền tảng đủ dài, ít nhất 3 ví dụ cụ thể, mã nội bộ
 (HC5, D22, GĐ24, ν…) được định nghĩa trước lần dùng đầu, mỗi phương án có phán quyết với từng ràng buộc
 kèm nguồn, phương án được khuyên không vi phạm ràng buộc nào. Không chấm được trang có dễ hiểu thật không:
@@ -28,7 +30,11 @@ MIN_QUESTION_CHARS = 20
 MIN_REASON_CHARS = 15  # ô "vi phạm" hay "cần duyệt" phải nói vì sao
 MAX_SUMMARY_WORDS = 150
 MAX_LISTED = 20
-EXPLAINER = "giai-thich"  # data-loai của trang chỉ giải thích hay báo cáo, không có đề xuất
+EXPLAINER = "giai-thich"  # data-loai của trang chỉ giải thích, không có đề xuất
+REPORT = "bao-cao"  # kết quả đo, trạng thái, review, sự cố: tóm tắt và nguồn, không bắt phần nền tảng hay 3 ví dụ
+TOOL = "cong-cu"  # trang tương tác (chỉnh rồi chép kết quả về chat): tóm tắt và nút xuất data-xuat
+LIGHT = {REPORT, TOOL}
+NO_PROPOSAL = {EXPLAINER} | LIGHT
 
 VERDICTS = {"dat": "đạt", "vi-pham": "vi phạm", "can-duyet": "cần duyệt", "khong-lien-quan": "không liên quan"}
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
@@ -121,7 +127,7 @@ class PageParser(HTMLParser):
             for n in self.stack:
                 n.concrete = True
         if any(k in attrs for k in ("data-phan", "data-vi-du", "data-phuong-an", "data-cau-hoi", "data-rang-buoc",
-                                    "data-cho", "data-vi-pham")):
+                                    "data-cho", "data-vi-pham", "data-xuat")):
             self.marked.append(node)
             for n in self.stack:
                 n.marks.append(node)
@@ -212,12 +218,22 @@ def check(html: str) -> Report:
 
     # Loại trang: trang không có thẻ phương án phải tự khai là trang chỉ giải thích, để kế hoạch một hướng
     # không lọt qua bảng ràng buộc chỉ vì quên đánh dấu đề xuất.
-    if not options and EXPLAINER not in p.kinds:
+    unknown = sorted(p.kinds - NO_PROPOSAL)
+    if unknown:
+        r.error("loại trang", f"data-loai không hợp lệ: {', '.join(unknown)}. Dùng {EXPLAINER}, {REPORT} hay {TOOL}.")
+    if not options and not p.kinds & NO_PROPOSAL:
         r.error("loại trang", "Trang không có thẻ data-phuong-an. Có đề xuất (kể cả kế hoạch một hướng) thì đặt mỗi "
-                              f"đề xuất vào một thẻ data-phuong-an; chỉ giải thích hay báo cáo thì khai "
-                              f'data-loai="{EXPLAINER}" trên <main>.')
-    if options and EXPLAINER in p.kinds:
-        r.error("loại trang", f'Trang khai data-loai="{EXPLAINER}" mà có thẻ phương án: bỏ một trong hai.')
+                              f"đề xuất vào một thẻ data-phuong-an; không có đề xuất thì khai trên <main> "
+                              f'data-loai="{EXPLAINER}" (giải thích), "{REPORT}" (báo cáo) hay "{TOOL}" (công cụ).')
+    if options and p.kinds & NO_PROPOSAL:
+        r.error("loại trang", f'Trang khai data-loai="{", ".join(sorted(p.kinds & NO_PROPOSAL))}" mà có thẻ phương '
+                              "án: bỏ một trong hai.")
+    light = bool(p.kinds & LIGHT) and not options
+    # Có câu cần chốt hay bảng luật là có đề xuất: khai loại nhẹ không được dùng để né bảng ràng buộc.
+    proposal_parts = [name for name in ("rang-buoc", "pattern-xau") if parts.get(name)]
+    if not options and (questions or proposal_parts):
+        r.error("loại trang", "Trang có câu cần chốt hay phần ràng buộc là trang đề xuất: đặt mỗi đề xuất vào một thẻ "
+                              "data-phuong-an (kế hoạch một hướng là một thẻ) để được đối chiếu với luật.")
 
     # Tóm tắt và nền tảng
     summary = parts.get("tom-tat", [])
@@ -229,10 +245,11 @@ def check(html: str) -> Report:
             r.note("tóm tắt", f"Tóm tắt dài {words} chữ; nên dưới {MAX_SUMMARY_WORDS}, chi tiết để phần sau.")
     foundation = parts.get("nen-tang", [])
     if not foundation:
-        r.error("nền tảng", 'Thiếu phần data-phan="nen-tang": bối cảnh, vấn đề, khái niệm cần biết trước.')
+        if not light:
+            r.error("nền tảng", 'Thiếu phần data-phan="nen-tang": bối cảnh, vấn đề, khái niệm cần biết trước.')
     else:
         size = sum(len(n.plain()) for n in foundation)
-        if size < MIN_FOUNDATION_CHARS:
+        if size < MIN_FOUNDATION_CHARS and not light:
             r.error("nền tảng", f"Phần nền tảng mới {size} ký tự, cần ít nhất {MIN_FOUNDATION_CHARS}: "
                                 "giải thích từ gốc cho người không nhớ phiên làm việc.")
         if summary and summary[0].start > foundation[0].start:
@@ -242,8 +259,15 @@ def check(html: str) -> Report:
             r.error("thứ tự", f"Phương án {', '.join(early)} đứng trước phần nền tảng; giải thích gốc trước, "
                               "đề xuất sau.")
 
+    # Trang báo cáo phải chỉ được số liệu lấy từ đâu; trang công cụ phải có đường đưa kết quả về lại chat.
+    if light and REPORT in p.kinds and not parts.get("nguon"):
+        r.error("nguồn", 'Trang báo cáo thiếu phần data-phan="nguon": lệnh đã chạy, file, link mà số liệu lấy ra.')
+    if light and TOOL in p.kinds and not any("data-xuat" in n.attrs for n in p.marked):
+        r.error("xuất", "Trang công cụ thiếu nút data-xuat (chép kết quả thành prompt, JSON hay diff để dán lại "
+                        "vào chat): trang dùng xong là bỏ, phần xuất là thứ còn lại.")
+
     # Ví dụ
-    if len(examples) < MIN_EXAMPLES:
+    if len(examples) < MIN_EXAMPLES and not light:
         r.error("ví dụ", f"Mới có {len(examples)} ví dụ (data-vi-du), cần ít nhất {MIN_EXAMPLES}.")
     for i, ex in enumerate(examples, 1):
         size = len(ex.plain())

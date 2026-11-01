@@ -111,6 +111,44 @@ class PageKind(unittest.TestCase):
         html = page(options=[("A", True, False)]).replace("<main>", '<main data-loai="giai-thich">')
         self.assertTrue(any("bỏ một trong hai" in e for e in errors(html)))
 
+    def light(self, kind, extra=""):
+        return (f'<title>Kết quả đo</title><main data-loai="{kind}">'
+                '<section data-phan="tom-tat"><p>Bản có agent-stack đạt 14 trên 20 việc, bản trơn 13.</p></section>'
+                f"<table><tr><td>14</td></tr></table>{extra}</main>")
+
+    def test_report_needs_sources_but_not_foundation_or_examples(self):
+        found = errors(self.light("bao-cao"))
+        self.assertEqual([e for e in found if e.startswith("[nguồn]")], [found[0]])
+        self.assertEqual(len(found), 1)
+        self.assertEqual(errors(self.light("bao-cao", '<footer data-phan="nguon"><p>harbor_bench.py</p></footer>')), [])
+
+    def test_tool_needs_an_export_button(self):
+        self.assertTrue(any(e.startswith("[xuất]") for e in errors(self.light("cong-cu"))))
+        self.assertEqual(errors(self.light("cong-cu", "<button data-xuat>Chép prompt</button>")), [])
+
+    def test_light_pages_still_check_terms_and_summary(self):
+        html = self.light("bao-cao", '<p>Mã HC5 đổi.</p><footer data-phan="nguon"><p>x</p></footer>')
+        self.assertTrue(any("HC5" in e for e in errors(html)))
+        html = self.light("cong-cu", "<button data-xuat>Chép</button>").replace('data-phan="tom-tat"', "")
+        self.assertTrue(any(e.startswith("[tóm tắt]") for e in errors(html)))
+
+    def test_page_with_questions_cannot_hide_behind_a_light_kind(self):
+        # Trang khuyên một cách sửa rồi hỏi chốt, khai "báo cáo" để né bảng ràng buộc: trước đây vẫn "Đạt".
+        ask = '<div data-cau-hoi><p>Sửa bằng cách gửi log ra dịch vụ ngoài hay giữ cục bộ?</p></div>'
+        for kind, extra in (("bao-cao", '<footer data-phan="nguon"><p>git diff</p></footer>'),
+                            ("cong-cu", "<button data-xuat>Chép</button>"), ("giai-thich", "")):
+            with self.subTest(kind=kind):
+                html = self.light(kind, ask + extra) if kind != "giai-thich" else page().replace("</main>", ask + "</main>")
+                self.assertTrue(any("là trang đề xuất" in e for e in errors(html)))
+        html = self.light("bao-cao", '<section data-phan="rang-buoc"><table></table></section>'
+                                     '<footer data-phan="nguon"><p>x</p></footer>')
+        self.assertTrue(any("là trang đề xuất" in e for e in errors(html)))
+
+    def test_unknown_kind_and_report_with_options(self):
+        self.assertTrue(any("không hợp lệ" in e for e in errors(self.light("bang-tin"))))
+        html = page(options=[("A", True, False)]).replace("<main>", '<main data-loai="bao-cao">')
+        self.assertTrue(any("bỏ một trong hai" in e for e in errors(html)))
+
 
 class Placeholders(unittest.TestCase):
     def test_leftover_ellipsis_and_template_title_fail(self):

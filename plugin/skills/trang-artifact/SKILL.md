@@ -1,26 +1,56 @@
 ---
 name: trang-artifact
-description: Viết trang Artifact (trang HTML riêng tư trên claude.ai) để người đọc không nhớ phiên làm việc vẫn hiểu và quyết được. Trang giải thích từ gốc (hệ thống làm gì, vấn đề, khái niệm cần biết trước, thuật ngữ định nghĩa trước khi dùng), có ít nhất 3 ví dụ cụ thể, chạy cùng các ví dụ qua từng phương án, đối chiếu mỗi đề xuất với luật của project kèm nguồn, soát pattern xấu (theo code cũ, chiều người dùng, chọn vì ít công, phương án bù nhìn) và không khuyên phương án vi phạm luật. Script kiểm trang trước khi đăng. Dùng trước khi đăng hay sửa mọi trang Artifact để đọc: trang so sánh phương án, kế hoạch, báo cáo, giải thích. Không dùng cho app, dashboard, game.
-when_to_use: artifact, trang artifact, đăng trang, trang so sánh, trang phương án, trang kế hoạch, báo cáo dạng trang, giải thích từ gốc, trang khó hiểu, publish artifact, comparison page
+description: Viết mọi file HTML cho người đọc (file .html trong project hay trang Artifact riêng tư trên claude.ai) thay cho file Markdown, để người không nhớ phiên làm việc vẫn hiểu và quyết được. Bốn loại trang - đề xuất, giải thích, báo cáo, công cụ - mỗi loại một mức kiểm. Trang đề xuất giải thích từ gốc, có ít nhất 3 ví dụ cụ thể chạy qua từng phương án, đối chiếu đề xuất với luật của project kèm nguồn, soát pattern xấu và không khuyên phương án vi phạm luật. Script kiểm trang trước khi đưa người dùng. Dùng trước khi viết hay sửa mọi file để người đọc: kế hoạch, so sánh, báo cáo, kết quả đo, review, giải thích, hướng dẫn, trang tương tác chép kết quả về chat. Không dùng cho file bắt buộc Markdown (CLAUDE.md, SKILL.md, PLAN.md, README) hay app, dashboard, game.
+when_to_use: artifact, trang artifact, file html, trang html, thay markdown, đăng trang, trang so sánh, trang phương án, trang kế hoạch, báo cáo dạng trang, kết quả đo, trang review, giải thích từ gốc, hướng dẫn, trang khó hiểu, publish artifact, comparison page, html report
 ---
 
-# Trang Artifact dễ hiểu
+# Trang HTML dễ hiểu
 
-Người đọc trang là bạn sau hai tuần nghỉ, hoặc người bạn gửi link: không nhớ phiên làm việc, không biết mã nội bộ, không thấy file. Trang phải tự đứng được: đọc từ trên xuống là hiểu vấn đề, hiểu các phương án qua ví dụ cụ thể, và trả lời được câu cần chốt. Skill này lo nội dung; trình bày (màu, chữ, bố cục, sáng tối) vẫn theo skill `artifact-design` mà công cụ Artifact bắt nạp.
+Người đọc trang là bạn sau hai tuần nghỉ, hoặc người bạn gửi link: không nhớ phiên làm việc, không biết mã nội bộ, không thấy file. Trang phải tự đứng được: đọc từ trên xuống là hiểu vấn đề, hiểu các phương án qua ví dụ cụ thể, và trả lời được câu cần chốt. Skill này lo nội dung; trình bày (màu, chữ, bố cục, sáng tối) theo hướng dẫn `artifact-design` mà công cụ Artifact nạp, hay `frontend-design` nếu đã cài và không có công cụ Artifact.
+
+Luật chung (mục "File cho người đọc viết bằng HTML") bắt mọi file cho người đọc là HTML, trừ file bắt buộc Markdown. Skill này là cách viết các file đó.
 
 Khuôn: `${CLAUDE_SKILL_DIR}/mau.html`. Script kiểm: `${CLAUDE_SKILL_DIR}/scripts/check_page.py`. Nếu hai đường dẫn này chưa phải đường dẫn tuyệt đối, dùng `~/Documents/Claude/agent-stack/plugin/skills/trang-artifact/` thay cho `${CLAUDE_SKILL_DIR}`.
 
 ## Khi nào dùng
 
-- Trang để đọc: so sánh phương án, kế hoạch, báo cáo, giải thích một hệ thống, kết quả đo. Cả khi sửa một trang cũ: đưa nó về khuôn này luôn.
-- Bỏ qua: app, dashboard, game, công cụ nhập liệu. Trang dựng từ Artifact type (Docs, Slides): theo nội dung của skill này, bỏ bước chạy script.
+- Mọi file để người đọc: so sánh phương án, kế hoạch, báo cáo, kết quả đo, review, giải thích một hệ thống, hướng dẫn, trang tương tác. Cả khi sửa một trang cũ: đưa nó về khuôn này luôn.
+- Bỏ qua: file bắt buộc Markdown (danh sách trong luật chung), app, dashboard, game. Trang dựng từ Artifact type (Docs, Slides): theo nội dung của skill này, bỏ bước chạy script.
+
+## Bốn loại trang
+
+Khai loại trên `<main>`; script kiểm theo loại.
+
+| Loại | Khai | Khi nào | Script đòi |
+|---|---|---|---|
+| Đề xuất | (không khai; có thẻ `data-phuong-an`) | có thứ cần chốt, kể cả kế hoạch một hướng | đủ khuôn bên dưới |
+| Giải thích | `data-loai="giai-thich"` | giải thích hệ thống, khái niệm, hướng dẫn | tóm tắt, từ gốc từ 600 ký tự, 3 ví dụ |
+| Báo cáo | `data-loai="bao-cao"` | kết quả đo, trạng thái, review thay đổi, sự cố, kiểm duyệt | tóm tắt, nguồn (`data-phan="nguon"`) |
+| Công cụ | `data-loai="cong-cu"` | trang để chỉnh rồi chép kết quả về chat | tóm tắt, nút xuất `data-xuat` |
+
+Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn nên có phần từ gốc ngắn khi người đọc cần bối cảnh, nhưng script không ép.
+
+## Dùng skill có sẵn của Anthropic khi hợp việc
+
+Đã qua `vet-skill`; chỉ dùng khi đã cài (`claude plugin list`). Nội dung vẫn theo các mục "Cách viết" của skill này.
+
+- **Trang công cụ:** skill `playground` có 6 khuôn (chỉnh thiết kế, dựng truy vấn, bản đồ khái niệm, góp ý văn bản, duyệt diff từng dòng, bản đồ code). Lấy khuôn hợp nhất, khai `data-loai="cong-cu"`, gắn `data-xuat` vào nút chép prompt, giữ sáng tối theo `artifact-design` (khuôn của nó mặc định tối).
+- **Kế hoạch triển khai một hướng, đụng hơn vài file:** `/html-plan`. Trang của nó dùng runtime riêng; kiểm bằng `node <skill html-plan>/runtime/pack.mjs <trang> --lint-only` thay cho `check_page.py`, rồi `pack.mjs` để gói thành một file. Kế hoạch có từ hai phương án thì vẫn dùng khuôn của skill này.
+- **Trang tổng quan project gửi người khác, làm mới cùng link:** `project-artifact`.
+- **Diff có chú thích bên lề:** khuôn `diff-review` của `playground`, hoặc tự viết theo loại báo cáo.
+
+## Đặt file và đưa cho người dùng
+
+- Trang của phiên cần giữ: `.agent/trang/<tên>.html` trong project. Không cần giữ: thư mục scratchpad hay thư mục tạm. Tài liệu của project (hướng dẫn, giải thích kiến trúc): đúng chỗ file `.md` lẽ ra nằm.
+- Đưa cho người dùng: `SendUserFile` với `display: "render"`, hay mở ở pane trình duyệt của app. Đăng Artifact khi luật Trang HTML và Artifact yêu cầu hay người dùng cần link.
 
 ## Các bước
 
 1. **Xác định trang để làm gì.** Một câu: sau khi đọc, người đọc hiểu được gì hay chốt được gì. Liệt kê điều họ phải biết trước để hiểu câu đó, xếp từ gốc lên: cái nền (hệ thống làm gì) trước, cái dựa trên nó sau.
 2. **Gom luật của project trước khi viết đề xuất.** Đọc những file có mặt: `CLAUDE.md`, `AGENTS.md` của project và luật toàn cục; `.agent/threat-model.md`; mục "Đã quyết" và §0 của file kế hoạch; phần nguyên tắc trong `README`. Ghi từng luật liên quan kèm `file:dòng`. Luật không ghi trong file thì không phải luật, nhưng quyết định cũ của người dùng (ghi trong kế hoạch) là luật.
 3. **Soát pattern xấu** (mục dưới) trên từng đề xuất, kể cả đề xuất của chính người dùng.
-4. **Viết trang từ khuôn** `mau.html`: chép sang scratchpad, thay mọi chỗ "…" bằng nội dung thật, giữ thuộc tính `data-*`. Kế hoạch chỉ có một hướng vẫn là đề xuất: đặt nó vào đúng một thẻ `data-phuong-an`, kèm bảng ràng buộc và câu chốt. Trang thật sự không có đề xuất (giải thích, báo cáo) thì bỏ các phần từ "Các phương án" tới "Câu cần chốt" và khai `data-loai="giai-thich"` trên `<main>`.
+4. **Viết trang từ khuôn** `mau.html`: chép sang scratchpad, thay mọi chỗ "…" bằng nội dung thật, giữ thuộc tính `data-*`. Kế hoạch chỉ có một hướng vẫn là đề xuất: đặt nó vào đúng một thẻ `data-phuong-an`, kèm bảng ràng buộc và câu chốt. Trang thật sự không có đề xuất thì bỏ các phần từ "Các phương án" tới "Câu cần chốt" và khai loại trên `<main>` (bảng "Bốn loại trang"). Trang báo cáo và công cụ có thể bỏ cả phần từ gốc và ví dụ khi không cần.
+   Bước 2, 3 và 6 chỉ bắt buộc với trang đề xuất; trang khác làm bước 6 khi trang dài hay gửi người khác.
 5. **Chạy script**: `python3 ${CLAUDE_SKILL_DIR}/scripts/check_page.py <file>`. Mã thoát 1 thì sửa từng LỖI rồi chạy lại tới khi ra "Đạt". NHẮC thì cân nhắc. Script chỉ đếm và so được phần cấu trúc; nó không chứng minh trang dễ hiểu.
 6. **Đọc thử bằng người lạ, một lần.** Giao file cho subagent `agent-stack:nguoi-doc-la` với prompt chỉ gồm đường dẫn tuyệt đối của file trang: không kể bối cảnh, không nói trang muốn gì, vì người đọc thật cũng không được nghe. Hook SubagentStart của agent-stack không đưa bối cảnh phiên cho subagent này. Chưa có subagent đó (plugin chưa nạp lại) thì dùng `general-purpose`, model `sonnet`, với chỉ dẫn trong `${CLAUDE_SKILL_DIR}/../../agents/nguoi-doc-la.md`; khi đó hook vẫn chèn yêu cầu của người dùng vào đầu context, nên con số "hiểu bao nhiêu phần trăm" có thể cao hơn thật, và báo cáo phải nói vậy. Sửa theo kết quả một lượt, chạy lại script, không lặp tiếp.
 7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Kế hoạch có phương án thì đọc bình luận bằng `ArtifactComments` rồi mới làm (luật toàn cục).
@@ -86,6 +116,6 @@ Trang chỉ giải thích (không đề xuất) cần tóm tắt, từ gốc, th
 
 ## Script kiểm báo gì
 
-- LỖI (thoát 1): thiếu `<title>`, tóm tắt, phần từ gốc hay phần đó dưới 600 ký tự; tóm tắt đứng sau phần từ gốc, hay phương án đứng trước nó; còn chữ mẫu của khuôn ("…", "Nhãn: …", "Tên trang"); trang không có thẻ phương án mà không khai `data-loai="giai-thich"`; dưới 3 ví dụ hay ví dụ dưới 80 ký tự; mã nội bộ, chữ viết tắt, ký hiệu Hy Lạp chưa định nghĩa hay dùng trước khi định nghĩa; có đề xuất mà thiếu bảng ràng buộc, phần pattern xấu hay câu chốt; hàng ràng buộc thiếu nguồn hay thiếu phán quyết cho một phương án; phương án được khuyên mà vi phạm; phương án vi phạm mà thẻ không ghi (dòng `data-vi-pham` ít nhất 15 ký tự); từ hai phương án mà thiếu bảng ví dụ × phương án.
+- LỖI (thoát 1): thiếu `<title>`, tóm tắt, phần từ gốc hay phần đó dưới 600 ký tự; tóm tắt đứng sau phần từ gốc, hay phương án đứng trước nó; còn chữ mẫu của khuôn ("…", "Nhãn: …", "Tên trang"); trang không có thẻ phương án mà không khai loại, hay khai loại lạ; trang báo cáo thiếu phần nguồn; trang công cụ thiếu nút `data-xuat`; (trừ trang báo cáo và công cụ) dưới 3 ví dụ hay ví dụ dưới 80 ký tự; mã nội bộ, chữ viết tắt, ký hiệu Hy Lạp chưa định nghĩa hay dùng trước khi định nghĩa; có đề xuất mà thiếu bảng ràng buộc, phần pattern xấu hay câu chốt; hàng ràng buộc thiếu nguồn hay thiếu phán quyết cho một phương án; phương án được khuyên mà vi phạm; phương án vi phạm mà thẻ không ghi (dòng `data-vi-pham` ít nhất 15 ký tự); từ hai phương án mà thiếu bảng ví dụ × phương án.
 - NHẮC: tóm tắt trên 150 chữ; ví dụ chưa có số, tên file, lệnh hay bảng; có từ hai phương án mà không khuyên cái nào; phương án chạy qua dưới 3 ví dụ trong bảng ví dụ × phương án.
 - Từ người đọc chắc chắn đã biết (tên project của chính họ) thì khai trong `data-tu-quen="SCEE, AgentDojo"` trên phần tóm tắt. Mã có chữ số và ký hiệu không miễn được. Chữ viết tắt và mã kỹ thuật phổ biến (API, URL, JSON, CI, PR, UTF-8, SHA-256…) đã được miễn sẵn. Tên trong `<code>` không bị soát, nhưng vẫn phải giải thích bằng lời ở lần đầu.

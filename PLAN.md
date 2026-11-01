@@ -3,7 +3,9 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 30/10/2026 (chiều).*
+*Cập nhật 01/11/2026.*
+
+- **Xong (01/11/2026), chưa commit lúc ghi, plugin 0.18.0 chưa cài: GĐ30 file cho người đọc viết bằng HTML** (mốc ở §1). Luật chung mới (`global/SHARED.global.md`, mục "File cho người đọc viết bằng HTML") và bảng skill Anthropic theo việc (`global/CLAUDE.global.md`, "Trang HTML và Artifact"); hai file này nạp thẳng vào mọi phiên nên đã có hiệu lực. `trang-artifact` thêm loại trang báo cáo và công cụ; trang có câu chốt hay bảng luật không khai loại nhẹ được. Hook PreToolUse nhắc một lần khi tạo `.md` mới không bắt buộc Markdown (tái hiện bằng hook thật với lượt của phiên: lần đầu chặn, lần hai cho qua, file nhớ cho qua). Vet 4 đích, chờ bạn duyệt. Kiểm: 800+ test, `plugin validate`, `plugin test` 24 đạt (biên nhận). Reviewer opus·high: 0 cao, 2 vừa (trang đề xuất né bảng luật bằng loại nhẹ; luật trả lời dài áp cả subagent), 2 thấp (luật cũ mâu thuẫn; TODO.md, PROGRESS.md bị nhắc); đã sửa cả 4 kèm test.
 
 - **Xong (30/10/2026): rà lại agent-stack có làm Claude tệ hơn không, sửa tin của phiên khác bị coi là lời người dùng (plugin 0.17.7, commit `4055764`; đã cài lúc 22:18 30/10/2026 theo lệnh của bạn, nhật ký `state/install-logs/20261030-221831.json`, bản cache giống hệt `plugin/`; chưa push). Phiên mở trước 22:18 cần `/reload-plugins`.** Đo trên 59 phiên từ 16/10 đến 30/10: phần nạp sẵn (luật chung, mô tả skill và subagent, SessionStart) khoảng 26.500 ký tự, tức khoảng 2,5% token đầu vào; hook Stop chặn 86 lần, gồm nhắc cây 39 lần (221K token đầu ra, đã bỏ ở 0.17.1–0.17.2), §0 22 lần, chốt việc 25 lần; tỉ lệ chặn từ 0.17.4 là 0,9%. Reviewer chạy 77 lần, ít nhất 14 lần agent sửa code ngay sau đó. Chưa có bằng chứng làm giảm chất lượng; bench phải nạp cả `~/.claude/CLAUDE.md`, không chỉ plugin. Lỗi: `is_automated_prompt` không nhận `<cross-session-message`, `<side-sessions-event`, `<ci-monitor-event` (kể cả khi app đặt khối `<system-reminder>` hay dòng "Another Claude session sent a message:" trước), nên router gợi ý sai, LAST-TURN ghi tin đó làm yêu cầu, subagent nhận nó như yêu cầu của bạn. Đã sửa, tin mở đầu của phiên do phiên khác tạo vẫn là yêu cầu. Tái hiện bằng hook thật với 5 tin thật từ transcript: bản cũ 2 gợi ý router sai, bản mới 0. Cả bộ test, `plugin validate`, `plugin test` 24, eval router 109/109 đạt (biên nhận).
 
@@ -41,3 +43,15 @@
 - **Sau khi bị ngắt:** chạy `git -C ~/Documents/Claude/agent-stack status -sb` (phải khớp `origin/main` nếu không có việc dở), `git log --oneline -5`, `python3 plugin/skills/session-keeper/scripts/receipt.py show` và `claude plugin list`, rồi đọc `INSTALLED.md` và mục này.
 
 ## 1. Giai đoạn
+
+#### GĐ30: File cho người đọc viết bằng HTML (01/11/2026)
+Bạn chọn hướng B, ý (b) ngày 01/11/2026 (trang so sánh: https://claude.ai/artifact/V9dUnzLxS6kw5iBtSM1rWX): mọi file cho người đọc là HTML, chỉ file bắt buộc mới giữ `.md`; tích hợp skill có sẵn của Anthropic, thiếu thì tự viết. Quyết định reuse-best: không có skill chính thức nào làm đúng việc này (bài blog của đội Claude Code nói chỉ cần dặn); dùng lại `playground`, `project-artifact` (Anthropic), `html-plan` (tác giả bài blog, chợ cộng đồng), `frontend-design`, `artifact-design` có sẵn trong app; tự viết phần luật, loại trang và hook nhắc.
+- [x] Vet 4 đích, ghi nhận xét vào `vetted.lock`: playground, project-artifact, frontend-design khuyên cài; html-plan khuyên có điều kiện (cần node, chỉ chạy pack.mjs trên trang của agent)
+- [x] Luật chung mục "File cho người đọc viết bằng HTML" (`global/SHARED.global.md`) và bảng skill Anthropic theo việc (`global/CLAUDE.global.md`, mục "Trang HTML và Artifact")
+- [x] `trang-artifact` thành skill viết mọi file HTML cho người đọc: thêm loại trang báo cáo (`bao-cao`, cần nguồn) và công cụ (`cong-cu`, cần nút `data-xuat`) trong `check_page.py`, kèm test
+- [x] Hook PreToolUse nhắc một lần khi tạo file `.md` mới không bắt buộc Markdown (`pretool_guard.py`), kèm test; plugin 0.18.0
+- [ ] Bạn duyệt 4 đích (`vet.py approve`) và cho cài qua `install.sh` @ban
+- [ ] Script tự sinh báo cáo HTML: `harbor_bench.py compare --html`, `vet.py` (threat model trước: chữ từ repo lạ vào trang)
+- [ ] `chot-viec`: mời làm trang review (loại báo cáo, diff có chú thích) khi rủi ro cao
+- [ ] Chuyển `HUONG-DAN.md` (645 dòng, cho người đọc) sang HTML; `KE-HOACH.md`, `INSTALLED.md`, `BASELINE.md` hỏi bạn từng file vì agent cũng đọc chúng @ban
+- [ ] Đo: so số lần bạn mở trang với tóm tắt chat sau 2 tuần, và token mỗi lượt có trang (luật chung: skill đổi cách trả lời cần số liệu trước khi bật lâu dài)

@@ -209,6 +209,32 @@ class WriteGuard(GuardBase):
         self.assertIsNone(self.guard("Write", {"file_path": str(Path(tempfile.gettempdir()) / "X_DIFFERENTIAL_REVIEW.md")}))
         self.assertIsNone(self.guard("Write", {"file_path": str(self.project / "README.md"), "content": "x"}))
 
+    def test_new_markdown_for_readers_is_nudged_to_html_once(self):
+        self.start("Viết báo cáo kết quả đo cho tôi", "md1")
+        report = {"file_path": str(self.project / "bao-cao-do.md"), "content": "# Kết quả"}
+        decision, reason = self.guard("Write", report, "md1")
+        self.assertEqual(decision, "deny")
+        self.assertIn("bao-cao-do.html", reason)
+        self.assertIn("trang-artifact", reason)
+        self.assertIsNone(self.guard("Write", report, "md1"), "ghi lại thì cho qua: Claude đã cân nhắc")
+        self.start("Viết thêm ghi chú", "md1")
+        self.assertEqual(self.guard("Write", report, "md1")[0], "deny", "lượt mới thì nhắc lại")
+
+    def test_required_markdown_and_existing_files_pass(self):
+        self.start("Cập nhật tài liệu", "md2")
+        (self.project / "notes.md").write_text("cũ\n")
+        skill = self.project / "tools" / "x"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("---\nname: x\n---\n")
+        for path in ("README.md", "CLAUDE.md", "docs/CHANGELOG.md", ".agent/HANDOFF.md", ".claude/plans/p.md", "TODO.md",
+                     "PROGRESS.md",
+                     "plugin/skills/y/references/a.md", ".github/ISSUE_TEMPLATE/bug.md", "PLAN.md", "notes.md",
+                     "tools/x/guide.md", "app/views.py", "page.html"):
+            with self.subTest(path=path):
+                self.assertIsNone(self.guard("Write", {"file_path": str(self.project / path), "content": "x"}, "md2"))
+        self.assertIsNone(self.guard("Edit", {"file_path": str(self.project / "new.md"), "old_string": "a",
+                                              "new_string": "b"}, "md2"), "chỉ nhắc khi tạo file bằng Write")
+
     def test_threat_model_nudge_once_before_first_source_edit(self):
         self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "tm1")
         target = {"file_path": str(self.project / "app" / "upload.py"), "content": "x"}

@@ -9,6 +9,8 @@
   vá bị commit lẫn).
 - Sửa file mã nguồn khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model: từ chối
   một lần, nhắc chạy mo-hinh-de-doa trước khi code.
+- Tạo file `.md` mới không thuộc loại bắt buộc Markdown: từ chối một lần cho mỗi file trong lượt, nhắc viết HTML
+  theo skill trang-artifact (luật chung "File cho người đọc viết bằng HTML"); ghi lại thì cho qua.
 - Tạo tag git hay `gh release create` (sắp phát hành): nhắc bước 3 của quy trình bảo mật là audit cả repo (Semgrep
   qua static-analysis, rồi claude-security). Lần đầu thì từ chối để lời nhắc tới Claude, Claude hỏi người dùng; lệnh
   chỉ qua khi người dùng đã nhắn sau lần từ chối đó. Không theo dõi được phiên thì hỏi người dùng như cũ.
@@ -37,6 +39,12 @@ REPORT_RE = re.compile(r"differential[_-]?review", re.I)
 OS_TEMP = ("/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/")
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".php", ".rs", ".c",
               ".cc", ".cpp", ".h", ".hpp", ".cs", ".swift", ".scala", ".sh", ".lua", ".pl", ".sql"}
+# File bắt buộc Markdown (luật chung, mục "File cho người đọc viết bằng HTML"): agent, công cụ hay nền tảng đọc nó.
+MD_NAMES = {"claude.md", "claude.local.md", "agents.md", "gemini.md", "skill.md", "readme.md", "changelog.md",
+            "contributing.md", "security.md", "code_of_conduct.md", "license.md", "support.md", "plan.md",
+            "handoff.md", "last-turn.md", "nhat-ky.md", "threat-model.md", "memory.md", "pull_request_template.md"}
+MD_DIRS = {".claude", ".agent", ".agents", ".github", ".cursor", "skills", "agents", "commands", "memory", "plans",
+           "references", "prompts"}
 
 
 def decide(decision: str, reason: str) -> None:
@@ -257,7 +265,38 @@ def safe_scratch(path: Path) -> bool:
     return lib().git_out(parent, "check-ignore", "-q", str(path)) is not None
 
 
-def check_write(tool_input: dict, cwd: str, session_id: str):
+def markdown_required(full: Path) -> bool:
+    """File .md mà agent, công cụ hay nền tảng đọc như Markdown, nên không đổi sang HTML được."""
+    plans = {Path(p).name.lower() for p in lib().PLAN_CANDIDATES}  # file kế hoạch mà SessionStart nạp §0
+    if full.name.lower() in MD_NAMES | plans or REPORT_RE.search(full.name):
+        return True
+    if any(part.lower() in MD_DIRS for part in full.parent.parts):
+        return True
+    return any((d / "SKILL.md").exists() for d in (full.parent, full.parent.parent))  # tài liệu kèm skill
+
+
+def check_new_markdown(full: Path, session_id: str):
+    """Tạo file .md mới cho người đọc: nhắc viết HTML, một lần cho mỗi file trong lượt. Ghi lại thì cho qua, vì chỉ
+    Claude biết file có bắt buộc Markdown hay không (project quy ước Markdown, người dùng xin .md)."""
+    if full.suffix.lower() not in (".md", ".markdown") or full.exists() or markdown_required(full) or not session_id:
+        return None
+    A = lib()
+    turn = A.load_turn(session_id)
+    if not turn:
+        return None
+    nudged = turn.get("md_nudged") or []
+    key = str(full.resolve())
+    if key in nudged:
+        return None
+    turn["md_nudged"] = nudged + [key]
+    A.save_turn(session_id, turn)
+    return "deny", (f"agent-stack: file cho người đọc viết bằng HTML (luật chung, mục \"File cho người đọc viết bằng "
+                    f"HTML\"). Viết `{full.with_suffix('.html').name}` theo skill trang-artifact thay cho `{full.name}`. "
+                    "Nếu file này bắt buộc là Markdown (agent hay script đọc nó, nền tảng đòi Markdown, project quy "
+                    "ước Markdown, người dùng xin .md) thì ghi lại đúng lệnh này: nhắc chỉ hiện một lần cho file này.")
+
+
+def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"):
     path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
     if not path:
         return None
@@ -266,6 +305,10 @@ def check_write(tool_input: dict, cwd: str, session_id: str):
         return "deny", ("agent-stack: báo cáo differential-review là danh sách lỗ hổng chưa vá; đừng ghi vào trong "
                         "project (dễ bị commit lẫn). Ghi vào `.tmp/` của project (nếu đã bị git bỏ qua) hoặc thư mục "
                         "tạm của hệ điều hành.")
+    if tool == "Write":
+        nudge = check_new_markdown(full, session_id)
+        if nudge:
+            return nudge
     if full.suffix.lower() not in SOURCE_EXT or not session_id:
         return None
     A = lib()
@@ -308,7 +351,7 @@ def main():
     if tool == "Bash":
         result = check_bash(str(tool_input.get("command") or ""), cwd, data.get("session_id") or "")
     elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
-        result = check_write(tool_input, cwd, data.get("session_id") or "")
+        result = check_write(tool_input, cwd, data.get("session_id") or "", tool)
     else:
         result = None
     if result:
