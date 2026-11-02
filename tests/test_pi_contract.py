@@ -1,5 +1,6 @@
 """Hợp đồng agent-stack cho pi (plugin/hosts/pi.json): plugin phải khớp, mọi chỗ lệch phải bị bắt, và hook chạy với
 dữ liệu đúng như cầu nối của pi gửi chỉ trả về trường mà cầu nối hiểu."""
+import functools
 import json
 import os
 import shutil
@@ -7,7 +8,7 @@ import subprocess
 import sys
 import unittest
 
-from tests._util import PLUGIN, REPO, TempDirTestCase, git
+from tests._util import PLUGIN, REPO, TempDirTestCase, copy_plugin, git
 
 sys.path.insert(0, str(PLUGIN / "hosts"))
 import pi_host  # noqa: E402
@@ -15,8 +16,10 @@ import pi_host  # noqa: E402
 CONTRACT = json.loads((PLUGIN / "hosts" / "pi.json").read_text(encoding="utf-8"))
 
 
+@functools.cache
 def pi_frontmatter_module():
-    """Đường tới utils/frontmatter.js của pi đã cài (để đọc frontmatter đúng như pi), hay "" nếu máy không có."""
+    """Đường tới utils/frontmatter.js của pi đã cài (để đọc frontmatter đúng như pi), hay "" nếu máy không có.
+    Tính khi test cần: `npm root -g` mất khoảng 0,2 giây."""
     if not shutil.which("node") or not shutil.which("npm"):
         return ""
     try:
@@ -27,18 +30,7 @@ def pi_frontmatter_module():
     return path if os.path.isfile(path) else ""
 
 
-PI_FRONTMATTER = pi_frontmatter_module()
 PLAN = "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Việc tiếp theo:**\n  1. Viết test cho bước cài.\n"
-
-
-def copy_plugin(dest):
-    """Bản chép tối thiểu của plugin mà check() đọc: hợp đồng, hooks, agents, SKILL.md, plugin.json."""
-    for rel in ("hosts", "hooks", "agents", ".claude-plugin"):
-        shutil.copytree(PLUGIN / rel, dest / rel, ignore=shutil.ignore_patterns("__pycache__"))
-    for skill in (PLUGIN / "skills").glob("*/SKILL.md"):
-        (dest / "skills" / skill.parent.name).mkdir(parents=True)
-        shutil.copy(skill, dest / "skills" / skill.parent.name / "SKILL.md")
-    return dest
 
 
 def flat_keys(data, prefix=""):
@@ -166,8 +158,10 @@ class ContractTests(TempDirTestCase):
         path.write_text(text.replace(fields["description"], '"Báo tiến độ: việc dở, việc tiếp theo."'))
         self.assertEqual(pi_host.check(plugin), [])
 
-    @unittest.skipUnless(PI_FRONTMATTER, "máy không có pi để đọc frontmatter bằng parser thật")
     def test_pi_own_parser_reads_every_used_file(self):
+        pi_fm = pi_frontmatter_module()
+        if not pi_fm:
+            self.skipTest("máy không có pi để đọc frontmatter bằng parser thật")
         out = self.tmp / "agents"
         pi_host.sync_agents(PLUGIN, out)
         files = [PLUGIN / "skills" / n / "SKILL.md" for n in CONTRACT["skills"]["use"]]
@@ -178,7 +172,7 @@ class ContractTests(TempDirTestCase):
                   "readFileSync(f, 'utf8')); if (!frontmatter.description) console.log('THIẾU', f); }"
                   " catch (e) { console.log('LỖI', f, e.message.split('\\n')[0]); } }")
         res = subprocess.run(["node", "--input-type=module", "-e", script, *map(str, files)], capture_output=True,
-                             text=True, env=dict(os.environ, PI_FM=PI_FRONTMATTER), timeout=60)
+                             text=True, env=dict(os.environ, PI_FM=pi_fm), timeout=60)
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertEqual(res.stdout.strip(), "")
 

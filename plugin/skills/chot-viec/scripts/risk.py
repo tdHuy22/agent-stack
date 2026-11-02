@@ -18,11 +18,10 @@ from pathlib import Path
 LEVEL_NAMES = {"thap": "thấp", "vua": "vừa", "cao": "cao"}
 KIND_NAMES = {"code": "code", "test": "test", "doc": "tài liệu", "instr": "chỉ dẫn cho agent"}
 DOC_EXT = {".md", ".txt", ".rst", ".adoc"}
-# Trang HTML cho người đọc (luật chung: báo cáo, kế hoạch viết bằng .html, ở .agent/trang/ hay chỗ .md lẽ ra nằm) là
-# tài liệu; HTML nằm trong thư mục mã của web app (template, trang tĩnh của app) vẫn là code.
+# HTML mặc định là code (trang của web app, template). Trang cho người đọc (luật chung: báo cáo, kế hoạch viết bằng
+# .html) là tài liệu khi nằm trong .agent/ hay docs/, hoặc mang dấu của skill trang-artifact trong nội dung file.
 PAGE_EXT = {".html", ".htm"}
-WEB_CODE_DIR_RE = re.compile(r"(^|/)(src|app|apps|public|static|templates?|views?|components?|pages|layouts?|www|"
-                             r"web|frontend|client|assets)/")
+READER_PAGE_RE = re.compile(r"<main\b[^>]*\bdata-loai=|\bdata-phan=[\"']tom-tat[\"']")
 MAX_UNTRACKED_BYTES = 1_000_000
 MAX_TEXT = 200_000
 
@@ -98,9 +97,9 @@ def boundaries(changes: list, reviewed=frozenset()) -> list:
     out = []
     for name, path_re, text_re in BOUNDARY_RULES:
         paths = [c["path"] for c in changes
-                 if (path_re and c["path"] not in reviewed and kind(c["path"]) != "test"
+                 if (path_re and c["path"] not in reviewed and change_kind(c) != "test"
                      and path_re.search(c["path"].lower()))
-                 or (text_re and kind(c["path"]) == "code" and Path(c["path"]).suffix.lower() in SOURCE_EXT
+                 or (text_re and change_kind(c) == "code" and Path(c["path"]).suffix.lower() in SOURCE_EXT
                      and text_re.search(c.get("text") or ""))]
         if paths:
             out.append((name, paths))
@@ -115,8 +114,8 @@ class GitError(Exception):
     pass
 
 
-def kind(path: str) -> str:
-    """Phân loại file: code, test, doc hay instr (chỉ dẫn cho agent)."""
+def kind(path: str, page: bool = False) -> str:
+    """Phân loại file: code, test, doc hay instr (chỉ dẫn cho agent). page: file HTML mang dấu trang cho người đọc."""
     p = path.lower()
     name = p.rsplit("/", 1)[-1]
     if re.search(r"(^|/)(tests?|spec|__tests__)/", p) or re.match(r"(test_.*|.*_test|.*\.(test|spec))\.\w+$", name):
@@ -125,9 +124,15 @@ def kind(path: str) -> str:
         return "instr"
     if Path(name).suffix in DOC_EXT or re.search(r"(^|/)docs?/", p):
         return "doc"
-    if Path(name).suffix in PAGE_EXT and not WEB_CODE_DIR_RE.search(p):
+    if Path(name).suffix in PAGE_EXT and (page or re.search(r"(^|/)\.agent/", p)):
         return "doc"
     return "code"
+
+
+def change_kind(c: dict) -> str:
+    """Loại của một thay đổi: dấu trang cho người đọc lấy từ cờ page (collect đọc cả file) hay từ dòng thêm vào."""
+    page = Path(c["path"]).suffix.lower() in PAGE_EXT and (c.get("page") or READER_PAGE_RE.search(c.get("text") or ""))
+    return kind(c["path"], bool(page))
 
 
 def assess(changes: list, reviewed=frozenset()) -> dict:
@@ -152,7 +157,7 @@ def assess(changes: list, reviewed=frozenset()) -> dict:
             hot[p][1].append(reason)
 
     for c in changes:
-        k = kind(c["path"])
+        k = change_kind(c)
         added, deleted = c.get("added") or 0, c.get("deleted") or 0
         result["added"] += added
         result["deleted"] += deleted
@@ -168,7 +173,7 @@ def assess(changes: list, reviewed=frozenset()) -> dict:
     if secret_paths:
         hit(4, "có thể lộ secret trong dòng thêm vào", secret_paths)
     for pattern, points, reason in CODE_RULES:
-        paths = [c["path"] for c in changes if kind(c["path"]) == "code" and pattern.search(c.get("text") or "")]
+        paths = [c["path"] for c in changes if change_kind(c) == "code" and pattern.search(c.get("text") or "")]
         if paths:
             hit(points, reason, paths)
 
@@ -260,6 +265,8 @@ def collect(root, base: str = None) -> list:
     numstat = checked(root, "diff", ref, "--numstat", "--no-renames", "--no-ext-diff", "--no-textconv", "-z")
     texts = added_text(checked(root, "diff", ref, "-U0", "--no-color", "--no-renames", "--no-ext-diff",
                                "--no-textconv"))
+    # --full-name: đường dẫn tính từ gốc repo như của git diff, để dấu đã chấm khớp dù chạy từ thư mục con.
+    top = Path(checked(root, "rev-parse", "--show-toplevel").strip())
     changes = []
     for record in numstat.split("\0"):
         parts = record.split("\t", 2)
@@ -267,9 +274,7 @@ def collect(root, base: str = None) -> list:
             continue
         a, d, path = parts
         changes.append({"path": path, "added": None if a == "-" else int(a), "deleted": 0 if d == "-" else int(d),
-                         "text": texts.get(path, "")})
-    # --full-name: đường dẫn tính từ gốc repo như của git diff, để dấu đã chấm khớp dù chạy từ thư mục con.
-    top = Path(checked(root, "rev-parse", "--show-toplevel").strip())
+                         "text": texts.get(path, ""), "page": reader_page(top / path)})
     for path in git(root, "ls-files", "--others", "--exclude-standard", "--full-name", "-z").stdout.split("\0"):
         if not path:
             continue
@@ -282,8 +287,21 @@ def collect(root, base: str = None) -> list:
             changes.append({"path": path, "added": None, "deleted": 0, "text": ""})
             continue
         text = data.decode("utf-8", errors="replace")
-        changes.append({"path": path, "added": len(text.splitlines()), "deleted": 0, "text": text[:MAX_TEXT]})
+        # dấu trang tính trên cả file: fresh_changes cắt text còn dòng mới, dấu ở dòng cũ sẽ mất
+        changes.append({"path": path, "added": len(text.splitlines()), "deleted": 0, "text": text[:MAX_TEXT],
+                        "page": Path(path).suffix.lower() in PAGE_EXT and bool(READER_PAGE_RE.search(text))})
     return sorted(changes, key=lambda c: c["path"])
+
+
+def reader_page(path: Path) -> bool:
+    """File HTML đã theo dõi mang dấu trang cho người đọc: diff chỉ có dòng thêm vào, dấu thường nằm ở phần không đổi."""
+    if path.suffix.lower() not in PAGE_EXT:
+        return False
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            return bool(READER_PAGE_RE.search(f.read(MAX_UNTRACKED_BYTES)))
+    except OSError:
+        return False
 
 
 def render(r: dict, base: str = "HEAD") -> str:

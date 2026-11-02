@@ -89,7 +89,7 @@ def main():
     flags = {}
     # Hạn mức (limits.json do statusline Claude Code ghi) và bản plugin đang chạy là của Claude Code; chạy từ pi qua
     # cầu nối thì bỏ, kẻo model của pi bỏ việc chính đi cập nhật §0 vì hạn mức của công cụ khác.
-    claude_code = os.environ.get("AGENT_STACK_HOST", "claude-code") == "claude-code"
+    claude_code = A.host() == "claude-code"
     try:
         context, user = limit_notes(sid) if claude_code else ([], [])
         stale_ctx, stale_user = stale_plugin_note(sid) if sid and claude_code else ("", "")

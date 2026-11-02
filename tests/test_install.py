@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 
-from tests._util import REPO, TempDirTestCase, git
+from tests._util import REPO, TempDirTestCase, copy_plugin, git
 
 
 def vetted(cache) -> str:
@@ -146,7 +146,6 @@ class InstallTests(TempDirTestCase):
 
     def with_pi(self):
         """Máy có pi, và agent-stack giả có plugin/ đủ để kiểm hợp đồng pi (bản chép tối thiểu của plugin thật)."""
-        from tests.test_pi_contract import copy_plugin
         (self.home / ".pi" / "agent").mkdir(parents=True, exist_ok=True)
         shutil.rmtree(self.stack / "plugin")
         return copy_plugin(self.stack / "plugin")

@@ -170,6 +170,12 @@ def read_json(path: Path, default=None):
         return default
 
 
+def host() -> str:
+    """Công cụ đang chạy hook: "claude-code" (mặc định) hay tên cầu nối đặt qua AGENT_STACK_HOST (pi đặt "pi",
+    theo env trong plugin/hosts/pi.json)."""
+    return os.environ.get("AGENT_STACK_HOST", "claude-code")
+
+
 def write_json_atomic(path: Path, data) -> None:
     tmp = path.with_name(path.name + f".{os.getpid()}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

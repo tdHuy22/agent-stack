@@ -39,14 +39,18 @@ class Assess(unittest.TestCase):
 
     def test_reader_html_pages_are_docs(self):
         # trang cho người đọc dài hàng trăm dòng, không có test: không được chấm như code
-        r = risk.assess([change(".agent/trang/de-xuat.html", 600), change("HUONG-DAN.html", 300, 40),
-                         change("docs/kien-truc.htm", 80)])
+        page = '<main data-loai="bao-cao">\n<section data-phan="tom-tat">'
+        r = risk.assess([change(".agent/trang/de-xuat.html", 600), change("HUONG-DAN.html", 300, 40, page),
+                         {**change("notes/bao-cao.htm", 80), "page": True}])
         self.assertEqual(r["level"], "thap", r["reasons"])
         self.assertEqual(r["by_kind"]["code"], 0)
 
-    def test_html_in_web_app_dirs_is_still_code(self):
-        for path in ("src/index.html", "app/templates/login.html", "public/index.html", "web/static/page.htm"):
-            self.assertEqual(risk.kind(path), "code", path)
+    def test_html_without_reader_mark_is_code(self):
+        # index.html của Vite ở gốc repo, template: vẫn chấm như code, kể cả <script> có eval
+        for path in ("index.html", "site/about.html", "app/templates/login.html"):
+            self.assertEqual(risk.change_kind(change(path, 5, 0, "<div id=app></div>")), "code", path)
+        r = risk.assess([change("index.html", 3, 0, "<script>eval(location.hash)</script>")])
+        self.assertTrue(any("mã động" in x for x in r["reasons"]), r["reasons"])
 
     def test_small_code_change_with_test_is_low(self):
         r = risk.assess([change("src/pager.py", 3, 1, "start = (page - 1) * per_page\n"),
@@ -158,6 +162,34 @@ class Collect(TempDirTestCase):
         self.assertEqual((changes["a.py"]["added"], changes["a.py"]["deleted"]), (2, 1))
         self.assertIn("shell=True", changes["a.py"]["text"])
         self.assertEqual(changes["new.md"]["added"], 2)
+
+    def test_reader_mark_outside_the_diff_still_counts(self):
+        # sửa giữa trang HUONG-DAN.html: diff không chứa <main data-loai>, collect phải đọc cả file
+        self.git("init", "-q")
+        body = "\n".join(f"<p>đoạn {i}</p>" for i in range(30))
+        (self.tmp / "HUONG-DAN.html").write_text(f'<main data-loai="giai-thich">\n{body}\n</main>\n')
+        (self.tmp / "index.html").write_text(f"<div id=app>\n{body}\n</div>\n")
+        self.git("add", ".")
+        self.git("commit", "-q", "-m", "init")
+        for name in ("HUONG-DAN.html", "index.html"):
+            path = self.tmp / name
+            path.write_text(path.read_text().replace("đoạn 15", "đoạn mười lăm"))
+        kinds = {c["path"]: risk.change_kind(c) for c in risk.collect(self.tmp)}
+        self.assertEqual(kinds, {"HUONG-DAN.html": "doc", "index.html": "code"})
+
+    def test_untracked_reader_page_keeps_mark_on_later_turns(self):
+        # lượt sau chỉ chấm dòng mới (fresh_changes): dấu trang ở dòng cũ vẫn phải giữ trang là tài liệu
+        self.git("init", "-q")
+        (self.tmp / "a.py").write_text("x = 1\n")
+        self.git("add", "a.py")
+        self.git("commit", "-q", "-m", "init")
+        page = self.tmp / "HUONG-DAN.html"
+        page.write_text('<main data-loai="giai-thich">\n' + "\n".join(f"<p>{i}</p>" for i in range(200)) + "\n</main>\n")
+        seen = {c["path"]: risk.line_hashes(c["text"]) for c in risk.collect(self.tmp)}
+        page.write_text(page.read_text() + "\n".join(f"<p>mới {i}</p>" for i in range(200)) + "\n")
+        picked, _ = risk.fresh_changes(risk.collect(self.tmp), seen)
+        self.assertNotIn("data-loai", picked[0]["text"])
+        self.assertEqual(risk.change_kind(picked[0]), "doc")
 
     def test_no_changes(self):
         self.git("init", "-q")

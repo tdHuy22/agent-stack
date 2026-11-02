@@ -63,12 +63,11 @@
       "Grep": ["grep"],
       "Glob": ["find", "ls"],
       "Bash": ["bash"],
-      "Write": ["write"],
       "Edit": ["edit"],
+      "Write": ["write"],
       "WebSearch": ["web_search"],
       "WebFetch": ["web_fetch"]
     },
-    "all_tools": ["read", "grep", "find", "ls", "bash", "edit", "write", "web_search", "web_fetch"],
     "no_pi_tool": ["NotebookEdit", "MultiEdit"],
     "drop_fields": ["model", "effort", "maxTurns", "color", "disallowedTools"],
     "use": ["explore-lite", "nguoi-doc-la", "researcher", "reviewer", "test-runner"],

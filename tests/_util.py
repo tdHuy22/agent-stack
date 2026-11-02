@@ -78,6 +78,16 @@ def git(cwd: Path, *args: str) -> str:
     return out.stdout
 
 
+def copy_plugin(dest):
+    """Bản chép tối thiểu của plugin mà check() đọc: hợp đồng, hooks, agents, SKILL.md, plugin.json."""
+    for rel in ("hosts", "hooks", "agents", ".claude-plugin"):
+        shutil.copytree(PLUGIN / rel, dest / rel, ignore=shutil.ignore_patterns("__pycache__"))
+    for skill in (PLUGIN / "skills").glob("*/SKILL.md"):
+        (dest / "skills" / skill.parent.name).mkdir(parents=True)
+        shutil.copy(skill, dest / "skills" / skill.parent.name / "SKILL.md")
+    return dest
+
+
 def run_script(script: Path, *args: str, stdin: str = "", env: dict = None) -> subprocess.CompletedProcess:
     import os
     full_env = dict(os.environ)

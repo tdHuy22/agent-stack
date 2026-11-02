@@ -59,9 +59,6 @@ PATCH_DIR = "patches"  # bản vá cục bộ đã duyệt cho đồ bên thứ 
 VET_SCRIPTS = Path(__file__).resolve().parents[1] / "plugin" / "skills" / "vet-skill" / "scripts"
 MCP_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "hosts"))
-import pi_host  # noqa: E402
-
 
 def read_json_file(path: Path) -> dict:
     try:
@@ -412,16 +409,20 @@ class Installer:
             self.failures.append(f"pi: {exc}")
 
     def pi_links(self, pi_dir: Path, plugin: Path) -> None:
-        problems = pi_host.check(plugin)
+        sys.path.insert(0, str(plugin / "hosts"))  # nạp khi máy có pi: lỗi ở đây không làm hỏng các bước khác
+        import pi_host
+        agents = HOME_STACK / "state" / "pi" / "agents"
+        if self.apply:
+            names, problems = pi_host.sync(plugin, agents)
+        else:
+            names, problems = [], pi_host.check(plugin)
         if problems:
             for line in problems[:5]:
                 self.say(f"  ! lệch hợp đồng: {line}")
             self.say("  ! bỏ qua: plugin/ lệch hợp đồng pi; sửa rồi chạy python3 plugin/hosts/pi_host.py check")
             self.skipped.append(f"pi: plugin lệch hợp đồng ({problems[0]})")
             return
-        agents = HOME_STACK / "state" / "pi" / "agents"
         if self.apply:
-            names = pi_host.sync_agents(plugin, agents)
             self.say(f"  · subagent cho pi trong {short(str(agents))}: {', '.join(names)}")
         else:
             self.say(f"  · sẽ sinh subagent cho pi vào {short(str(agents))}")
