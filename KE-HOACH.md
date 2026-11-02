@@ -587,6 +587,8 @@ pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agen
 - Bước `pi` của `install.sh`: `~/.pi/agent/agent-stack/plugin` → `plugin/`, `~/.pi/agent/agent-stack/agents` → `state/pi/agents`; chỉ khi máy có pi và hợp đồng khớp.
 - Phần của pi-agent (làm trong phiên riêng của nó): `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`, cầu nối gọi hook ở `~/.pi/agent/agent-stack/plugin/hooks` và đọc `pi.json`, extension subagent đọc thêm `~/.pi/agent/agent-stack/agents`, bỏ `tools/port_agents.py`.
 
+**Lỗi tìm khi nối pi-agent** (02/11/2026, phiên pi-agent báo): pi 1.4.0 đọc frontmatter bằng YAML chặt và bỏ cả skill `trang-artifact` vì `description` có `: ` không nằm trong dấu nháy; Claude Code đọc dễ dãi nên không lộ. Đã đổi câu, `check` báo mọi giá trị không nháy có `: `, ` #`, ký tự đặc biệt đầu dòng, và `tests/test_pi_contract.py` đọc mọi skill, subagent bằng chính parser của pi khi máy có pi (plugin 0.19.1).
+
 **Không làm:** bản agent-stack tách riêng cho pi (lệch nhanh hơn); đưa cầu nối TypeScript vào agent-stack (trái luật TypeScript trong `CLAUDE.md`); bản chép theo version cho pi (Claude Code không chạy bản chép, nên pi sẽ chạy code khác Claude Code).
 
 ---

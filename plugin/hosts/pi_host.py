@@ -60,6 +60,28 @@ def split_frontmatter(text: str):
     return fields, m.group(2)
 
 
+def yaml_problem(value: str):
+    """Lý do giá trị một dòng (không nháy) sẽ hỏng khi pi đọc frontmatter bằng YAML chặt, hay None. Claude Code đọc
+    dễ dãi hơn nên lỗi này không lộ ở Claude Code: pi 1.4.0 bỏ cả skill khi gặp `: ` trong description."""
+    if not value:
+        return None
+    if value[0] in "\"'":
+        return None if len(value) > 1 and value[-1] == value[0] else "mở dấu nháy mà không đóng"
+    if value[0] == "[":
+        return None if value.endswith("]") else "mở [ mà không đóng"
+    if ": " in value or value.endswith(":"):
+        return "có ': ' trong giá trị không nháy (YAML hiểu là khóa lồng nhau); đổi câu hay bọc trong dấu nháy kép"
+    if " #" in value:
+        return "có ' #' trong giá trị không nháy (YAML cắt phần sau làm chú thích)"
+    if value[0] in "{}>|*&!%@`#," or value.startswith(("- ", "? ")):
+        return f"bắt đầu bằng ký tự đặc biệt của YAML ({value[0]})"
+    return None
+
+
+def frontmatter_problems(label: str, fields: dict) -> list:
+    return [f"{label}: trường {key} {why}" for key, value in fields.items() if (why := yaml_problem(value))]
+
+
 def names(value: str) -> list:
     """Tên trong chuỗi `A, B` hay `[A, "B"]`."""
     value = (value or "").strip()
@@ -141,6 +163,7 @@ def check(plugin: Path) -> list:
         except ValueError as exc:
             problems.append(f"subagent {name}: {exc}")
             continue
+        problems += frontmatter_problems(f"subagent {name}", fields)
         if not fields.get("description"):
             problems.append(f"subagent {name}: thiếu description")
         for key in ("tools", "disallowedTools"):
@@ -171,6 +194,7 @@ def check(plugin: Path) -> list:
         except ValueError as exc:
             problems.append(f"skill {name}: {exc}")
             continue
+        problems += frontmatter_problems(f"skill {name}", fields)
         declared_name = fields.get("name") or name
         if declared_name != name:
             problems.append(f"skill {name}: name trong SKILL.md là {declared_name}, khác tên thư mục")

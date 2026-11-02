@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import unittest
 
 from tests._util import PLUGIN, REPO, TempDirTestCase, git
 
@@ -12,6 +13,21 @@ sys.path.insert(0, str(PLUGIN / "hosts"))
 import pi_host  # noqa: E402
 
 CONTRACT = json.loads((PLUGIN / "hosts" / "pi.json").read_text(encoding="utf-8"))
+
+
+def pi_frontmatter_module():
+    """Đường tới utils/frontmatter.js của pi đã cài (để đọc frontmatter đúng như pi), hay "" nếu máy không có."""
+    if not shutil.which("node") or not shutil.which("npm"):
+        return ""
+    try:
+        root = subprocess.run(["npm", "root", "-g"], capture_output=True, text=True, timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    path = os.path.join(root, "@earendil-works", "pi-coding-agent", "dist", "utils", "frontmatter.js")
+    return path if os.path.isfile(path) else ""
+
+
+PI_FRONTMATTER = pi_frontmatter_module()
 PLAN = "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Việc tiếp theo:**\n  1. Viết test cho bước cài.\n"
 
 
@@ -138,6 +154,33 @@ class ContractTests(TempDirTestCase):
         fields, _ = pi_host.split_frontmatter(text)
         path.write_text(text.replace(fields["description"], "x" * 1025))
         self.assert_problem(plugin, "skill tien-do: description dài 1025")
+
+    def test_colon_in_unquoted_description_is_a_problem(self):
+        # Lỗi thật 02/11/2026: pi bỏ trang-artifact vì description có "để người đọc: kế hoạch"
+        plugin = self.plugin()
+        path = plugin / "skills" / "tien-do" / "SKILL.md"
+        text = path.read_text()
+        fields, _ = pi_host.split_frontmatter(text)
+        path.write_text(text.replace(fields["description"], "Báo tiến độ: việc dở, việc tiếp theo."))
+        self.assert_problem(plugin, "skill tien-do: trường description có ': '")
+        path.write_text(text.replace(fields["description"], '"Báo tiến độ: việc dở, việc tiếp theo."'))
+        self.assertEqual(pi_host.check(plugin), [])
+
+    @unittest.skipUnless(PI_FRONTMATTER, "máy không có pi để đọc frontmatter bằng parser thật")
+    def test_pi_own_parser_reads_every_used_file(self):
+        out = self.tmp / "agents"
+        pi_host.sync_agents(PLUGIN, out)
+        files = [PLUGIN / "skills" / n / "SKILL.md" for n in CONTRACT["skills"]["use"]]
+        files += [PLUGIN / "agents" / f"{n}.md" for n in CONTRACT["agents"]["use"]] + sorted(out.glob("*.md"))
+        script = ("import {readFileSync} from 'node:fs';"
+                  "const {parseFrontmatter} = await import(process.env.PI_FM);"
+                  "for (const f of process.argv.slice(1)) { try { const {frontmatter} = parseFrontmatter("
+                  "readFileSync(f, 'utf8')); if (!frontmatter.description) console.log('THIẾU', f); }"
+                  " catch (e) { console.log('LỖI', f, e.message.split('\\n')[0]); } }")
+        res = subprocess.run(["node", "--input-type=module", "-e", script, *map(str, files)], capture_output=True,
+                             text=True, env=dict(os.environ, PI_FM=PI_FRONTMATTER), timeout=60)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(res.stdout.strip(), "")
 
     def test_skipped_hook_needs_reason(self):
         plugin = self.plugin()
