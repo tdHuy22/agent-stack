@@ -2,8 +2,6 @@
 
 Mục đích: chọn cấu hình model và effort **rẻ nhất mà vẫn giữ chất lượng**, bằng số liệu trên việc giống việc thật của bạn, thay vì đoán.
 
-Muốn biết agent-stack có làm Claude Code tệ đi không (có và không có luật chung cùng plugin, trên bộ việc TBLite chạy trong Docker ở TUF), xem [`harbor/README.md`](harbor/README.md).
-
 | Nhóm | Việc | Cách chấm |
 |---|---|---|
 | Coding | `code-off-by-one`, `code-add-flag`, `code-refactor-dup`, `code-duration` (khó) | Chạy test, kể cả test ẩn; chặn việc sửa file test |
