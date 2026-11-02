@@ -21,3 +21,6 @@ plugin/.agent-stack-home
 .venv-skillspector/
 # Kiểu do Claude Code tự ghi cạnh mod khi nạp
 plugin/.claude-plugin/types/
+
+# Bản HTML của báo cáo kiểm duyệt: sinh lại từ bản .md bằng `vet.py html`
+vet-reports/*.html

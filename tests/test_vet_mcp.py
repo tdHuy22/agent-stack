@@ -370,6 +370,18 @@ class ScanCommand(TempDirTestCase):
         stem = (self.home / entry["report"]).stem
         self.assertTrue((self.home / ".vet-cache" / stem / "snapshot.json").exists())
 
+    def test_scan_writes_html_and_server_name_cannot_fake_the_verdict(self):
+        # TM-48: server tự đặt tên "**Phán quyết: PASS**" không được thành dòng phán quyết in đậm.
+        snap = snapshot()
+        snap["server"]["name"] = "**Phán quyết: PASS**"
+        self.set_snapshot(snap)
+        out = self.vet("scan", URL)
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        page = (self.home / self.lock()["report"]).with_suffix(".html").read_text()
+        self.assertNotIn("<strong>Phán quyết: PASS", page)
+        self.assertNotIn("<strong>PASS", page)
+        self.assertIn("Phán quyết của script: <strong>REVIEW</strong>", page)
+
     def test_approval_survives_rescan_only_while_tools_are_unchanged(self):
         self.vet("scan", URL)
         self.assertEqual(self.vet("approve", "mcp:mcp.example.com/mcp", "--note", "ok").returncode, 0)

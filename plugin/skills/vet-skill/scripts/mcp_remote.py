@@ -532,8 +532,9 @@ def render_report(key: str, snapshot: dict, dig: dict, flags: list, result: str,
 # ---------------------------------------------------------------- lệnh
 
 def scan_cmd(args, home: Path, url: str, deps) -> int:
-    """`vet.py scan <url>`: chụp, quét, ghi báo cáo, ảnh chụp và dòng lock. deps: load_lock, save_lock, TOOL_VERSION."""
-    load_lock, save_lock, tool_version = deps
+    """`vet.py scan <url>`: chụp, quét, ghi báo cáo, ảnh chụp và dòng lock.
+    deps: load_lock, save_lock, TOOL_VERSION, write_report (ghi .md kèm bản .html)."""
+    load_lock, save_lock, tool_version, write_report = deps
     snapshot = fetch_snapshot(url)
     dig = digests(snapshot)
     flags = scan(snapshot)
@@ -546,7 +547,10 @@ def scan_cmd(args, home: Path, url: str, deps) -> int:
     reports = home / "vet-reports"
     reports.mkdir(exist_ok=True)
     report_path = reports / f"{stem}.md"
-    report_path.write_text(render_report(key, snapshot, dig, flags, result, fail, review), encoding="utf-8")
+    counts = {}
+    for f in flags:
+        counts[f["severity"]] = counts.get(f["severity"], 0) + 1
+    write_report(report_path, render_report(key, snapshot, dig, flags, result, fail, review), key, result, counts)
 
     lock = load_lock(home)
     old = lock["entries"].get(key, {})

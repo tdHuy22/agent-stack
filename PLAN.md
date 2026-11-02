@@ -3,7 +3,9 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 01/11/2026.*
+*Cập nhật 02/11/2026.*
+
+- **Xong (02/11/2026): GĐ30 phần tiếp, plugin 0.18.0 (không đổi hook, chỉ skill và script; phiên mở trước cần `/reload-plugins` để có chỉ dẫn mới).** `vet.py` ghi kèm bản `.html` cho mọi báo cáo (scan GitHub, cục bộ, MCP từ xa, note, bản vá bị bỏ) qua `report_html.py`; `vet.py html` sinh lại, bản `.html` không vào git. Threat model TM-47 đến TM-49 đã có (escape, CSP, phán quyết chỉ in đậm khi khớp dữ liệu, khung nhận xét chỉ sau mốc duyệt). `chot-viec` mời làm trang review khi rủi ro cao. Reviewer sonnet hai vòng: vòng 1 tìm 4 vừa, 4 thấp; vòng 2 tìm 2 vừa, 3 thấp; đã sửa hết kèm test. Cả bộ test, `plugin validate`, `plugin test` 24 đạt (biên nhận); trang SkillSpector xem ở khổ máy tính và điện thoại.
 
 - **Xong (01/11/2026), chưa commit lúc ghi, plugin 0.18.0 đã cài lúc 10:08 02/11/2026 cùng playground, project-artifact, html-plan, frontend-design (phiên mở trước đó cần `/reload-plugins`): GĐ30 file cho người đọc viết bằng HTML** (mốc ở §1). Luật chung mới (`global/SHARED.global.md`, mục "File cho người đọc viết bằng HTML") và bảng skill Anthropic theo việc (`global/CLAUDE.global.md`, "Trang HTML và Artifact"); hai file này nạp thẳng vào mọi phiên nên đã có hiệu lực. `trang-artifact` thêm loại trang báo cáo và công cụ; trang có câu chốt hay bảng luật không khai loại nhẹ được. Hook PreToolUse nhắc một lần khi tạo `.md` mới không bắt buộc Markdown (tái hiện bằng hook thật với lượt của phiên: lần đầu chặn, lần hai cho qua, file nhớ cho qua). Vet 4 đích, chờ bạn duyệt. Kiểm: 800+ test, `plugin validate`, `plugin test` 24 đạt (biên nhận). Reviewer opus·high: 0 cao, 2 vừa (trang đề xuất né bảng luật bằng loại nhẹ; luật trả lời dài áp cả subagent), 2 thấp (luật cũ mâu thuẫn; TODO.md, PROGRESS.md bị nhắc); đã sửa cả 4 kèm test.
 
@@ -49,7 +51,7 @@ Bạn chọn hướng B, ý (b) ngày 01/11/2026 (trang so sánh: https://claude
 - [x] `trang-artifact` thành skill viết mọi file HTML cho người đọc: thêm loại trang báo cáo (`bao-cao`, cần nguồn) và công cụ (`cong-cu`, cần nút `data-xuat`) trong `check_page.py`, kèm test
 - [x] Hook PreToolUse nhắc một lần khi tạo file `.md` mới không bắt buộc Markdown (`pretool_guard.py`), kèm test; plugin 0.18.0
 - [x] Bạn duyệt 4 đích (02/11/2026, "Duyệt và cài cả 4"); `install.sh --apply` lúc 10:08 02/11/2026, nhật ký `state/install-logs/20261102-100832.json`; `vet.py drift` khớp cả 4
-- [ ] Script tự sinh báo cáo HTML: `vet.py` (threat model trước: chữ từ repo lạ vào trang)
-- [ ] `chot-viec`: mời làm trang review (loại báo cáo, diff có chú thích) khi rủi ro cao
+- [x] `vet.py` ghi kèm bản `.html` cho mỗi báo cáo (scan, note, bản vá bị bỏ) qua `report_html.py`; `vet.py html` sinh lại; bản `.html` không vào git. Threat model TM-47 đến TM-49 (escape, CSP chặn script và tài nguyên ngoài, phán quyết lấy từ dữ liệu)
+- [x] `chot-viec`: mức cao thì mời làm trang review (loại báo cáo, diff có chú thích, escape từng dòng); chỉ làm khi bạn đồng ý
 - [ ] Chuyển `HUONG-DAN.md` (645 dòng, cho người đọc) sang HTML; `KE-HOACH.md`, `INSTALLED.md`, `BASELINE.md` hỏi bạn từng file vì agent cũng đọc chúng @ban
 - [ ] Đo: so số lần bạn mở trang với tóm tắt chat sau 2 tuần, và token mỗi lượt có trang (luật chung: skill đổi cách trả lời cần số liệu trước khi bật lâu dài)

@@ -45,6 +45,8 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
    Rủi ro: thấp | vừa | cao — nên đọc: file:dòng … (mức thấp: "không cần đọc diff")
    ```
 
+   Mức cao: thêm một dòng mời "Muốn xem trang review HTML không?" rồi dừng ở đó; chỉ làm trang khi người dùng đồng ý (mỗi trang tốn token, và chưa có số liệu cho thấy trang được đọc nhiều hơn báo cáo chữ). Đồng ý thì viết trang loại báo cáo theo skill `trang-artifact` vào `.agent/trang/review-<ngày>-<việc>.html`: tóm tắt (báo cáo trên, viết thành câu), diff của các file "nên đọc" với chú thích bên lề ngay cạnh dòng, tô màu theo mức của từng phát hiện, phát hiện đã sửa kèm đoạn sửa, kết quả kiểm chứng, phần cần bạn quyết, nguồn (lệnh diff, biên nhận). Mọi dòng diff qua `html.escape` trước khi vào trang (diff có thể chứa thẻ HTML). Người dùng muốn duyệt từng dòng rồi chép góp ý về chat thì dùng khuôn `diff-review` của skill `playground` (khi đã cài), khai `data-loai="cong-cu"`. Chạy `check_page.py`, rồi đưa trang bằng `SendUserFile` với `display: "render"`.
+
 8. **Commit.** Chỉ commit khi người dùng đã yêu cầu, hoặc luật của project yêu cầu commit sau mỗi giai đoạn. Chỉ `git add` đúng file thuộc việc này, không dùng `git add -A`. Không bao giờ push.
 
 ## Lưu ý
