@@ -40,9 +40,10 @@ OS_TEMP = ("/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/")
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".php", ".rs", ".c",
               ".cc", ".cpp", ".h", ".hpp", ".cs", ".swift", ".scala", ".sh", ".lua", ".pl", ".sql"}
 # File bắt buộc Markdown (luật chung, mục "File cho người đọc viết bằng HTML"): agent, công cụ hay nền tảng đọc nó.
+# Tên file kế hoạch (PLAN_CANDIDATES) và LAST-TURN lấy từ agentstack, không chép lại ở đây.
 MD_NAMES = {"claude.md", "claude.local.md", "agents.md", "gemini.md", "skill.md", "readme.md", "changelog.md",
-            "contributing.md", "security.md", "code_of_conduct.md", "license.md", "support.md", "plan.md",
-            "handoff.md", "last-turn.md", "nhat-ky.md", "threat-model.md", "memory.md", "pull_request_template.md"}
+            "contributing.md", "security.md", "code_of_conduct.md", "license.md", "support.md", "nhat-ky.md",
+            "threat-model.md", "memory.md", "pull_request_template.md"}
 MD_DIRS = {".claude", ".agent", ".agents", ".github", ".cursor", "skills", "agents", "commands", "memory", "plans",
            "references", "prompts"}
 
@@ -53,7 +54,9 @@ def decide(decision: str, reason: str) -> None:
 
 
 def lib():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+    path = str(Path(__file__).resolve().parents[1] / "lib")
+    if path not in sys.path:
+        sys.path.insert(0, path)
     import agentstack
     return agentstack
 
@@ -265,24 +268,33 @@ def safe_scratch(path: Path) -> bool:
     return lib().git_out(parent, "check-ignore", "-q", str(path)) is not None
 
 
-def markdown_required(full: Path) -> bool:
-    """File .md mà agent, công cụ hay nền tảng đọc như Markdown, nên không đổi sang HTML được."""
-    plans = {Path(p).name.lower() for p in lib().PLAN_CANDIDATES}  # file kế hoạch mà SessionStart nạp §0
-    if full.name.lower() in MD_NAMES | plans or REPORT_RE.search(full.name):
+def markdown_required(full: Path, root: str, A) -> bool:
+    """File .md mà agent, công cụ hay nền tảng đọc như Markdown, nên không đổi sang HTML được. Thư mục đặc biệt
+    (skills, agents…) chỉ tính tên gốc project và phần đường dẫn bên trong nó, để repo nằm dưới ~/work/agents/ không
+    được miễn cả, còn phiên mở ngay trong ~/.claude vẫn được miễn."""
+    name = full.name.lower()
+    if name in MD_NAMES or REPORT_RE.search(full.name):
         return True
-    if any(part.lower() in MD_DIRS for part in full.parent.parts):
+    if name in {Path(p).name.lower() for p in (*A.PLAN_CANDIDATES, A.LAST_TURN_REL)}:
+        return True
+    try:
+        base = Path(root).resolve()
+        parts = (base.name, *full.resolve().parent.relative_to(base).parts) if root else full.parent.parts
+    except ValueError:  # ngoài project (file nhớ, plan mode trong ~/.claude): xét cả đường dẫn
+        parts = full.parent.parts
+    if any(part.lower() in MD_DIRS for part in parts):
         return True
     return any((d / "SKILL.md").exists() for d in (full.parent, full.parent.parent))  # tài liệu kèm skill
 
 
-def check_new_markdown(full: Path, session_id: str):
+def check_new_markdown(full: Path, cwd: str, session_id: str):
     """Tạo file .md mới cho người đọc: nhắc viết HTML, một lần cho mỗi file trong lượt. Ghi lại thì cho qua, vì chỉ
     Claude biết file có bắt buộc Markdown hay không (project quy ước Markdown, người dùng xin .md)."""
-    if full.suffix.lower() not in (".md", ".markdown") or full.exists() or markdown_required(full) or not session_id:
+    if full.suffix.lower() not in (".md", ".markdown") or not session_id or full.exists():
         return None
     A = lib()
     turn = A.load_turn(session_id)
-    if not turn:
+    if not turn or markdown_required(full, turn.get("root") or cwd, A):
         return None
     nudged = turn.get("md_nudged") or []
     key = str(full.resolve())
@@ -306,7 +318,7 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
                         "project (dễ bị commit lẫn). Ghi vào `.tmp/` của project (nếu đã bị git bỏ qua) hoặc thư mục "
                         "tạm của hệ điều hành.")
     if tool == "Write":
-        nudge = check_new_markdown(full, session_id)
+        nudge = check_new_markdown(full, cwd, session_id)
         if nudge:
             return nudge
     if full.suffix.lower() not in SOURCE_EXT or not session_id:

@@ -37,7 +37,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from redflags import RISKY_ALLOWED, SEVERITIES, SHADOWED_COMMANDS, hidden_chars, is_comment, scan_text  # noqa: E402
+from redflags import (HIDDEN_CHARS, RISKY_ALLOWED, SEVERITIES, SHADOWED_COMMANDS, hidden_chars, is_comment,  # noqa: E402
+                      scan_text)
 
 TOOL_VERSION = "vet.py/1"
 MD_EXT = {".md", ".mdc", ".markdown"}
@@ -535,29 +536,36 @@ def must_read(files: list, comp: dict, flags: list, scanner: dict, spector: dict
     return sorted(p for p in paths if p)
 
 
-def write_report(path: Path, text: str, key: str, verdict: str, counts) -> bool:
+def write_text_atomic(path: Path, text: str) -> None:
+    """Ghi qua file tạm (tên kèm pid, hai tiến trình không giẫm nhau) rồi replace: người đọc không thấy file dở."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def write_report(path: Path, text: str, key: str, verdict: str, counts, write_md: bool = True) -> bool:
     """Ghi báo cáo .md (agent đọc, vetted.lock trỏ tới) và bản .html cùng tên cho người đọc. Dựng trang trước khi
     ghi; dựng hỏng thì vẫn ghi .md, xoá .html cũ cho khỏi lệch, và chỉ cảnh báo: bản .html không được làm hỏng scan."""
-    import report_html
-    page = None
     try:
+        import report_html
         page = report_html.render(text, key, verdict, counts, path.name)
     except Exception as exc:  # noqa: BLE001 (bản cho người đọc là phụ; bản .md mới là bản chính)
         print(f"⚠️  Không sinh được bản .html của {path.name}: {exc!r}", file=sys.stderr)
-    path.write_text(text, encoding="utf-8")
-    html_path = path.with_suffix(".html")
+        page = None
+    if write_md:
+        write_text_atomic(path, text)
     if page is None:
-        html_path.unlink(missing_ok=True)
+        path.with_suffix(".html").unlink(missing_ok=True)
         return False
-    tmp = html_path.with_name(html_path.name + ".tmp")
-    tmp.write_text(page, encoding="utf-8")
-    tmp.replace(html_path)
+    write_text_atomic(path.with_suffix(".html"), page)
     return True
 
 
 def one_line(text) -> str:
-    """Chữ của đối tượng được kiểm thành đúng một dòng: không tạo được dòng hay mục Markdown giả."""
-    return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", str(text))).strip()
+    """Chữ của đối tượng được kiểm thành đúng một dòng: không tạo được dòng hay mục Markdown giả; ký tự ẩn hay đảo
+    chiều hiện thành [U+XXXX] (như mcp_remote.clean) để không giấu được chữ trong báo cáo."""
+    text = HIDDEN_CHARS.sub(lambda m: f"[U+{ord(m.group()):04X}]", str(text))
+    return re.sub(r"[\s\x00-\x1f\x7f-\x9f]+", " ", text).strip()
 
 
 def render_reviews(reviews: list) -> list:
@@ -613,9 +621,9 @@ def render_report(key: str, meta: dict, files: list, comp: dict, flags: list, sc
     if flags:
         L += ["| Mức | Luật | Vị trí | Loại file | Trích |", "|---|---|---|---|---|"]
         order = {s: i for i, s in enumerate(SEVERITIES)}
+        cell = lambda x: one_line(x).replace("|", "\\|")  # noqa: E731
         for f in sorted(flags, key=lambda x: order[x["severity"]])[:60]:
             excerpt = f["excerpt"].replace("|", "\\|").replace("`", "'")
-            cell = lambda x: one_line(x).replace("|", "\\|")
             L.append(f"| {f['severity']} | {cell(f['rule'])} | {cell(f['file'])}:{f['line']} | {f['kind']} | `{excerpt}` |")
     else:
         L.append("Không có.")
@@ -655,10 +663,7 @@ def load_lock(home: Path) -> dict:
 
 
 def save_lock(home: Path, data: dict) -> None:
-    path = lock_path(home)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    write_text_atomic(lock_path(home), json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 # ---------------------------------------------------------------- lệnh
@@ -713,8 +718,16 @@ def cmd_scan(args, home: Path) -> int:
     counts = {s: 0 for s in SEVERITIES}
     for f in flags:
         counts[f["severity"]] += 1
-    write_report(report_path, render_report(key, meta, files, comp, flags, scanner, result, fail, review, reviews,
-                                            second), key, result, counts)
+    # Bản vá cục bộ đã duyệt gắn với đúng commit này: vet lại cùng commit thì giữ. Commit khác thì bỏ, và ghi lại
+    # (lock, báo cáo, tóm tắt) để người duyệt kiểm upstream đã sửa chưa, kẻo lỗi cũ quay lại mà không ai biết.
+    dropped = [] if same_sha else [{k: p.get(k) for k in ("path", "why", "upstream")}
+                                   for p in old.get("local_patches") or []]
+    text = render_report(key, meta, files, comp, flags, scanner, result, fail, review, reviews, second)
+    if dropped:
+        text += ("\n## Bản vá cục bộ bị bỏ khi đổi commit\n\n" + "".join(
+            f"- `{d['path']}`: {d['why']} Upstream: {d['upstream']}\n" for d in dropped) +
+            "\nKiểm upstream đã sửa lỗi này ở commit mới chưa; chưa thì làm lại bản vá cho commit mới và duyệt lại.\n")
+    write_report(report_path, text, key, result, counts)
     lock["entries"][key] = {
         "source": meta["source"], "subpath": meta.get("subpath") or "", "ref": meta.get("ref"), "sha": meta["sha"],
         "verdict": result, "vetted_at": str(date.today()), "tool": TOOL_VERSION,
@@ -732,21 +745,12 @@ def cmd_scan(args, home: Path) -> int:
                         {"status": "pending", "at": None, "note": None},
         "reviews": reviews,
     }
-    # Bản vá cục bộ đã duyệt gắn với đúng commit này: vet lại cùng commit thì giữ. Commit khác thì bỏ, và ghi lại
-    # (lock, báo cáo, tóm tắt) để người duyệt kiểm upstream đã sửa chưa, kẻo lỗi cũ quay lại mà không ai biết.
-    dropped = []
     if same_sha:
         for field in ("local_patches", "dropped_patches"):
             if old.get(field):
                 lock["entries"][key][field] = old[field]
-    elif old.get("local_patches"):
-        dropped = [{k: p.get(k) for k in ("path", "why", "upstream")} for p in old["local_patches"]]
+    elif dropped:
         lock["entries"][key]["dropped_patches"] = dropped
-        text = report_path.read_text(encoding="utf-8") + (
-            "\n## Bản vá cục bộ bị bỏ khi đổi commit\n\n" + "".join(
-                f"- `{d['path']}`: {d['why']} Upstream: {d['upstream']}\n" for d in dropped) +
-            "\nKiểm upstream đã sửa lỗi này ở commit mới chưa; chưa thì làm lại bản vá cho commit mới và duyệt lại.\n")
-        write_report(report_path, text, key, result, counts)
     save_lock(home, lock)
 
     summary = {"key": key, "verdict": result, "sha": meta["sha"], "report": str(report_path),
@@ -818,16 +822,17 @@ def cmd_html(args, home: Path) -> int:
     if missing:
         print(f"Không có khóa trong vetted.lock: {', '.join(missing)}", file=sys.stderr)
         return 3
+    reports_dir = (home / "vet-reports").resolve()
     for key in keys:
         entry = entries[key]
-        report = home / (entry.get("report") or "")
-        inside = report.resolve().is_relative_to((home / "vet-reports").resolve())
-        if not entry.get("report") or report.suffix != ".md" or not report.is_file() or not inside:
-            print(f"  · bỏ qua {key}: không có báo cáo .md")
+        rel = entry.get("report") or ""
+        report = home / rel
+        if not rel.endswith(".md") or not report.is_file() or not report.resolve().is_relative_to(reports_dir):
+            print(f"  · bỏ qua {key}: không có báo cáo .md trong vet-reports/")
             continue
         if write_report(report, report.read_text(encoding="utf-8"), key, entry.get("verdict", ""),
-                        entry.get("redflags")):
-            print(f"  + {entry['report'][:-3]}.html")
+                        entry.get("redflags"), write_md=False):
+            print(f"  + vet-reports/{report.with_suffix('.html').name}")
     return 0
 
 

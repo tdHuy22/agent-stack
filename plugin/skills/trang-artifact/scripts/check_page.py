@@ -121,7 +121,7 @@ class PageParser(HTMLParser):
         for value in re.split(r"[,\s]+", attrs.get("data-tu-quen", "")):
             if value:
                 self.known.add(value)
-        if attrs.get("data-loai"):
+        if tag == "main" and attrs.get("data-loai"):  # loại trang chỉ khai trên <main>
             self.kinds.add(attrs["data-loai"].strip())
         if tag in CONCRETE:
             for n in self.stack:
@@ -230,8 +230,7 @@ def check(html: str) -> Report:
                               "án: bỏ một trong hai.")
     light = bool(p.kinds & LIGHT) and not options
     # Có câu cần chốt hay bảng luật là có đề xuất: khai loại nhẹ không được dùng để né bảng ràng buộc.
-    proposal_parts = [name for name in ("rang-buoc", "pattern-xau") if parts.get(name)]
-    if not options and (questions or proposal_parts):
+    if not options and (questions or any(parts.get(n) for n in ("rang-buoc", "pattern-xau"))):
         r.error("loại trang", "Trang có câu cần chốt hay phần ràng buộc là trang đề xuất: đặt mỗi đề xuất vào một thẻ "
                               "data-phuong-an (kế hoạch một hướng là một thẻ) để được đối chiếu với luật.")
 
@@ -244,10 +243,9 @@ def check(html: str) -> Report:
         if words > MAX_SUMMARY_WORDS:
             r.note("tóm tắt", f"Tóm tắt dài {words} chữ; nên dưới {MAX_SUMMARY_WORDS}, chi tiết để phần sau.")
     foundation = parts.get("nen-tang", [])
-    if not foundation:
-        if not light:
-            r.error("nền tảng", 'Thiếu phần data-phan="nen-tang": bối cảnh, vấn đề, khái niệm cần biết trước.')
-    else:
+    if not foundation and not light:
+        r.error("nền tảng", 'Thiếu phần data-phan="nen-tang": bối cảnh, vấn đề, khái niệm cần biết trước.')
+    if foundation:
         size = sum(len(n.plain()) for n in foundation)
         if size < MIN_FOUNDATION_CHARS and not light:
             r.error("nền tảng", f"Phần nền tảng mới {size} ký tự, cần ít nhất {MIN_FOUNDATION_CHARS}: "

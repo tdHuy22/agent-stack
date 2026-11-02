@@ -14,11 +14,10 @@ import html
 import re
 
 CODE_RE = re.compile(r"`([^`]+)`")
-BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 # Chữ đậm hợp lệ (TM-48): nhãn thành phần của render_report khi đứng đầu mục; "có hook", "có MCP" ở đâu cũng được
 # (chữ lạ giả chúng chỉ giả cảnh báo). Chữ đậm khác (từ tên file, mô tả, tên server) giữ nguyên dấu **.
-LABEL_RE = re.compile(r"\*\*((Hook|MCP|Monitor|bin/ trên PATH|Script khi cài|Nguồn plugin bên ngoài):)\*\* ?(.*)")
-STRONG_OK = {"có hook", "có MCP"}
+LABEL_RE = re.compile(r"\*\*((?:Hook|MCP|Monitor|bin/ trên PATH|Script khi cài|Nguồn plugin bên ngoài):)\*\* ?(.*)")
+STRONG_RE = re.compile(r"\*\*(có hook|có MCP)\*\*")
 REVIEWS_MARK = "Duyệt xong thì ghi lại"
 CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
 VERDICT_TEXT = {"PASS": "Không thấy dấu hiệu nguy hiểm", "REVIEW": "Cần đọc tay trước khi duyệt",
@@ -79,16 +78,12 @@ li.todo { list-style: none; margin-left: -1.3em }
 """
 
 
-def strong(m: re.Match) -> str:
-    return f"<strong>{m.group(1)}</strong>" if html.unescape(m.group(1)) in STRONG_OK else m.group(0)
-
-
 def inline(text: str) -> str:
     """Chữ một dòng ra HTML: escape trước, rồi chỉ thêm <code> và <strong> cho nhãn cố định. Không liên kết, ảnh."""
     out = []
     for i, part in enumerate(CODE_RE.split(text)):
         safe = html.escape(part, quote=True)
-        out.append(f"<code>{safe}</code>" if i % 2 else BOLD_RE.sub(strong, safe))
+        out.append(f"<code>{safe}</code>" if i % 2 else STRONG_RE.sub(r"<strong>\1</strong>", safe))
     return "".join(out)
 
 
@@ -99,15 +94,18 @@ def cells(line: str) -> list:
 
 def item_html(text: str, verdict: str) -> str:
     """Một mục danh sách. Dòng phán quyết chỉ in đậm khi đúng bằng phán quyết thật mà vet.py truyền vào."""
-    if text in (f"**Phán quyết: {verdict}**", f"Phán quyết của script: **{verdict}**"):
-        return html.escape(text.replace("**", ""))[:-len(verdict)] + f"<strong>{verdict}</strong>"
+    v = html.escape(verdict)
+    exact = {f"**Phán quyết: {verdict}**": f"Phán quyết: <strong>{v}</strong>",
+             f"Phán quyết của script: **{verdict}**": f"Phán quyết của script: <strong>{v}</strong>"}
+    if text in exact:
+        return exact[text]
     m = LABEL_RE.fullmatch(text)
     if m:
-        return f"<strong>{html.escape(m.group(1))}</strong> {inline(m.group(3))}"
+        return f"<strong>{html.escape(m.group(1))}</strong> {inline(m.group(2))}"
     return inline(text)
 
 
-def body(md: str, verdict: str = "") -> str:
+def body(md: str, verdict: str) -> str:
     """Thân trang từ Markdown của báo cáo, bỏ dòng tiêu đề # (trang tự dựng tiêu đề)."""
     out, para, table, items, fence = [], [], [], [], None
 
@@ -136,7 +134,7 @@ def body(md: str, verdict: str = "") -> str:
             th = "".join(f"<th>{inline(c)}</th>" for c in head)
             trs = []
             for row in rows:
-                sev = re.sub(r"[^a-z]", "", row[0].lower()) if row else ""
+                sev = re.sub(r"[^a-z]", "", row[0].lower())
                 tds = "".join(f"<td>{inline(c)}</td>" for c in row)
                 trs.append(f'<tr class="sev-{sev}">{tds}</tr>')
             out.append(f'<div class="scroll"><table><thead><tr>{th}</tr></thead><tbody>{"".join(trs)}</tbody>'

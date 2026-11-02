@@ -555,9 +555,6 @@ def scan_cmd(args, home: Path, url: str, deps) -> int:
     lock = load_lock(home)
     old = lock["entries"].get(key, {})
     same = old.get("sha") == dig["sha"] and old.get("source") == "mcp:" + url
-    counts = {}
-    for f in flags:
-        counts[f["severity"]] = counts.get(f["severity"], 0) + 1
     server = snapshot.get("server") or {}
     lock["entries"][key] = {
         "source": "mcp:" + url, "kind": "mcp-remote", "subpath": "", "ref": None, "sha": dig["sha"],

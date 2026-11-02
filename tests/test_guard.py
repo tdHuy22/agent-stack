@@ -235,6 +235,34 @@ class WriteGuard(GuardBase):
         self.assertIsNone(self.guard("Edit", {"file_path": str(self.project / "new.md"), "old_string": "a",
                                               "new_string": "b"}, "md2"), "chỉ nhắc khi tạo file bằng Write")
 
+    def test_project_under_a_folder_named_agents_is_not_exempt(self):
+        # Simplify GĐ30: thư mục đặc biệt chỉ tính phần đường dẫn bên trong project.
+        proj = self.tmp / "agents" / "p2"
+        proj.mkdir(parents=True)
+        self.hook("prompt_submit.py", {"session_id": "md3", "cwd": str(proj), "prompt": "Viết báo cáo"})
+        out = self.hook("pretool_guard.py", {"session_id": "md3", "cwd": str(proj), "tool_name": "Write",
+                                             "tool_input": {"file_path": str(proj / "bao-cao.md"), "content": "x"},
+                                             "hook_event_name": "PreToolUse"})
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIsNone(self.hook("pretool_guard.py", {
+            "session_id": "md3", "cwd": str(proj), "tool_name": "Write", "hook_event_name": "PreToolUse",
+            "tool_input": {"file_path": str(proj / "skills" / "x" / "notes.md"), "content": "x"}}))
+        # cwd là thư mục con: gốc project (từ bản ghi lượt) quyết, không phải cwd
+        (proj / "src").mkdir()
+        out = self.hook("pretool_guard.py", {"session_id": "md3", "cwd": str(proj / "src"),
+                                             "tool_name": "Write", "hook_event_name": "PreToolUse",
+                                             "tool_input": {"file_path": str(proj / "docs" / "ke-hoach-moi.md")}})
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_session_rooted_in_a_special_folder_is_exempt(self):
+        import sys
+        sys.path.insert(0, str(HOOKS))
+        import pretool_guard
+        A = pretool_guard.lib()
+        claude_dir = self.tmp / "home" / ".claude"
+        self.assertTrue(pretool_guard.markdown_required(claude_dir / "note.md", str(claude_dir), A))
+        self.assertFalse(pretool_guard.markdown_required(self.tmp / "agents" / "p" / "a.md", str(self.tmp / "agents" / "p"), A))
+
     def test_threat_model_nudge_once_before_first_source_edit(self):
         self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "tm1")
         target = {"file_path": str(self.project / "app" / "upload.py"), "content": "x"}

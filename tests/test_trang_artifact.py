@@ -144,6 +144,11 @@ class PageKind(unittest.TestCase):
                                      '<footer data-phan="nguon"><p>x</p></footer>')
         self.assertTrue(any("là trang đề xuất" in e for e in errors(html)))
 
+    def test_kind_counts_only_on_main(self):
+        html = page().replace('<main data-loai="giai-thich">', "<main>").replace(
+            '<section data-phan="nen-tang">', '<section data-phan="nen-tang" data-loai="bao-cao">')
+        self.assertTrue(any(e.startswith("[loại trang]") for e in errors(html)))
+
     def test_unknown_kind_and_report_with_options(self):
         self.assertTrue(any("không hợp lệ" in e for e in errors(self.light("bang-tin"))))
         html = page(options=[("A", True, False)]).replace("<main>", '<main data-loai="bao-cao">')

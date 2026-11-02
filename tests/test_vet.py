@@ -376,6 +376,13 @@ class ReviewNotes(TempDirTestCase):
         self.assertIn("tên **Hook:** giả, <strong>có hook</strong>", body)
         self.assertNotIn("<strong>FAIL", report_html.body(md, "PASS"), "chỉ in đậm đúng phán quyết thật")
 
+    def test_generated_report_passes_check_page(self):
+        import report_html
+        sys.path.insert(0, str(PLUGIN / "skills" / "trang-artifact" / "scripts"))
+        import check_page
+        md = "# Kiểm duyệt: k\n\n- **Phán quyết: REVIEW**\n\n## Lý do\n\n- ⚠️ Có file chạy được.\n"
+        self.assertEqual(check_page.check(report_html.render(md, "k", "REVIEW", {"medium": 1}, "k.md")).errors, [])
+
     def test_html_command_only_writes_inside_vet_reports(self):
         home = self.tmp / "home"
         (home / "vet-reports").mkdir(parents=True)
