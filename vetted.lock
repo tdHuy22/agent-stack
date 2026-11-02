@@ -94,9 +94,9 @@
     "anthropics/claude-plugins-community:html-plan": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-11-02T03:08:06Z",
+        "note": "Bạn duyệt ngày 02/11/2026, nguyên văn: \"Duyệt và cài cả 4\" (GĐ30, sau khi đọc nhận xét đọc tay ngày 01/11/2026).",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -294,9 +294,9 @@
     "anthropics/claude-plugins-official:plugins/playground": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-11-02T03:08:06Z",
+        "note": "Bạn duyệt ngày 02/11/2026, nguyên văn: \"Duyệt và cài cả 4\" (GĐ30, sau khi đọc nhận xét đọc tay ngày 01/11/2026).",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -380,9 +380,9 @@
     "anthropics/claude-plugins-official:plugins/project-artifact": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-11-02T03:08:06Z",
+        "note": "Bạn duyệt ngày 02/11/2026, nguyên văn: \"Duyệt và cài cả 4\" (GĐ30, sau khi đọc nhận xét đọc tay ngày 01/11/2026).",
+        "status": "approved"
       },
       "license": "Apache-2.0",
       "license_files": [
@@ -503,9 +503,9 @@
     "anthropics/skills:skills/frontend-design": {
       "archived": false,
       "human_review": {
-        "at": null,
-        "note": null,
-        "status": "pending"
+        "at": "2026-11-02T03:08:06Z",
+        "note": "Bạn duyệt ngày 02/11/2026, nguyên văn: \"Duyệt và cài cả 4\" (GĐ30, sau khi đọc nhận xét đọc tay ngày 01/11/2026).",
+        "status": "approved"
       },
       "license": "none",
       "license_files": [

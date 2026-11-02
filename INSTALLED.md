@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 22:18 30/10/2026 từ commit `4055764` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 10:08 02/11/2026 từ commit `36fae2e` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -558,6 +558,21 @@
 | # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
 |---:|---|---|---|---|
 | 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 10:08 02/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261102-100832.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261102-100832`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: rules, plugin, statusline, autocontinue, catalog, tools
+- Kết quả: 5 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+| 2 | lệnh claude | `claude plugin install playground@claude-plugins-official --scope user` |  | `claude plugin uninstall playground@claude-plugins-official --scope user` |
+| 3 | lệnh claude | `claude plugin install project-artifact@claude-plugins-official --scope user` |  | `claude plugin uninstall project-artifact@claude-plugins-official --scope user` |
+| 4 | lệnh claude | `claude plugin install agent-stack-vendor@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user` |
+| 5 | lệnh claude | `claude plugin install html-plan@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall html-plan@agent-stack-vendor-local --scope user` |
 
 ## Gỡ toàn bộ
 
