@@ -18,6 +18,11 @@ from pathlib import Path
 LEVEL_NAMES = {"thap": "thấp", "vua": "vừa", "cao": "cao"}
 KIND_NAMES = {"code": "code", "test": "test", "doc": "tài liệu", "instr": "chỉ dẫn cho agent"}
 DOC_EXT = {".md", ".txt", ".rst", ".adoc"}
+# Trang HTML cho người đọc (luật chung: báo cáo, kế hoạch viết bằng .html, ở .agent/trang/ hay chỗ .md lẽ ra nằm) là
+# tài liệu; HTML nằm trong thư mục mã của web app (template, trang tĩnh của app) vẫn là code.
+PAGE_EXT = {".html", ".htm"}
+WEB_CODE_DIR_RE = re.compile(r"(^|/)(src|app|apps|public|static|templates?|views?|components?|pages|layouts?|www|"
+                             r"web|frontend|client|assets)/")
 MAX_UNTRACKED_BYTES = 1_000_000
 MAX_TEXT = 200_000
 
@@ -119,6 +124,8 @@ def kind(path: str) -> str:
     if INSTR_RE.search(p):
         return "instr"
     if Path(name).suffix in DOC_EXT or re.search(r"(^|/)docs?/", p):
+        return "doc"
+    if Path(name).suffix in PAGE_EXT and not WEB_CODE_DIR_RE.search(p):
         return "doc"
     return "code"
 

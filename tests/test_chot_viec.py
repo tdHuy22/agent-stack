@@ -37,6 +37,17 @@ class Assess(unittest.TestCase):
         self.assertEqual(r["level"], "thap")
         self.assertEqual(r["hotspots"], [])
 
+    def test_reader_html_pages_are_docs(self):
+        # trang cho người đọc dài hàng trăm dòng, không có test: không được chấm như code
+        r = risk.assess([change(".agent/trang/de-xuat.html", 600), change("HUONG-DAN.html", 300, 40),
+                         change("docs/kien-truc.htm", 80)])
+        self.assertEqual(r["level"], "thap", r["reasons"])
+        self.assertEqual(r["by_kind"]["code"], 0)
+
+    def test_html_in_web_app_dirs_is_still_code(self):
+        for path in ("src/index.html", "app/templates/login.html", "public/index.html", "web/static/page.htm"):
+            self.assertEqual(risk.kind(path), "code", path)
+
     def test_small_code_change_with_test_is_low(self):
         r = risk.assess([change("src/pager.py", 3, 1, "start = (page - 1) * per_page\n"),
                          change("tests/test_pager.py", 6)])
