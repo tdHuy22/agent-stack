@@ -55,6 +55,11 @@ def main():
     except ImportError:
         pass
     drift_note, drift_user = plugin_drift() if source == "startup" else ("", "")
+    if os.environ.get("AGENT_STACK_HOST") == "pi":
+        pi_note, pi_user = pi_sync()
+        if pi_note:
+            drift_note = (pi_note + "\n" + drift_note).strip()
+            drift_user = f"{pi_user} · {drift_user}" if drift_user else pi_user
     last = A.last_turn_context(root, sid, source)
     if not info and not hint and not drift_note and not last:
         return
@@ -77,6 +82,27 @@ def main():
         context = drift_note + "\n" + context
         user = f"{drift_user} · {user}"
     A.emit("SessionStart", context, user)
+
+
+def pi_sync():
+    """Chỉ trong pi (cầu nối đặt AGENT_STACK_HOST=pi): sinh lại subagent dạng pi vào state/pi/agents theo đúng
+    plugin/ đang chạy, và báo khi plugin lệch hợp đồng hosts/pi.json. Lệch thì giữ bộ subagent cũ, vì bản sinh từ
+    hợp đồng lệch có thể mở công cụ bị cấm. Trả về (context, dòng cho người dùng); rỗng nếu ổn. Lỗi khi kiểm hay sinh cũng được báo."""
+    try:
+        plugin = Path(__file__).resolve().parents[1]
+        sys.path.insert(0, str(plugin / "hosts"))
+        import pi_host  # noqa: E402
+        problems = pi_host.check(plugin)
+        if not problems:
+            pi_host.sync_agents(plugin, A.state_dir() / "pi" / "agents")
+            return "", ""
+    except Exception as exc:  # việc phụ: lỗi ở đây không được làm mất phần còn lại của hook
+        problems = [f"lỗi khi kiểm hay sinh subagent cho pi: {type(exc).__name__}: {exc}"]
+    shown = "; ".join(problems[:3])
+    return (f"[agent-stack] pi: plugin lệch hợp đồng hosts/pi.json ({len(problems)} chỗ), phần lệch có thể không chạy "
+            f"trong pi: {A.clip(shown, 600)}. Báo cho người dùng; sửa trong agent-stack rồi chạy "
+            f"`python3 plugin/hosts/pi_host.py check`.",
+            f"⚠️ agent-stack lệch hợp đồng pi ({len(problems)} chỗ)")
 
 
 def plugin_drift():

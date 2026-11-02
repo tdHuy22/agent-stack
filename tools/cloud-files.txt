@@ -53,6 +53,8 @@ plugin/hooks/stop_failure.py
 plugin/hooks/subagent_start.py
 plugin/hooks/ui.tsx
 plugin/hooks/ui_status.py
+plugin/hosts/pi.json
+plugin/hosts/pi_host.py
 plugin/lib/agentstack.py
 plugin/skills/chot-viec/SKILL.md
 plugin/skills/chot-viec/scripts/risk.py

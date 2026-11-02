@@ -177,6 +177,7 @@ Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ x
 |---|---|
 | `rules` | Symlink `~/.claude/CLAUDE.md` tới luật chung |
 | `plugin` | Marketplace local `agent-stack-local` và plugin `agent-stack` |
+| `pi` | Chỉ khi máy có pi: `~/.pi/agent/agent-stack/plugin` trỏ vào `plugin/`, `agents` trỏ vào `state/pi/agents` (xem 5.7) |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
 | `catalog` | Plugin chính thức và đồ bên thứ ba đã duyệt, chép đúng commit đã kiểm vào `vendor/` |
@@ -184,7 +185,9 @@ Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ x
 
 ### 5.4 Cập nhật sau khi sửa plugin
 
-Marketplace `agent-stack-local` là chính thư mục repo, nên Claude Code (CLI lẫn app desktop) đọc plugin thẳng từ `plugin/`: `claude plugin list` ghi "Read from: …/agent-stack/plugin". Sửa trong repo có hiệu lực ở phiên mới, hoặc gõ `/reload-plugins` trong phiên đang mở. Không cần cài lại để code mới chạy.
+Marketplace `agent-stack-local` là chính thư mục repo, nên Claude Code (CLI lẫn app desktop) nạp plugin tại chỗ từ `plugin/`: `claude plugin list --json` ghi `readFromFolder` là thư mục đó, và docs ghi marketplace thêm từ đường dẫn cục bộ thì plugin "loads in place" ([plugins/loading](https://code.claude.com/docs/en/plugins/loading)). Sửa trong repo có hiệu lực ở phiên mới, hoặc gõ `/reload-plugins` trong phiên đang mở. Không cần cài lại để code mới chạy.
+
+`installPath` trong `~/.claude/plugins/installed_plugins.json` vẫn trỏ vào bản chép trong `~/.claude/plugins/cache/`, nhưng không phiên nào chạy bản đó. Kiểm trên máy: hook SessionStart ghi `plugin_root` của mỗi phiên vào `state/sessions.jsonl`; phiên app tới 13/10/2026 chạy bản chép, từ 14/10/2026 chạy `agent-stack/plugin`.
 
 Sau khi tăng `version` trong `plugin/.claude-plugin/plugin.json`, chạy
 
@@ -192,7 +195,7 @@ Sau khi tăng `version` trong `plugin/.claude-plugin/plugin.json`, chạy
 ./install.sh --apply --only plugin
 ```
 
-chỉ để Claude Code ghi nhận số phiên bản mới và để `INSTALLED.md` có nhật ký; bỏ qua thì code vẫn chạy đúng. Plugin bên thứ ba trong `vendor/` thì khác: Claude Code chạy bản chép trong cache, nên phải cài lại mới có hiệu lực.
+chỉ để Claude Code ghi nhận số phiên bản mới và để `INSTALLED.md` có nhật ký; bỏ qua thì code vẫn chạy đúng. Plugin bên thứ ba cũng nạp tại chỗ, từ `vendor/`, nhưng `vendor/` chỉ được chép lại từ bản đã kiểm duyệt khi chạy bước `catalog`, nên đổi bản bên thứ ba thì phải cài lại.
 
 ### 5.5 Gỡ
 
@@ -211,6 +214,25 @@ claude plugin list
 ```
 
 phải có `agent-stack@agent-stack-local` đang bật. Thư mục không phải git repo và không có file kế hoạch thì hook im lặng, đó là hành vi đúng.
+
+### 5.7 Dùng với pi
+
+pi (project `~/Documents/Claude/pi-agent`) chạy đúng thư mục `plugin/` mà Claude Code chạy, nên hai bên luôn cùng một code. Phần nối nằm ở hai nơi:
+
+| Nơi | Giữ gì |
+|---|---|
+| agent-stack | `plugin/hosts/pi.json` (hợp đồng: hook nào ứng với sự kiện pi nào, trường vào ra, subagent và skill nào dùng hay bỏ kèm lý do), `plugin/hosts/pi_host.py` (kiểm hợp đồng, sinh subagent dạng pi), `tests/test_pi_contract.py`, bước `pi` của `install.sh` |
+| pi-agent | cầu nối `extensions/agent-stack-bridge.ts`, `config/APPEND_SYSTEM.md`, chặn lệnh, công cụ web, cấu hình model |
+
+`./install.sh --apply` (bước `pi`, chỉ khi có `~/.pi/agent`) tạo hai đường cố định cho pi: `~/.pi/agent/agent-stack/plugin` → `plugin/` và `~/.pi/agent/agent-stack/agents` → `state/pi/agents`. Mỗi lần mở phiên pi, hook SessionStart (cầu nối đặt `AGENT_STACK_HOST=pi`) sinh lại subagent dạng pi theo đúng `plugin/agents/`, và báo khi plugin lệch hợp đồng; lệch thì giữ bộ subagent cũ.
+
+Phần này có hiệu lực ở pi khi pi-agent dùng hai đường cố định trên (cầu nối gọi hook qua `~/.pi/agent/agent-stack/plugin/hooks`, extension subagent đọc `~/.pi/agent/agent-stack/agents`, `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`); tới 02/11/2026 pi-agent vẫn gọi thẳng repo và chép subagent bằng `tools/port_agents.py` của nó, nên đó là việc còn lại ở pi-agent.
+
+Thêm, đổi tên hay bỏ một hook, subagent hay skill thì ghi vào `plugin/hosts/pi.json` (dùng, hay bỏ kèm lý do); quên thì `tests/test_pi_contract.py` trượt. Kiểm riêng:
+
+```bash
+python3 plugin/hosts/pi_host.py check
+```
 
 ## 6. Một ngày làm việc
 

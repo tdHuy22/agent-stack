@@ -28,7 +28,8 @@ LIB_DIR = Path(__file__).resolve().parent
 
 def home_dir():
     """Thư mục gốc agent-stack (có file .agent-stack-root), nếu tìm được.
-    Claude Code chép plugin vào ~/.claude/plugins/cache/ khi cài, nên bản chép không nằm trong repo;
+    Claude Code nạp plugin tại chỗ từ repo (marketplace nguồn thư mục), nhưng bản chép trong ~/.claude/plugins/cache/
+    (Claude Code cũ, marketplace git) không nằm trong repo;
     install.py ghi đường dẫn repo vào plugin/.agent-stack-home (được chép theo) để bản chép tìm về."""
     env = os.environ.get("AGENT_STACK_HOME")
     if env:

@@ -573,6 +573,22 @@ Bạn thấy các trang Artifact quá khó hiểu, và yêu cầu: giải thích
 
 **Pattern xấu cần soát:** theo code cũ (tiền lệ không chứng minh đúng), chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro hay lặng lẽ thu hẹp, đi tắt qua cổng kiểm. Phương án vi phạm luật cứng không bao giờ được khuyên; muốn chọn thì sửa luật trước, như một câu chốt riêng.
 
+### 6.22 agent-stack cho pi (02/11/2026)
+
+pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agent`) đã dùng luật chung, skill và hook của agent-stack, nhưng chỗ nối nằm hết ở pi-agent, nên agent-stack đổi thì pi lệch mà không test nào thấy: cầu nối chuyển 6/8 hook, `researcher` bị bỏ dù pi đã có công cụ web, ghi chép pi-agent nói `trang-artifact` không nạp. Trang so sánh: https://claude.ai/artifact/CVqWe7RGyYXXHevhVb7NL9.
+
+**Đã chốt** (02/11/2026): phương án B, hợp đồng nằm ở agent-stack. Câu "pi chạy bản đã cài hay thư mục đang sửa" chốt lại sau khi kiểm (mục 6.1 (c)): Claude Code chạy thẳng `plugin/` của repo, nên pi cũng chạy đúng thư mục đó, hai bên luôn cùng một code.
+
+**Cách làm.**
+- `plugin/hosts/pi.json`: hook nào ứng với sự kiện pi nào, trường vào và ra cầu nối hiểu, tên công cụ, subagent và skill nào dùng hay bỏ kèm lý do.
+- `plugin/hosts/pi_host.py`: `check` (mọi hook trong `hooks.json`, mọi file trong `agents/`, mọi skill phải có mục; công cụ và trường frontmatter phải chuyển được; skill qua kiểm của pi), `sync_agents` (subagent dạng pi, chỉ ghi file đổi).
+- `tests/test_pi_contract.py`: plugin khớp hợp đồng, mỗi kiểu lệch bị bắt, từng hook chạy với đúng dữ liệu cầu nối gửi (`AGENT_STACK_HOST=pi`, transcript rỗng) chỉ trả trường cầu nối hiểu.
+- Hook SessionStart trong pi sinh lại `state/pi/agents` và báo khi lệch hợp đồng (lệch thì giữ bộ cũ, vì bản sinh từ hợp đồng lệch có thể mở công cụ bị cấm).
+- Bước `pi` của `install.sh`: `~/.pi/agent/agent-stack/plugin` → `plugin/`, `~/.pi/agent/agent-stack/agents` → `state/pi/agents`; chỉ khi máy có pi và hợp đồng khớp.
+- Phần của pi-agent (làm trong phiên riêng của nó): `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`, cầu nối gọi hook ở `~/.pi/agent/agent-stack/plugin/hooks` và đọc `pi.json`, extension subagent đọc thêm `~/.pi/agent/agent-stack/agents`, bỏ `tools/port_agents.py`.
+
+**Không làm:** bản agent-stack tách riêng cho pi (lệch nhanh hơn); đưa cầu nối TypeScript vào agent-stack (trái luật TypeScript trong `CLAUDE.md`); bản chép theo version cho pi (Claude Code không chạy bản chép, nên pi sẽ chạy code khác Claude Code).
+
 ---
 
 ## 7. Thiết kế chi tiết
@@ -582,7 +598,7 @@ Bạn thấy các trang Artifact quá khó hiểu, và yêu cầu: giải thích
 Bản đầu của kế hoạch dùng symlink từng skill vào `~/.claude/`. Khi triển khai, mình đổi sang **đóng gói thành plugin Claude Code**, vì ba lý do:
 (a) thử được bằng `claude --plugin-dir agent-stack/plugin` mà không sửa gì trong `~/.claude`;
 (b) kiểm tra được bằng `claude plugin validate`, và đo kích hoạt skill bằng `claude plugin eval`;
-(c) khi bạn duyệt kích hoạt toàn cục, cài qua một marketplace cục bộ. Kiểm chứng khi cài ngày 02/10/2026: CLI trong terminal nạp plugin tại chỗ từ `agent-stack/plugin`, còn desktop app chạy bản chép trong `~/.claude/plugins/cache/`. Bản chép tìm về repo nhờ file `plugin/.agent-stack-home` do `install.py` ghi. Sau khi sửa plugin: tăng `version`, chạy `./install.sh --apply --only plugin` (gồm `claude plugin update`), rồi mở phiên mới.
+(c) khi bạn duyệt kích hoạt toàn cục, cài qua một marketplace cục bộ. Kiểm chứng khi cài ngày 02/10/2026: CLI trong terminal nạp plugin tại chỗ từ `agent-stack/plugin`, còn desktop app chạy bản chép trong `~/.claude/plugins/cache/`. **Đổi từ 14/10/2026** (kiểm lại 02/11/2026): `plugin_root` mà hook SessionStart ghi trong `state/sessions.jsonl` là bản cache ở mọi phiên app tới 13/10, và là `agent-stack/plugin` ở mọi phiên từ 14/10; `claude plugin list --json` ghi `readFromFolder` là thư mục đó; docs (plugins/loading, mục "In-place and copied plugins") ghi marketplace thêm từ đường dẫn cục bộ thì plugin "loads in place", sửa có hiệu lực ở phiên mới hay sau `/reload-plugins`, không cần tăng version. Bản chép trong cache vẫn được tạo lúc cài nhưng không phiên nào chạy nó; `plugin/.agent-stack-home` giữ lại cho trường hợp plugin bị nạp từ bản chép (Claude Code cũ, marketplace git). pi dùng chính thư mục này, xem mục 6.22.
 
 Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc plugin không được nạp và `claude plugin validate` sẽ cảnh báo.
 

@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "host": "pi",
+  "about": "Hợp đồng giữa agent-stack và pi (project pi-agent). Mọi hook trong hooks.json, mọi subagent trong agents/ và mọi skill trong skills/ phải có mục ở đây: dùng hay bỏ kèm lý do. tests/test_pi_contract.py kiểm; plugin/hosts/pi_host.py sinh subagent cho pi (hook SessionStart trong pi và install.sh). Cầu nối agent-stack-bridge.ts của pi-agent nên đọc file này qua ~/.pi/agent/agent-stack/plugin/hosts/pi.json (việc của pi-agent, 02/11/2026 chưa làm).",
+  "env": {"AGENT_STACK_HOST": "pi"},
+  "payload_common": ["session_id", "cwd", "hook_event_name", "transcript_path"],
+  "outputs_supported": [
+    "systemMessage",
+    "decision",
+    "reason",
+    "hookSpecificOutput.hookEventName",
+    "hookSpecificOutput.additionalContext",
+    "hookSpecificOutput.permissionDecision",
+    "hookSpecificOutput.permissionDecisionReason"
+  ],
+  "hooks": {
+    "SessionStart": {
+      "script": "session_start.py",
+      "pi_event": "session_start",
+      "source_map": {"startup": "startup", "reload": "startup", "new": "clear", "resume": "resume", "fork": "resume"},
+      "payload": ["source"]
+    },
+    "UserPromptSubmit": {
+      "script": "prompt_submit.py",
+      "pi_event": "before_agent_start",
+      "payload": ["prompt"]
+    },
+    "PreToolUse": {
+      "script": "pretool_guard.py",
+      "pi_event": "tool_call",
+      "tool_map": {"bash": "Bash", "write": "Write", "edit": "Edit"},
+      "no_pi_tool": {
+        "MultiEdit": "pi không có công cụ sửa nhiều chỗ một lần; edit của pi đi qua Edit",
+        "NotebookEdit": "pi không có công cụ sửa notebook"
+      },
+      "payload": ["tool_name", "tool_input"]
+    },
+    "Stop": {
+      "script": "stop.py",
+      "pi_event": "agent_before_settle",
+      "payload": ["stop_hook_active", "last_assistant_message"]
+    },
+    "PreCompact": {
+      "script": "pre_compact.py",
+      "pi_event": "session_before_compact",
+      "payload": ["trigger"]
+    },
+    "SessionEnd": {
+      "script": "session_end.py",
+      "pi_event": "session_shutdown",
+      "payload": ["reason"]
+    },
+    "SubagentStart": {
+      "skip": "subagent của pi là một tiến trình pi riêng (PI_SUBAGENT=1); cầu nối không chèn bối cảnh phiên chính cho nó"
+    },
+    "StopFailure": {
+      "skip": "cầu nối chưa có sự kiện pi tương ứng cho lượt dừng vì lỗi API; lượt đó giữ trạng thái 'đang chạy' trong LAST-TURN"
+    }
+  },
+  "agents": {
+    "tool_map": {
+      "Read": ["read"],
+      "Grep": ["grep"],
+      "Glob": ["find", "ls"],
+      "Bash": ["bash"],
+      "Write": ["write"],
+      "Edit": ["edit"],
+      "WebSearch": ["web_search"],
+      "WebFetch": ["web_fetch"]
+    },
+    "all_tools": ["read", "grep", "find", "ls", "bash", "edit", "write", "web_search", "web_fetch"],
+    "no_pi_tool": ["NotebookEdit", "MultiEdit"],
+    "drop_fields": ["model", "effort", "maxTurns", "color", "disallowedTools"],
+    "use": ["explore-lite", "nguoi-doc-la", "researcher", "reviewer", "test-runner"],
+    "skip": {}
+  },
+  "skills": {
+    "use": ["chot-viec", "giong-van", "goi-mcp", "mo-hinh-de-doa", "reuse-best", "session-keeper", "task-router",
+            "tien-do", "trang-artifact", "vet-skill"],
+    "skip": {}
+  }
+}

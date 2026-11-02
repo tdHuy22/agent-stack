@@ -14,6 +14,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 
 - Python chỉ dùng thư viện chuẩn, chạy bằng `python3` (Python 3.11 của pyenv). App gọi hook bằng chính `python3` này: mọi bản plugin đã cài chỉ có `cpython-311.pyc` (kiểm 09/10/2026). Không chạy hay kiểm trên `/usr/bin/python3` (3.9 của hệ thống macOS).
 - TypeScript chỉ dùng cho lớp giao diện (mod) `plugin/hooks/ui.tsx`, kiểu ở `plugin/types/`, test ở `plugin/tests/*.test.tsx`. Không dùng gói npm nào. Logic vẫn nằm ở script Python; module chỉ gọi script qua `$.process.run` rồi vẽ. API mod còn early access: kiểm bằng binary của app (`tools/claude_app.py`), không bằng `claude` trong PATH (brew stable, có thể cũ hơn app).
+- Claude Code và pi (project pi-agent) cùng chạy thẳng thư mục `plugin/`. Thêm, đổi tên hay bỏ hook, subagent, skill thì ghi vào hợp đồng `plugin/hosts/pi.json` (dùng, hay bỏ kèm lý do); `tests/test_pi_contract.py` trượt khi quên.
 - Hook phải nhanh và không bao giờ làm kẹt phiên: bắt mọi lỗi, thoát mã 0, không in gì khi không có việc cần báo.
 - File tạm nằm trong `.tmp/`. Trạng thái chạy nằm trong `state/`. Cả hai không đưa vào git.
 - Ngoại lệ:
