@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hướng dẫn agent-stack</title>
+<style>
+/* Bố cục: mục lục dính bên trái trên màn rộng, thu vào một khối mở được trên điện thoại; cột đọc khoảng 72 ký tự */
+:root {
+  --bg: #f4f3ef; --panel: #ffffff; --fg: #1f2220; --muted: #5f6661; --line: #dcdcd4; --code: #ebeae4;
+  --accent: #2e5d7b; --accent-soft: #e2ebf2; --warn: #8a5a12; --warn-soft: #f7ecd6;
+  --f-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151715; --panel: #1d201e; --fg: #e3e6e2; --muted: #9ca39d; --line: #343a35; --code: #111312;
+  --accent: #8ec0e2; --accent-soft: #1d2d39; --warn: #e2b462; --warn-soft: #3a2f19; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151715; --panel: #1d201e; --fg: #e3e6e2; --muted: #9ca39d; --line: #343a35; --code: #111312;
+  --accent: #8ec0e2; --accent-soft: #1d2d39; --warn: #e2b462; --warn-soft: #3a2f19; color-scheme: dark }
+* { box-sizing: border-box }
+html { scroll-behavior: smooth; scroll-padding-top: 16px }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px }
+.layout { max-width: 1180px; margin: 0 auto; display: grid; gap: 32px }
+@media (min-width: 1040px) { .layout { grid-template-columns: 250px minmax(0, 1fr) } }
+nav.toc { font-size: .9rem; min-width: 0; order: -1 }
+@media (min-width: 1040px) { nav.toc { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px);
+  overflow-y: auto } nav.toc details > summary { display: none } }
+nav.toc summary { cursor: pointer; font-weight: 600; padding: 10px 12px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px }
+nav.toc ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px }
+nav.toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--fg); text-decoration: none }
+nav.toc a:hover, nav.toc a:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none }
+nav.toc .l3 a { padding-left: 22px; color: var(--muted); font-size: .86rem }
+main { min-width: 0; max-width: 780px; display: grid; gap: 18px }
+h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); margin: 0; line-height: 1.2; text-wrap: balance }
+h2 { font-size: 1.35rem; margin: 26px 0 0; padding-top: 18px; border-top: 1px solid var(--line); line-height: 1.3 }
+h3 { font-size: 1.08rem; margin: 14px 0 0 }
+h4 { font-size: .98rem; margin: 10px 0 0; color: var(--muted) }
+section { display: grid; gap: 12px; min-width: 0 }
+p, ul, ol, blockquote { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+a { color: var(--accent) }
+code { font-family: var(--f-mono); font-size: .87em; background: var(--code); padding: 1px 5px; border-radius: 4px;
+  overflow-wrap: anywhere }
+pre { margin: 0; background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  font: .86rem/1.55 var(--f-mono) }
+pre code { background: none; padding: 0; overflow-wrap: normal }
+.codebox { position: relative; min-width: 0 } .codebox pre { padding-top: 34px }
+.codebox .copy { position: absolute; top: 6px; right: 6px; font: 600 .75rem var(--f-body); color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer }
+.codebox .copy:focus-visible { outline: 2px solid var(--accent) }
+blockquote { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; font-style: italic; color: var(--muted) }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .92rem }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line) }
+th { font-size: .8rem; color: var(--muted) }
+.summary { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent);
+  border-radius: 10px; padding: 16px 18px }
+.lead { color: var(--muted) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 }
+.glossary dt { font-weight: 600 } .glossary dd { margin: 0 }
+@media (max-width: 560px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 6px } }
+dfn { font-style: normal; font-weight: 600 }
+.examples { display: grid; gap: 12px }
+@media (min-width: 760px) { .examples { grid-template-columns: repeat(3, minmax(0, 1fr)) } }
+.example { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  display: grid; gap: 8px; align-content: start; min-width: 0 }
+.example h3 { margin: 0; font-size: 1rem }
+.note { font-size: .9rem; color: var(--muted) }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<main data-loai="giai-thich">
+<header>
+<h1>Hướng dẫn sử dụng agent-stack</h1>
+<p class="lead">Cho người dùng hằng ngày. Thiết kế và lý do chọn từng thứ ở <code>KE-HOACH.md</code>; tiến độ triển khai ở <code>PLAN.md</code> §0; những gì đã cài trên máy ở <code>INSTALLED.md</code>.</p>
+</header>
+
+<section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code">
+<h2 id="bat-dau" style="border:0;margin:0;padding:0">Tóm tắt</h2>
+<p>agent-stack là bộ công cụ cá nhân chạy cùng Claude Code. Nó giữ tiến độ qua các phiên, gợi ý việc làm tiếp, chọn model hợp việc, kiểm đồ bên thứ ba trước khi cài, và bắt agent tự kiểm trước khi báo xong. Phần lớn tự chạy: bạn chỉ cần nói tự nhiên bằng tiếng Việt. Trang này đi từ cách kiểm đã cài đúng, qua một ngày làm việc, tới từng skill, cách cài gỡ và cách xử lý trục trặc.</p>
+</section>
+
+<section data-phan="nen-tang">
+<h2 id="can-biet-truoc">Cần biết trước</h2>
+<p>Claude Code là trợ lý lập trình chạy trong terminal hay trong app Claude. Mỗi lần mở là một <dfn>phiên</dfn>; phiên quên hết khi đóng, và có thể bị cắt giữa chừng khi hết hạn mức. agent-stack bù chỗ đó bằng cách ghi trạng thái ra đĩa và nạp lại tự động. Các khái niệm dưới đây xuất hiện ở các mục sau; bốn dòng đầu là cốt lõi.</p>
+<dl class="glossary">
+<dt><dfn>Skill</dfn></dt><dd>Gói hướng dẫn mà Claude tự nạp khi việc khớp mô tả, ví dụ <code>tien-do</code> khi bạn hỏi "làm gì tiếp?". Gọi đích danh bằng <code>/agent-stack:&lt;tên-skill&gt;</code>. Cần cho mục 3 và 5.</dd>
+<dt><dfn>Hook</dfn></dt><dd>Script tự chạy ở một thời điểm cố định: mở phiên, gửi tin, trước khi ghi file, khi agent dừng. Ví dụ hook mở phiên in dòng 📍 với việc tiếp theo. Cần cho mục 2 và 4.</dd>
+<dt><dfn>Subagent</dfn></dt><dd>Agent phụ chạy trong bối cảnh riêng, chỉ trả về kết quả gọn, ví dụ <code>agent-stack:reviewer</code> đọc diff tìm lỗi. Cần cho mục 6.</dd>
+<dt><dfn>§0</dfn></dt><dd>Mục "Đang ở đâu, việc tiếp theo" ở đầu <code>PLAN.md</code> của mỗi project: đã xong gì, đang dở gì, việc tiếp theo. Hook nạp nó vào mọi phiên. Cần cho mục 3 và 5.1, 5.2.</dd>
+<dt><dfn>Dòng ➡️</dfn></dt><dd>Dòng cuối mỗi câu trả lời, gợi ý việc kế tiếp kèm model, effort (mức suy nghĩ), subagent và skill hợp với việc đó.</dd>
+<dt><dfn>MCP</dfn></dt><dd>Máy chủ cấp thêm công cụ cho Claude (Model Context Protocol), ví dụ công cụ tìm web.</dd>
+<dt><dfn>PASS</dfn>, <dfn>REVIEW</dfn>, <dfn>FAIL</dfn></dt><dd>Ba phán quyết của <code>vet-skill</code>: không thấy dấu hiệu nào (không có nghĩa là an toàn), cần đọc tay, có dấu hiệu nguy hiểm.</dd>
+<dt><dfn>HEAD</dfn>, <dfn>SHA</dfn></dt><dd>Trong git: HEAD là commit đang đứng; SHA là mã băm định danh một commit (ghim SHA là cố định đúng một bản).</dd>
+<dt><dfn>HMAC</dfn></dt><dd>Chữ ký bằng khóa bí mật của máy này, để hook nhận ra bản ghi do chính nó viết.</dd>
+<dt><dfn>HOME</dfn></dt><dd>Thư mục nhà của người dùng (<code>~</code>), nơi có khóa và cấu hình riêng.</dd>
+<dt><dfn>SOTA</dfn></dt><dd>Tốt nhất hiện nay (state of the art), thường nói về kết quả nghiên cứu.</dd>
+<dt><dfn>STRIDE</dfn></dt><dd>Sáu loại đe dọa dùng khi làm threat model: giả danh, sửa trộm, chối bỏ, lộ thông tin, làm sập, leo quyền.</dd>
+<dt><dfn>Hạn mức</dfn></dt><dd>Lượng dùng Claude được phép trong 5 giờ và trong 7 ngày (viết tắt 5h, 7d trên thanh trạng thái).</dd>
+</dl>
+</section>
+
+<section>
+<h2 id="ba-tinh-huong">Ba tình huống thường gặp</h2>
+<div class="examples">
+<article class="example" data-vi-du>
+<h3>Quay lại project sau ba ngày</h3>
+<p>Mở phiên trong thư mục project, đọc dòng 📍, rồi hỏi <q>làm gì tiếp?</q>. Skill <code>tien-do</code> đọc §0, git và TODO, trả về tối đa 3 việc kèm lý do và gợi ý model. Xem mục 3 và 5.1.</p>
+</article>
+<article class="example" data-vi-du>
+<h3>Hạn mức 5 giờ đã dùng 90%</h3>
+<p>Từ 90% (mặc định), hook nhắc Claude lưu tiến độ. Bạn nói <q>lưu tiến độ</q>; skill <code>session-keeper</code> ghi §0 (đã xong, đang dở, việc tiếp theo). Hết hạn mức thì cứ để đó: phiên sau tự đọc lại §0. Xem mục 4 và 5.2.</p>
+</article>
+<article class="example" data-vi-du>
+<h3>Mở phiên mà không thấy dòng 📍</h3>
+<p>Plugin chưa nạp hay hook không chạy. Chạy <code>claude plugin list</code> (phải thấy <code>agent-stack@agent-stack-local</code> đang bật) và xem 3 dòng cuối của <code>state/sessions.jsonl</code>. Xem mục 2 và 10.</p>
+</article>
+</div>
+</section>
+
+<section>
+<h2 id="s-1-agent-stack-làm-gì">1. agent-stack làm gì</h2>
+<p>Bộ này giải quyết bốn chuyện hay gặp khi làm việc với Claude Code:</p>
+<ul><li><strong>Mất tiến độ</strong> khi hết hạn mức, crash, compact hay đổi công cụ. Trạng thái được ghi ra đĩa, ở mục §0 của <code>PLAN.md</code>, và tự nạp lại mỗi khi mở phiên.</li><li><strong>Không biết làm gì tiếp</strong> khi quay lại project sau vài ngày. Skill <code>tien-do</code> đọc §0, git và TODO rồi xếp việc theo ưu tiên.</li><li><strong>Tốn hạn mức vì chọn model quá mạnh</strong> (hoặc quá yếu). Router gợi ý model, effort, subagent và skill cho từng việc; cuối mỗi câu trả lời có dòng ➡️.</li><li><strong>Cài đồ bên thứ ba thiếu kiểm tra.</strong> Skill <code>vet-skill</code> quét skill, plugin, MCP trước khi cài và ghi kết quả vào <code>vetted.lock</code>.</li></ul>
+<p>Ngoài ra có bốn skill phụ: <code>giong-van</code> để chỉnh văn cho đúng giọng mình, <code>reuse-best</code> để tìm thứ có sẵn trước khi tự viết, <code>mo-hinh-de-doa</code> để làm threat model ngắn trước khi code chức năng đụng ranh giới tin cậy, và <code>chot-viec</code> để agent tự kiểm trước khi báo xong.</p>
+<p>Mọi thứ nằm trong repo này. Các file ngoài repo (<code>~/.claude/CLAUDE.md</code>, bản plugin trong cache của Claude Code...) chỉ là symlink hoặc bản chép từ đây, nên sửa trong repo là đủ.</p>
+</section>
+<section>
+<h2 id="s-2-kiểm-tra-đã-cài-đúng-chưa">2. Kiểm tra đã cài đúng chưa</h2>
+<p>Mở một phiên Claude Code mới trong thư mục có <code>PLAN.md</code> (ví dụ chính repo này). Đầu phiên phải thấy:</p>
+<ul><li>dòng <strong>📍</strong> <code>&lt;tên project&gt;: tiếp theo → &lt;việc đầu tiên trong §0&gt;</code>;</li><li>dòng <strong>🧭</strong> hồ sơ project, ví dụ <code>🧭 tài liệu, Python, có test</code>;</li><li>dòng <strong>🕘</strong> <code>Lượt cuối (&lt;giờ ngày&gt;): tiếp → &lt;việc tiếp theo&gt;</code>, khi thư mục đã có lượt cuối do hook ghi (mục 4); lượt cuối chưa xong hay dừng vì lỗi API thì là dòng <strong>⚠️</strong>.</li></ul>
+<p>Các dòng này do hook SessionStart in ra. Phần đầy đủ (§0, quyết định còn treo, mốc kiểm tra, trạng thái git, skill và subagent nên dùng) được nạp vào context của Claude, bạn không thấy trực tiếp. Nếu không thấy hai dòng trên:</p>
+<pre data-lang="bash"><code>claude plugin list</code></pre>
+<pre data-lang="bash"><code>tail -3 ~/Documents/Claude/agent-stack/state/sessions.jsonl</code></pre>
+<p>Lệnh đầu phải có <code>agent-stack@agent-stack-local</code> ở trạng thái bật. Lệnh sau cho biết hook có chạy không và plugin được nạp từ đâu (<code>plugin_root</code>). Thư mục không phải git repo và không có file kế hoạch thì hook im lặng; đó là hành vi đúng.</p>
+<p><strong>Chỉ khi chạy <code>claude</code> trong terminal</strong>, thanh trạng thái ở dưới cùng phải có dạng:</p>
+<pre data-lang=""><code>Opus 5.5 · high · ctx 23% · 5h 41% · 7d 12%</code></pre>
+<p>Màu chuyển vàng rồi đỏ khi gần ngưỡng (ctx: 60/80%, 5h: 70/90%, 7d: 70/85%). Desktop app không chạy statusline, nên ở đó không có thanh này; xem mức dùng bằng <code>/usage</code>. Cách kiểm tra statusline đã chạy: file <code>state/limits.json</code> được tạo hoặc vừa cập nhật.</p>
+</section>
+<section>
+<h2 id="s-3-một-ngày-làm-việc">3. Một ngày làm việc</h2>
+<p>Đây là cách dùng điển hình. Phần lớn chỉ cần nói tự nhiên bằng tiếng Việt; skill tự kích hoạt theo từ khóa. Muốn gọi đích danh thì gõ <code>/agent-stack:&lt;tên-skill&gt;</code>.</p>
+<p><strong>Mở project.</strong> Đọc dòng 📍. Nếu đã nghỉ lâu hoặc không nhớ đang làm gì, hỏi:</p>
+<blockquote>làm gì tiếp?</blockquote>
+<p>Skill <code>tien-do</code> trả về tối đa 3 việc, kèm lý do, gợi ý model và một câu <code>/goal</code> nếu việc đầu tiên kiểm chứng được.</p>
+<p><strong>Trước một việc lớn.</strong> Nếu sắp viết một tool, tính năng hay thuật toán không tầm thường:</p>
+<blockquote>có sẵn thư viện nào làm việc X chưa?</blockquote>
+<p>Skill <code>reuse-best</code> tìm theo thứ tự: tính năng sẵn có, code trong project, skill đã duyệt, GitHub, rồi bài nghiên cứu. Kết quả là một quyết định dùng lại, điều chỉnh hay tự làm, kèm nguồn, phần còn phải tự làm, và những điểm cần bạn quyết.</p>
+<p><strong>Trong lúc làm.</strong> Để ý dòng ➡️ cuối mỗi câu trả lời:</p>
+<pre data-lang=""><code>➡️ Tiếp: chạy test sau khi sửa parser · Model: sonnet · Effort: medium · Subagent: agent-stack:test-runner · Skill: không</code></pre>
+<p>Đây là gợi ý cho <em>việc kế tiếp</em>. Chỉ đổi model hay effort ở ranh giới giữa hai việc, vì đổi giữa chừng làm mất prompt cache và có khi tốn hơn.</p>
+<p><strong>Khi chạy kiểm tra.</strong> Nhờ Claude chạy qua <code>receipt.py</code> để có biên nhận. Biên nhận gắn với nội dung code lúc chạy, nên phiên sau biết kết quả còn đúng hay code đã đổi.</p>
+<p><strong>Khi gần hết hạn mức.</strong> Hook sẽ nhắc (xem mục 4). Lúc đó nói:</p>
+<blockquote>lưu tiến độ</blockquote>
+<p>Skill <code>session-keeper</code> cập nhật §0 với đã xong gì, đang dở gì, việc tiếp theo, mốc kiểm tra. Hết hạn mức thì cứ để đó; phiên sau tự đọc lại §0.</p>
+<p><strong>Khi bàn giao cho phiên khác.</strong> Nói &quot;bàn giao&quot;. Claude viết <code>.agent/HANDOFF.md</code>; phiên Claude Code mới trong thư mục project tự nạp file này. Công cụ không có hook thì nhắn &quot;Đọc .agent/HANDOFF.md rồi làm tiếp bước 1&quot;.</p>
+<p><strong>Trước khi commit.</strong> Nếu thay đổi chạm tới xác thực, input, đường dẫn file, secret hay cấu hình, nhờ &quot;review trước khi commit&quot;. Subagent <code>agent-stack:reviewer</code> (opus · high, chỉ đọc) sẽ xem.</p>
+</section>
+<section>
+<h2 id="s-4-những-gì-tự-chạy">4. Những gì tự chạy</h2>
+<p>Bạn không cần gọi các thành phần dưới đây. Chúng chạy theo sự kiện của Claude Code, đều viết bằng Python thư viện chuẩn, bắt mọi lỗi và không bao giờ làm kẹt phiên.</p>
+<div class="scroll"><table><thead><tr><th>Thành phần</th><th>Khi nào</th><th>Làm gì</th></tr></thead><tbody><tr><td>Hook SessionStart</td><td>Mở phiên, resume, <code>/clear</code>, sau compact</td><td>Nạp §0, hồ sơ project và lượt cuối (<code>.agent/LAST-TURN.md</code>, rút gọn khoảng 500 ký tự) vào context; in dòng 📍, 🧭 và 🕘. Resume lại đúng phiên đã ghi lượt cuối thì không nạp lượt cuối, vì phiên đó còn nguyên hội thoại. Lúc mở phiên mới: báo plugin lệch bản đã kiểm duyệt; với MCP từ xa đã cài, báo kết quả lần kiểm nền trước và mỗi ngày khởi một lần kiểm nền mới (chạy tách phiên, hook không chờ; tắt bằng <code>AGENT_STACK_NO_BACKGROUND=1</code>)</td></tr><tr><td>Hook UserPromptSubmit</td><td>Mỗi tin nhắn</td><td>Ghi lượt cuối ở trạng thái đang chạy (yêu cầu, lúc bắt đầu), để Esc, crash, đóng app hay lượt dài chưa xong vẫn để lại dấu; nhắc một lần khi phiên còn chạy agent-stack cũ hơn bản đã cài (gõ <code>/reload-plugins</code> hay mở lại phiên). Gợi ý <code>[router]</code> cho việc trong tin nhắn: lấy model, cỡ context, lúc gọi model gần nhất từ số liệu mod giao diện ghi trong <code>state/session-usage/</code> (phiên Claude Code có mod; không có thì đọc phần cuối transcript), rồi chỉ gợi ý <code>/model</code> khi rẻ (đầu phiên, context dưới 40K token, đã nghỉ quá thời hạn cache), còn lại gợi ý giữ model và giao subagent; <code>/effort</code> gợi ý thoải mái vì các model 5.x giữ cache khi đổi effort (bạn thấy dòng <code>🧭 router: ...</code> khi có luật khớp; không gợi ý cho tin do hệ thống tạo như báo cáo của subagent, tin của phiên Claude khác hay tin báo phiên phụ xong lượt); cảnh báo hạn mức khi vượt ngưỡng; lưu yêu cầu gần nhất (đã che khóa, tối đa 1200 ký tự; bỏ qua lệnh <code>/ ! #</code> và tin do hệ thống tạo, kể cả báo cáo của subagent quay về phiên chính và tin của phiên Claude khác; sau một tin quá ngắn như &quot;ok&quot; vẫn nhớ yêu cầu đầy đủ trước đó) vào <code>state/last-request/</code> cho hook SubagentStart; ghi lúc bắt đầu lượt và dấu của §0 lúc đó vào <code>state/turns/</code> cho hook Stop (mọi tin, kể cả tin do hệ thống tạo)</td></tr><tr><td>Hook PreToolUse</td><td>Trước mỗi lệnh Bash và mỗi lần ghi, sửa file (khoảng 20 ms)</td><td>Chặn cài plugin, skill, MCP chưa qua <code>vet-skill</code> và chưa được duyệt trong <code>vetted.lock</code> (nhắc Claude chạy <code>vet-skill</code>); hỏi bạn trước khi thêm marketplace lạ; hỏi bạn trước <code>git checkout</code> hay <code>git switch</code> làm đổi HEAD hoặc ghi đè file khi cây có thay đổi chưa commit; chặn ghi báo cáo <code>*DIFFERENTIAL_REVIEW*.md</code> vào chỗ git không bỏ qua; tạo file <code>.md</code> mới không thuộc loại bắt buộc Markdown thì chặn một lần cho mỗi file trong lượt, nhắc Claude viết HTML (ghi lại thì cho qua); khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa file mã nguồn đầu tiên để Claude chạy <code>mo-hinh-de-doa</code> trước (chỉ một lần mỗi lượt); khi Claude tạo tag git (<code>git tag &lt;tên&gt;</code>, kể cả <code>-a</code>, <code>-s</code>, <code>-f</code>) hay chạy <code>gh release create</code>, chặn lần đầu để Claude hỏi bạn đã audit cả repo chưa (Semgrep rồi <code>claude-security</code>); bạn trả lời xong thì Claude chạy lại được. Không dùng hộp hỏi vì ở auto mode hộp hỏi của hook từng được duyệt mà bạn không thấy (10/10/2026)</td></tr><tr><td>Hook SubagentStart</td><td>Mỗi khi sinh subagent hoặc chạy skill <code>context: fork</code></td><td>Đưa vào đầu context của chúng yêu cầu gần nhất của bạn và 1 đến 2 việc đầu trong §0 (tối đa khoảng 1500 ký tự), vì chúng không thấy hội thoại</td></tr><tr><td>Hook PreCompact</td><td>Trước khi compact</td><td>Ghi sự kiện; nhắc nếu §0 đã lâu chưa cập nhật. Không chặn compact</td></tr><tr><td>Hook Stop</td><td>Cuối mỗi lượt trả lời trọn vẹn (không chạy khi bạn bấm dừng giữa chừng hay lỗi API)</td><td>Ghi <code>.agent/LAST-TURN.md</code> trong thư mục làm việc, trước các bước chậm: yêu cầu, câu trả lời cuối (đã che khóa, tối đa 1.500 ký tự), việc tiếp theo lấy từ dòng ➡️, file đổi trong lượt, §0 đã cập nhật chưa. File chỉ nằm trên máy: hook thêm nó vào <code>.git/info/exclude</code> nên không hiện trong <code>git status</code>. Nếu lượt đổi code có mức rủi ro từ vừa trở lên (chấm bằng <code>risk.py</code> của <code>chot-viec</code>, chỉ trên file lượt này đổi, kể cả file đã commit trong lượt) mà chưa chạy <code>chot-viec</code>, hook chặn một lần để Claude chạy <code>chot-viec</code>. <code>chot-viec</code> lo luôn threat model, review theo mức rủi ro và §0. Còn lại, nếu lượt có đổi file mà §0 vẫn như lúc bắt đầu lượt, hook chặn một lần để Claude cập nhật §0 rồi mới kết thúc. Mỗi lần chặn tốn thêm một lượt model; lần dừng thứ hai không chặn nữa. Thư mục không phải git repo cũng được ghi (file nằm ngay trong thư mục); thư mục chung (home, <code>~/.claude</code>, thư mục tạm, thư mục gom nhiều project), file là symlink hay do git theo dõi thì ghi vào <code>state/last-turn/</code>. Mỗi bản ghi ký HMAC bằng khóa trong <code>state/</code>; SessionStart bỏ qua bản không ký đúng (file do repo clone cài sẵn hay bị sửa tay)</td></tr><tr><td>Hook StopFailure</td><td>Lỗi API kết thúc lượt (rate limit, hết hạn mức, quá tải, lỗi máy chủ)</td><td>Ghi lượt cuối ở trạng thái &quot;dừng vì lỗi&quot;, kèm file đã đổi và đoạn chữ gần nhất Claude viết trong lượt. Claude Code bỏ qua đầu ra của hook này</td></tr><tr><td>Hook SessionEnd</td><td>Đóng phiên</td><td>Ghi một dòng vào <code>state/sessions.jsonl</code>, để <code>tien-do</code> gợi ý <code>claude --resume</code></td></tr><tr><td>Statusline</td><td>Liên tục, chỉ trong terminal</td><td>Hiện model, effort, ctx, 5h, 7d; ghi <code>state/limits.json</code> cho hook cảnh báo</td></tr><tr><td>Luật chung</td><td>Mọi phiên</td><td><code>~/.claude/CLAUDE.md</code> trỏ về <code>global/CLAUDE.global.md</code>, file này import <code>global/SHARED.global.md</code>: trả lời tiếng Việt, đọc §0 trước, không nói &quot;xong&quot; khi chưa kiểm chứng, dòng ➡️</td></tr><tr><td><code>autoContinueAtUsageLimit</code></td><td>Khi chạm hạn mức</td><td>Claude Code tự làm tiếp khi hạn mức reset</td></tr></tbody></table></div>
+<p><strong>Giới hạn của hook PreToolUse.</strong> Hook so chuỗi lệnh với mẫu, nên nó là lớp nhắc cho Claude chứ không phải ranh giới bảo mật. Lệnh viết vòng (qua biến, script trung gian) vẫn lọt; ngược lại, một lệnh chỉ in ra chuỗi giống lệnh cài (ví dụ <code>echo &quot;claude plugin install ...&quot;</code>) cũng bị chặn. Ranh giới thật là quyền của Claude Code, việc bạn duyệt, và bước kiểm lệch lúc mở phiên: plugin cài ngoài catalog bị báo là chưa qua vet. Hook không chặn lệnh bạn tự gõ trong terminal.</p>
+<h3 id="s-cảnh-báo-hạn-mức">Cảnh báo hạn mức</h3>
+<ul><li>Hạn mức 5 giờ: nhắc khi đã dùng từ <strong>90%</strong>. Claude sẽ ghi checkpoint vào §0 trước bước dài tiếp theo.</li><li>Hạn mức tuần: nhắc khi đã dùng từ <strong>80%</strong>. Claude sẽ cập nhật §0 ngay.</li><li>Lên 95% thì nhắc thêm một lần. Mỗi ngưỡng chỉ nhắc một lần cho mỗi phiên và mỗi chu kỳ reset.</li></ul>
+<p>Số liệu hạn mức do statusline ghi, mà statusline chỉ chạy trong terminal. Vì vậy <strong>desktop app không có cảnh báo hạn mức</strong> trừ khi gần đây bạn có mở <code>claude</code> trong terminal (số liệu cũ hơn 30 phút bị bỏ qua). Trong desktop app, tự để ý mức dùng và nói &quot;lưu tiến độ&quot; khi thấy cần.</p>
+</section>
+<section>
+<h2 id="s-5-mười-skill">5. Mười skill</h2>
+<p>Mỗi skill có thể gọi bằng lời tự nhiên hoặc gọi thẳng <code>/agent-stack:&lt;tên&gt; &lt;tham số&gt;</code>. Script đi kèm cũng chạy tay được; mọi đường dẫn dưới đây tính từ gốc repo.</p>
+<h3 id="s-51-tien-do-tiến-độ-và-việc-nên-làm-tiếp">5.1 <code>tien-do</code>: tiến độ và việc nên làm tiếp</h3>
+<p><strong>Khi nào:</strong> mở lại project, hỏi &quot;làm gì tiếp&quot;, &quot;đang dở gì&quot;, &quot;status&quot;, hoặc muốn xem tổng quan mọi project.</p>
+<p><strong>Gọi:</strong></p>
+<ul><li><code>/agent-stack:tien-do</code> cho project hiện tại.</li><li><code>/agent-stack:tien-do all</code> cho mọi project trong <code>~/Documents/Claude/</code>. Chỉ chạy khi bạn hỏi: không có tác vụ định kỳ hay bản tổng hợp tuần, mỗi project tự theo dõi qua §0 của nó (bạn quyết 03/10/2026).</li></ul>
+<p><strong>Kết quả:</strong> một dòng trạng thái, tối đa 3 việc nên làm, cảnh báo (§0 cũ, file chưa commit lâu, nhánh chưa merge, kiểm tra trượt hoặc đã cũ), và câu <code>/goal</code> gợi ý. Việc được xếp theo 5 bậc: chặn đường → dang dở → giai đoạn hiện tại → nợ TODO → bị bỏ quên.</p>
+<p><strong>Chạy tay</strong> (chỉ đọc project, không sửa gì trong project; chỉ ghi một snapshot nhỏ vào <code>state/</code> của agent-stack để lần sau báo &quot;Đổi từ lần trước&quot;):</p>
+<pre data-lang="bash"><code>python3 plugin/skills/tien-do/scripts/collect.py --md</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/tien-do/scripts/collect.py --all --md</code></pre>
+<p>Thêm <code>--gh</code> để lấy cả PR và CI trên GitHub (cần mạng, cần <code>gh</code> đã đăng nhập). <code>--brief</code> in bản rút gọn, <code>--json</code> cho máy đọc. Thêm <code>--no-snapshot</code> nếu chỉ xem thử và không muốn dời mốc &quot;lần trước&quot; (<code>--brief</code> và hook không so, không ghi). Từ lần báo thứ hai cho cùng một project, kết quả có mục &quot;Đổi từ lần trước&quot;: commit mới, việc mới xong, việc mới phát sinh, việc biến mất; không có gì đổi thì đúng một dòng.</p>
+<h3 id="s-52-session-keeper-lưu-làm-tiếp-bàn-giao">5.2 <code>session-keeper</code>: lưu, làm tiếp, bàn giao</h3>
+<p><strong>Khi nào:</strong> &quot;lưu tiến độ&quot;, &quot;sắp hết limit&quot;, &quot;làm tiếp việc hôm qua&quot;, &quot;bàn giao&quot;, hoặc project chưa có file kế hoạch.</p>
+<p><strong>Bốn chế độ</strong> (<code>/agent-stack:session-keeper &lt;chế độ&gt;</code>):</p>
+<div class="scroll"><table><thead><tr><th>Chế độ</th><th>Làm gì</th></tr></thead><tbody><tr><td><code>luu</code> (mặc định)</td><td>Cập nhật §0: ngày, Xong (kèm bằng chứng), Đang dở, Việc tiếp theo, Quyết định còn treo, Mốc kiểm tra. Cho bạn xem diff trước khi commit</td></tr><tr><td><code>tiep-tuc</code></td><td>Đọc §0, chạy các bước &quot;Sau khi bị ngắt&quot;, chạy lại mốc kiểm tra nếu biên nhận đã cũ, báo chỗ lệch, đề xuất bước đầu tiên</td></tr><tr><td><code>ban-giao</code></td><td>Chạy <code>luu</code>, rồi tạo <code>.agent/HANDOFF.md</code> có sẵn §0 và trạng thái git</td></tr><tr><td><code>khoi-tao</code></td><td>Tạo <code>.agent/PLAN.md</code> từ mẫu cho project chưa có file kế hoạch</td></tr></tbody></table></div>
+<p><strong>Nguyên tắc của §0:</strong> chỉ có một nguồn sự thật. Các file khác chỉ trỏ tới §0, không chép. Không xóa lịch sử trong file kế hoạch; chỉ cập nhật §0 và tick checkbox. §0 phải ngắn vì agent đọc nó mỗi phiên (một §0 dài 80K ký tự tốn khoảng 25K token mỗi lần mở phiên): lịch sử cũ dời sang <code>.agent/NHAT-KY.md</code> bằng <code>state.py trim</code>.</p>
+<p><strong>Chạy tay:</strong></p>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/state.py show --project &lt;thư mục&gt;</code></pre>
+<p><code>state.py</code> có bốn lệnh: <code>show</code>, <code>init</code>, <code>handoff</code>, <code>trim</code>. <code>trim</code> giữ 3 mục Xong mới nhất của §0 theo ngày ghi ở dòng đầu mục (<code>--keep N</code> để đổi; mục không ghi ngày thì cần <code>--newest-first</code> hay <code>--newest-last</code>), chuyển các mục Xong còn lại, bước đã gạch hay ✅ của &quot;Việc tiếp theo&quot; và mốc đã xong hết (không còn ô <code>- [ ]</code> nào, kể cả ở tiêu đề con) sang <code>.agent/NHAT-KY.md</code>, đợt mới nhất ở trên; không xóa chữ nào. Chỉ đụng <code>PLAN.md</code> hay <code>.agent/PLAN.md</code>, không đụng <code>HANDOFF.md</code>. <code>--dry-run</code> in mục sẽ giữ và mục sẽ dời. tien-do và hook SessionStart cảnh báo khi §0 dài hơn 12K ký tự; hook Stop nhắc trim (chỉ khi trim rút được §0) ở lượt vừa cập nhật §0 mà §0 dài quá ngưỡng, nên §0 phình lại thì được dời ngay ở lần cập nhật đó; §0 dài vì lịch sử không nằm dưới nhãn <strong>Xong</strong> thì cần rút gọn tay. <code>trim</code> không dời mục hay bước nào nhắc mốc kiểm tra, và từ chối (mã thoát 3, không ghi gì) nếu dời xong thì mốc kiểm tra mà tien-do đọc được sẽ đổi.</p>
+<h4 id="s-biên-nhận-kiểm-tra-receiptpy">Biên nhận kiểm tra (<code>receipt.py</code>)</h4>
+<p>Luật chung yêu cầu mọi lệnh kiểm chứng chạy qua <code>receipt.py</code>:</p>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/receipt.py run -- python3 -m unittest discover -s tests -t .</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/receipt.py show</code></pre>
+<p><code>run</code> chạy lệnh và ghi lại mã thoát kèm dấu vân tay của code lúc đó. <code>show</code> liệt kê biên nhận và đánh dấu biên nhận nào đã cũ vì code đổi sau khi chạy. Tùy chọn: <code>--project</code>, <code>--label</code>, <code>--timeout</code>.</p>
+<p>Biên nhận trượt mà không còn ý nghĩa sẽ làm hook SessionStart và cây kế hoạch báo &quot;Chặn đường&quot; mãi. <code>forget &lt;tên&gt;</code> xoá biên nhận theo tên mà <code>show</code> in ra. <code>prune</code> tự xoá biên nhận trượt của lệnh <code>unittest</code> hay <code>pytest</code> trỏ tới module hoặc file test đã bị xoá; không chắc (ví dụ <code>discover</code>) thì giữ. Thêm <code>--dry-run</code> để xem trước.</p>
+<h3 id="s-53-task-router-chọn-model-effort-subagent-skill">5.3 <code>task-router</code>: chọn model, effort, subagent, skill</h3>
+<p><strong>Khi nào:</strong> &quot;việc này nên dùng opus hay sonnet?&quot;, &quot;effort bao nhiêu?&quot;, &quot;có nên giao subagent không?&quot;, &quot;làm sao tiết kiệm token&quot;.</p>
+<p>Phần lớn thời gian bạn không cần gọi skill này: hook đã chèn gợi ý <code>[router]</code> vào mỗi tin nhắn, và dòng ➡️ dùng gợi ý đó. Gọi <code>/agent-stack:task-router &lt;mô tả việc&gt;</code> khi muốn hỏi riêng.</p>
+<p><strong>Nguyên tắc router áp dụng:</strong></p>
+<ol><li>Giữ chất lượng là bắt buộc. Chỉ hạ model hay effort khi có bước kiểm tra tự động hoặc model mạnh hơn sẽ xem lại.</li><li>Hạ effort trước, hạ model sau.</li><li>Việc rủi ro cao (bảo mật, mất dữ liệu, kiến trúc, migration) luôn opus · high.</li><li>Việc nhiều phần độc lập hoặc sinh output dài thì giao subagent.</li><li>Fable chỉ cho việc tự chủ rất dài và rất khó.</li></ol>
+<p><strong>Chạy tay</strong> (0 token, chỉ so từ khóa):</p>
+<pre data-lang="bash"><code>python3 plugin/skills/task-router/scripts/route.py &quot;review bảo mật trước khi commit&quot;</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/task-router/scripts/route.py --session ~/Documents/Claude/&lt;project&gt;</code></pre>
+<p><code>--project &lt;thư mục&gt;</code> thêm skill theo loại project; <code>--session</code> in hồ sơ project như hook SessionStart, dùng cho công cụ không có hook. Bảng gợi ý hiện tại ở <code>routing-table.md</code>, luật máy đọc ở <code>plugin/skills/task-router/rules.json</code>. Cả hai còn là giả thuyết cho tới khi có số liệu eval (mục 9).</p>
+<h3 id="s-54-vet-skill-kiểm-duyệt-đồ-bên-thứ-ba">5.4 <code>vet-skill</code>: kiểm duyệt đồ bên thứ ba</h3>
+<p><strong>Khi nào:</strong> trước khi cài bất kỳ skill, plugin, MCP hay marketplace nào; khi dán link GitHub của một skill; khi hỏi &quot;cái này có an toàn không&quot;.</p>
+<p><strong>Gọi:</strong></p>
+<pre data-lang=""><code>/agent-stack:vet-skill owner/repo
+/agent-stack:vet-skill owner/repo@v1.2.0:skills/ten-skill
+/agent-stack:vet-skill ~/Downloads/mot-skill
+/agent-stack:vet-skill https://mcp.exa.ai/mcp</code></pre>
+<p><strong>Skill làm gì:</strong> tải đúng commit vào <code>.vet-cache/</code> (không chạy mã của đích), quét dấu hiệu độc hại (tải-rồi-chạy, đọc khóa và token, prompt injection, ký tự ẩn, hook tự chạy), chạy <code>skill-scanner</code> và <code>SkillSpector</code> (máy quét thứ hai, chỉ đẩy lên REVIEW; cài một lần bằng <code>python3 plugin/skills/vet-skill/scripts/vet.py spector --setup</code>), rồi đọc tay từng file đáng ngờ. Skill chạy ở effort high, trong context riêng, và không được sửa file.</p>
+<p><strong>Kết quả:</strong> phán quyết của script (PASS / REVIEW / FAIL), khuyến nghị (cài, có điều kiện, thử trong 1 project, không cài), những gì sẽ chạy trên máy nếu cài, rủi ro còn lại, và lệnh duyệt để <strong>bạn tự chạy</strong>:</p>
+<pre data-lang="bash"><code>python3 plugin/skills/vet-skill/scripts/vet.py approve &quot;&lt;khóa&gt;&quot; --note &quot;&lt;lý do&gt;&quot;</code></pre>
+<p>Claude không tự duyệt. PASS chỉ có nghĩa là không thấy dấu hiệu đã biết.</p>
+<p><strong>Các lệnh khác của <code>vet.py</code>:</strong></p>
+<div class="scroll"><table><thead><tr><th>Lệnh</th><th>Việc</th></tr></thead><tbody><tr><td><code>scan &lt;đích&gt; [--name] [--no-scanner] [--json]</code></td><td>Quét. Mã thoát 0 = PASS, 1 = REVIEW, 2 = FAIL, 3 = lỗi</td></tr><tr><td><code>list</code></td><td>Xem mọi mục trong <code>vetted.lock</code> và trạng thái</td></tr><tr><td><code>approve &lt;khóa&gt; --note &quot;...&quot;</code></td><td>Duyệt</td></tr><tr><td><code>reject &lt;khóa&gt; --note &quot;...&quot;</code></td><td>Từ chối</td></tr><tr><td><code>note &lt;khóa&gt; --recommend &lt;cài|có-điều-kiện|thử-1-project|không-cài&gt; --text &quot;...&quot;</code></td><td>Ghi nhận xét đọc tay; giữ được qua các lần quét lại</td></tr><tr><td><code>drift [--remote]</code></td><td>So plugin đã cài với bản đã kiểm (hook SessionStart chạy bản không mạng). <code>--remote</code> thêm MCP từ xa: lấy lại định nghĩa tool, so hash đã duyệt, và báo MCP scope user không qua catalog</td></tr></tbody></table></div>
+<p>Báo cáo đầy đủ nằm trong <code>vet-reports/</code>. Sau khi duyệt, chạy <code>./install.sh --apply</code> để cài các mục mới (mục 7).</p>
+<p><strong>Bản vá cục bộ</strong> (từ 10/10/2026). Khi plugin đã duyệt có lỗi mà upstream chưa sửa, có thể vá trong agent-stack thay vì chờ. File vá nằm trong <code>patches/&lt;tên plugin&gt;/</code>. Mục của plugin trong <code>vetted.lock</code> ghi <code>local_patches</code>: đường dẫn file vá, sha256 của nó, sha256 từng file sau khi vá, lý do và link upstream. <code>install.sh</code> xuất đúng commit đã duyệt vào <code>vendor/</code>, kiểm sha256 file vá, áp bằng <code>git apply</code>, rồi so tập file bị đổi với lock; lệch chỗ nào thì không chép, không cài. Kiểm lệch chấp nhận file đã vá khi khớp đúng sha256 trong lock. Bản vá chỉ được sửa nội dung file văn bản, tạo file thường hay xóa file; symlink, đổi quyền chạy, đổi tên hay file nhị phân bị từ chối. Vet lại cùng commit thì giữ bản vá; vet commit mới thì bỏ, và <code>vet.py</code> cảnh báo trong tóm tắt, báo cáo và lúc duyệt, để bạn kiểm upstream đã sửa chưa; đã sửa thì chỉ cần vet commit đó, chưa thì làm lại bản vá. Hiện có một bản vá: <code>static-analysis</code>, lỗi Semgrep bỏ qua file khi gốc repo có file trùng glob (trailofbits/skills#297).</p>
+<p><strong>MCP server từ xa</strong> (từ 10/10/2026). Đích là URL <code>https://</code>. Không có mã để đọc, nên <code>scan</code> chụp <code>instructions</code> và định nghĩa tool (thứ đi vào context của Claude), quét tool poisoning và ký tự ẩn, rồi ghim sha256 vào <code>vetted.lock</code>. Kết quả không bao giờ tự PASS, vì câu hỏi và tham số luôn đi tới hãng. Trong <code>catalog.json</code>, loại <code>mcp-remote</code> được <code>install.sh</code> cài bằng <code>claude mcp add -s user --transport http</code>, chỉ khi URL khớp bản đã duyệt, không trùng tên server bạn đã có, và định nghĩa tool lấy lại ngay lúc cài còn khớp hash đã duyệt. Claude Code không tự ghim định nghĩa tool, nên hook SessionStart kiểm lệch MCP đã cài tối đa một lần mỗi ngày: nó khởi <code>vet.py drift --save-state</code> chạy nền (chỉ gửi <code>initialize</code> và <code>tools/list</code> tới đúng các server đã duyệt), không chờ, rồi báo ở phiên sau nếu có tool đổi, thêm hay mất. Tắt bằng biến môi trường <code>AGENT_STACK_NO_BACKGROUND=1</code>. Kiểm ngay thì chạy <code>vet.py drift --remote</code>.</p>
+<p><strong>Phân tích động (tùy chọn).</strong> <code>scan</code> không chạy mã của đích. Khi một script đáng ngờ mà đọc tay chưa kết luận được, <code>vet.py dynamic</code> chạy MỘT lệnh bạn chọn trong sandbox-runtime của Anthropic: không mạng, ghi chỉ trong bản chép tạm, đọc được phần lớn hệ thống trừ HOME thật, <code>/Volumes</code> và keychain, môi trường sạch (không token). HOME của lệnh là một HOME giả rải sẵn 12 file mồi (khóa SSH, token AWS, GitHub, npm... giả) và chặn ghi vào chúng: file nào bị đọc lộ ra qua atime, mồi bị xóa hay thay lộ qua bản chụp trước/sau, nội dung mồi bị chép ra file hay đầu ra cũng bị phát hiện. Tiến trình nền còn sót bị dò và diệt.</p>
+<pre data-lang="bash"><code>python3 plugin/skills/vet-skill/scripts/vet.py dynamic --setup     # một lần; cần Node; cài vào .cache/srt, bản ghim, --ignore-scripts
+python3 plugin/skills/vet-skill/scripts/vet.py dynamic &quot;&lt;khóa&gt;&quot; -- python3 scripts/x.py --help</code></pre>
+<p>Kết luận <strong>KHÔNG THẤY GÌ</strong> (mã thoát 0; không có nghĩa là an toàn), <strong>CẦN ĐỌC</strong> (1) hoặc <strong>ĐÁNG NGỜ</strong> (2). Giới hạn: chỉ phủ các nhánh code đã chạy; log vi phạm của macOS làm mất khoảng một nửa sự kiện khi tiến trình thoát nhanh (đo được) nên file mồi và dấu rò rỉ mới là bằng chứng mạnh (không tuyệt đối); mã có chủ ý né (nhận ra sandbox, chờ lâu, mã hóa dữ liệu, đọc mồi bằng clonefile <code>cp -c</code> (không làm atime nhảy), truy vấn keychain qua dịch vụ hệ thống mà sandbox-runtime cho phép) vẫn qua mặt được; sandbox giảm rủi ro chứ không phải ranh giới tuyệt đối. Không chạy lệnh cài đặt của đích. <code>--real-home</code> giữ HOME thật thay cho HOME giả. Cần macOS (Seatbelt) hoặc Linux có bubblewrap (phần mồi qua atime mới kiểm trên macOS).</p>
+<h3 id="s-55-giong-van-chỉnh-văn-đúng-giọng-mình">5.5 <code>giong-van</code>: chỉnh văn đúng giọng mình</h3>
+<p><strong>Khi nào:</strong> &quot;sửa lại đoạn này cho tự nhiên&quot;, &quot;đọc như AI viết&quot;, &quot;viết lại email này đúng giọng mình&quot;, bài luận, blog, cover letter.</p>
+<p><strong>Skill làm gì:</strong></p>
+<ol><li>Đo điểm dấu hiệu văn AI trên 1.000 từ bằng <code>tells.py</code>.</li><li>Sửa nội dung trước: câu thổi phồng thay bằng số liệu có sẵn, câu chung chung bỏ đi. Không bịa sự kiện; chỗ thiếu thì hỏi bạn.</li><li>Sửa câu chữ: mở bài sáo, &quot;không chỉ... mà còn&quot;, kết bài nhắc lại, nhịp câu đều đều...</li><li>Đưa về giọng trong <code>style-card.md</code>: xưng hô, độ dài câu, mức trang trọng, từ quen dùng.</li><li>Đo lại, báo tối đa 5 thay đổi chính và điểm trước/sau.</li></ol>
+<p>Văn tiếng Anh cũng dùng <code>giong-van</code> (có nhóm dấu hiệu tiếng Anh trong <code>tells.py</code>). Skill <code>humanizer</code> của vendor đã gỡ ngày 08/10/2026 vì A/B không thấy nó giúp thêm, và xoá khỏi <code>catalog.json</code>, <code>vetted.lock</code> ngày 09/10/2026; muốn dùng lại thì phải chạy lại <code>vet-skill</code>.</p>
+<p><strong>Bài mẫu.</strong> <code>tells.py</code> so bản nháp với bài mẫu cùng ngôn ngữ, chọn theo thứ tự:</p>
+<ol><li>Mẫu riêng của project viết luận: <code>.agent/giong-van/samples/</code> trong project đó.</li><li>Bài bạn tự viết, dùng chung: đặt thẳng vào <code>plugin/skills/giong-van/samples/</code> (không đưa vào git).</li><li>Văn mẫu kinh điển: <code>plugin/skills/giong-van/samples/kinh-dien/</code>, 5 bài tiếng Việt và 5 bài tiếng Anh thuộc phạm vi công cộng (danh sách và nguồn trong <code>README.md</code> ở đó). Bộ này không phải giọng của bạn, nên script không so cách xưng hô.</li></ol>
+<p><strong>Mỗi project viết luận</strong>, đặt 3–5 bài cùng thể loại vào <code>.agent/giong-van/samples/</code> của project, rồi nói trong project đó:</p>
+<pre data-lang=""><code>/agent-stack:giong-van tao-style-card</code></pre>
+<p>Claude điền style card riêng của project (<code>.agent/giong-van/style-card.md</code>) với ví dụ trích nguyên văn và hỏi bạn duyệt từng mục. Project chưa có mẫu thì skill so với văn kinh điển và nhắc chỗ đặt mẫu.</p>
+<p><strong>Chạy tay:</strong></p>
+<pre data-lang="bash"><code>python3 plugin/skills/giong-van/scripts/tells.py bai-viet.md</code></pre>
+<pre data-lang="bash"><code>pbpaste | python3 plugin/skills/giong-van/scripts/tells.py -</code></pre>
+<p><code>--no-samples</code> để bỏ so với bài mẫu, <code>--samples &lt;thư mục&gt;</code> để dùng bộ mẫu khác.</p>
+<p>Skill này để văn hay hơn, không phải để qua mặt công cụ phát hiện AI. Bài nộp có quy định về AI thì làm theo quy định nơi nhận.</p>
+<h3 id="s-56-reuse-best-tìm-thứ-có-sẵn-trước-khi-tự-làm">5.6 <code>reuse-best</code>: tìm thứ có sẵn trước khi tự làm</h3>
+<p><strong>Khi nào:</strong> trước khi viết một tool, tính năng, script hay thuật toán không tầm thường; &quot;có sẵn chưa&quot;, &quot;thư viện nào tốt nhất&quot;, &quot;SOTA&quot;. Bỏ qua với sửa nhỏ.</p>
+<p><strong>Gọi:</strong> <code>/agent-stack:reuse-best &lt;nhu cầu&gt;</code>, ví dụ <code>/agent-stack:reuse-best đọc PDF scan tiếng Việt ra text, chạy offline</code>.</p>
+<p><strong>Cách làm.</strong> Trước khi tìm, skill đọc ràng buộc trong file của project (phiên bản Python hay Node, luật về phụ thuộc, CI, cách chạy production), rồi viết nhu cầu thành tiêu chí bắt buộc và nên có. <strong>Thứ tự tìm:</strong> tính năng sẵn có của công cụ → code trong project → skill đã duyệt trong <code>vetted.lock</code> → GitHub → bài nghiên cứu. Chỉ dừng ở một bậc khi có ứng viên đạt mọi tiêu chí bắt buộc, có bằng chứng (<code>file:dòng</code> với code trong project, dòng README với thư viện ngoài); &quot;chạy được&quot; hay &quot;có sẵn trong repo&quot; thì chưa đủ.</p>
+<p><strong>Kết quả</strong> gồm tối đa 5 ứng viên chấm theo từng tiêu chí (kèm sao, lần cập nhật, giấy phép; hoặc nơi đăng, năm, trích dẫn), quyết định có nguồn, mục <strong>Phần còn phải làm</strong> (tiêu chí mà lựa chọn chưa đạt) và mục <strong>Cần người dùng quyết</strong> (ràng buộc va nhau, thứ cần duyệt). Quyết định không được thu hẹp nhu cầu của bạn. Claude sẽ đề nghị ghi quyết định vào file kế hoạch để phiên sau khỏi tìm lại.</p>
+<p><strong>Chạy tay</strong> (có gọi mạng tới GitHub, OpenAlex, Semantic Scholar, arXiv; chỉ dùng từ khóa chung, đừng đưa code hay thông tin riêng vào):</p>
+<pre data-lang="bash"><code>python3 plugin/skills/reuse-best/scripts/scout.py github &quot;pdf ocr vietnamese&quot; --language python</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/reuse-best/scripts/scout.py papers &quot;vietnamese ocr&quot; --since 2024</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/reuse-best/scripts/scout.py repo lycheeverse/lychee tcort/markdown-link-check --find &quot;fragment, retry, ignore&quot;</code></pre>
+<p><code>github</code> có thêm <code>--limit</code>, <code>--sort {both,best-match,stars,updated}</code>, <code>--json</code>. GitHub đòi mọi từ trong câu tìm đều khớp, nên câu ra rỗng được nới dần: bỏ từ chung chung và tên ngôn ngữ, rồi bỏ từ cuối. Tốt nhất dùng tên khái niệm ngắn (<code>toml parser</code>) và để tên ngôn ngữ ở <code>--language</code>. <code>repo</code> kiểm tối đa 5 repo một lần: lần phát hành (hay tag) gần nhất, issue đang mở, giấy phép và những dòng README nhắc tới từng từ khóa của <code>--find</code>, kèm số dòng; <code>--max-lines</code> in thêm dòng khớp, <code>--readme-chars</code> in đầu README. Kết quả nào cũng mở đầu bằng một dòng tổng và kết thúc bằng dòng &quot;Tiếp:&quot; là lệnh nên chạy tiếp; chạy <code>scout.py</code> không tham số thì in cách dùng.</p>
+<p>Thứ tìm được là skill, plugin hay MCP thì vẫn phải qua <code>vet-skill</code>. Repo không có giấy phép thì chỉ học ý tưởng, không chép code.</p>
+<h3 id="s-57-chot-viec-cổng-kiểm-trước-khi-báo-xong">5.7 <code>chot-viec</code>: cổng kiểm trước khi báo xong</h3>
+<p><strong>Khi nào:</strong> vừa xong một tính năng, bản sửa lỗi hay refactor; &quot;chốt việc&quot;, &quot;kiểm lại trước khi commit&quot;, &quot;sẵn sàng commit chưa&quot;. Câu hỏi tiến độ kiểu &quot;xong chưa&quot; không kích hoạt nó. Luật chung dặn Claude tự chạy nó sau mỗi thay đổi không tầm thường, và hook Stop buộc chạy nó khi lượt đổi code có mức rủi ro từ vừa trở lên mà Claude quên (xem mục 4).</p>
+<p><strong>Gọi:</strong> <code>/agent-stack:chot-viec</code> (thêm <code>--base main</code> để so với nhánh khác thay vì HEAD).</p>
+<p><strong>Làm gì:</strong> nêu lại ý định và tiêu chí xong; tách file thuộc việc này khỏi file người khác đổi; chấm mức rủi ro của diff; chạy mốc kiểm tra qua <code>receipt.py</code> và tái hiện thay đổi đúng như bạn sẽ dùng; review ở context mới (mức thấp: tự đọc diff; vừa: <code>agent-stack:reviewer</code> chạy sonnet; cao: reviewer chạy opus · high); tự sửa lỗi máy móc, còn lỗi đụng tới ý định thì hỏi bạn; rà README và tài liệu; báo cáo ngắn kèm phần bạn nên đọc. Chỉ commit khi bạn hoặc luật project yêu cầu, không bao giờ push.</p>
+<p><strong>Chạy tay</strong> phần chấm rủi ro (chỉ đọc):</p>
+<pre data-lang="bash"><code>python3 plugin/skills/chot-viec/scripts/risk.py</code></pre>
+<p>Mỗi lần chạy, script ghi dấu các dòng đã chấm. Thêm <code>--new</code> thì chỉ chấm dòng thêm sau lần chạy trước, ví dụ phần sửa theo review. <code>chot-viec</code> dùng cờ này sau khi sửa, rồi giao reviewer xem lại phần sửa nếu mức từ vừa trở lên. Hook Stop cũng chỉ chấm các dòng chưa có dấu: dòng sửa sau lần chấm mà chưa chấm lại thì lượt sau, kể cả lượt chỉ commit, vẫn bị nhắc.</p>
+<p>Điểm cộng khi đụng phần nhạy cảm (xác thực, secret, mã hóa, thanh toán, quyền, sandbox), schema, hook, cài đặt, phụ thuộc, file chỉ dẫn cho agent; khi dòng thêm vào có dấu hiệu secret, chạy lệnh qua shell, xóa file, tải rồi chạy mã, SQL ghép chuỗi; khi thay đổi lớn, đổi code mà không đổi test, hoặc bớt test. Đây là gợi ý thô để quyết review sâu tới đâu, không thay review.</p>
+<p>Ý tưởng lấy từ pipeline <code>no-mistakes</code> của Kun Chen (video của tác giả về quy trình agentic engineering; giấy phép MIT). Phần tự push, mở PR và trông CI không lấy.</p>
+<p><code>risk.py</code> còn liệt kê <strong>ranh giới tin cậy bị đụng</strong> trong file mã nguồn: input từ bên ngoài (route, <code>request.files</code>…), xác thực, gọi ra ngoài (<code>requests</code>, <code>fetch</code>…), dữ liệu nhạy cảm, dependency mới, chạy lệnh hay đường dẫn từ input. Đụng ranh giới thì ít nhất mức vừa, và <code>chot-viec</code> cần một mục trong <code>.agent/threat-model.md</code> (xem 5.8) để đưa từng chốt chặn cho reviewer kiểm. Mức cao và đụng phần bảo mật thì chạy thêm <code>differential-review</code> (Trail of Bits) trên diff rồi để reviewer lọc dương tính giả.</p>
+<h3 id="s-58-mo-hinh-de-doa-threat-model-trước-khi-code">5.8 <code>mo-hinh-de-doa</code>: threat model trước khi code</h3>
+<p><strong>Khi nào:</strong> sắp làm chức năng đụng ranh giới tin cậy: nhận input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, lưu hay truyền dữ liệu nhạy cảm, thêm dependency, chạy lệnh. Router gợi ý nó (luật <code>feature-boundary</code>) khi bạn nhờ làm tính năng đăng nhập, upload, webhook, thanh toán…; luật chung dặn chạy trước khi code; nếu Claude vẫn bắt đầu sửa file mã nguồn mà chưa có threat model, hook PreToolUse chặn lần sửa đầu tiên và nhắc chạy skill này. Sửa giao diện, sửa chữ, refactor không đổi luồng dữ liệu thì bỏ qua.</p>
+<p><strong>Gọi:</strong> <code>/agent-stack:mo-hinh-de-doa</code> hoặc nói &quot;threat model chức năng này&quot;.</p>
+<p><strong>Làm gì:</strong> đọc ít (chỉ phần code sắp chạm và chốt chặn có sẵn), vẽ luồng 3–6 dòng, hỏi sáu câu STRIDE cho mỗi ranh giới, giữ tối đa 5 mối đe dọa có khả năng cao nhất, mỗi mối kèm actor, surface, asset và chốt chặn phải có (kiểm được trong code hay test). Ghi vào <code>.agent/threat-model.md</code> của project với ID <code>TM-n</code> và trạng thái <code>cần làm</code>, <code>đã có</code> hay <code>chấp nhận rủi ro</code>. Project có skill threat model riêng (ví dụ <code>security-whitebox</code>, nơi bạn tự viết skill khi học) thì dùng skill đó.</p>
+<p><strong>Ba bước bảo mật theo mức rủi ro:</strong> threat model trước khi code (skill này) → review từng thay đổi theo mức rủi ro (<code>chot-viec</code>) → audit cả repo một lần trước phát hành: quét Semgrep (<code>static-analysis</code>) trước, rồi <code>claude-security</code> tìm phần Semgrep bỏ sót; cả hai cài toàn cục từ 10/10/2026. Bước 1 và 2 tự chạy: luật chung và router bảo Claude làm, khi router thấy việc đụng ranh giới tin cậy mà chưa có threat model thì hook PreToolUse chặn lần sửa mã nguồn đầu tiên, hook Stop chặn khi lượt đổi code rủi ro từ vừa mà chưa chạy <code>chot-viec</code>. Bước 3 chỉ chạy khi bạn yêu cầu (&quot;audit cả repo&quot;, <code>/static-analysis:semgrep</code>, <code>/claude-security</code>), nhưng có nhắc: khi Claude tạo tag git hay chạy <code>gh release create</code>, hook PreToolUse chặn lần đầu để Claude hỏi bạn đã audit chưa, bạn trả lời xong thì Claude chạy lại được (từ 10/10/2026); sau <code>git push</code> hay khi tạo PR, <code>claude-security</code> in lời gợi ý quét. Tag bạn tự tạo trong terminal thì không có nhắc, vì hook chỉ thấy lệnh Claude chạy. Không chạy đủ cả ba cho mọi chức năng: phần lớn chi phí của một lần review là cố định, nên chạy cho cả chức năng sửa giao diện thì tốn mà không tìm được gì.</p>
+<p>Ý lấy từ skill <code>threat-model</code> của <code>anthropics/defending-code-reference-harness</code> (Apache-2.0): phép thử &quot;sửa một dòng là hết thì là lỗi, không phải mối đe dọa&quot; và tên cột của bảng. Bản đó mô hình hóa cả codebase bằng nhiều subagent; bản này gọn cho từng chức năng.</p>
+<h3 id="s-59-goi-mcp-gọi-mcp-từ-xa-theo-việc-không-cài">5.9 <code>goi-mcp</code>: gọi MCP từ xa theo việc, không cài</h3>
+<p><strong>Khi nào:</strong> hỏi về một repo GitHub công khai (DeepWiki), hay cần tìm web sâu hơn khi Exa chưa đủ (Parallel). Claude tự gọi khi việc hợp; bạn cũng gọi được bằng <code>/agent-stack:goi-mcp &lt;câu hỏi&gt;</code>.</p>
+<p><strong>Vì sao không cài thẳng như Exa:</strong> server cài vào Claude Code thì <code>instructions</code> của nó nạp vào mọi phiên (DeepWiki 3.458 ký tự, phần lớn nói về tool không dùng được; Parallel 1.587). Qua skill thì phiên thường chỉ tốn một dòng mô tả.</p>
+<p><strong>Script làm gì:</strong> <code>plugin/skills/goi-mcp/scripts/call.py &lt;server&gt; &lt;tool&gt; --args &#x27;&lt;json&gt;&#x27;</code>. Chỉ gọi server có trong <code>catalog.json</code> với scope <code>skill</code> và đã duyệt trong <code>vetted.lock</code>. Mỗi lần gọi, lấy định nghĩa tool trong cùng phiên và so sha256 với bản đã duyệt; lệch thì không gọi. Từ chối tham số trông như khóa hay token. Bỏ tham số theo dõi (<code>session_id</code>, <code>model_name</code> của Parallel). In kết quả giữa hai dòng mốc có mã ngẫu nhiên mỗi lần gọi, đã làm sạch ký tự ẩn; đó là dữ liệu, không phải chỉ dẫn. <code>call.py list</code> xem server và tool gọi được.</p>
+<h3 id="s-510-trang-artifact-trang-html-đọc-là-hiểu">5.10 <code>trang-artifact</code>: trang HTML đọc là hiểu</h3>
+<p><strong>Khi nào:</strong> trước khi Claude viết hay sửa một file để người đọc (luật chung từ 01/11/2026: file cho người đọc viết bằng HTML, chỉ file bắt buộc mới giữ <code>.md</code>): trang so sánh phương án, kế hoạch, báo cáo, kết quả đo, review, giải thích, hướng dẫn, trang tương tác. Skill có sẵn của Anthropic (<code>playground</code>, <code>html-plan</code>, <code>project-artifact</code>, <code>frontend-design</code>) dùng cho đúng việc của chúng, theo bảng trong mục &quot;Trang HTML và Artifact&quot; của <code>global/CLAUDE.global.md</code>. Luật toàn cục bảo Claude dùng skill này; bạn cũng gọi được bằng <code>/agent-stack:trang-artifact</code>. Không dùng cho app, dashboard, game.</p>
+<p><strong>Vì sao có:</strong> các trang cũ viết cho người vừa ngồi trong phiên. Một trang ngày 19/10/2026 dùng 14 mã nội bộ và ký hiệu không giải thích (như <code>HC5</code>, <code>ν</code>, <code>G1–G5</code>); trang &quot;Overlay Kustomize&quot; chỉ có một ví dụ; không trang nào đối chiếu đề xuất với luật của project.</p>
+<p><strong>Trang gồm:</strong> tóm tắt lời thường → phần từ gốc (hệ thống làm gì, vấn đề hôm nay, khái niệm cần biết trước, thuật ngữ) → ít nhất 3 ví dụ cụ thể → các phương án → bảng chạy cùng các ví dụ qua từng phương án → bảng đối chiếu từng phương án với từng luật của project (kèm <code>file:dòng</code>) → pattern xấu đã soát (theo code cũ, chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro, đi tắt qua cổng kiểm) → câu cần chốt → nguồn. Phương án vi phạm luật không bao giờ được khuyên; nếu vẫn hiện trên trang thì thẻ của nó ghi rõ vi phạm gì.</p>
+<p><strong>Script làm gì:</strong> <code>plugin/skills/trang-artifact/scripts/check_page.py &lt;trang.html&gt;</code> đọc các thuộc tính <code>data-*</code> của khuôn <code>mau.html</code> và báo LỖI (thoát 1) khi thiếu phần, dưới 3 ví dụ, mã nội bộ chưa định nghĩa hay dùng trước khi định nghĩa, phương án thiếu phán quyết với một luật, phương án được khuyên mà vi phạm. Script không chấm được trang có dễ hiểu thật không, nên sau đó Claude giao trang cho subagent <code>nguoi-doc-la</code> (không nhận bối cảnh phiên) đọc thử một lần và sửa theo. Trang không có đề xuất phải khai loại trên <code>&lt;main&gt;</code>, để kế hoạch một hướng không lọt qua bảng luật vì quên đánh dấu: <code>data-loai=&quot;giai-thich&quot;</code> (kiểm đủ như trên), <code>&quot;bao-cao&quot;</code> (chỉ cần tóm tắt và phần nguồn), <code>&quot;cong-cu&quot;</code> (chỉ cần tóm tắt và nút <code>data-xuat</code> chép kết quả về chat).</p>
+</section>
+<section>
+<h2 id="s-6-subagent">6. Subagent</h2>
+<p>Subagent chạy trong context riêng và chỉ trả về kết quả gọn, nên context chính không bị đầy bởi log dài. Gọi bằng lời (&quot;giao cho test-runner chạy test&quot;) hoặc để Claude tự chọn theo dòng ➡️. Tên đầy đủ có tiền tố <code>agent-stack:</code>.</p>
+<div class="scroll"><table><thead><tr><th>Subagent</th><th>Model</th><th>Quyền</th><th>Dùng khi</th></tr></thead><tbody><tr><td><code>agent-stack:reviewer</code></td><td>opus · high</td><td>Chỉ đọc</td><td>Review code và bảo mật trước commit hoặc PR</td></tr><tr><td><code>agent-stack:researcher</code></td><td>sonnet · medium</td><td>Không sửa file</td><td>Tra docs, so sánh công cụ, kiểm chứng một nhận định; trả về có dẫn nguồn</td></tr><tr><td><code>agent-stack:test-runner</code></td><td>Haiku 5.5 · low</td><td>Chỉ đọc, chạy lệnh</td><td>Chạy test, lint, build và chỉ trả về phần lỗi</td></tr><tr><td><code>agent-stack:explore-lite</code></td><td>Haiku 5.5 · low</td><td>Chỉ đọc</td><td>Tìm vị trí code, nơi dùng một hàm, cấu hình. Rẻ hơn <code>Explore</code> nhưng không suy luận sâu</td></tr><tr><td><code>agent-stack:nguoi-doc-la</code></td><td>sonnet · medium</td><td>Chỉ Read</td><td>Đọc thử một trang như người lạ trước khi đăng (skill <code>trang-artifact</code>); không nhận bối cảnh phiên</td></tr></tbody></table></div>
+<p>Subagent vẫn tính vào hạn mức. Theo <code>BASELINE.md</code>, khoảng 70% chi phí đến từ subagent và workflow, nên đừng chia nhỏ việc mà một model làm liền mạch tốt hơn.</p>
+<p><strong>Subagent không thấy hội thoại.</strong> Subagent và skill chạy <code>context: fork</code> (<code>vet-skill</code>, <code>reuse-best</code>, <code>tien-do</code>) có context riêng: không thấy yêu cầu của bạn, các tin nhắn trước hay task của phiên, chỉ thấy prompt mà Claude giao cho chúng. Hai lớp bù lại:</p>
+<ul><li><strong>Hook SubagentStart</strong> (mục 4) đưa yêu cầu gần nhất của bạn và việc tiếp theo trong §0 vào đầu context của chúng, như dữ liệu bối cảnh chứ không phải chỉ dẫn mới. Riêng <code>nguoi-doc-la</code> không nhận, vì nó phải hiểu trang nhờ chính trang. Hook chỉ có hiệu lực sau khi plugin được cập nhật và bạn mở phiên mới (mục 7). Chỉ lấy yêu cầu của đúng phiên này, không đoán theo thư mục. Đã kiểm chạy thật ngày 03/10/2026 bằng <code>claude -p</code>: hai subagent liên tiếp trong một phiên đều nhận đúng yêu cầu của người dùng. Kiểm lại bất cứ lúc nào bằng <code>grep subagent-start state/events.jsonl | tail -3</code> (dòng đạt có <code>&quot;request&quot;: true</code>).</li><li><strong>Prompt giao việc phải tự đủ.</strong> Luật chung dặn Claude ghi rõ yêu cầu gốc, mục tiêu, ràng buộc, file liên quan, tiêu chí xong và định dạng trả về. Mỗi agent và skill đều ghi nó cần gì; thiếu thì nó nói rõ phần thiếu ở dòng đầu báo cáo thay vì đoán.</li></ul>
+<h3 id="s-quyền-riêng-tư-với-model-từ-xa">Quyền riêng tư với model từ xa</h3>
+<p>Model chạy qua OpenRouter hay dịch vụ model miễn phí nhận toàn bộ prompt và nội dung file, và nhiều dịch vụ miễn phí còn được dùng dữ liệu đó để huấn luyện model. Vì vậy luật chung quy định: không giao file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa; việc như vậy làm ngay trong Claude Code, không có cách an toàn thì dừng và hỏi bạn.</p>
+<h3 id="s-việc-cơ-học-hàng-loạt">Việc cơ học hàng loạt</h3>
+<p>Đổi tên hàng loạt, định dạng, boilerplate, dịch tài liệu: router gợi ý <code>claude-haiku-5-5 · low</code> và không giao subagent riêng. Đổi model giữa phiên không rẻ thì giao subagent <code>general-purpose</code> chạy model đó; chỉ dùng model rẻ khi có kiểm tra tự động (test, lint), trượt thì làm lại ở mức cao hơn.</p>
+</section>
+<section>
+<h2 id="s-7-cài-cập-nhật-gỡ">7. Cài, cập nhật, gỡ</h2>
+<p>Mọi thay đổi ngoài repo đều đi qua <code>install.sh</code>. Mặc định chỉ xem trước.</p>
+<pre data-lang="bash"><code>./install.sh</code></pre>
+<pre data-lang="bash"><code>./install.sh --apply</code></pre>
+<p><code>--apply</code> sao lưu trước rồi mới sửa, và chỉ cài mục đã <code>approve</code> trong <code>vetted.lock</code>. Mã thoát 1 là có lỗi, 2 là cài chưa đủ. Mỗi lần cài thêm một mục vào <code>INSTALLED.md</code>, kèm lệnh gỡ riêng cho từng thay đổi.</p>
+<p>Các bước có thể chọn riêng bằng <code>--only</code>, ngăn cách bằng dấu phẩy:</p>
+<div class="scroll"><table><thead><tr><th>Bước</th><th>Cài gì</th></tr></thead><tbody><tr><td><code>rules</code></td><td>Symlink <code>~/.claude/CLAUDE.md</code> tới luật chung</td></tr><tr><td><code>plugin</code></td><td>Marketplace local và plugin <code>agent-stack</code></td></tr><tr><td><code>statusline</code></td><td>Khóa <code>statusLine</code> trong <code>~/.claude/settings.json</code></td></tr><tr><td><code>autocontinue</code></td><td>Khóa <code>autoContinueAtUsageLimit</code></td></tr><tr><td><code>tools</code></td><td>Công cụ dòng lệnh mà mục đã duyệt cần (khóa <code>brew</code> trong <code>catalog.json</code>, hiện là <code>semgrep</code> cho <code>static-analysis</code>), cài bằng Homebrew; gỡ được bằng <code>--rollback</code></td></tr><tr><td><code>catalog</code></td><td>Plugin chính thức, plugin và skill bên thứ ba đã duyệt; bên thứ ba được chép đúng commit đã kiểm vào <code>vendor/</code> (không theo HEAD), mục scope project chỉ được chép rồi in lệnh cài trong project</td></tr></tbody></table></div>
+<p>Tùy chọn khác: <code>--replace-existing</code> thay file hoặc symlink đang có (có sao lưu); <code>--restore-workflow-warning</code> bỏ khóa <code>skipWorkflowUsageWarning</code>.</p>
+<h3 id="s-sau-khi-sửa-code-plugin">Sau khi sửa code plugin</h3>
+<ul><li>Claude Code (CLI lẫn app desktop) đọc plugin thẳng từ thư mục <code>plugin/</code> của repo, vì marketplace <code>agent-stack-local</code> là chính repo (<code>claude plugin list</code> ghi &quot;Read from&quot;). Sửa trong repo có hiệu lực ở phiên mới, hoặc gõ <code>/reload-plugins</code> trong phiên đang mở.</li><li>Sau khi tăng <code>version</code> trong <code>plugin/.claude-plugin/plugin.json</code>, có thể chạy:</li></ul>
+<pre data-lang="bash"><code>./install.sh --apply --only plugin</code></pre>
+<p>Lệnh này chỉ ghi nhận số phiên bản mới và ghi nhật ký vào <code>INSTALLED.md</code>; không chạy thì code vẫn chạy đúng. Plugin bên thứ ba trong <code>vendor/</code> thì phải cài lại, vì Claude Code chạy bản chép trong cache.</p>
+<p>Sửa luật chung thì không cần cài lại, vì <code>~/.claude/CLAUDE.md</code> là symlink.</p>
+<h3 id="s-gỡ">Gỡ</h3>
+<pre data-lang="bash"><code>./install.sh --rollback</code></pre>
+<pre data-lang="bash"><code>./install.sh --rollback --apply</code></pre>
+<p>Lệnh gỡ chạy ngược mọi lần cài, mới nhất trước: gỡ plugin và marketplace, gỡ symlink, khôi phục file từ bản sao lưu, xóa thư mục do lần cài tạo ra (kể cả <code>vendor/</code>), dọn <code>settings.json</code> và cache plugin, rồi so với bản chụp trước lần cài đầu và báo những gì còn khác. Gỡ riêng một lần cài: <code>./install.sh --rollback state/install-logs/&lt;tên&gt;.json --apply</code>.</p>
+<p>Lần gỡ không đụng tới <code>vetted.lock</code>, <code>vet-reports/</code>, <code>state/</code>, <code>.vet-cache/</code>, các thư mục <code>backups/install-*</code> và công cụ cài bằng brew.</p>
+<h3 id="s-dùng-trên-cloud-session">Dùng trên cloud session</h3>
+<p>Cloud session (claude.ai/code, <code>claude --cloud</code>, môi trường Cloud của app desktop) chạy trên máy ảo mới với bản clone của project. Nó không đọc <code>~/.claude/</code> của Mac và không cài plugin khai báo trong <code>settings.json</code>, kể cả của repo. Muốn có agent-stack ở đó:</p>
+<ol><li>Trên claude.ai/code, ở màn hình phiên mới, bấm nút environment dưới ô nhập, chọn <strong>New environment</strong>, đặt tên <code>agent-stack</code> (environment riêng, đừng dùng environment chia sẻ). <strong>Network access</strong>: giao diện ngày 28/10/2026 có None, Limited, Full; chọn <strong>Limited</strong>, giữ ô &quot;Allow package managers&quot;, thêm <code>github.com</code> và <code>raw.githubusercontent.com</code> vào Allowed domains.</li><li>Dán nguyên nội dung <code>tools/cloud_setup.sh</code> vào ô <strong>Setup script</strong>. Script tải agent-stack vào <code>~/Documents/Claude/agent-stack</code> (clone, proxy GitHub chặn thì tải từng file theo <code>tools/cloud-files.txt</code> qua <code>raw.githubusercontent.com</code>), trỏ <code>~/.claude/CLAUDE.md</code> tới luật chung và <code>~/.claude/skills/agent-stack</code> tới <code>plugin/</code>. Script luôn thoát 0; tải không được thì phiên vẫn chạy, chỉ thiếu agent-stack.</li><li>Bấm <strong>Add environment</strong>, rồi mở phiên với environment này. Đã chạy thật ngày 28/10/2026 trên repo <code>tdHuy22/agent-stack</code>: clone được (có <code>.git</code>), <code>CLAUDE.md</code> và plugin skills-dir đều nạp (10 skill, 5 subagent <code>agent-stack:</code>), hook SessionStart đưa §0 và hồ sơ project vào, hook Stop chạy, Python 3.13. Mod giao diện vẫn chạy trên cloud nhưng pane không hiện (giới hạn của Claude Code), nên <code>/cay</code> in cây dạng chữ, <code>/cay T.2</code> in một việc. Nếu sau này plugin không nạp, thêm biến môi trường <code>CLAUDE_CODE_PLUGIN_DIRS=/root/Documents/Claude/agent-stack/plugin</code> cho environment.</li></ol>
+<p>Máy ảo lưu kết quả setup khoảng 7 ngày, và Claude Code không có API hay lệnh nào để sửa environment hoặc buộc dựng lại cache. Vì vậy từ plugin 0.17.5, hook SessionStart tự kéo bản mới trên cloud (<code>plugin/hooks/cloud_update.py</code>). Hook chỉ chạy khi có <code>CLAUDE_CODE_REMOTE=true</code> và máy không phải macOS, tối đa một lần mỗi 10 phút (ổ đĩa máy ảo được giữ giữa các phiên, nên sau khi push, phiên mở trong 10 phút kể từ lần kiểm trước chưa có bản mới), ở tiến trình nền nên phiên không mở chậm hơn. Nó <code>git fetch --depth 1</code> đúng nhánh mà setup script đã tải, từ đúng <code>https://github.com/tdHuy22/agent-stack.git</code>, rồi <code>reset --keep</code>. Không có commit mới thì chỉ tốn một lượt hỏi GitHub vài KB. Hook không cập nhật khi bản clone có sửa ở file đã track, khi commit mới thiếu file cốt lõi, hay khi fetch lỗi; kết quả lần chạy gần nhất ghi ở <code>state/cloud-update.json</code>. Bản mới có tác dụng từ lần gọi hook sau; skill mới thì phải sang phiên sau. Bản tải từng file (proxy chặn clone, không có <code>.git</code>) không tự cập nhật. Muốn làm mới ngay thì vẫn sửa dòng chú thích <code># Làm mới cache: &lt;ngày&gt;</code> ở cuối script trong environment, rồi <strong>Save changes</strong>. Muốn ghim một commit thì sửa dòng <code>REF=</code> ở đầu script; bản ghim SHA không tự cập nhật. Phiên gắn nhiều repo và thread trong Claude Project không chạy hook của repo; hook của agent-stack nạp qua plugin nên không bị ảnh hưởng, nhưng chưa kiểm. <code>state/</code> trên cloud mất khi máy ảo bị thu hồi; phần cần mang theo nằm ở §0 của <code>PLAN.md</code>, đi theo git.</p>
+<p>Thêm file vào <code>plugin/</code> hay <code>global/</code> thì tạo lại danh sách: chạy lệnh ở dòng <code># Tạo lại</code> trong <code>tools/cloud-files.txt</code> (test <code>tests/test_cloud_setup.py</code> báo khi lệch).</p>
+</section>
+<section>
+<h2 id="s-8-bảo-trì-và-eval">8. Bảo trì và eval</h2>
+<h3 id="s-mỗi-tháng">Mỗi tháng</h3>
+<pre data-lang="bash"><code>python3 tools/maintain.py</code></pre>
+<p>Script kiểm tra: phiên bản Claude Code; đồ bên thứ ba đã có commit mới chưa (có thì phải kiểm duyệt lại trước khi cập nhật); test và <code>claude plugin validate</code>; độ dài mô tả skill; mức dùng 7 ngày so với <code>BASELINE.md</code>; dung lượng <code>.vet-cache</code>; công cụ dòng lệnh khuyến nghị đã cài chưa. Chỉ đọc, trừ khi thêm <code>--clean-cache</code>. <code>--offline</code> bỏ bước gọi GitHub, <code>--skip-tests</code> bỏ chạy test.</p>
+<h3 id="s-xem-mức-dùng-token">Xem mức dùng token</h3>
+<pre data-lang="bash"><code>python3 tools/usage_snapshot.py --days 7</code></pre>
+<p>Đọc transcript cục bộ trong <code>~/.claude/projects/</code>, không gọi mạng.</p>
+<h3 id="s-mốc-kiểm-tra-của-repo">Mốc kiểm tra của repo</h3>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/receipt.py run -- python3 -m unittest discover -s tests -t .</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/receipt.py run -- claude plugin validate plugin</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/session-keeper/scripts/receipt.py run -- &quot;$(python3 tools/claude_app.py)&quot; plugin test plugin</code></pre>
+<pre data-lang="bash"><code>python3 evals/run_eval.py --self-test</code></pre>
+<pre data-lang="bash"><code>python3 plugin/skills/task-router/scripts/route.py --eval evals/router-prompts.jsonl</code></pre>
+<p>Test chạy bằng <code>python3</code> (3.11 của pyenv), cũng là Python mà app dùng để gọi hook. Không chạy trên <code>/usr/bin/python3</code> (3.9 của hệ thống macOS).</p>
+<h3 id="s-eval-chọn-cấu-hình">Eval chọn cấu hình</h3>
+<p><code>evals/</code> có 12 việc để tìm cấu hình rẻ nhất mà vẫn giữ chất lượng. Cấu hình định nghĩa trong <code>evals/configs.json</code>: A (sonnet · medium), B (sonnet · high), C (opus · medium), D (opus · low), E (A + plugin), H (alias <code>haiku</code>, tức Haiku 4.5, chỉ đo trần dưới), <code>H5L</code>, <code>H5M</code>, <code>HM</code> (Haiku 5.5 · low, medium, max), S (A + superpowers chép ở <code>vendor/plugins/superpowers</code>; A/B 10/10/2026: đạt 20/20 như A, tốn hơn 14%, nên không bật toàn cục, xem <code>routing-table.md</code> mục 8).</p>
+<pre data-lang="bash"><code>python3 evals/run_eval.py --configs A,C,D --repeats 2</code></pre>
+<p>Không có <code>--yes</code> thì chỉ in kế hoạch và chi phí ước tính. Thêm <code>--yes</code> mới chạy thật và tốn hạn mức (lần chạy trên khoảng 15 USD theo giá niêm yết). Nên đặt trần: <code>--max-total-usd 20 --cap-usd 1</code>. Model làm việc trong thư mục tạm ngoài repo, để không đọc được grader hay lời giải. Các tùy chọn không gọi model: <code>--report &lt;file.jsonl&gt;</code> tổng hợp kết quả đã có, <code>--regrade &lt;file.jsonl&gt;</code> chấm lại bằng grader mới.</p>
+<p>Có số liệu rồi thì cập nhật <code>routing-table.md</code> và <code>rules.json</code>.</p>
+<p>Đo lợi ích của một plugin bên thứ ba: thêm vào <code>evals/configs.json</code> một cấu hình có <code>&quot;plugins&quot;: [&quot;&lt;thư mục trong repo&gt;&quot;]</code>, rồi so với A trên các việc plugin đó nhắm tới. Cấu hình có plugin chạy với <code>stream-json</code>, nên bảng kết quả có thêm dòng &quot;gọi skill ở n/m lượt&quot;. Skill có mà không được gọi thì chênh lệch chỉ là nhiễu. Không hơn A thì đừng bật skill đó: skill tốn token mỗi lần nạp mô tả, và có skill làm kết quả tệ đi.</p>
+<p><strong>Skill vendor, kết quả 07/10/2026:</strong> cấu hình V (A + 5 skill vendor) và A cùng đạt 20/20 trên 10 việc (gồm 3 việc debug, diff rất khó), V không gọi skill lượt nào. Ngày 08/10/2026 đã gỡ hẳn: plugin và marketplace <code>agent-stack-vendor-local</code>, 5 symlink OpenCode, thư mục <code>vendor/</code> và cấu hình V. Ngày 09/10/2026 xoá luôn khỏi <code>catalog.json</code> và <code>vetted.lock</code>; muốn dùng lại thì chạy lại <code>vet-skill</code>. Chi tiết ở <code>routing-table.md</code> mục 8.</p>
+<p><strong>Kết quả lần chạy ngày 02/10/2026</strong> (72 lượt, khoảng 7,5 USD giá niêm yết): A, C và D đều đạt 24/24; A rẻ nhất (0,063 USD mỗi việc, so với 0,128 và 0,121). Vì cả ba đều đạt hết, bộ việc này chưa phân biệt được các cấu hình: nó chỉ cho thấy sonnet · medium đủ cho việc nhỏ có tín hiệu kiểm tra rõ. Muốn đo debug khó hay review diff thật, cần thêm việc khó hơn vào <code>evals/tasks/</code>. Chi tiết và khuyến nghị chính thức của Anthropic nằm ở <code>routing-table.md</code>.</p>
+<p>Đo xem skill có kích hoạt đúng lúc không:</p>
+<pre data-lang="bash"><code>claude plugin eval ~/Documents/Claude/agent-stack/plugin --runs 1 --max-cost-usd 3 --trust-plugin --no-publish</code></pre>
+<p>Trần 3 USD chỉ đủ khoảng 11 trên 13 ca; chạy nốt phần còn lại bằng <code>--case &lt;tên&gt;</code>. Lần ngày 02/10/2026: 10/10 ca cần kích hoạt đều gọi đúng skill, 3/3 ca không được kích hoạt đều sạch. Cột chênh lệch chỉ cho biết skill chạy khi có plugin, chưa đo chất lượng việc skill làm.</p>
+</section>
+<section>
+<h2 id="s-9-tùy-chỉnh">9. Tùy chỉnh</h2>
+<div class="scroll"><table><thead><tr><th>Muốn đổi</th><th>Sửa ở đâu</th></tr></thead><tbody><tr><td>Ngưỡng cảnh báo hạn mức</td><td>Biến môi trường <code>AGENT_STACK_WARN_5H</code> (mặc định 90) và <code>AGENT_STACK_WARN_7D</code> (mặc định 80)</td></tr><tr><td>Luật chung cho mọi project</td><td><code>global/SHARED.global.md</code> (dùng chung), <code>global/CLAUDE.global.md</code> (riêng Claude Code, có bảng chọn cho dòng ➡️). Sửa xong có hiệu lực ở phiên mới</td></tr><tr><td>Luật router</td><td><code>plugin/skills/task-router/rules.json</code>, rồi chạy lại <code>route.py --eval evals/router-prompts.jsonl</code></td></tr><tr><td>Giọng văn</td><td><code>plugin/skills/giong-van/style-card.md</code> và <code>samples/</code> (chung); <code>.agent/giong-van/</code> trong từng project viết luận</td></tr><tr><td>Danh sách dấu hiệu văn AI tiếng Việt</td><td><code>plugin/skills/giong-van/vi-ai-tells.md</code></td></tr><tr><td>Mẫu <code>PLAN.md</code> và <code>HANDOFF.md</code></td><td><code>plugin/skills/session-keeper/templates/</code></td></tr></tbody></table></div>
+<p>Sửa xong luật router hay skill thì chạy test. Nếu dùng desktop app, nhớ tăng version và cài lại plugin (mục 7).</p>
+<h3 id="s-đưa-project-khác-vào-nếp">Đưa project khác vào nếp</h3>
+<p>Project nào cũng dùng được agent-stack, chỉ cần có file kế hoạch. Trong project đó, nói &quot;khởi tạo file kế hoạch&quot; để <code>session-keeper</code> tạo <code>.agent/PLAN.md</code>. Từ phiên sau, hook sẽ nạp §0 tự động.</p>
+</section>
+<section>
+<h2 id="s-10-khi-có-trục-trặc">10. Khi có trục trặc</h2>
+<div class="scroll"><table><thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead><tbody><tr><td>Không thấy dòng 📍 / 🧭</td><td>Plugin chưa bật, hoặc thư mục không có git và file kế hoạch</td><td><code>claude plugin list</code>; xem <code>tail -3 state/sessions.jsonl</code>; mở phiên mới</td></tr><tr><td>Phiên đang mở chạy code plugin cũ</td><td>Phiên nạp plugin lúc mở</td><td>Gõ <code>/reload-plugins</code> hay mở phiên mới (không cần cài lại)</td></tr><tr><td>Không có cảnh báo hạn mức</td><td>Chưa có lượt nào gọi API trong 30 phút qua (số liệu cũ bị bỏ); trên desktop, mod giao diện chưa nạp (Claude Code dưới 2.1.295)</td><td>Gõ <code>/reload-plugins</code>; xem <code>state/limits.json</code>; tự theo dõi <code>/usage</code></td></tr><tr><td><code>claude -p</code> báo &quot;OAuth session expired&quot;</td><td>CLI hết phiên đăng nhập</td><td><code>claude /login</code> trong terminal</td></tr><tr><td>Plugin pyright-lsp không chạy trong project đã bật</td><td>Chưa có <code>pyright</code></td><td><code>brew install pyright</code></td></tr><tr><td>Muốn bật <dfn>LSP</dfn> (máy chủ ngôn ngữ: nhảy tới định nghĩa, kiểm kiểu) cho một project</td><td>LSP chỉ bật theo project; hồ sơ project lúc mở phiên đề xuất ở project lớn</td><td>Trong project đó: <code>claude plugin enable pyright-lsp@claude-plugins-official --scope local</code> (chỉ còn LSP cho Python; <code>clangd-lsp</code> cho C/C++ đã xoá ngày 10/10/2026)</td></tr><tr><td><code>vet.py scan</code> thoát mã 3</td><td>Lỗi mạng hoặc đích không tồn tại</td><td>Kiểm tra lại <code>owner/repo@ref</code>, thử <code>--no-scanner</code></td></tr><tr><td>§0 lệch với thực tế</td><td>Quên lưu trước khi dừng</td><td><code>/agent-stack:session-keeper tiep-tuc</code> để so và báo chỗ lệch</td></tr></tbody></table></div>
+<p>Sau khi bị ngắt giữa chừng, chạy theo thứ tự:</p>
+<pre data-lang="bash"><code>git -C ~/Documents/Claude/agent-stack status</code></pre>
+<pre data-lang="bash"><code>git -C ~/Documents/Claude/agent-stack log --oneline -5</code></pre>
+<pre data-lang="bash"><code>python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py show</code></pre>
+<p>rồi đọc §0 của <code>PLAN.md</code>. Muốn quay về trạng thái trước khi cài: <code>./install.sh --rollback --apply</code>.</p>
+</section>
+<section>
+<h2 id="s-11-tra-cứu-nhanh">11. Tra cứu nhanh</h2>
+<div class="scroll"><table><thead><tr><th>Muốn</th><th>Nói hoặc gõ</th></tr></thead><tbody><tr><td>Biết làm gì tiếp</td><td>&quot;làm gì tiếp?&quot; · <code>/agent-stack:tien-do</code></td></tr><tr><td>Xem mọi project</td><td><code>/agent-stack:tien-do all</code></td></tr><tr><td>Lưu tiến độ</td><td>&quot;lưu tiến độ&quot; · <code>/agent-stack:session-keeper luu</code></td></tr><tr><td>Làm tiếp sau khi bị ngắt</td><td><code>/agent-stack:session-keeper tiep-tuc</code></td></tr><tr><td>Bàn giao cho phiên khác</td><td><code>/agent-stack:session-keeper ban-giao</code></td></tr><tr><td>Project mới chưa có kế hoạch</td><td><code>/agent-stack:session-keeper khoi-tao</code></td></tr><tr><td>Hỏi nên dùng model nào</td><td><code>/agent-stack:task-router &lt;việc&gt;</code></td></tr><tr><td>Kiểm tra skill/plugin trước khi cài</td><td><code>/agent-stack:vet-skill &lt;owner/repo&gt;</code></td></tr><tr><td>Sửa văn cho tự nhiên</td><td>&quot;sửa đoạn này cho tự nhiên&quot; · <code>/agent-stack:giong-van</code></td></tr><tr><td>Tìm thư viện có sẵn</td><td><code>/agent-stack:reuse-best &lt;nhu cầu&gt;</code></td></tr><tr><td>Threat model trước khi code</td><td>&quot;threat model chức năng này&quot; · <code>/agent-stack:mo-hinh-de-doa</code></td></tr><tr><td>Kiểm trước khi báo xong hay commit</td><td>&quot;chốt việc&quot;, &quot;kiểm lại trước khi commit&quot; · <code>/agent-stack:chot-viec</code></td></tr><tr><td>Review trước commit</td><td>&quot;review trước khi commit&quot; (subagent <code>agent-stack:reviewer</code>)</td></tr><tr><td>Chạy test gọn</td><td>&quot;giao test-runner chạy test&quot;</td></tr></tbody></table></div>
+<p>Các file cần biết:</p>
+<div class="scroll"><table><thead><tr><th>File</th><th>Nội dung</th></tr></thead><tbody><tr><td><code>PLAN.md</code> §0</td><td>Đang ở đâu, việc tiếp theo</td></tr><tr><td><code>KE-HOACH.md</code></td><td>Thiết kế đầy đủ</td></tr><tr><td><code>INSTALLED.md</code></td><td>Đã cài gì, gỡ từng mục thế nào</td></tr><tr><td><code>vetted.lock</code></td><td>Đồ bên thứ ba đã kiểm duyệt và quyết định</td></tr><tr><td><code>routing-table.md</code></td><td>Bảng chọn model, effort, subagent, skill</td></tr><tr><td><code>BASELINE.md</code></td><td>Số liệu dùng token nền</td></tr><tr><td><code>state/</code></td><td>Trạng thái chạy: phiên, hạn mức, biên nhận, nhật ký cài (không vào git)</td></tr></tbody></table></div>
+</section>
+<footer data-phan="nguon"><p class="note">Nguồn: chuyển từ <code>HUONG-DAN.md</code> ngày 02/11/2026 (luật chung "File cho người đọc viết bằng HTML"); từ nay sửa thẳng file này. Chi tiết thiết kế: <code>KE-HOACH.md</code>.</p></footer>
+</main>
+<nav class="toc" aria-label="Mục lục">
+<details id="toc"><summary>Mục lục</summary>
+<ol>
+<li><a href="#bat-dau">Tóm tắt</a></li>
+<li><a href="#can-biet-truoc">Cần biết trước</a></li>
+<li><a href="#ba-tinh-huong">Ba tình huống thường gặp</a></li>
+<li class="l2"><a href="#s-1-agent-stack-làm-gì">1. agent-stack làm gì</a></li>
+<li class="l2"><a href="#s-2-kiểm-tra-đã-cài-đúng-chưa">2. Kiểm tra đã cài đúng chưa</a></li>
+<li class="l2"><a href="#s-3-một-ngày-làm-việc">3. Một ngày làm việc</a></li>
+<li class="l2"><a href="#s-4-những-gì-tự-chạy">4. Những gì tự chạy</a></li>
+<li class="l3"><a href="#s-cảnh-báo-hạn-mức">Cảnh báo hạn mức</a></li>
+<li class="l2"><a href="#s-5-mười-skill">5. Mười skill</a></li>
+<li class="l3"><a href="#s-51-tien-do-tiến-độ-và-việc-nên-làm-tiếp">5.1 tien-do: tiến độ và việc nên làm tiếp</a></li>
+<li class="l3"><a href="#s-52-session-keeper-lưu-làm-tiếp-bàn-giao">5.2 session-keeper: lưu, làm tiếp, bàn giao</a></li>
+<li class="l3"><a href="#s-53-task-router-chọn-model-effort-subagent-skill">5.3 task-router: chọn model, effort, subagent, skill</a></li>
+<li class="l3"><a href="#s-54-vet-skill-kiểm-duyệt-đồ-bên-thứ-ba">5.4 vet-skill: kiểm duyệt đồ bên thứ ba</a></li>
+<li class="l3"><a href="#s-55-giong-van-chỉnh-văn-đúng-giọng-mình">5.5 giong-van: chỉnh văn đúng giọng mình</a></li>
+<li class="l3"><a href="#s-56-reuse-best-tìm-thứ-có-sẵn-trước-khi-tự-làm">5.6 reuse-best: tìm thứ có sẵn trước khi tự làm</a></li>
+<li class="l3"><a href="#s-57-chot-viec-cổng-kiểm-trước-khi-báo-xong">5.7 chot-viec: cổng kiểm trước khi báo xong</a></li>
+<li class="l3"><a href="#s-58-mo-hinh-de-doa-threat-model-trước-khi-code">5.8 mo-hinh-de-doa: threat model trước khi code</a></li>
+<li class="l3"><a href="#s-59-goi-mcp-gọi-mcp-từ-xa-theo-việc-không-cài">5.9 goi-mcp: gọi MCP từ xa theo việc, không cài</a></li>
+<li class="l3"><a href="#s-510-trang-artifact-trang-html-đọc-là-hiểu">5.10 trang-artifact: trang HTML đọc là hiểu</a></li>
+<li class="l2"><a href="#s-6-subagent">6. Subagent</a></li>
+<li class="l3"><a href="#s-quyền-riêng-tư-với-model-từ-xa">Quyền riêng tư với model từ xa</a></li>
+<li class="l3"><a href="#s-việc-cơ-học-hàng-loạt">Việc cơ học hàng loạt</a></li>
+<li class="l2"><a href="#s-7-cài-cập-nhật-gỡ">7. Cài, cập nhật, gỡ</a></li>
+<li class="l3"><a href="#s-sau-khi-sửa-code-plugin">Sau khi sửa code plugin</a></li>
+<li class="l3"><a href="#s-gỡ">Gỡ</a></li>
+<li class="l3"><a href="#s-dùng-trên-cloud-session">Dùng trên cloud session</a></li>
+<li class="l2"><a href="#s-8-bảo-trì-và-eval">8. Bảo trì và eval</a></li>
+<li class="l3"><a href="#s-mỗi-tháng">Mỗi tháng</a></li>
+<li class="l3"><a href="#s-xem-mức-dùng-token">Xem mức dùng token</a></li>
+<li class="l3"><a href="#s-mốc-kiểm-tra-của-repo">Mốc kiểm tra của repo</a></li>
+<li class="l3"><a href="#s-eval-chọn-cấu-hình">Eval chọn cấu hình</a></li>
+<li class="l2"><a href="#s-9-tùy-chỉnh">9. Tùy chỉnh</a></li>
+<li class="l3"><a href="#s-đưa-project-khác-vào-nếp">Đưa project khác vào nếp</a></li>
+<li class="l2"><a href="#s-10-khi-có-trục-trặc">10. Khi có trục trặc</a></li>
+<li class="l2"><a href="#s-11-tra-cứu-nhanh">11. Tra cứu nhanh</a></li>
+</ol>
+</details>
+</nav>
+</div>
+<script>
+// Mục lục: màn rộng thì luôn mở (đứng bên trái), màn hẹp thì thu gọn để nội dung lên đầu.
+(function () {
+  var toc = document.getElementById('toc'), wide = matchMedia('(min-width: 1040px)');
+  var sync = function () { toc.open = wide.matches; };
+  sync(); wide.addEventListener('change', sync);
+  toc.addEventListener('click', function (e) { if (e.target.tagName === 'A' && !wide.matches) toc.open = false; });
+})();
+// Nút chép cho khối lệnh: chép đúng chữ trong khối, báo "Đã chép"; trình duyệt từ chối thì chọn sẵn chữ để chép tay.
+document.querySelectorAll('pre[data-lang="bash"], pre[data-lang="sh"]').forEach(function (pre) {
+  var b = document.createElement('button');
+  b.type = 'button'; b.className = 'copy'; b.textContent = 'Chép';
+  b.addEventListener('click', function () {
+    var text = pre.querySelector('code').innerText;
+    var done = function () { b.textContent = 'Đã chép'; setTimeout(function () { b.textContent = 'Chép'; }, 1500); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(pre.querySelector('code'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'Đã chọn'; };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+  var box = document.createElement('div');
+  box.className = 'codebox';
+  pre.parentNode.insertBefore(box, pre);
+  box.appendChild(pre); box.appendChild(b);
+});
+</script>
+</body>
+</html>

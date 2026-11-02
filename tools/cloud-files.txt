@@ -97,6 +97,7 @@ plugin/skills/vet-skill/scripts/drift.py
 plugin/skills/vet-skill/scripts/dynamic.py
 plugin/skills/vet-skill/scripts/mcp_remote.py
 plugin/skills/vet-skill/scripts/redflags.py
+plugin/skills/vet-skill/scripts/report_html.py
 plugin/skills/vet-skill/scripts/skillspector-build.txt
 plugin/skills/vet-skill/scripts/spector.py
 plugin/skills/vet-skill/scripts/vet.py

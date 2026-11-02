@@ -271,7 +271,7 @@ agent-stack/
 ├── vetted.lock, catalog.json
 ├── install.sh
 ├── KE-HOACH.md              thiết kế và lý do
-├── HUONG-DAN.md             hướng dẫn sử dụng chi tiết
+├── HUONG-DAN.html           hướng dẫn sử dụng chi tiết (mở bằng trình duyệt)
 ├── PLAN.md                  tiến độ (§0)
 ├── routing-table.md, BASELINE.md, INSTALLED.md
 └── (không vào git) state/, backups/, vendor/, .venv/, .cache/, .tmp/, .vet-cache/
@@ -326,7 +326,7 @@ Phát hiện lỗ hổng: mở issue trên GitHub, đừng kèm secret hay mã k
 
 | File | Nội dung |
 |---|---|
-| [`HUONG-DAN.md`](HUONG-DAN.md) | Hướng dẫn sử dụng đầy đủ: từng skill, hook, cảnh báo hạn mức, xử lý trục trặc, tra cứu nhanh |
+| [`HUONG-DAN.html`](HUONG-DAN.html) | Hướng dẫn sử dụng đầy đủ (trang HTML, mở bằng trình duyệt): từng skill, hook, cảnh báo hạn mức, xử lý trục trặc, tra cứu nhanh |
 | [`KE-HOACH.md`](KE-HOACH.md) | Thiết kế, lý do chọn từng thứ, kết quả nghiên cứu công cụ, lộ trình theo giai đoạn |
 | [`routing-table.md`](routing-table.md) | Bảng định tuyến model và effort đầy đủ, kèm căn cứ |
 | [`evals/README.md`](evals/README.md) | Bộ eval và cách chấm |
