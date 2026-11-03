@@ -22,7 +22,7 @@
 
 ## File cho người đọc viết bằng HTML
 
-- File viết ra để người đọc (báo cáo, kế hoạch, so sánh, giải thích, review, kết quả đo, hướng dẫn, ghi chú học) là một file `.html` tự chứa: CSS, JS, hình SVG nằm sẵn trong file, mở thẳng bằng trình duyệt, đọc được trên điện thoại. Không viết file `.md` cho những việc này. Viết theo skill `reader-page` và qua `check_page.py` của nó (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026; bạn chọn ngày 01/11/2026).
+- File viết ra để người đọc (báo cáo, kế hoạch, so sánh, giải thích, review, kết quả đo, hướng dẫn, ghi chú học) là một file `.html` tự chứa: CSS, JS, hình SVG nằm sẵn trong file, mở thẳng bằng trình duyệt, đọc được trên điện thoại. Không viết file `.md` cho những việc này. Viết theo skill `reader-page` và qua `check_page.py` của nó (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026).
 - Chỉ giữ `.md` khi file bắt buộc là Markdown:
   - agent hay công cụ đọc nó: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `SKILL.md` và mọi file trong thư mục skill, file định nghĩa subagent hay lệnh, file nhớ; file trạng thái `PLAN.md`, `PROGRESS.md`, `TODO.md`, `.agent/*.md` (HANDOFF, LAST-TURN, NHAT-KY, threat-model);
   - nền tảng ngoài đòi Markdown: `README`, `CHANGELOG`, `CONTRIBUTING`, `SECURITY`, `LICENSE`, mẫu trong `.github/`, mô tả PR và issue, commit; tài liệu của site dựng từ Markdown (MkDocs, Docusaurus) hay project đã quy ước Markdown trong `CLAUDE.md`, `AGENTS.md`;
