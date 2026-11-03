@@ -1,5 +1,5 @@
 ---
-name: tien-do
+name: progress
 description: Báo tiến độ project và việc nên làm tiếp. Gồm giai đoạn hiện tại, việc đang dở, và việc tiếp theo xếp theo ưu tiên (chặn đường, dang dở, giai đoạn hiện tại, nợ TODO, bị bỏ quên), kèm gợi ý model, effort và câu /goal. Dùng khi người dùng hỏi làm gì tiếp, tiến độ tới đâu, còn dở gì, đang ở đâu, status, what's next, hoặc khi mở lại project sau thời gian nghỉ. Thêm "all" để xem tổng quan mọi project.
 when_to_use: tiến độ, làm gì tiếp, việc dở, task dang dở, status, what's next, tổng quan các project, review tuần, mở lại project
 argument-hint: "[all]"
@@ -10,7 +10,7 @@ context: fork
 
 # Tiến độ và việc nên làm tiếp
 
-Script chỉ đọc project, không sửa gì trong project. Nó chỉ ghi một snapshot nhỏ vào `state/` của agent-stack để lần sau báo phần đã đổi. Đường dẫn: `${CLAUDE_SKILL_DIR}/scripts/collect.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/collect.py`.
+Script chỉ đọc project, không sửa gì trong project. Nó chỉ ghi một snapshot nhỏ vào `state/` của agent-stack để lần sau báo phần đã đổi. Đường dẫn: `${CLAUDE_SKILL_DIR}/scripts/collect.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/progress/scripts/collect.py`.
 
 ## Các bước
 

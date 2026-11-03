@@ -1,4 +1,4 @@
-# Bài mẫu cho skill giong-van
+# Bài mẫu cho skill writing-voice
 
 Có ba chỗ đặt bài mẫu. `tells.py` chọn theo thứ tự dưới đây, chỉ lấy bài cùng ngôn ngữ với bản nháp, và cần ít nhất 500 từ:
 

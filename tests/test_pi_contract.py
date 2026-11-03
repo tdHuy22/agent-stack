@@ -121,7 +121,7 @@ class ContractTests(TempDirTestCase):
 
     def test_disallowed_tools_win_over_tools(self):
         plugin = self.plugin()
-        path = plugin / "agents" / "nguoi-doc-la.md"
+        path = plugin / "agents" / "cold-reader.md"
         path.write_text(path.read_text().replace("tools: Read\n", "tools: Read, Bash\n"))
         fields, _ = pi_host.split_frontmatter(path.read_text())
         self.assertEqual(pi_host.pi_tools(fields, CONTRACT["agents"]), ["read"])
@@ -141,20 +141,20 @@ class ContractTests(TempDirTestCase):
         (plugin / "skills" / "moi").mkdir()
         (plugin / "skills" / "moi" / "SKILL.md").write_text("---\nname: moi\ndescription: Mới.\n---\n")
         self.assert_problem(plugin, "skill moi chưa có mục")
-        path = plugin / "skills" / "tien-do" / "SKILL.md"
+        path = plugin / "skills" / "progress" / "SKILL.md"
         text = path.read_text()
         fields, _ = pi_host.split_frontmatter(text)
         path.write_text(text.replace(fields["description"], "x" * 1025))
-        self.assert_problem(plugin, "skill tien-do: description dài 1025")
+        self.assert_problem(plugin, "skill progress: description dài 1025")
 
     def test_colon_in_unquoted_description_is_a_problem(self):
-        # Lỗi thật 02/11/2026: pi bỏ trang-artifact vì description có "để người đọc: kế hoạch"
+        # Lỗi thật 02/11/2026: pi bỏ reader-page vì description có "để người đọc: kế hoạch"
         plugin = self.plugin()
-        path = plugin / "skills" / "tien-do" / "SKILL.md"
+        path = plugin / "skills" / "progress" / "SKILL.md"
         text = path.read_text()
         fields, _ = pi_host.split_frontmatter(text)
         path.write_text(text.replace(fields["description"], "Báo tiến độ: việc dở, việc tiếp theo."))
-        self.assert_problem(plugin, "skill tien-do: trường description có ': '")
+        self.assert_problem(plugin, "skill progress: trường description có ': '")
         path.write_text(text.replace(fields["description"], '"Báo tiến độ: việc dở, việc tiếp theo."'))
         self.assertEqual(pi_host.check(plugin), [])
 

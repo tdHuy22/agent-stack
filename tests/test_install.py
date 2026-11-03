@@ -85,8 +85,8 @@ class InstallTests(TempDirTestCase):
         for rel in ("global", "plugin/skills", "statusline", ".claude-plugin"):
             (self.stack / rel).mkdir(parents=True)
         (self.stack / "global" / "CLAUDE.global.md").write_text("# luật claude\n")
-        (self.stack / "plugin" / "skills" / "tien-do").mkdir()
-        (self.stack / "plugin" / "skills" / "tien-do" / "SKILL.md").write_text("---\nname: tien-do\n---\n")
+        (self.stack / "plugin" / "skills" / "progress").mkdir()
+        (self.stack / "plugin" / "skills" / "progress" / "SKILL.md").write_text("---\nname: progress\n---\n")
         (self.stack / "statusline" / "statusline.py").write_text("print('x')\n")
         shutil.copy(REPO / ".claude-plugin" / "marketplace.json", self.stack / ".claude-plugin" / "marketplace.json")
         self.lock = {"version": 1, "entries": {}}

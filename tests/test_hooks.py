@@ -358,7 +358,7 @@ class HookTests(TempDirTestCase):
         self.assertIn("b.py", self.stop("me", "Xong.", transcript_path=str(mine))["reason"])
 
     def test_stop_skips_the_tree_when_the_mod_marked_the_pane_open(self):
-        # Lỗi ở applerar: pane mở bằng /cay giữa các lượt, rồi /reload-plugins; hook không có AGENT_STACK_UI.
+        # Lỗi ở applerar: pane mở bằng /tree giữa các lượt, rồi /reload-plugins; hook không có AGENT_STACK_UI.
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"
         transcript.write_text("")
@@ -380,24 +380,24 @@ class HookTests(TempDirTestCase):
         self.assertEqual(self.stop("p1", "Còn hai việc.", transcript_path=str(transcript))["decision"], "block")
 
     def test_stop_skips_the_tree_after_cay_printed_it_as_text(self):
-        # Người dùng gõ /cay (mod in cây chữ, không qua lượt model): trong cùng lượt thì đã thấy cây.
+        # Người dùng gõ /tree (mod in cây chữ, không qua lượt model): trong cùng lượt thì đã thấy cây.
         self.with_plan()
         transcript = self.tmp / "transcript.jsonl"
         transcript.write_text("")
         env = dict(os.environ, AGENT_STACK_STATE=str(self.state))
 
-        def cay(sid):
+        def tree(sid):
             out = subprocess.run(["python3", str(HOOKS / "ui_status.py"), "--tree-shown"],
                                  input=json.dumps({"session_id": sid}), capture_output=True, text=True, timeout=30,
                                  env=env)
             self.assertEqual((out.returncode, out.stdout, out.stderr), (0, "", ""))
 
-        # Hỏi tiến độ: /cay cũ không đủ, phải hiện cây mới; gõ /cay trong lượt thì đủ.
+        # Hỏi tiến độ: /tree cũ không đủ, phải hiện cây mới; gõ /tree trong lượt thì đủ.
         self.submit("c1", "làm gì tiếp theo")
         out = self.stop("c1", "Còn hai việc.", transcript_path=str(transcript))
         self.assertIn("câu hỏi về tiến độ", out["reason"])
         self.submit("c1", "tiến độ tới đâu rồi")
-        cay("c1")
+        tree("c1")
         self.assertIsNone(self.stop("c1", "Cây ở trên.", transcript_path=str(transcript)))
         # Phiên khác không được tính nhờ dấu của c1.
         self.submit("c2", "tiến độ tới đâu rồi")
@@ -928,10 +928,10 @@ class HookTests(TempDirTestCase):
         self.assertEqual(self.last_request("cmd")["prompt"], "Đổi tên hàm foo thành bar trong utils.py và cập nhật nơi gọi")
 
     def test_subagent_start_gives_no_context_to_the_cold_reader(self):
-        # Người đọc lạ của skill trang-artifact phải hiểu trang nhờ chính trang, không nhờ yêu cầu của người dùng.
+        # Người đọc lạ của skill reader-page phải hiểu trang nhờ chính trang, không nhờ yêu cầu của người dùng.
         self.with_plan()
         self.submit("cold", "Viết trang so sánh hai cách đọc overlay")
-        for agent_type in ("nguoi-doc-la", "agent-stack:nguoi-doc-la"):
+        for agent_type in ("cold-reader", "agent-stack:cold-reader"):
             with self.subTest(agent_type=agent_type):
                 payload = {"session_id": "cold", "cwd": str(self.project), "transcript_path": "/x/t.jsonl",
                            "hook_event_name": "SubagentStart", "agent_id": "ag-2", "agent_type": agent_type}
@@ -1132,6 +1132,6 @@ class StopTrimHint(unittest.TestCase):
         self.assertNotIn("state.py trim", self.hook.block_reason(["a.py"], "PLAN.md", None))
         helps = ("§0 dài 20K ký tự: chạy `python3 x/state.py trim`", True)
         self.assertIn("state.py trim", self.hook.block_reason(["a.py"], "PLAN.md", helps))
-        # trim không rút được §0 thì không nhắc mỗi lượt (SessionStart và tien-do đã báo người dùng).
+        # trim không rút được §0 thì không nhắc mỗi lượt (SessionStart và progress đã báo người dùng).
         useless = ("§0 dài 50K ký tự mà trim không dời được: rút gọn tay", False)
         self.assertNotIn("rút gọn tay", self.hook.block_reason(["a.py"], "PLAN.md", useless))

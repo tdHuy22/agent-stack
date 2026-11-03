@@ -37,7 +37,7 @@ Năm phát hiện quan trọng nhất:
 | 4 | **Hook không thể đổi model hay effort** (docs chính thức), và đổi model giữa chừng làm mất prompt cache. | Router chỉ **gợi ý**, bạn tự đổi ở ranh giới việc. Không tự động đổi theo từng tin nhắn. |
 | 5 | Danh sách task có sẵn của Claude Code **không bật mặc định trên Opus 5.5 và Sonnet 5.5**, và chỉ dùng chung giữa các phiên khi đặt `CLAUDE_CODE_TASK_LIST_ID`. Trong khi đó `SCEE/PLAN.md` của bạn đã có sẵn mẫu rất tốt: mục §0 "Đang ở đâu, việc tiếp theo". | Skill #7 lấy file Markdown theo mẫu SCEE làm nguồn sự thật. Task list chỉ là công cụ phụ trong phiên. |
 
-Lộ trình ban đầu: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18 buổi × 2 giờ**. GĐ4 và GĐ5 có thể tính vào giờ lab của trục AI Engineer. Sau đó có thêm GĐ6b (giong-van theo nghiên cứu), GĐ8 (reuse-best), GĐ9 (sửa sau rà soát) và GĐ10 (chọn skill theo project, gợi ý sau mỗi câu trả lời). Tiến độ thật nằm ở mục §0 của `PLAN.md`.
+Lộ trình ban đầu: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoảng **14–18 buổi × 2 giờ**. GĐ4 và GĐ5 có thể tính vào giờ lab của trục AI Engineer. Sau đó có thêm GĐ6b (writing-voice theo nghiên cứu), GĐ8 (reuse-best), GĐ9 (sửa sau rà soát) và GĐ10 (chọn skill theo project, gợi ý sau mỗi câu trả lời). Tiến độ thật nằm ở mục §0 của `PLAN.md`.
 
 ---
 
@@ -83,7 +83,7 @@ Lộ trình ban đầu: 9 giai đoạn (GĐ0 đến GĐ7, cộng GĐ2b), khoản
 | G2 | "Rẻ hơn" là **tốn ít hạn mức gói thuê bao** (cửa sổ 5 giờ và tuần), không phải tiền API. | Nếu dùng API key thì đo bằng đô la. |
 | G3 | OpenCode đóng hai vai: (a) worker cho việc cơ học bằng model local hoặc miễn phí, (b) phương án dự phòng khi hết hạn mức tuần của Claude. Không chạy tài khoản Claude bên trong OpenCode. | |
 | G4 | Viết luận là cho bài của chính bạn (blog, email, tài liệu, hồ sơ cho phép dùng AI), bằng tiếng Việt và tiếng Anh. | |
-| G5 | **Đã chốt:** Claude viết v1 các skill lõi (vet-skill, session-keeper, tien-do, task-router, giong-van) kèm test và ghi chú thiết kế; bạn review. | — |
+| G5 | **Đã chốt:** Claude viết v1 các skill lõi (vet-skill, session-keeper, progress, task-router, writing-voice) kèm test và ghi chú thiết kế; bạn review. | — |
 | G6 | "Project" gồm mọi thư mục trong `~/Documents/Claude/`, kể cả ba thư mục học. Nguồn sự thật về tiến độ là file Markdown trong project, không phải công cụ quản lý task bên ngoài. | Nếu bạn muốn GitHub Issues hoặc beads làm nguồn chính thì đổi tầng dữ liệu của skill #7. |
 
 Các câu hỏi cần bạn trả lời nằm ở mục 10.
@@ -112,7 +112,7 @@ prompt ─┼─► [Lớp 2: Định tuyến]  hook UserPromptSubmit + router-r
         ├─► [Lớp 3: Bền bỉ]  PLAN §0 · PROGRESS · HANDOFF + git checkpoint          (#3 ghi)
         │        ├─ hết 5 giờ  → Claude Code tự chờ rồi làm tiếp (sẵn có)
         │        ├─ hết hạn mức tuần, crash → mở OpenCode, đọc HANDOFF, làm tiếp
-        │        └─ tien-do: đọc PLAN/PROGRESS + git + mốc test → tiến độ, việc dang dở,
+        │        └─ progress: đọc PLAN/PROGRESS + git + mốc test → tiến độ, việc dang dở,
         │           việc tiếp theo (kèm gợi ý model/effort lấy từ router)       (#7 đọc)
         │
         └─► [Lớp 4: Kiểm chứng]  skill verify trước commit · claude plugin eval (so model)
@@ -205,8 +205,8 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | `/deep-research`, WebSearch, WebFetch | có sẵn | — | CC | **Dùng ngay** | |
 | Tavily | MCP / plugin chính thức | 2.4k / 09-29 | CC, OC | Đã kết nối trong desktop app | crawl, map, research; tìm kiếm thì kém hơn Exa và Parallel (Artificial Analysis Search Index 28/09/2026: Tavily basic 66). |
 | Exa | MCP từ xa, không key | — | CC | **Đã cài** (10/10/2026) qua `install.sh` | Tìm và đọc trang; điểm 74; định nghĩa tool gọn (2.372 ký tự), không có `instructions`. |
-| Parallel Search | MCP từ xa, không key | — | CC | **Dùng qua skill `goi-mcp`** (11/10/2026), không cài | Điểm 73–75; script bỏ `session_id` và tên model mà tool xin; định nghĩa tool 12.596 ký tự. |
-| DeepWiki | MCP từ xa, không key | — | CC | **Dùng qua skill `goi-mcp`** (11/10/2026), không cài | Hỏi về repo GitHub công khai; không cài vì `instructions` 3.458 ký tự sẽ nạp vào mọi phiên. |
+| Parallel Search | MCP từ xa, không key | — | CC | **Dùng qua skill `remote-mcp`** (11/10/2026), không cài | Điểm 73–75; script bỏ `session_id` và tên model mà tool xin; định nghĩa tool 12.596 ký tự. |
+| DeepWiki | MCP từ xa, không key | — | CC | **Dùng qua skill `remote-mcp`** (11/10/2026), không cài | Hỏi về repo GitHub công khai; không cài vì `instructions` 3.458 ký tự sẽ nạp vào mọi phiên. |
 | firecrawl, brave, jina, searxng, duckduckgo | MCP | — | CC | Không cài | So sánh 07/10/2026: cần key hay thẻ, hoặc kém hơn Exa (trang so sánh trong PLAN §0). |
 | K-Dense scientific-agent-skills | skills | 47.2k / 10-01 | CC, OC | Thử chọn lẻ | Đọc paper khoa học, hợp trục bán dẫn và AI. |
 | paper-anatomy (của bạn) | skill | — | CC | **Dùng tiếp** | Đã có sẵn. |
@@ -242,7 +242,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | webapp-testing (anthropics/skills) | skill | 179k | CC, OC | **Cài** | |
 | playwright (Microsoft) | MCP / plugin chính thức | 37.7k / 09-28 | CC, OC | **Cài** | Kiểm thử e2e. |
 | chrome-devtools-mcp | MCP | 52.8k / 10-01 | CC, OC | Tùy chọn | Debug hiệu năng trình duyệt. |
-| `/verify` có sẵn + biên nhận kiểm tra | có sẵn + ⚙️ script | — | CC, OC | **Dùng** | Dùng `/verify` có sẵn để kiểm tra; ghi kết quả bằng `receipt.py` để `tien-do` biết kết quả còn khớp code hay đã cũ. |
+| `/verify` có sẵn + biên nhận kiểm tra | có sẵn + ⚙️ script | — | CC, OC | **Dùng** | Dùng `/verify` có sẵn để kiểm tra; ghi kết quả bằng `receipt.py` để `progress` biết kết quả còn khớp code hay đã cũ. |
 | mutation-testing (Trail of Bits) | skill | 7.3k | CC | Thử | Đo xem test có bắt được lỗi thật không. |
 | tdd (mattpocock) hoặc TDD (superpowers) | skill | — | CC, OC | Chọn **một** | Tránh hai skill tranh nhau kích hoạt. |
 
@@ -296,7 +296,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 |---|---|---|---|---|
 | humanizer | plugin skill | 53.2k / 09-28 | **Cài** (tiếng Anh) | 26 dấu hiệu lấy từ trang "Signs of AI writing" của Wikipedia. Tác giả viết rõ: qua mặt detector không phải mục tiêu, và detector vẫn gắn cờ phần lớn output của nó. |
 | stop-slop | skill | 17.7k / 03-17 | Tham khảo | |
-| giong-van (VI + EN) | ✍️ skill | — | **Viết ở GĐ6** | Xem 7.5. |
+| writing-voice (VI + EN) | ✍️ skill | — | **Viết ở GĐ6** | Xem 7.5. |
 
 ### 6.11 Theo dõi tiến độ (cho #7)
 
@@ -307,8 +307,8 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | project-artifact | plugin chính thức | — | CC | Thử cho project lớn (SCEE) | Trang trạng thái "sống" có dải "Next steps". Lấy trạng thái PR/CI qua `gh`; làm mới thì đăng lại đúng URL cũ. Cần đăng nhập claude.ai và có tính năng Artifact. |
 | beads | CLI | 27.6k / 10-01 (MIT) | CC, OC | Để sau | Issue tracker dành cho agent, có quan hệ phụ thuộc giữa các việc; `bd ready` liệt kê việc không bị chặn. Hợp khi việc nhiều và đan xen. |
 | Backlog.md | CLI + MCP | 6.9k / 09-28 (MIT) | CC, OC | Tham khảo | Task dạng Markdown nằm trong repo, có bảng kanban. |
-| planning-with-files | skill | 27.2k | CC, OC | (đã có ở 6.8) | `tien-do` đọc được file `progress.md` của nó. |
-| `tien-do` | ✍️ skill + script | — | CC, OC | **Viết ở GĐ2b** | Xem 7.8. |
+| planning-with-files | skill | 27.2k | CC, OC | (đã có ở 6.8) | `progress` đọc được file `progress.md` của nó. |
+| `progress` | ✍️ skill + script | — | CC, OC | **Viết ở GĐ2b** | Xem 7.8. |
 
 ### 6.12 Không khuyến nghị lúc này
 
@@ -332,7 +332,7 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 **Kết luận**
 - Không mục nào đáng "dùng lại nguyên bản" ngoài `claude-security`, và chỉ để gọi tay khi cần quét sâu. Phần lớn thứ Anthropic có đã nằm sẵn trong Claude Code (`/code-review`, `/simplify`, `/security-review`, `/goal`, `/loop`, skill `claude-api`) hoặc trùng bản tự viết.
 - Một mục đáng đưa vào lộ trình: **sandbox-runtime**, để `vet-skill` có phân tích động. Đây là lỗ hổng thật duy nhất tìm thấy, vì `vet.py` hiện chỉ phân tích tĩnh.
-- Các ý nên lấy để nâng cấp bản tự viết, không chép code: `reviewer` (bước verifier phản biện, bảng lọc dương tính giả, mô tả "hình dạng" lỗi thay vì liệt kê loại lỗi, soi nuốt lỗi và test thiếu), `tien-do` (báo phần thay đổi), `session-keeper` (kiểm bằng agent không có ngữ cảnh), `vet-skill` (danh sách kiểm MCP), grader (rubric từng tiêu chí).
+- Các ý nên lấy để nâng cấp bản tự viết, không chép code: `reviewer` (bước verifier phản biện, bảng lọc dương tính giả, mô tả "hình dạng" lỗi thay vì liệt kê loại lỗi, soi nuốt lỗi và test thiếu), `progress` (báo phần thay đổi), `session-keeper` (kiểm bằng agent không có ngữ cảnh), `vet-skill` (danh sách kiểm MCP), grader (rubric từng tiêu chí).
 - Nên tránh: Stop hook tự lặp (`ralph-loop`) và `security-guidance` (SessionStart tự `pip install`, Stop gọi LLM mỗi lượt có sửa file).
 
 **Giấy phép quyết định được chép hay chỉ học ý** (đọc từ file LICENSE; API trả `null` cho `claude-code` và `skills` vì giấy phép nằm ở từng thư mục)
@@ -348,25 +348,25 @@ tính năng có sẵn → plugin hoặc skill chính thức của Anthropic → 
 | `reviewer` ← [defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) | **ĐIỀU CHỈNH** (ý, không cài) | `plugin/agents/reviewer.md` | Theo `docs/prompting.md` và `docs/best-practices.md` của harness: (a) mô tả "hình dạng" lỗ hổng thay vì liệt kê loại lỗi, vì liệt kê làm giảm recall (`reviewer.md` dòng 14 đang liệt kê); (b) mỗi phát hiện qua một bước verifier đối kháng ("tìm lý do nó sai") rồi mới báo. Pipeline tự động (Docker, ASAN, gVisor) quá nặng, không dùng. | ★7,5k · 08-06 · Apache-2.0 · README ghi "not maintained" |
 | `reviewer` ← [claude-code-security-review](https://github.com/anthropics/claude-code-security-review) | **ĐIỀU CHỈNH** | `reviewer.md` | Lấy danh sách loại trừ cứng (HARD EXCLUSIONS), tiền lệ (PRECEDENTS) và ngưỡng tin cậy làm bảng lọc dương tính giả; diễn đạt lại bằng tiếng Việt, ghi nguồn, giữ thông báo MIT. Chỉ áp cho `reviewer`, không áp cho `vet-skill` (vài loại trừ như DoS và rò secret trên đĩa không hợp khi soi đồ lạ). | ★6,3k · 02-11 (8 tháng chưa cập nhật) · MIT |
 | `reviewer` ← `pr-review-toolkit`, `code-review` | **BỎ QUA cài, lấy ý** | `reviewer.md` | Thêm hai mục kiểm từ `agents/silent-failure-hunter.md` (nuốt lỗi, fallback sai) và `agents/pr-test-analyzer.md` (thiếu test ở nhánh lỗi), hợp với C/C++ firmware; thêm quy tắc "chấm tin cậy 0 đến 100, bỏ dưới 80" từ `code-review/commands/code-review.md`. | Apache-2.0 |
-| `tien-do` ← `project-artifact` | **BỎ QUA cài, lấy ý** | `tien-do` | Lưu một snapshot nhỏ trong `state/` rồi báo "đã đổi gì từ lần trước" thay vì kể lại đầy đủ (mục "Refreshing an artifact (deltas, not re-narratives)", `SKILL.md` dòng 131). Phần Artifact và claude.ai không cần. | Apache-2.0 |
+| `progress` ← `project-artifact` | **BỎ QUA cài, lấy ý** | `progress` | Lưu một snapshot nhỏ trong `state/` rồi báo "đã đổi gì từ lần trước" thay vì kể lại đầy đủ (mục "Refreshing an artifact (deltas, not re-narratives)", `SKILL.md` dòng 131). Phần Artifact và claude.ai không cần. | Apache-2.0 |
 | [claude-security](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-security) | **DÙNG LẠI**, gọi tay | quét sâu repo hoặc diff | Vet trước. Chỉ chạy khi cần; có hỏi xác nhận chi phí trước mỗi lần quét. Hook chỉ in banner, đếm usage qua telemetry của Claude Code và nhắc quét sau `git push`; tắt bằng `DISABLE_TELEMETRY=1` và `CLAUDE_SECURITY_SCAN_TIP=off`. | 46 file, ~8,3k dòng; 8 agent chạy song song nên tốn hạn mức. LICENSE riêng (đóng): chỉ dùng, không chép. |
 | `session-keeper` ← [doc-coauthoring](https://github.com/anthropics/skills/tree/main/skills/doc-coauthoring) | **ĐIỀU CHỈNH** (ý) | `session-keeper` | Thêm bước "kiểm người đọc": đưa `PLAN.md` §0 hoặc `HANDOFF.md` cho một subagent không có ngữ cảnh, hỏi "làm gì tiếp?" rồi xem chỗ nào bị hiểu sai. Viết lại bằng lời mình, không chép. | Không có LICENSE.txt: coi là chưa xác định |
 | `vet-skill` ← `mcp-server-dev`, [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder) | **ĐIỀU CHỈNH** (lấy ý) | `vet-skill` (soi MCP) | Lấy ba danh sách kiểm: `build-mcpb/references/local-security.md` (path traversal, command injection, mặc định chỉ đọc), `build-mcp-server/references/tool-design.md` (annotation `readOnlyHint`, `destructiveHint`; mô tả tool không được ra lệnh cho Claude, coi là prompt injection), `auth.md` (audience của token, nơi lưu token). Khi tự viết MCP server: cài `mcp-server-dev` và đọc `mcp-builder/reference/evaluation.md` để dựng bộ câu hỏi chấm; không chạy `evaluation.py` (gọi API Anthropic bằng khóa). | Apache-2.0 cả hai |
 | `evals/`, `session-keeper` ← [claude-cookbooks](https://github.com/anthropics/claude-cookbooks), [knowledge-work-plugins/productivity](https://github.com/anthropics/knowledge-work-plugins/tree/main/productivity) | **ĐIỀU CHỈNH** (ý) | `plugin/evals/*/graders`, `session-keeper` | (a) Viết grader theo rubric từng tiêu chí kiểm được, như `managed_agents/CMA_verify_with_outcome_grader.ipynb`. (b) Giữ §0 ngắn, đẩy chi tiết sang file riêng (mẫu bộ nhớ nóng và kho sâu). (c) Ý "dựng sẵn bản tóm tắt từ ngưỡng mềm" trong `misc/session_memory_compaction.ipynb`: để sau, vì hook không được gọi model. | MIT · Apache-2.0 |
 | [claude-code/examples](https://github.com/anthropics/claude-code/tree/main/examples) | **TỰ LÀM theo ý**, chưa gấp | hook mới, `install.py` | Mẫu hook `PreToolUse` chặn lệnh nguy hiểm bằng thoát mã 2 kèm stderr. Nếu làm thì tự viết `plugin/hooks/pretooluse_guard.py` (Python 3.9, thoát 0 khi không chắc; mẫu gốc thoát 1 khi JSON lỗi nên không theo). `settings-bash-sandbox.json`: thêm làm tùy chọn trong `install.py`, mặc định tắt. | All rights reserved: chỉ học ý |
 
-**Kết quả triển khai 6.13.1 (02/10/2026).** Đã làm: `sandbox-runtime` (phân tích động `vet.py dynamic`, kèm phát hiện bằng file mồi vì log vi phạm của macOS mất sự kiện), `plugin-dev` (chạy ba script một lần, kết luận không dùng, giữ `timeout: 2`), `reviewer` (hình dạng lỗi, verifier phản biện, bảng lọc dương tính giả, ghi nguồn), `tien-do` (báo phần đổi), `claude-security` (đã vet, chờ duyệt). Chưa làm, vẫn là ý để sau: bước "kiểm người đọc" cho `session-keeper`, ba danh sách kiểm MCP cho `vet-skill`, grader theo rubric và §0 ngắn, hook `PreToolUse` chặn lệnh nguy hiểm.
+**Kết quả triển khai 6.13.1 (02/10/2026).** Đã làm: `sandbox-runtime` (phân tích động `vet.py dynamic`, kèm phát hiện bằng file mồi vì log vi phạm của macOS mất sự kiện), `plugin-dev` (chạy ba script một lần, kết luận không dùng, giữ `timeout: 2`), `reviewer` (hình dạng lỗi, verifier phản biện, bảng lọc dương tính giả, ghi nguồn), `progress` (báo phần đổi), `claude-security` (đã vet, chờ duyệt). Chưa làm, vẫn là ý để sau: bước "kiểm người đọc" cho `session-keeper`, ba danh sách kiểm MCP cho `vet-skill`, grader theo rubric và §0 ngắn, hook `PreToolUse` chặn lệnh nguy hiểm.
 
 **6.13.2 Giữ bản tự viết** (đã so với bản chính thức tương ứng)
 
 | Thành phần của mình | So với | Lý do giữ |
 |---|---|---|
 | `reviewer` | feature-dev, pr-review-toolkit, code-review, code-simplifier, `/code-review`, `/security-review` | Bản chính thức trùng lệnh có sẵn hoặc quá nặng (nhiều agent chạy song song); không bản nào thay được. Nâng cấp bằng các ý ở 6.13.1. |
-| `tien-do` | project-artifact | Artifact cần đăng nhập claude.ai và công cụ `Artifact`; `tien-do` chạy cục bộ. |
+| `progress` | project-artifact | Artifact cần đăng nhập claude.ai và công cụ `Artifact`; `progress` chạy cục bộ. |
 | `evals/run_eval.py` | claude-agent-sdk-python, agent-sdk-dev | SDK cần Python 3.10 trở lên cùng `anyio`, `mcp`, trái ràng buộc stdlib và Python 3.9. SDK chỉ bọc CLI `claude` bằng subprocess, đúng thứ script đang làm, và script đã lấy `total_cost_usd`, `num_turns`, `permission_denials` từ `--output-format json` (dòng 168 đến 197). |
 | `vet-skill` | claude-plugins-community | Kho này (2.283 plugin, 2.274 có `sha` ghim) nói đã "quét bảo mật tự động" nhưng không công bố tiêu chí hay kết quả. Chỉ dùng làm danh mục để tra; không add marketplace; vẫn phải vet từng mục. |
 | `task-router` | cookbooks `patterns/agents` | Không có thứ tương đương trực tiếp; các notebook là khung khái niệm. Mục `cost_optimization/` chưa mở. |
-| `giong-van` | brand-review, internal-comms, doc-coauthoring | Các mục kia cần style guide công ty hoặc là quy trình viết tài liệu; `giong-van` chỉnh giọng cá nhân. |
+| `writing-voice` | brand-review, internal-comms, doc-coauthoring | Các mục kia cần style guide công ty hoặc là quy trình viết tài liệu; `writing-voice` chỉnh giọng cá nhân. |
 | §0 và `session-keeper` | claude-quickstarts `autonomous-coding` | Cùng ý (file tiến độ giữa các phiên), mình đã có. |
 
 **6.13.3 Bỏ qua** (ghi lý do để phiên sau không phải xét lại)
@@ -406,10 +406,10 @@ Nguồn: video "L8 Principal's Agentic Engineering Workflow" (Kun Chen, YouTube 
 | Sửa lỗi bắt đầu từ tái hiện end-to-end, giống người dùng nhất | Thêm luật chung; `diagnosing-bugs` đã có bước này nhưng chỉ khi được gọi | `SHARED.global.md` |
 | File nhớ project lớn dần từ các lần người dùng sửa agent | Thêm luật: đề nghị ghi bài học thành luật ngắn trong `CLAUDE.md`/`AGENTS.md` của project, hoặc vào skill nếu chỉ cần cho một loại việc | `SHARED.global.md` |
 | Sao không chứng minh skill giúp được agent | Thêm vào luật cài đồ bên thứ ba và vào `reuse-best`. Bộ eval có cấu hình V (A + plugin vendor) và ghi skill nào thực sự được gọi; chưa chạy thật | `evals/` |
-| `no-mistakes`: ý định, review đối kháng ở context mới, test có bằng chứng, rà tài liệu, chấm rủi ro để quyết người đọc tới đâu | Tự làm skill `chot-viec` từ các mảnh đã có (`receipt.py`, `agent-stack:reviewer`) cộng `risk.py`. Không cài `no-mistakes`: nó tự push, mở PR, trông CI (repo không push), và cài bằng `curl \| sh` | `plugin/skills/chot-viec` |
+| `no-mistakes`: ý định, review đối kháng ở context mới, test có bằng chứng, rà tài liệu, chấm rủi ro để quyết người đọc tới đâu | Tự làm skill `done-gate` từ các mảnh đã có (`receipt.py`, `agent-stack:reviewer`) cộng `risk.py`. Không cài `no-mistakes`: nó tự push, mở PR, trông CI (repo không push), và cài bằng `curl \| sh` | `plugin/skills/done-gate` |
 | `lavish`: lên kế hoạch bằng trang HTML có bình luận và nút chọn | Dùng Artifact có sẵn của Claude (riêng tư, có bình luận đọc được bằng `ArtifactComments`), không cài lavish. Chỉ khi kế hoạch có từ hai phương án hoặc ba quyết định | `CLAUDE.global.md` |
 | `gnhf`: vòng lặp qua đêm có trần vòng, trần token, điều kiện dừng, mỗi vòng một commit | Ghi cách chạy vào dòng "agent tự chạy dài" của bảng định tuyến và ghi chú của luật router `long-agent`; `/goal`, `/loop` đã có | `routing-table.md`, `rules.json` |
-| AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Ngày 07/10/2026 rà thêm `scout.py` (mục 6.16); các script cũ khác chưa rà | `chot-viec/scripts/risk.py`, `reuse-best/scripts/scout.py` |
+| AXI: công cụ cho agent nên in gọn, có trạng thái rỗng rõ ràng, gợi ý bước tiếp | `risk.py` theo các nguyên tắc này (dòng tổng trước, "Không có thay đổi nào", dòng "Review đề nghị"). Ngày 07/10/2026 rà thêm `scout.py` (mục 6.16); các script cũ khác chưa rà | `done-gate/scripts/risk.py`, `reuse-best/scripts/scout.py` |
 | WezTerm, tmux, Neovim, nhập bằng giọng (OpenSuperWhisper), Treehouse, firstmate | Không áp dụng: là thói quen terminal cá nhân, cần cài toàn cục, hoặc app desktop đã làm thay (worktree mỗi phiên, nhiều phiên song song) | |
 
 ### 6.15 Sửa `reuse-best` sau eval có bẫy (07/10/2026)
@@ -463,8 +463,8 @@ Bạn chốt: phương án B, lưu trong project, phiên mới tự nạp, có l
 
 Bạn hỏi nên chạy threat model và review bảo mật cho mỗi chức năng, hay làm xong hết rồi mới review. Mình trả lời là cả hai cách đều kém hơn làm theo mức rủi ro. Chạy đủ cho mọi chức năng tốn nhiều nhất: một lần review opus · high cho diff khoảng 140 dòng tốn khoảng 54 nghìn token, phần lớn là chi phí cố định. Làm xong mới review thì diff lớn nên review sót nhiều, và lỗi thiết kế phải sửa muộn. Bạn bảo làm, và thêm luôn những skill đã duyệt giúp được cho bảo mật. Review độc lập (agent `reviewer`, opus · high) tìm 0 cao, 3 vừa, 2 thấp, đã sửa cả năm kèm test. Có ba bước:
 
-1. **Threat model trước khi code**, chỉ khi chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh). Skill mới `mo-hinh-de-doa`: đọc ít, sáu câu STRIDE, tối đa 5 mối đe dọa, mỗi mối có chốt chặn kiểm được, ghi vào `.agent/threat-model.md`. `reuse-best` không tìm được thứ dùng lại được: skill `threat-model` của `anthropics/defending-code-reference-harness` chạy nhiều subagent cho cả codebase, không có điều kiện kích hoạt và chưa vet; `fr33d3m0n/threat-modeling` cần Python 3.10+ và là cả một pipeline; `stride-gpt` là app Streamlit. Vì vậy mình tự viết, lấy ý từ harness (phép thử lỗi và mối đe dọa, tên cột của bảng). Trigger có ba lớp: luật `feature-boundary` của router (khi xin làm tính năng đăng nhập, upload, webhook…), một dòng trong luật chung, và `risk.py` làm lưới cuối.
-2. **Review từng thay đổi theo rủi ro.** `risk.py` liệt kê ranh giới bị đụng trong file mã nguồn và nâng mức thấp lên vừa. `chot-viec` đưa bảng mối đe dọa cho reviewer kiểm từng chốt chặn. Ở mức cao có đụng phần bảo mật, `differential-review` (Trail of Bits) chạy trên diff, rồi reviewer lọc dương tính giả, vì skill đó không lọc.
+1. **Threat model trước khi code**, chỉ khi chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh). Skill mới `threat-model`: đọc ít, sáu câu STRIDE, tối đa 5 mối đe dọa, mỗi mối có chốt chặn kiểm được, ghi vào `.agent/threat-model.md`. `reuse-best` không tìm được thứ dùng lại được: skill `threat-model` của `anthropics/defending-code-reference-harness` chạy nhiều subagent cho cả codebase, không có điều kiện kích hoạt và chưa vet; `fr33d3m0n/threat-modeling` cần Python 3.10+ và là cả một pipeline; `stride-gpt` là app Streamlit. Vì vậy mình tự viết, lấy ý từ harness (phép thử lỗi và mối đe dọa, tên cột của bảng). Trigger có ba lớp: luật `feature-boundary` của router (khi xin làm tính năng đăng nhập, upload, webhook…), một dòng trong luật chung, và `risk.py` làm lưới cuối.
+2. **Review từng thay đổi theo rủi ro.** `risk.py` liệt kê ranh giới bị đụng trong file mã nguồn và nâng mức thấp lên vừa. `done-gate` đưa bảng mối đe dọa cho reviewer kiểm từng chốt chặn. Ở mức cao có đụng phần bảo mật, `differential-review` (Trail of Bits) chạy trên diff, rồi reviewer lọc dương tính giả, vì skill đó không lọc.
 3. **Audit cả repo trước phát hành** bằng `claude-security`, cài theo project và gọi tay. Đây là công cụ duy nhất có threat model cho từng component. `/security-review` chỉ xem diff của nhánh nên không thay được.
 
 Đánh giá các mục đã duyệt (subagent đọc bản ghim trong `.vet-cache`):
@@ -481,22 +481,22 @@ Bạn hỏi nên chạy threat model và review bảo mật cho mỗi chức nă
 
 **Giới hạn và việc chưa làm.**
 - Chưa có số đo cho thấy bước threat model làm review bắt được nhiều lỗi hơn. Harness của Anthropic cũng không công bố số liệu. Muốn biết thì đo bằng eval.
-- Regex của `risk.py` có thể báo nhầm (ví dụ `subprocess` chạy lệnh cố định) hoặc bỏ sót; báo nhầm thì `chot-viec` ghi một dòng lý do rồi bỏ qua.
-- TM-3 và TM-4 (`git checkout` baseline, ghi báo cáo vào thư mục project) có chốt chặn khi `differential-review` được gọi qua router hay `chot-viec`: lời dặn đi kèm gợi ý (`skill_notes` trong `rules.json`). Khi skill tự kích theo description của nó, không qua router, thì chưa có.
+- Regex của `risk.py` có thể báo nhầm (ví dụ `subprocess` chạy lệnh cố định) hoặc bỏ sót; báo nhầm thì `done-gate` ghi một dòng lý do rồi bỏ qua.
+- TM-3 và TM-4 (`git checkout` baseline, ghi báo cáo vào thư mục project) có chốt chặn khi `differential-review` được gọi qua router hay `done-gate`: lời dặn đi kèm gợi ý (`skill_notes` trong `rules.json`). Khi skill tự kích theo description của nó, không qua router, thì chưa có.
 - `semgrep` chưa cài nên `static-analysis` chưa dùng được.
 
 
 ### 6.19 Skill cần thiết tự chạy (09/10/2026)
 
-Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nhắc, và bảo làm hết các việc còn treo của GĐ19. Trước đó, việc chạy `chot-viec`, `mo-hinh-de-doa` và `vet-skill` chỉ dựa vào luật chung và gợi ý của router: Claude nhớ thì chạy, quên thì thôi. Nay có hai chốt chặn bằng hook, nên không còn phụ thuộc vào trí nhớ của model:
+Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nhắc, và bảo làm hết các việc còn treo của GĐ19. Trước đó, việc chạy `done-gate`, `threat-model` và `vet-skill` chỉ dựa vào luật chung và gợi ý của router: Claude nhớ thì chạy, quên thì thôi. Nay có hai chốt chặn bằng hook, nên không còn phụ thuộc vào trí nhớ của model:
 
-- **Hook Stop buộc chạy `chot-viec`** khi lượt đổi code có mức rủi ro từ vừa trở lên mà chưa chạy nó. Mức rủi ro do `risk.py` chấm, chỉ trên file lượt này đổi, so với HEAD lúc bắt đầu lượt, nên file đã commit trong lượt vẫn được tính. `risk.py` ghi dấu "đã chốt việc" theo từng project. `chot-viec` kéo theo `mo-hinh-de-doa` khi đụng ranh giới tin cậy, `differential-review` ở mức cao, và cập nhật §0. Mức thấp (tài liệu, sửa nhỏ có test) không bị chặn, để không tốn thêm lượt model vô ích.
+- **Hook Stop buộc chạy `done-gate`** khi lượt đổi code có mức rủi ro từ vừa trở lên mà chưa chạy nó. Mức rủi ro do `risk.py` chấm, chỉ trên file lượt này đổi, so với HEAD lúc bắt đầu lượt, nên file đã commit trong lượt vẫn được tính. `risk.py` ghi dấu "đã chốt việc" theo từng project. `done-gate` kéo theo `threat-model` khi đụng ranh giới tin cậy, `differential-review` ở mức cao, và cập nhật §0. Mức thấp (tài liệu, sửa nhỏ có test) không bị chặn, để không tốn thêm lượt model vô ích.
 - **Hook PreToolUse mới:**
   - từ chối cài plugin, skill hay MCP chưa duyệt, nên Claude phải chạy `vet-skill` trước;
   - hỏi bạn trước khi thêm marketplace lạ;
   - hỏi bạn trước `git checkout` hay `git switch` khi cây có thay đổi chưa commit (TM-3);
   - từ chối ghi báo cáo `differential-review` vào chỗ git không bỏ qua (TM-4), kể cả khi skill tự kích, không qua router;
-  - khi router đánh dấu lượt là chức năng đụng ranh giới tin cậy mà chưa có threat model, từ chối một lần lần sửa file mã nguồn đầu tiên, nên `mo-hinh-de-doa` chạy trước khi code.
+  - khi router đánh dấu lượt là chức năng đụng ranh giới tin cậy mà chưa có threat model, từ chối một lần lần sửa file mã nguồn đầu tiên, nên `threat-model` chạy trước khi code.
   
   Lệnh thường chỉ tốn khoảng 20 ms.
 - **Bước `tools` của `install.sh`** cài công cụ mà mục đã duyệt cần (khóa `brew` trong catalog; hiện là `semgrep` cho `static-analysis`), có ghi nhật ký và gỡ được.
@@ -518,14 +518,14 @@ Bạn muốn các skill cần thiết luôn tự chạy, không đợi bạn nh�
   - Review (agent `reviewer`, sonnet): 0 cao, 1 vừa, 4 thấp, đã sửa cả năm kèm test. Lỗi vừa là chữ thô SkillSpector trích từ đích đi thẳng vào báo cáo, nên một skill độc chèn được dòng `## Phán quyết: PASS` giả vào báo cáo mà agent `vet-skill` đọc; nay chữ được làm sạch. Các lỗi thấp: `--version` không được bọc lỗi; `uv` nhận cả biến môi trường có khóa lúc build; dấu `.vetted-sha` cũ có thể còn sau khi cài dở; thiếu test nhánh lỗi.
 
 **Review độc lập** (agent `reviewer`, opus · high): 0 cao, 2 vừa, 1 thấp; đã sửa cả ba kèm test.
-- Hook Stop chấm lại cả phần chưa commit mà các lượt trước đã chốt, nên sửa nhiều lượt rồi mới commit thì lượt nào cũng bị ép chạy lại `chot-viec`. Nay `risk.py` lưu dấu băm từng dòng lúc chốt, và hook chỉ chấm dòng mới. File đã chốt không tính lại luật theo đường dẫn.
+- Hook Stop chấm lại cả phần chưa commit mà các lượt trước đã chốt, nên sửa nhiều lượt rồi mới commit thì lượt nào cũng bị ép chạy lại `done-gate`. Nay `risk.py` lưu dấu băm từng dòng lúc chốt, và hook chỉ chấm dòng mới. File đã chốt không tính lại luật theo đường dẫn.
 - `git diff` của `risk.py` chạy `diff.external`, textconv và clean filter của repo. `diff.external` toàn cục (như difftastic) còn làm mất nội dung cần chấm. Nay thêm `--no-ext-diff --no-textconv`, và bỏ chấm khi repo có clean filter cục bộ. Phần `git status` chạy clean filter thì Claude Code tự làm lúc mở phiên, nên agent-stack không chặn thêm được (TM-7).
 - Chốt chặn cài khớp chuỗi thô, nên chặn nhầm thông điệp commit hay heredoc có chữ "claude plugin install", và đọc nhầm `--scope` thành tên plugin. Nay hook phân tích lệnh bằng `shlex`: bỏ thân heredoc, chỉ xét lệnh có argv[0] là `claude`, `git` hay `npx`, mở `bash -c` thêm một tầng, bỏ qua cờ và giá trị của cờ.
 
 **Giới hạn** (bạn chấp nhận ngày 09/10/2026: TM-6, phần còn lại của TM-7, TM-9).
 - Hook PreToolUse so chuỗi lệnh theo mẫu, nên là lớp nhắc chứ không phải ranh giới bảo mật (TM-6).
 - Mỗi lần Stop chặn tốn thêm một lượt model.
-- Mức "vừa" của `risk.py` dựa vào regex, nên có thể chặn nhầm; khi đó `chot-viec` ghi một dòng lý do rồi kết thúc nhanh.
+- Mức "vừa" của `risk.py` dựa vào regex, nên có thể chặn nhầm; khi đó `done-gate` ghi một dòng lý do rồi kết thúc nhanh.
 
 ### 6.20 Tự lưu chắc chắn, đổi model không mất cache (12/10/2026)
 
@@ -561,21 +561,21 @@ Bạn thấy các trang Artifact quá khó hiểu, và yêu cầu: giải thích
 
 **Hai trang thật, 19/10/2026.** "Cổng 0 USD D22" (SCEE): 19 thuật ngữ không giải thích, trong đó 14 mã nội bộ hay ký hiệu (HC5, ν, TP6, G1 tới G5, D22, D27, D36, D38, E1, HC9); kết quả viết nén kiểu "G1 41 · G2 10 · G3 15 · G5 31; cách (ii) 4". "Overlay Kustomize" (archctl): một ví dụ, không có phần nền tảng; lý do theo tiền lệ ("như `helm`"). Không trang nào đối chiếu đề xuất với luật của project.
 
-**Quyết định.** Skill mới `trang-artifact` lo nội dung; `artifact-design` (của Claude Code, bắt buộc khi đăng) vẫn lo trình bày. Luật toàn cục giữ ngắn và trỏ tới skill, kèm đường dẫn dự phòng khi plugin chưa nạp. Không đặt chi tiết vào `CLAUDE.global.md` vì file đó nạp vào mọi phiên của mọi project.
+**Quyết định.** Skill mới `reader-page` lo nội dung; `artifact-design` (của Claude Code, bắt buộc khi đăng) vẫn lo trình bày. Luật toàn cục giữ ngắn và trỏ tới skill, kèm đường dẫn dự phòng khi plugin chưa nạp. Không đặt chi tiết vào `CLAUDE.global.md` vì file đó nạp vào mọi phiên của mọi project.
 
 **Dùng lại** (`reuse-best`, 19/10/2026): khuôn lấy ý từ [MADR 4.0.0](https://github.com/adr/madr) (Context and Problem Statement, Decision Drivers, Considered Options, Pros and Cons, Decision Outcome; MIT hoặc CC0) và nguyên tắc "explanation" của [Diátaxis](https://github.com/evildmp/diataxis-documentation-framework) (chỉ học ý, CC-BY-SA). Không linter HTML nào kiểm được thuật ngữ chưa định nghĩa hay phán quyết ràng buộc (`deezer/html-linter` chỉ kiểm style, 60 tháng không cập nhật), nên script tự viết trên `html.parser` của thư viện chuẩn. Phần thêm so với MADR: thang khái niệm từ gốc, thuật ngữ định nghĩa trước khi dùng, ít nhất 3 ví dụ chạy qua từng phương án, bảng ràng buộc có nguồn, soát pattern xấu.
 
-**Cách kiểm.** Khuôn `mau.html` đánh dấu từng phần bằng `data-*`; `check_page.py` báo lỗi khi thiếu phần, dưới 3 ví dụ, mã có chữ số hay ký hiệu Hy Lạp chưa định nghĩa hoặc dùng trước khi định nghĩa (`<dfn>` hay `<dt>` trong bảng thuật ngữ), phương án thiếu phán quyết với một luật, phương án được khuyên mà vi phạm, phương án vi phạm mà thẻ không ghi. Mã có chữ số không được miễn qua `data-tu-quen`, vì chính chúng làm trang cũ khó đọc. Script không đo được độ dễ hiểu, nên bước cuối là một subagent không thấy hội thoại đọc thử một lần (đúng vai người không nhớ phiên), sửa theo một lượt, không lặp; khớp tinh thần "kiểm một lần rồi đăng" của `artifact-design`. Người đọc là subagent `nguoi-doc-la` (chỉ Read); hook SubagentStart bỏ qua nó, vì reviewer chỉ ra hook chèn yêu cầu của người dùng vào mọi subagent, làm người đọc "lạ" hiểu nhờ yêu cầu chứ không nhờ trang. Hai lần đọc thử ngày 19/10 (trang D22 cũ: hiểu 20–25%; trang mẫu mới: 65% trước khi sửa) chạy bằng `general-purpose` khi hook còn chèn bối cảnh, nên con số thứ hai có thể cao hơn thật.
+**Cách kiểm.** Khuôn `mau.html` đánh dấu từng phần bằng `data-*`; `check_page.py` báo lỗi khi thiếu phần, dưới 3 ví dụ, mã có chữ số hay ký hiệu Hy Lạp chưa định nghĩa hoặc dùng trước khi định nghĩa (`<dfn>` hay `<dt>` trong bảng thuật ngữ), phương án thiếu phán quyết với một luật, phương án được khuyên mà vi phạm, phương án vi phạm mà thẻ không ghi. Mã có chữ số không được miễn qua `data-tu-quen`, vì chính chúng làm trang cũ khó đọc. Script không đo được độ dễ hiểu, nên bước cuối là một subagent không thấy hội thoại đọc thử một lần (đúng vai người không nhớ phiên), sửa theo một lượt, không lặp; khớp tinh thần "kiểm một lần rồi đăng" của `artifact-design`. Người đọc là subagent `cold-reader` (chỉ Read); hook SubagentStart bỏ qua nó, vì reviewer chỉ ra hook chèn yêu cầu của người dùng vào mọi subagent, làm người đọc "lạ" hiểu nhờ yêu cầu chứ không nhờ trang. Hai lần đọc thử ngày 19/10 (trang D22 cũ: hiểu 20–25%; trang mẫu mới: 65% trước khi sửa) chạy bằng `general-purpose` khi hook còn chèn bối cảnh, nên con số thứ hai có thể cao hơn thật.
 
 **Review** (`agent-stack:reviewer`, sonnet, 19/10/2026): 0 cao, 3 vừa, 5 thấp; đã sửa cả 8 kèm test. Vừa: kế hoạch một hướng không đánh dấu phương án lọt qua mọi kiểm (nay trang không có phương án phải khai `data-loai="giai-thich"`); chữ mẫu "…" còn sót vẫn qua (nay bắt); người đọc lạ không lạ (như trên). Thấp: dải mã `HC5-HC7`, mã phổ biến như `UTF-8`, chữ dạng NFD, `<code>` trong `<dt>`, dòng `data-vi-pham` rỗng, bảng ví dụ × phương án quá mỏng (NHẮC), tài liệu lệch.
 
-**Đã chốt** (20/10/2026, bạn chọn theo khuyến nghị trên trang https://claude.ai/artifact/MTeDvYTEikKhajnDb746eM): 1A khuôn áp cho mọi trang Artifact để đọc, không chỉ trang có phương án; 2A mã có chữ số và ký hiệu luôn phải định nghĩa, `data-tu-quen` chỉ miễn tên riêng không có số; 3A mọi trang được `nguoi-doc-la` đọc thử một lần, sửa một lượt. Lần đọc thử thật đầu tiên bằng `nguoi-doc-la` (20/10, trang mẫu): hook ghi đã bỏ qua, người đọc xác nhận không thấy bối cảnh phiên, ước hiểu khoảng 70% (so với 65% của lần 19/10 khi hook còn chèn yêu cầu), tốn 38 nghìn token.
+**Đã chốt** (20/10/2026, bạn chọn theo khuyến nghị trên trang https://claude.ai/artifact/MTeDvYTEikKhajnDb746eM): 1A khuôn áp cho mọi trang Artifact để đọc, không chỉ trang có phương án; 2A mã có chữ số và ký hiệu luôn phải định nghĩa, `data-tu-quen` chỉ miễn tên riêng không có số; 3A mọi trang được `cold-reader` đọc thử một lần, sửa một lượt. Lần đọc thử thật đầu tiên bằng `cold-reader` (20/10, trang mẫu): hook ghi đã bỏ qua, người đọc xác nhận không thấy bối cảnh phiên, ước hiểu khoảng 70% (so với 65% của lần 19/10 khi hook còn chèn yêu cầu), tốn 38 nghìn token.
 
 **Pattern xấu cần soát:** theo code cũ (tiền lệ không chứng minh đúng), chiều người dùng, chọn vì ít công, phương án bù nhìn, giấu rủi ro hay lặng lẽ thu hẹp, đi tắt qua cổng kiểm. Phương án vi phạm luật cứng không bao giờ được khuyên; muốn chọn thì sửa luật trước, như một câu chốt riêng.
 
 ### 6.22 agent-stack cho pi (02/11/2026)
 
-pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agent`) đã dùng luật chung, skill và hook của agent-stack, nhưng chỗ nối nằm hết ở pi-agent, nên agent-stack đổi thì pi lệch mà không test nào thấy: cầu nối chuyển 6/8 hook, `researcher` bị bỏ dù pi đã có công cụ web, ghi chép pi-agent nói `trang-artifact` không nạp. Trang so sánh: https://claude.ai/artifact/CVqWe7RGyYXXHevhVb7NL9.
+pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agent`) đã dùng luật chung, skill và hook của agent-stack, nhưng chỗ nối nằm hết ở pi-agent, nên agent-stack đổi thì pi lệch mà không test nào thấy: cầu nối chuyển 6/8 hook, `researcher` bị bỏ dù pi đã có công cụ web, ghi chép pi-agent nói `reader-page` không nạp. Trang so sánh: https://claude.ai/artifact/CVqWe7RGyYXXHevhVb7NL9.
 
 **Đã chốt** (02/11/2026): phương án B, hợp đồng nằm ở agent-stack. Câu "pi chạy bản đã cài hay thư mục đang sửa" chốt lại sau khi kiểm (mục 6.1 (c)): Claude Code chạy thẳng `plugin/` của repo, nên pi cũng chạy đúng thư mục đó, hai bên luôn cùng một code.
 
@@ -587,7 +587,7 @@ pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agen
 - Bước `pi` của `install.sh`: `~/.pi/agent/agent-stack/plugin` → `plugin/`, `~/.pi/agent/agent-stack/agents` → `state/pi/agents`; chỉ khi máy có pi và hợp đồng khớp.
 - Phần của pi-agent (làm trong phiên riêng của nó): `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`, cầu nối gọi hook ở `~/.pi/agent/agent-stack/plugin/hooks` và đọc `pi.json`, extension subagent đọc thêm `~/.pi/agent/agent-stack/agents`, bỏ `tools/port_agents.py`.
 
-**Lỗi tìm khi nối pi-agent** (02/11/2026, phiên pi-agent báo): pi 1.4.0 đọc frontmatter bằng YAML chặt và bỏ cả skill `trang-artifact` vì `description` có `: ` không nằm trong dấu nháy; Claude Code đọc dễ dãi nên không lộ. Đã đổi câu, `check` báo mọi giá trị không nháy có `: `, ` #`, ký tự đặc biệt đầu dòng, và `tests/test_pi_contract.py` đọc mọi skill, subagent bằng chính parser của pi khi máy có pi (plugin 0.19.1).
+**Lỗi tìm khi nối pi-agent** (02/11/2026, phiên pi-agent báo): pi 1.4.0 đọc frontmatter bằng YAML chặt và bỏ cả skill `reader-page` vì `description` có `: ` không nằm trong dấu nháy; Claude Code đọc dễ dãi nên không lộ. Đã đổi câu, `check` báo mọi giá trị không nháy có `: `, ` #`, ký tự đặc biệt đầu dòng, và `tests/test_pi_contract.py` đọc mọi skill, subagent bằng chính parser của pi khi máy có pi (plugin 0.19.1).
 
 **Không làm:** bản agent-stack tách riêng cho pi (lệch nhanh hơn); đưa cầu nối TypeScript vào agent-stack (trái luật TypeScript trong `CLAUDE.md`); bản chép theo version cho pi (Claude Code không chạy bản chép, nên pi sẽ chạy code khác Claude Code).
 
@@ -610,7 +610,7 @@ Plugin nằm trong thư mục con `plugin/`, vì `CLAUDE.md` đặt ở gốc pl
 ├── .claude-plugin/marketplace.json      # marketplace cục bộ (dùng khi bạn duyệt cài)
 ├── plugin/                              # plugin Claude Code
 │   ├── .claude-plugin/plugin.json
-│   ├── skills/   vet-skill/ session-keeper/ tien-do/ task-router/ giong-van/
+│   ├── skills/   vet-skill/ session-keeper/ progress/ task-router/ writing-voice/
 │   ├── agents/   reviewer · researcher · test-runner · oc-worker · explore-lite
 │   ├── hooks/    hooks.json + script Python (stdlib, chạy bằng `python3` 3.11)
 │   └── lib/      thư viện dùng chung: đọc §0/checkbox, git chỉ đọc, thư mục state
@@ -756,7 +756,7 @@ Mẫu `router-rules.json` (bản thật lấy từ kết quả GĐ4):
   {"id": "mechanical", "match": ["doi ten", "rename", "format", "boilerplate"],
    "model": "haiku", "effort": "low", "agent": "oc-worker"},
   {"id": "writing", "match": ["bai luan", "essay", "viet lai", "blog"],
-   "skills": ["giong-van", "humanizer"], "model": "sonnet", "effort": "medium"}
+   "skills": ["writing-voice", "humanizer"], "model": "sonnet", "effort": "medium"}
 ], "default": null}
 ```
 
@@ -771,7 +771,7 @@ Bảng định tuyến khởi điểm (giả thuyết, GĐ4 sẽ chỉnh bằng 
 | Việc tiếp theo | Model | Effort | Subagent |
 |---|---|---|---|
 | Hỏi nhanh, giải thích ngắn | sonnet | low | — |
-| Xem tiến độ, hỏi "làm gì tiếp?" | sonnet | low | — (skill tien-do) |
+| Xem tiến độ, hỏi "làm gì tiếp?" | sonnet | low | — (skill progress) |
 | Tìm code, đọc nhiều file | (giữ model hiện tại) | — | Explore (haiku) |
 | Nghiên cứu web, tài liệu | sonnet | medium | researcher |
 | Viết tính năng thông thường | sonnet | medium | — |
@@ -781,17 +781,17 @@ Bảng định tuyến khởi điểm (giả thuyết, GĐ4 sẽ chỉnh bằng 
 | Chạy test/lint và tóm tắt lỗi | — | — | test-runner (haiku) |
 | Việc cơ học hàng loạt | haiku / OpenCode local | low | oc-worker |
 | Việc tự chủ nhiều giờ, cực khó | fable (nếu gói cho phép) | high | — |
-| Viết văn bản | sonnet | medium | — (skill giong-van) |
+| Viết văn bản | sonnet | medium | — (skill writing-voice) |
 
 **"Luôn dùng skill" (#4)** làm bằng ba cách, không ép:
 (1) Viết `description` đặt use-case lên đầu, thêm `when_to_use`; (2) luật ngắn trong `AGENTS.md`: "Trước việc không tầm thường, xem có skill phù hợp không. Có thì dùng, không có thì nói rõ."; (3) đo bằng `claude plugin eval` với grader "skill đã kích hoạt" trên 10 prompt nên kích hoạt và 10 prompt không nên.
 
-### 7.5 Viết tự nhiên (#6), skill `giong-van` ✍️
+### 7.5 Viết tự nhiên (#6), skill `writing-voice` ✍️
 
 - 📦 humanizer cho tiếng Anh.
-- ✍️ Skill `giong-van` cho cả tiếng Việt và tiếng Anh:
+- ✍️ Skill `writing-voice` cho cả tiếng Việt và tiếng Anh:
   ```
-  giong-van/
+  writing-voice/
   ├── SKILL.md          # quy trình + checklist
   ├── samples/          # bài bạn tự viết (không commit) và kinh-dien/: 5 bài văn học kinh điển mỗi ngôn ngữ (có commit);
   │                     # mẫu riêng từng project viết luận nằm ở .agent/giong-van/samples/ của project
@@ -826,13 +826,13 @@ Luật cứng: không cài từ ClawHub; không chạy installer `curl | sh` khi
 - **Ngân sách:** 15 việc × 3 cấu hình × 2 lần = 90 lượt agent. Chia ra 3–4 ngày để không đốt hạn mức tuần, và đặt `--max-cost-usd` làm trần.
 - **Chạy công bằng (sửa ngày 02/10/2026):** model làm việc ngoài agent-stack, nên không thấy `CLAUDE.md`, grader hay lời giải. Bài làm được chốt thành patch ngay khi lượt chạy kết thúc; đổi grader thì chấm lại bằng `--regrade`. Lượt hỏng được chia thành nhóm vận hành (tính là trượt) và nhóm môi trường (phải chạy lại). Script chỉ chốt cấu hình khi ma trận đủ; gộp kết quả nhiều ngày bằng `--report`.
 
-### 7.8 Theo dõi tiến độ (#7), skill `tien-do` ✍️
+### 7.8 Theo dõi tiến độ (#7), skill `progress` ✍️
 
 **Nguyên tắc:**
 - **Không tạo hệ thống quản lý thứ hai.** Đọc đúng file kế hoạch mà project đang có. Mẫu chuẩn chỉ áp dụng cho project mới.
 - **Script làm phần nặng, LLM chỉ xếp hạng.** Script thu thập dữ liệu không tốn token; Claude chỉ đọc kết quả, sắp thứ tự và giải thích.
 - **Chỉ đọc.** Muốn đánh dấu xong hay sửa §0 thì skill đề xuất kèm bằng chứng (commit, kết quả test); bạn duyệt rồi mới ghi.
-- **Kết quả kiểm tra có hạn dùng.** `session-keeper/scripts/receipt.py` ghi mỗi lần kiểm tra kèm dấu vân tay nội dung code. `tien-do` xếp kiểm tra đang trượt vào bậc chặn đường, và nhắc chạy lại khi kết quả đạt đã cũ hơn code hiện tại. Commit mà không đổi nội dung thì biên nhận vẫn còn khớp.
+- **Kết quả kiểm tra có hạn dùng.** `session-keeper/scripts/receipt.py` ghi mỗi lần kiểm tra kèm dấu vân tay nội dung code. `progress` xếp kiểm tra đang trượt vào bậc chặn đường, và nhắc chạy lại khi kết quả đạt đã cũ hơn code hiện tại. Commit mà không đổi nội dung thì biên nhận vẫn còn khớp.
 
 **Mẫu §0 chuẩn**, rút từ `SCEE/PLAN.md`, dùng cho project mới (đặt trong `PLAN.md` ở gốc hoặc `.agent/PLAN.md`):
 
@@ -870,8 +870,8 @@ Luật cứng: không cài từ ClawHub; không chạy installer `curl | sh` khi
 Mỗi việc kèm gợi ý `Model · Effort · Subagent` lấy từ bảng định tuyến (7.4). Với việc kiểm chứng được, skill đề xuất luôn một câu `/goal`, ví dụ: `/goal pytest ra đúng 274 passed, 37 xfailed và git status sạch`.
 
 **Hai chế độ:**
-- `/tien-do`: project hiện tại.
-- `/tien-do all`: mọi thư mục trong `~/Documents/Claude/`, gộp thành một bảng gồm project · hoạt động gần nhất · việc dang dở · việc tiếp theo · cảnh báo.
+- `/progress`: project hiện tại.
+- `/progress all`: mọi thư mục trong `~/Documents/Claude/`, gộp thành một bảng gồm project · hoạt động gần nhất · việc dang dở · việc tiếp theo · cảnh báo.
 
 Ví dụ bản tóm tắt cho một project (minh họa, dựng từ `SCEE/PLAN.md` hiện tại; dòng cảnh báo là giả định):
 
@@ -890,20 +890,20 @@ Cảnh báo: mốc test 274 passed / 37 xfailed chưa được chạy lại kể
 | Cách | Chi phí | Khi nào |
 |---|---|---|
 | Hook `SessionStart` (startup, resume) chạy script ở chế độ `--brief` | 0 token LLM, khoảng 150 token context | Mỗi lần mở phiên trong project có file kế hoạch. Hiện 3–6 dòng "đang dở / tiếp theo" cho bạn (`systemMessage`) và cho Claude (`additionalContext`). Gộp chung với hook của 7.3 để chỉ chèn một khối. |
-| Gõ `/tien-do` hoặc hỏi "làm gì tiếp?" | Khoảng 1–3k token (`sonnet · low`, chạy với `context: fork`) | Khi cần xếp hạng và giải thích. |
-| Tác vụ định kỳ của desktop app, ví dụ sáng thứ Hai | 1 lượt mỗi tuần | Chạy `/tien-do all`, ghi ra `~/Documents/Claude/TIEN-DO.md` và gửi thông báo. **Bỏ ngày 03/10/2026:** mỗi project tự theo dõi. |
+| Gõ `/progress` hoặc hỏi "làm gì tiếp?" | Khoảng 1–3k token (`sonnet · low`, chạy với `context: fork`) | Khi cần xếp hạng và giải thích. |
+| Tác vụ định kỳ của desktop app, ví dụ sáng thứ Hai | 1 lượt mỗi tuần | Chạy `/progress all`, ghi ra `~/Documents/Claude/TIEN-DO.md` và gửi thông báo. **Bỏ ngày 03/10/2026:** mỗi project tự theo dõi. |
 
 **Cấu trúc skill:**
 
 ```
-tien-do/
+progress/
 ├── SKILL.md              # name, description (≤ 1.024 ký tự), model: sonnet, effort: low, context: fork
 ├── scripts/collect.py    # Python thuần (stdlib), xuất JSON; --brief cho hook; --all cho mọi project
 └── templates/PLAN-0.md   # mẫu §0 cho project mới
 ```
 
 - Trong Claude Code, `SKILL.md` chèn sẵn kết quả của script bằng `` !`python3 ${CLAUDE_SKILL_DIR}/scripts/collect.py` ``. OpenCode không hỗ trợ cú pháp này, nên phần thân skill ghi thêm: "Nếu chưa thấy dữ liệu, chạy `python3 <thư mục skill>/scripts/collect.py`."
-- Mỗi project có thể có cấu hình riêng (tùy chọn) trong `.agent/tien-do.json`: file nguồn, tên mục §0, lệnh test và mốc test, các thư mục loại trừ.
+- Mỗi project có thể có cấu hình riêng (tùy chọn) trong `.agent/progress.json`: file nguồn, tên mục §0, lệnh test và mốc test, các thư mục loại trừ.
 
 **Câu hỏi dẫn dắt khi bạn viết skill:**
 1. Một mục "đang dở" cần những trường nào để người khác, hoặc OpenCode, làm tiếp được mà không phải hỏi lại?
@@ -974,7 +974,7 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 - [ ] ⚙️ Gộp `collect.py --brief` vào hook `SessionStart` của GĐ2, để mỗi lần mở phiên chỉ chèn một khối.
 - [ ] (Tùy chọn) `git init` cho ba thư mục học, để có lịch sử tiến độ và để các tín hiệu git hoạt động.
 - [ ] (Tùy chọn) Bật task list trên model 5.5: `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` và `CLAUDE_CODE_TASK_LIST_ID=<project>`. Đây chỉ là công cụ phụ trong phiên; nguồn sự thật vẫn là §0.
-- [x] ~~(Tùy chọn) Tác vụ định kỳ chạy `/tien-do all` mỗi sáng thứ Hai.~~ Bỏ (03/10/2026): mỗi project tự theo dõi qua §0 của nó.
+- [x] ~~(Tùy chọn) Tác vụ định kỳ chạy `/progress all` mỗi sáng thứ Hai.~~ Bỏ (03/10/2026): mỗi project tự theo dõi qua §0 của nó.
 - [ ] (Tùy chọn) Thử plugin `project-artifact` cho SCEE.
 
 **Nghiệm thu:** theo các tiêu chí ở cuối mục 7.8.
@@ -1004,7 +1004,7 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 
 ### GĐ6: Viết tự nhiên, yêu cầu #6 (1–2 buổi) · `sonnet · medium`
 - [ ] 📦 humanizer.
-- [ ] ✍️ `giong-van`: gom samples, viết style-card, vi-ai-tells, SKILL.md.
+- [ ] ✍️ `writing-voice`: gom samples, viết style-card, vi-ai-tells, SKILL.md.
 - [ ] Đọc mù 5 cặp.
 
 **Nghiệm thu:** bạn nhận ra giọng mình ở ≥ 4/5 bản; không có ý hay sự kiện nào bị bịa.
@@ -1041,8 +1041,8 @@ Làm ngay sau GĐ2, vì dùng chung file trạng thái và chung hook `SessionSt
 
 1. ~~Gói Claude~~ **Đã trả lời (02/10/2026):** Max, nhưng có thể quay lại Pro nếu khối lượng công việc giảm. Usage credits: tắt (`get_usage` ngày 02/10: extra usage tắt, trần 100 USD/tháng, đã dùng 0). Nếu hạ xuống Pro, đo lại bằng `tools/usage_snapshot.py` và xem lại bảng định tuyến (dùng Opus ít hơn).
 2. ~~Worker OpenCode~~ **Đã trả lời một phần (02/10/2026):** OpenCode đang dùng OpenRouter và model miễn phí của OpenCode. Cấu hình thật ở `~/.config/opencode/opencode.jsonc`: model mặc định `opencode/muse-spark-1.3-contributor-free`, kèm provider local `tuf` (qua Tailscale; IP xem `~/.config/opencode/opencode.jsonc`). Theo trang OpenCode Zen, model contributor-free đổi giá rẻ lấy quyền dùng prompt và kết quả để huấn luyện model của Meta. Đã làm: `oc-worker` và `AGENTS.global.md` ghi rõ không tự rơi về model từ xa, không giao file chứa secret hay mã riêng tư. Còn mở: danh sách việc hay thư mục tuyệt đối không được gửi ra ngoài; có đổi model mặc định của OpenCode không (repo không tự sửa file đó). **Gác lại (03/10/2026):** bạn đã tự setup OpenCode riêng; chỉ làm khi bạn nhắc.
-3. ~~Viết luận~~ **Đã trả lời (03/10/2026):** dùng đa dạng, nhiều mục đích, viết cả tiếng Việt và tiếng Anh. Mẫu mặc định là 5 bài văn học kinh điển mỗi ngôn ngữ, khác loại nhau (`plugin/skills/giong-van/samples/kinh-dien/`). Mỗi project viết luận có mẫu riêng trong `.agent/giong-van/samples/` và style card riêng, đúng ý style card theo từng thể loại.
-4. ~~Theo dõi tiến độ~~ **Đã trả lời (03/10/2026):** không kích hoạt theo dõi toàn cục, không bản tổng hợp tuần; mỗi project tự theo dõi qua §0 của nó (hook SessionStart và `tien-do` trong project đó). `/tien-do all` chỉ chạy khi bạn hỏi. (Việc `git init` ba thư mục học vẫn để sau.)
+3. ~~Viết luận~~ **Đã trả lời (03/10/2026):** dùng đa dạng, nhiều mục đích, viết cả tiếng Việt và tiếng Anh. Mẫu mặc định là 5 bài văn học kinh điển mỗi ngôn ngữ, khác loại nhau (`plugin/skills/writing-voice/samples/kinh-dien/`). Mỗi project viết luận có mẫu riêng trong `.agent/giong-van/samples/` và style card riêng, đúng ý style card theo từng thể loại.
+4. ~~Theo dõi tiến độ~~ **Đã trả lời (03/10/2026):** không kích hoạt theo dõi toàn cục, không bản tổng hợp tuần; mỗi project tự theo dõi qua §0 của nó (hook SessionStart và `progress` trong project đó). `/progress all` chỉ chạy khi bạn hỏi. (Việc `git init` ba thư mục học vẫn để sau.)
 
 ---
 

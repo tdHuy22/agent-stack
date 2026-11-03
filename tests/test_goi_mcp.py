@@ -1,4 +1,4 @@
-"""Skill goi-mcp: gọi MCP từ xa đã duyệt qua script, kiểm hash từng lần gọi (TM-19 đến TM-22).
+"""Skill remote-mcp: gọi MCP từ xa đã duyệt qua script, kiểm hash từng lần gọi (TM-19 đến TM-22).
 
 Không gọi mạng thật: ảnh chụp và kết quả tool đưa vào qua AGENT_STACK_TEST_MCP_SNAPSHOTS.
 """
@@ -8,9 +8,9 @@ import sys
 
 from tests._util import PLUGIN, TempDirTestCase, run_script
 
-CALL = PLUGIN / "skills" / "goi-mcp" / "scripts" / "call.py"
+CALL = PLUGIN / "skills" / "remote-mcp" / "scripts" / "call.py"
 sys.path.insert(0, str(PLUGIN / "skills" / "vet-skill" / "scripts"))
-sys.path.insert(0, str(PLUGIN / "skills" / "goi-mcp" / "scripts"))
+sys.path.insert(0, str(PLUGIN / "skills" / "remote-mcp" / "scripts"))
 import call  # noqa: E402
 import mcp_remote  # noqa: E402
 

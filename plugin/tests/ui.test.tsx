@@ -95,16 +95,16 @@ function paneProps(): RenderPropsOf['Pane'] {
   } as unknown as RenderPropsOf['Pane']
 }
 
-test('/cay đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop', async ($, on) => {
+test('/tree đọc cây, pane vẽ đủ mốc và lá trên terminal và desktop', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('Đã mở pane')
   expect(s.runs[0]).toContain('--json')
   expect(s.runs[0]).toContain(CWD)
   expect(s.runs[0]).toEqual(expect.arrayContaining(['--leaves', '200']))
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-    const ui = await $.ui.mount({ plugin: 'agent-stack', surface, component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
+    const ui = await $.ui.mount({ plugin: 'agent-stack', surface, component: 'Pane', requestId: 'plan', props: paneProps() })
     expect(await ui.find({ type: 'Text', text: /▰+▱+ 3\/5 ô đã tick/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^GĐ3$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /▰{5}▱{5} 1\/2/ })).toBeDefined()
@@ -123,7 +123,7 @@ async function cayWithoutPane($: Parameters<Parameters<typeof test>[1]>[0], on: 
   s.statusArgs = []
   s.statusStdins = []
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('T.1 Chạy test')
   expect(s.runs.some(r => r.includes('--text') && r.includes(CWD))).toBe(true)
   expect(s.opens ?? 0).toBe(0)
@@ -132,23 +132,23 @@ async function cayWithoutPane($: Parameters<Parameters<typeof test>[1]>[0], on: 
   expect(s.statusStdins).toContain(JSON.stringify({ session_id: 'sid-1' }))
 }
 
-test('/cay trong cloud session trả cây dạng chữ, không mở pane', async ($, on) => {
+test('/tree trong cloud session trả cây dạng chữ, không mở pane', async ($, on) => {
   await cayWithoutPane($, on, { runs: [], fills: [], remote: true })
 })
 
-test('/cay khi pane không đặt được (-p, terminal hẹp) in thêm cây dạng chữ', async ($, on) => {
+test('/tree khi pane không đặt được (-p, terminal hẹp) in thêm cây dạng chữ', async ($, on) => {
   const s: Setup = { runs: [], fills: [], unplaced: true, statusArgs: [] }
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('chưa hiện được')
   expect(out.text).toContain('T.1 Chạy test')
   expect(s.statusArgs!.some(a => a.includes('--pane-open'))).toBe(false)  // pane không vẽ được: không ghi dấu
 })
 
-test('/cay khi đọc biến môi trường lỗi vẫn mở pane như cũ', async ($, on) => {
+test('/tree khi đọc biến môi trường lỗi vẫn mở pane như cũ', async ($, on) => {
   const s: Setup = { runs: [], fills: [], envFails: true }
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('Đã mở pane')
   expect(s.opens).toBe(1)
 })
@@ -156,8 +156,8 @@ test('/cay khi đọc biến môi trường lỗi vẫn mở pane như cũ', asy
 test('bấm một lá chỉ điền mã lá, không điền chữ của lá', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
-  await $.command.run({ command: 'cay', args: '' })
-  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
+  await $.command.run({ command: 'tree', args: '' })
+  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'Pane', requestId: 'plan', props: paneProps() })
   await ui.press({ key: 'T.2' })
   expect(s.fills).toEqual(['T.2 '])
   await ui.unmount()
@@ -167,20 +167,20 @@ test('lá có mã lạ thì bấm không điền gì', async ($, on) => {
   const tree = { ...TREE, milestones: [{ ...TREE.milestones[1], leaves: [{ id: 'x; rm -rf', text: 'lạ', full: 'lạ', tags: [], depth: 0, group: false }] }] }
   const s: Setup = { runs: [], fills: [], tree }
   fake(on, s)
-  await $.command.run({ command: 'cay', args: '' })
-  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'terminal', component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
+  await $.command.run({ command: 'tree', args: '' })
+  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'terminal', component: 'Pane', requestId: 'plan', props: paneProps() })
   await ui.press({ key: 'x; rm -rf' })
   expect(s.fills).toEqual([])
   await ui.unmount()
 })
 
-test('/cay <mã> chạy --pick, mã sai bị từ chối mà không chạy script', async ($, on) => {
+test('/tree <mã> chạy --pick, mã sai bị từ chối mà không chạy script', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
-  const ok = await $.command.run({ command: 'cay', args: 'T.2, 14' })
+  const ok = await $.command.run({ command: 'tree', args: 'T.2, 14' })
   expect(ok.text).toContain('Lá [14]')
   expect(s.runs[0]).toEqual(expect.arrayContaining(['--pick', 'T.2', '14']))
-  const bad = await $.command.run({ command: 'cay', args: 'T.2 $(rm)' })
+  const bad = await $.command.run({ command: 'tree', args: 'T.2 $(rm)' })
   expect(bad.text).toContain('Mã không hợp lệ')
   expect(s.runs).toHaveLength(1)
 })
@@ -188,17 +188,17 @@ test('/cay <mã> chạy --pick, mã sai bị từ chối mà không chạy scrip
 test('script lỗi thì pane hiện một dòng lỗi, không ném', async ($, on) => {
   const s: Setup = { runs: [], fills: [], exitCode: 1 }
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('ValueError: hỏng')
-  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'terminal', component: 'Pane', requestId: 'ke-hoach', props: paneProps() })
+  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'terminal', component: 'Pane', requestId: 'plan', props: paneProps() })
   expect(await ui.find({ type: 'Text', text: /Không đọc được kế hoạch/ })).toBeDefined()
   await ui.unmount()
 })
 
-test('project không có kế hoạch thì /cay báo, không mở pane', async ($, on) => {
+test('project không có kế hoạch thì /tree báo, không mở pane', async ($, on) => {
   const s: Setup = { runs: [], fills: [], tree: {} }
   fake(on, s)
-  const out = await $.command.run({ command: 'cay', args: '' })
+  const out = await $.command.run({ command: 'tree', args: '' })
   expect(out.text).toContain('chưa có file kế hoạch')
 })
 
@@ -226,10 +226,10 @@ test('phiên headless của app desktop vẫn tự mở pane khi có kế hoạc
 })
 
 test('dấu pane cho hook Stop: ghi khi pane vẽ được', async ($, on) => {
-  // Lỗi ở applerar: pane mở bằng /cay giữa các lượt, rồi /reload-plugins; AGENT_STACK_UI chưa tới hook Stop.
+  // Lỗi ở applerar: pane mở bằng /tree giữa các lượt, rồi /reload-plugins; AGENT_STACK_UI chưa tới hook Stop.
   const s: Setup = { runs: [], fills: [], statusArgs: [], statusStdins: [] }
   fake(on, s)
-  await $.command.run({ command: 'cay', args: '' })
+  await $.command.run({ command: 'tree', args: '' })
   const marks = () => s.statusArgs!.filter(a => a.includes('--pane-open') || a.includes('--pane-closed')).map(a => a[2])
   expect(marks()).toEqual(['--pane-open'])
   expect(s.statusStdins).toContain(JSON.stringify({ session_id: 'sid-1' }))
@@ -244,13 +244,13 @@ test('nạp mod khi pane đã đóng bằng tay: xoá dấu cũ của phiên, kh
   expect(s.statusArgs!.some(a => a.includes('--pane-closed'))).toBe(true)
 })
 
-test('/cay gõ lúc đang làm mới vẫn chờ và thấy cây', async ($, on) => {
+test('/tree gõ lúc đang làm mới vẫn chờ và thấy cây', async ($, on) => {
   let release = () => {}
   const s: Setup = { runs: [], fills: [], gate: new Promise<void>(r => { release = r }) }
   const clock = fake(on, s)
   await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
   const ticking = clock.advance(1)
-  const out = $.command.run({ command: 'cay', args: '' })
+  const out = $.command.run({ command: 'tree', args: '' })
   release()
   await ticking
   expect((await out).text).toContain('Đã mở pane')
@@ -284,7 +284,7 @@ test('pane đã được vẽ: thêm mục system prompt cố định và đặt
   // Chưa có pane: chưa thêm gì.
   const before = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
   expect(before.sections.map(x => x.id)).toEqual(['intro'])
-  await $.command.run({ command: 'cay', args: '' })
+  await $.command.run({ command: 'tree', args: '' })
   const first = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
   const second = await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
   expect(first.sections.map(x => x.id)).toEqual(['intro', 'agent-stack:ui'])
@@ -304,7 +304,7 @@ test('phiên -p (không nơi vẽ, như eval) giữ nguyên system prompt và kh
     return { value: undefined }
   })
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'gốc', scope: 'shared' }] }))
-  await $.command.run({ command: 'cay', args: '' })
+  await $.command.run({ command: 'tree', args: '' })
   const out = await $.prompt.compose({ ...COMPOSE, surfaces: [] } as never)
   expect(out.sections.map(x => x.id)).toEqual(['intro'])
   expect(envs).toEqual([])
@@ -360,32 +360,32 @@ test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không
     return { value: undefined }
   })
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'gốc', scope: 'shared' }] }))
-  await $.command.run({ command: 'cay', args: '' })
+  await $.command.run({ command: 'tree', args: '' })
   const out = await $.prompt.compose({ ...COMPOSE, surfaces: ['terminal'] } as never)
   expect(out.sections.map(x => x.id)).toEqual(['intro'])
   expect(envs).toEqual([])
 })
 
-test('/cay ? in chẩn đoán mà không chạy script --pick', async ($, on) => {
+test('/tree ? in chẩn đoán mà không chạy script --pick', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
   on('prompt.compose', () => ({ sections: [] }))
-  const before = await $.command.run({ command: 'cay', args: '?' })
+  const before = await $.command.run({ command: 'tree', args: '?' })
   expect(before.text).toContain('Pane đã được vẽ trong phiên: chưa')
   expect(before.text).toContain('chưa có lần nào')
-  await $.command.run({ command: 'cay', args: '' })
+  await $.command.run({ command: 'tree', args: '' })
   await $.prompt.compose({ ...COMPOSE, surfaces: ['desktop'] } as never)
-  const after = await $.command.run({ command: 'cay', args: '?' })
+  const after = await $.command.run({ command: 'tree', args: '?' })
   expect(after.text).toContain('Pane đã được vẽ trong phiên: có')
   expect(after.text).toContain('[desktop] (1 lần)')
   expect(after.text).toContain('đã bật')
   expect(s.runs.some(r => r.includes('--pick'))).toBe(false)
 })
 
-test('/bien-nhan in biên nhận qua receipt.py show, cắt bớt khi dài', async ($, on) => {
+test('/receipts in biên nhận qua receipt.py show, cắt bớt khi dài', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
-  const out = await $.command.run({ command: 'bien-nhan', args: '' })
+  const out = await $.command.run({ command: 'receipts', args: '' })
   expect(s.runs[0]).toEqual(expect.arrayContaining(['show', '--project', CWD]))
   expect(out.text).toContain('Kiểm tra đã ghi:')
   expect(out.text).toContain('- kiểm 14: ✓ đạt')
@@ -401,10 +401,10 @@ test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, k
     toasts.push(e.text)
     return { value: undefined }
   })
-  // Tên file chứa "chot-viec" không được làm toast nói sai loại nhắc.
+  // Tên file chứa "done-gate" không được làm toast nói sai loại nhắc.
   const reasons = [
-    'agent-stack (hook Stop): lượt này đã đổi 2 file (plugin/skills/chot-viec/SKILL.md, a.py) nhưng mục §0 của `PLAN.md` chưa đổi. Cập nhật §0 cho khớp',
-    'agent-stack (hook Stop): lượt này đổi code có mức rủi ro vừa (hook) mà chưa chạy chot-viec. Chạy skill',
+    'agent-stack (hook Stop): lượt này đã đổi 2 file (plugin/skills/done-gate/SKILL.md, a.py) nhưng mục §0 của `PLAN.md` chưa đổi. Cập nhật §0 cho khớp',
+    'agent-stack (hook Stop): lượt này đổi code có mức rủi ro vừa (hook) mà chưa chạy done-gate. Chạy skill',
     'agent-stack (hook Stop): lượt này vừa xong việc mà người dùng chưa thấy cây kế hoạch (chạy plan_tree.py',
     'hook khác chặn: không phải của agent-stack',
   ]

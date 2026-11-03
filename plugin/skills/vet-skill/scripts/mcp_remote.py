@@ -258,7 +258,7 @@ def _session(url: str, keep_open: bool = False):
     return (snap, (opener, session, protocol, deadline)) if keep_open else snap
 
 
-# ---------------------------------------------------------------- gọi tool (skill goi-mcp)
+# ---------------------------------------------------------------- gọi tool (skill remote-mcp)
 
 class PinError(ValueError):
     """Bộ tool của server không khớp bản đã duyệt: không được gọi."""

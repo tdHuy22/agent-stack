@@ -3,7 +3,7 @@ import sys
 
 from tests._util import PLUGIN, TempDirTestCase, run_script
 
-TELLS = PLUGIN / "skills" / "giong-van" / "scripts" / "tells.py"
+TELLS = PLUGIN / "skills" / "writing-voice" / "scripts" / "tells.py"
 sys.path.insert(0, str(TELLS.parent))
 import tells  # noqa: E402
 

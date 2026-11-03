@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Biên nhận kiểm tra: chạy một lệnh kiểm tra (test, lint, build) và ghi kết quả gắn với nội dung code
-lúc chạy, để phiên sau và skill tien-do biết kết quả đó còn đúng cho code hiện tại hay đã cũ.
+lúc chạy, để phiên sau và skill progress biết kết quả đó còn đúng cho code hiện tại hay đã cũ.
 
 Kết quả đạt cũ không chứng minh cho code đã sửa sau đó. Biên nhận lưu dấu vân tay nội dung của cây làm
 việc (file đang theo dõi và file mới), nên commit mà không đổi nội dung thì biên nhận vẫn còn khớp.

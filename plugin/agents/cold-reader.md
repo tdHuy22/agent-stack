@@ -1,6 +1,6 @@
 ---
-name: nguoi-doc-la
-description: Đọc thử một trang (HTML, Markdown) như người chưa biết gì về project, rồi liệt kê chỗ khó hiểu. Dùng ở bước đọc thử của skill trang-artifact, trước khi đăng trang Artifact. Chỉ đọc đúng file được giao, không nhận bối cảnh phiên chính.
+name: cold-reader
+description: Đọc thử một trang (HTML, Markdown) như người chưa biết gì về project, rồi liệt kê chỗ khó hiểu. Dùng ở bước đọc thử của skill reader-page, trước khi đăng trang Artifact. Chỉ đọc đúng file được giao, không nhận bối cảnh phiên chính.
 tools: Read
 disallowedTools: Write, Edit, NotebookEdit, Bash
 model: sonnet

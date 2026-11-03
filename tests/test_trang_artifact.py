@@ -1,4 +1,4 @@
-"""Test cho skill trang-artifact: script kiểm trang Artifact trước khi đăng."""
+"""Test cho skill reader-page: script kiểm trang Artifact trước khi đăng."""
 from __future__ import annotations
 
 import re
@@ -8,7 +8,7 @@ import unittest
 
 from tests._util import PLUGIN, TempDirTestCase
 
-SKILL = PLUGIN / "skills" / "trang-artifact"
+SKILL = PLUGIN / "skills" / "reader-page"
 sys.path.insert(0, str(SKILL / "scripts"))
 import check_page  # noqa: E402
 

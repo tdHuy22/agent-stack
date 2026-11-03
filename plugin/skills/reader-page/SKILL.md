@@ -1,5 +1,5 @@
 ---
-name: trang-artifact
+name: reader-page
 description: Viết mọi file HTML cho người đọc (file .html trong project hay trang Artifact riêng tư trên claude.ai) thay cho file Markdown, để người không nhớ phiên làm việc vẫn hiểu và quyết được. Bốn loại trang - đề xuất, giải thích, báo cáo, công cụ - mỗi loại một mức kiểm. Trang đề xuất giải thích từ gốc, có ít nhất 3 ví dụ cụ thể chạy qua từng phương án, đối chiếu đề xuất với luật của project kèm nguồn, soát pattern xấu và không khuyên phương án vi phạm luật. Script kiểm trang trước khi đưa người dùng. Dùng trước khi viết hay sửa mọi file để người đọc, như kế hoạch, so sánh, báo cáo, kết quả đo, review, giải thích, hướng dẫn, trang tương tác chép kết quả về chat. Không dùng cho file bắt buộc Markdown (CLAUDE.md, SKILL.md, PLAN.md, README) hay app, dashboard, game.
 when_to_use: artifact, trang artifact, file html, trang html, thay markdown, đăng trang, trang so sánh, trang phương án, trang kế hoạch, báo cáo dạng trang, kết quả đo, trang review, giải thích từ gốc, hướng dẫn, trang khó hiểu, publish artifact, comparison page, html report
 ---
@@ -10,7 +10,7 @@ Người đọc trang là bạn sau hai tuần nghỉ, hoặc người bạn g�
 
 Luật chung (mục "File cho người đọc viết bằng HTML") bắt mọi file cho người đọc là HTML, trừ file bắt buộc Markdown. Skill này là cách viết các file đó.
 
-Khuôn: `${CLAUDE_SKILL_DIR}/mau.html`. Script kiểm: `${CLAUDE_SKILL_DIR}/scripts/check_page.py`. Nếu hai đường dẫn này chưa phải đường dẫn tuyệt đối, dùng `~/Documents/Claude/agent-stack/plugin/skills/trang-artifact/` thay cho `${CLAUDE_SKILL_DIR}`.
+Khuôn: `${CLAUDE_SKILL_DIR}/mau.html`. Script kiểm: `${CLAUDE_SKILL_DIR}/scripts/check_page.py`. Nếu hai đường dẫn này chưa phải đường dẫn tuyệt đối, dùng `~/Documents/Claude/agent-stack/plugin/skills/reader-page/` thay cho `${CLAUDE_SKILL_DIR}`.
 
 ## Khi nào dùng
 
@@ -52,7 +52,7 @@ Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn n�
 4. **Viết trang từ khuôn** `mau.html`: chép sang scratchpad, thay mọi chỗ "…" bằng nội dung thật, giữ thuộc tính `data-*`. Kế hoạch chỉ có một hướng vẫn là đề xuất: đặt nó vào đúng một thẻ `data-phuong-an`, kèm bảng ràng buộc và câu chốt. Trang thật sự không có đề xuất thì bỏ các phần từ "Các phương án" tới "Câu cần chốt" và khai loại trên `<main>` (bảng "Bốn loại trang"). Trang báo cáo và công cụ có thể bỏ cả phần từ gốc và ví dụ khi không cần.
    Bước 2, 3 và 6 chỉ bắt buộc với trang đề xuất; trang khác làm bước 6 khi trang dài hay gửi người khác.
 5. **Chạy script**: `python3 ${CLAUDE_SKILL_DIR}/scripts/check_page.py <file>`. Mã thoát 1 thì sửa từng LỖI rồi chạy lại tới khi ra "Đạt". NHẮC thì cân nhắc. Script chỉ đếm và so được phần cấu trúc; nó không chứng minh trang dễ hiểu.
-6. **Đọc thử bằng người lạ, một lần.** Giao file cho subagent `agent-stack:nguoi-doc-la` với prompt chỉ gồm đường dẫn tuyệt đối của file trang: không kể bối cảnh, không nói trang muốn gì, vì người đọc thật cũng không được nghe. Hook SubagentStart của agent-stack không đưa bối cảnh phiên cho subagent này. Chưa có subagent đó (plugin chưa nạp lại) thì dùng `general-purpose`, model `sonnet`, với chỉ dẫn trong `${CLAUDE_SKILL_DIR}/../../agents/nguoi-doc-la.md`; khi đó hook vẫn chèn yêu cầu của người dùng vào đầu context, nên con số "hiểu bao nhiêu phần trăm" có thể cao hơn thật, và báo cáo phải nói vậy. Sửa theo kết quả một lượt, chạy lại script, không lặp tiếp.
+6. **Đọc thử bằng người lạ, một lần.** Giao file cho subagent `agent-stack:cold-reader` với prompt chỉ gồm đường dẫn tuyệt đối của file trang: không kể bối cảnh, không nói trang muốn gì, vì người đọc thật cũng không được nghe. Hook SubagentStart của agent-stack không đưa bối cảnh phiên cho subagent này. Chưa có subagent đó (plugin chưa nạp lại) thì dùng `general-purpose`, model `sonnet`, với chỉ dẫn trong `${CLAUDE_SKILL_DIR}/../../agents/cold-reader.md`; khi đó hook vẫn chèn yêu cầu của người dùng vào đầu context, nên con số "hiểu bao nhiêu phần trăm" có thể cao hơn thật, và báo cáo phải nói vậy. Sửa theo kết quả một lượt, chạy lại script, không lặp tiếp.
 7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Kế hoạch có phương án thì đọc bình luận bằng `ArtifactComments` rồi mới làm (luật toàn cục).
 8. **Sau khi bạn chốt**, sửa trang ngay trên từng câu: ghi lựa chọn đã chốt, nói lý do nếu khác khuyến nghị, bỏ chữ "cần chốt" khỏi câu đó. Không để khuyến nghị cũ đứng cạnh quyết định ngược với nó: người đọc sau không biết câu nào còn mở.
 
@@ -82,7 +82,7 @@ Trang chỉ giải thích (không đề xuất) cần tóm tắt, từ gốc, th
 - **Không viết kiểu ghi chú nén** ("G1 41 · G2 10"). Viết thành câu, hoặc bảng có tiêu đề cột nói rõ đơn vị.
 - **Con số kèm đơn vị và mốc so sánh**: "4 trên 97 bài thử, dưới ngưỡng 5 đã hẹn". Hai con số cho cùng một thứ (15 bài ở biểu đồ, 4 bài ở kết luận) thì nói ngay vì sao khác.
 - **Rủi ro nói bằng hậu quả**, không chỉ bằng đơn vị đo: "kẻ tấn công chọn được giờ họp", không chỉ "12 bit".
-- **Một ý một câu**, câu ngắn. Giọng văn theo skill `giong-van`: không mở bài sáo, không thổi phồng.
+- **Một ý một câu**, câu ngắn. Giọng văn theo skill `writing-voice`: không mở bài sáo, không thổi phồng.
 - **Không giấu khó khăn**: phương án khuyên có nhược điểm gì thì ghi ngay trên thẻ của nó.
 - **Ví dụ mượn từ project hay lĩnh vực khác** thì giải thích từ của nó ngay trong ví dụ, một hai câu.
 - **Chưa đo thì ghi chưa biết.** Ô bảng chưa có kết quả thật ghi "chưa biết", không viết lại cách làm cho đầy ô. Phương án vi phạm mà vẫn hỏi thì nói vì sao vẫn hỏi.

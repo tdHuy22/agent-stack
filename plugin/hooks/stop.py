@@ -2,7 +2,7 @@
 """Hook Stop: sau mỗi lượt, ghi lượt cuối (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi) vào
 .agent/LAST-TURN.md của thư mục làm việc, kể cả thư mục không phải project (thư mục chung thì vào state/last-turn/),
 để phiên mới làm tiếp được. Ghi trước các bước chậm. Chặn một lần để Claude làm nốt trước khi xong:
-- lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của chot-viec) mà chưa chạy chot-viec: chạy chot-viec (nó lo
+- lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của done-gate) mà chưa chạy done-gate: chạy done-gate (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
 - §0 vừa được cập nhật trong lượt mà dài quá ngưỡng, và `state.py trim` rút được nó: chạy trim (chạy xong thì §0 gọn
@@ -26,7 +26,7 @@ import agentstack as A  # noqa: E402
 
 def trim_hint(advice) -> str:
     """Nhắc chạy trim khi §0 dài và trim rút được nó (A.trim_advice); trim không giúp được thì không nhắc ở đây, kẻo lượt
-    nào cũng nhắc mà §0 không đổi (tien-do và SessionStart đã báo người dùng)."""
+    nào cũng nhắc mà §0 không đổi (progress và SessionStart đã báo người dùng)."""
     if not advice or not advice[1]:
         return ""
     return f" Sửa xong thì làm theo: {advice[0]}."
@@ -59,7 +59,7 @@ def block_reason(changed, plan_rel, advice=None) -> str:
 TREE_WIDGET_MARK = "data-plan-tree"  # plan_tree.py --widget gắn vào thẻ gốc của cây
 TREE_TEXT_RE = re.compile(r"[├└]─ ")  # nét cây của plan_tree.py --text
 WIDGET_TOOL = "show_widget"  # đuôi tên công cụ vẽ widget (mcp__visualize__show_widget và bản deferred)
-TREE_HOW = ("chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/tien-do/scripts/plan_tree.py --widget` rồi "
+TREE_HOW = ("chạy `python3 ~/Documents/Claude/agent-stack/plugin/skills/progress/scripts/plan_tree.py --widget` rồi "
             "đưa nguyên kết quả vào công cụ vẽ widget nếu có (không có thì chạy với `--text` và in trong khối code), "
             "rồi kết thúc lượt bằng dòng ➡️")
 # Chỉ nhắc cây khi người dùng hỏi tiến độ (29/10/2026). Không ép sau mỗi việc xong hay ở lượt đầu phiên: mỗi lần là
@@ -94,7 +94,7 @@ def tree_due(root: Path, turn, data: dict) -> list:
     if not now:
         return []
     reasons = ["progress"] if turn.get("progress") is True else []
-    # /cay in cây dạng chữ (cloud, nơi pane không hiện) trong lượt: người dùng đã thấy cây.
+    # /tree in cây dạng chữ (cloud, nơi pane không hiện) trong lượt: người dùng đã thấy cây.
     seen = A.tree_shown_at(data.get("session_id"))
     if seen is not None and seen >= turn["ts"]:
         return []
@@ -107,7 +107,7 @@ def tree_shown(turn: dict, data: dict) -> bool:
     """Người dùng đã thấy cây trong lượt: lời gọi show_widget với HTML của cây, hay cây chữ trong câu trả lời cuối
     khi phiên không có công cụ widget (luật chung: có widget thì vẽ widget). Phiên có mod giao diện (ui.tsx đặt
     AGENT_STACK_UI=1, chỉ ở phiên có nơi vẽ) hay mod đã ghi dấu pane đang hiện (biến chỉ đặt lúc ghép system prompt,
-    nên pane mở bằng /cay giữa các lượt hay sau khi nạp lại mod có thể chưa có biến) thì cây đã nằm sẵn ở pane."""
+    nên pane mở bằng /tree giữa các lượt hay sau khi nạp lại mod có thể chưa có biến) thì cây đã nằm sẵn ở pane."""
     if os.environ.get("AGENT_STACK_UI") == "1" or A.pane_open(data.get("session_id")):
         return True
     transcript = data.get("transcript_path")
@@ -118,12 +118,12 @@ def tree_shown(turn: dict, data: dict) -> bool:
             and not A.transcript_offers_tool(transcript, WIDGET_TOOL))
 
 
-def chot_viec_gate(root: Path, turn: dict, changed: list):
-    """Kết quả chấm rủi ro (dict của risk.assess) cho phần lượt này đổi, nếu cần chạy chot-viec; không thì None.
-    Không cần khi lượt không đổi file, khi chot-viec (risk.py) đã chạy trong lượt, hoặc khi mức rủi ro thấp."""
-    if not changed or A.chot_viec_ran_since(root, turn["ts"]):
+def done_gate_gate(root: Path, turn: dict, changed: list):
+    """Kết quả chấm rủi ro (dict của risk.assess) cho phần lượt này đổi, nếu cần chạy done-gate; không thì None.
+    Không cần khi lượt không đổi file, khi done-gate (risk.py) đã chạy trong lượt, hoặc khi mức rủi ro thấp."""
+    if not changed or A.done_gate_ran_since(root, turn["ts"]):
         return None
-    sys.path.insert(0, str(PLUGIN / "skills" / "chot-viec" / "scripts"))
+    sys.path.insert(0, str(PLUGIN / "skills" / "done-gate" / "scripts"))
     import risk  # noqa: E402
     if foreign_filters(root):
         return None  # git diff sẽ chạy clean filter do repo khai báo: không tự chạy lệnh của repo lạ
@@ -136,7 +136,7 @@ def chot_viec_gate(root: Path, turn: dict, changed: list):
     # commit thì không bị ép chốt lại toàn bộ diff cũ.
     top = (A.git_out(root, "rev-parse", "--show-prefix") or "").strip()
     mine = set(changed) | {top + c for c in changed}
-    seen = (A.chot_viec_mark(root).get("files") or {})
+    seen = (A.done_gate_mark(root).get("files") or {})
     result = risk.assess(*risk.fresh_changes([c for c in changes if c["path"] in mine], seen))
     return None if result["empty"] or result["level"] == "thap" else result
 
@@ -153,13 +153,13 @@ def gate_reason(result: dict, plan_rel: str, base: str = None) -> str:
     level = {"vua": "vừa", "cao": "cao"}[result["level"]]
     why = "; ".join(result["reasons"][:3])
     cmd = "risk.py --new" + (f" --base {base[:12]}" if base else "")
-    committed = (f" Lượt đã commit nên chot-viec chạy risk.py với `--base {base[:12]}` (HEAD lúc bắt đầu lượt); không "
+    committed = (f" Lượt đã commit nên done-gate chạy risk.py với `--base {base[:12]}` (HEAD lúc bắt đầu lượt); không "
                  "có `--base` thì diff rỗng và phần đã commit không được chấm." if base else "")
     return (f"agent-stack (hook Stop): lượt này đổi hay commit code có dòng chưa qua chốt việc, mức rủi ro {level} "
-            f"({why}), mà chưa chạy chot-viec. Dòng thêm sau lần chạy chot-viec trước (ví dụ sửa theo review) cũng "
-            f"tính; xem chúng bằng `{cmd}`.{committed} Chạy skill chot-viec ngay cho phần đó: nó tự chạy mo-hinh-de-doa "
+            f"({why}), mà chưa chạy done-gate. Dòng thêm sau lần chạy done-gate trước (ví dụ sửa theo review) cũng "
+            f"tính; xem chúng bằng `{cmd}`.{committed} Chạy skill done-gate ngay cho phần đó: nó tự chạy threat-model "
             f"nếu đụng ranh giới tin cậy, review theo mức rủi ro, và cập nhật §0 của `{plan_rel}`. Rồi kết thúc lượt "
-            "bằng báo cáo ngắn của chot-viec. Chỉ khi các dòng này do phiên khác hay người khác viết (không phải "
+            "bằng báo cáo ngắn của done-gate. Chỉ khi các dòng này do phiên khác hay người khác viết (không phải "
             "phiên này, kể cả ở lượt trước), trả lời đúng một câu nói vậy và không làm gì thêm.")
 
 
@@ -170,7 +170,7 @@ def plan_state(digest_now, plan_updated, should_block, gate, changed) -> str:
         return "đã cập nhật trong lượt này"
     if should_block:
         return ("chưa cập nhật; hook đã nhờ Claude cập nhật ngay sau lượt này"
-                + (" (cùng lúc chạy chot-viec)" if gate is not None else ""))
+                + (" (cùng lúc chạy done-gate)" if gate is not None else ""))
     if changed:
         return "chưa cập nhật dù lượt có đổi file"
     return "không đổi (lượt không đổi file)"
@@ -187,7 +187,7 @@ def main():
     if turn and turn.get("root") != str(root):
         turn = None  # lượt bắt đầu ở thư mục khác: không so được
     changed = A.changed_since(root, turn["ts"]) if turn else []
-    # File phiên khác đang làm cùng project sửa trong lúc lượt này chạy: không nhắc §0 hay chot-viec cho chúng.
+    # File phiên khác đang làm cùng project sửa trong lúc lượt này chạy: không nhắc §0 hay done-gate cho chúng.
     foreign = set()
     if changed:
         try:
@@ -199,7 +199,7 @@ def main():
     plan_updated = bool(turn) and digest_now is not None and digest_now != turn.get("plan_digest")
     found = A.read_plan(root)
     plan_rel = str(found[0].relative_to(root)) if found and str(found[0]).startswith(str(root)) else "PLAN.md"
-    # Lượt chỉ commit phần sửa ở lượt trước (§0 đã ghi lúc đó) thì không nhắc §0; chot-viec vẫn chấm phần commit.
+    # Lượt chỉ commit phần sửa ở lượt trước (§0 đã ghi lúc đó) thì không nhắc §0; done-gate vẫn chấm phần commit.
     plan_block = (bool(changed) and not active and turn is not None and digest_now is not None and not plan_updated
                   and any(c not in foreign for c in A.changed_since(root, turn["ts"], edited_only=True)))
 
@@ -221,7 +221,7 @@ def main():
         try:
             A.record_turn(root, sid, state="done", request=request, answer=answer, next_step=next_step,
                           changed=changed, dirty_count=dirty, branch=git.get("branch"), plan_status=status)
-        except Exception as exc:  # noqa: BLE001 (ghi lỗi thì các cổng §0, chot-viec vẫn phải chạy)
+        except Exception as exc:  # noqa: BLE001 (ghi lỗi thì các cổng §0, done-gate vẫn phải chạy)
             A.log_event("hook-error", {"hook": "record_turn", "error": repr(exc)[:300]})
 
     # Ghi trước các bước chậm (chấm rủi ro bằng git diff, đọc transcript), để hook có bị ngắt vì quá giờ thì lượt
@@ -232,9 +232,9 @@ def main():
     gate = None
     if changed and not active and turn is not None and A.is_project(root):
         try:
-            gate = chot_viec_gate(root, turn, changed)
+            gate = done_gate_gate(root, turn, changed)
         except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
-            A.log_event("hook-error", {"hook": "chot_viec_gate", "error": repr(exc)[:300]})
+            A.log_event("hook-error", {"hook": "done_gate_gate", "error": repr(exc)[:300]})
     tree_block = []
     if not active and turn is not None:
         try:
@@ -246,7 +246,7 @@ def main():
     if final != status:
         write(final)
     A.log_event("stop", {"session": sid, "cwd": str(root), "changed": len(changed), "plan_updated": plan_updated,
-                         "blocked": should_block or bool(tree_block), "chot_viec": gate["level"] if gate else None,
+                         "blocked": should_block or bool(tree_block), "done_gate": gate["level"] if gate else None,
                          "tree": tree_block or False})
 
     tree_extra = tree_after(tree_block) if tree_block else ""
@@ -256,7 +256,7 @@ def main():
         base = turn.get("head") if turn.get("head") and turn.get("head") != head_now else None
         A.emit_block(gate_reason(gate, plan_rel, base) + tree_extra,
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
-                     "Claude chạy chot-viec trước khi xong.")
+                     "Claude chạy done-gate trước khi xong.")
     elif should_block:
         advice = current_trim_advice(root)
         A.emit_block(block_reason(changed, plan_rel, advice) + tree_extra,

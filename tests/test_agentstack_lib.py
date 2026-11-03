@@ -430,7 +430,7 @@ class LastTurn(TempDirTestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def test_turn_records_head_and_flags_and_chot_viec_marker_is_per_project(self):
+    def test_turn_records_head_and_flags_and_done_gate_marker_is_per_project(self):
         import os
         from tests._util import git
         old = os.environ.get("AGENT_STACK_STATE")
@@ -448,10 +448,10 @@ class LastTurn(TempDirTestCase):
         other = self.tmp / "other"
         other.mkdir()
         self.assertIsNone(A.start_turn("sid-plain", str(other))["head"], "không phải git repo: không có HEAD")
-        self.assertFalse(A.chot_viec_ran_since(self.root, record["ts"]))
-        A.mark_chot_viec(self.root)
-        self.assertTrue(A.chot_viec_ran_since(self.root, record["ts"]))
-        self.assertFalse(A.chot_viec_ran_since(other, record["ts"]), "dấu theo từng project")
+        self.assertFalse(A.done_gate_ran_since(self.root, record["ts"]))
+        A.mark_done_gate(self.root)
+        self.assertTrue(A.done_gate_ran_since(self.root, record["ts"]))
+        self.assertFalse(A.done_gate_ran_since(other, record["ts"]), "dấu theo từng project")
 
     def test_next_step_is_taken_from_the_arrow_line(self):
         msg = "Xong.\n\n➡️ Tiếp: chạy test tích hợp · Model: sonnet · Effort: low · Subagent: không · Skill: không"

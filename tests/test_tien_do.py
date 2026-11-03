@@ -12,7 +12,7 @@ from pathlib import Path
 from tests._util import PLUGIN, TMP_ROOT, TempDirTestCase, git, run_script
 from tests.test_agentstack_lib import PLAN
 
-COLLECT = PLUGIN / "skills" / "tien-do" / "scripts" / "collect.py"
+COLLECT = PLUGIN / "skills" / "progress" / "scripts" / "collect.py"
 sys.path.insert(0, str(COLLECT.parent))
 import collect  # noqa: E402
 

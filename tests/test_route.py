@@ -138,7 +138,7 @@ class HookSuggestion(TempDirTestCase):
 
     def test_skips_messages_written_by_the_system(self):
         # Báo cáo của subagent quay về như một tin của người dùng; thân báo cáo nhắc "việc tiếp theo" nhưng đó không
-        # phải việc cần định tuyến (từng làm router gợi ý nhầm skill tien-do sau mỗi lần subagent trả lời).
+        # phải việc cần định tuyến (từng làm router gợi ý nhầm skill progress sau mỗi lần subagent trả lời).
         texts = (SUBAGENT_HANDBACK,
                  "<task-notification>\n<task-id>b1</task-id>\nviệc tiếp theo đã xong rồi nhé\n</task-notification>")
         for i, text in enumerate(texts):
@@ -467,7 +467,7 @@ class ProjectAware(ProjectFixtures):
         hit = route.hook_suggestion("Review bảo mật hàm xác thực khác giúp mình", {"session_id": "c3b", "cwd": str(root)})
         self.assertIn("skill differential-review, superpowers", hit["user"])
         self.assertNotIn("chưa bật", hit["context"])
-        # Gọi thẳng differential-review (không qua chot-viec) vẫn mang theo chốt chặn TM-3, TM-4.
+        # Gọi thẳng differential-review (không qua done-gate) vẫn mang theo chốt chặn TM-3, TM-4.
         self.assertIn("không git checkout", hit["context"])
         self.assertIn("đừng để ở gốc repo", hit["context"])
 
@@ -486,10 +486,10 @@ class ProjectAware(ProjectFixtures):
         root = self.python_repo()
         hit = route.hook_suggestion("Thêm tính năng upload ảnh đại diện cho người dùng", {"session_id": "f1", "cwd": str(root)})
         self.assertIn("feature-boundary", hit["context"])
-        self.assertIn("mo-hinh-de-doa", hit["context"])
+        self.assertIn("threat-model", hit["context"])
         self.assertIn("trước khi code", hit["context"])
         plain = route.hook_suggestion("Thêm tính năng xuất CSV cho trang báo cáo", {"session_id": "f2", "cwd": str(root)})
-        self.assertNotIn("mo-hinh-de-doa", plain["context"])
+        self.assertNotIn("threat-model", plain["context"])
 
     def test_session_start_hook_speaks_for_git_repo_without_plan(self):
         root = self.python_repo()

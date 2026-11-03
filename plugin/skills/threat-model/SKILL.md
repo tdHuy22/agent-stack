@@ -1,5 +1,5 @@
 ---
-name: mo-hinh-de-doa
+name: threat-model
 description: Threat model ngắn cho MỘT chức năng, làm TRƯỚC khi viết code, chỉ khi chức năng đụng ranh giới tin cậy (nhận input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, lưu hay truyền dữ liệu nhạy cảm, thêm dependency, chạy mã hay lệnh, đường dẫn file lấy từ input). Ra tối đa 5 mối đe dọa kèm chốt chặn phải có, ghi vào `.agent/threat-model.md` để lúc chốt việc reviewer kiểm từng chốt chặn. Dùng khi router hay `risk.py` báo đụng ranh giới tin cậy, khi người dùng nói threat model, mô hình đe dọa, STRIDE, hoặc trước khi làm đăng nhập, upload, webhook, API, thanh toán, tích hợp dịch vụ ngoài. Bỏ qua với sửa giao diện, sửa chữ, refactor không đổi luồng dữ liệu; không dùng để audit cả repo.
 when_to_use: threat model, mô hình đe dọa, STRIDE, trust boundary, ranh giới tin cậy, attack surface, bề mặt tấn công, trước khi code tính năng đăng nhập, upload, webhook, thanh toán
 ---
@@ -65,7 +65,7 @@ Luồng: <3–6 dòng ở bước 1>
 
 - Làm chốt chặn cùng lúc với chức năng. Viết test cho nhánh bị từ chối của ít nhất chốt chặn quan trọng nhất.
 - Mối đe dọa cần đánh đổi (bỏ tính năng, chấp nhận rủi ro, tốn thêm hạ tầng) thì hỏi người dùng, đừng tự chọn.
-- Khi chốt việc, skill `chot-viec` đưa các mục của chức năng này cho reviewer kiểm từng chốt chặn. Có bằng chứng thì sửa trạng thái thành `đã có` kèm `file:dòng`.
+- Khi chốt việc, skill `done-gate` đưa các mục của chức năng này cho reviewer kiểm từng chốt chặn. Có bằng chứng thì sửa trạng thái thành `đã có` kèm `file:dòng`.
 - Báo người dùng ngắn gọn: số mối đe dọa, chốt chặn sẽ làm, điểm cần họ quyết.
 
 ## Giới hạn

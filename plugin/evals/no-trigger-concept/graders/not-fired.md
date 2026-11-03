@@ -1,7 +1,7 @@
 ---
 type: tool_used
 tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?tien-do"'
+input_match: '"skill"\s*:\s*"(?:[\w-]+:)?progress"'
 min: 0
 max: 0
 arm: both

@@ -378,7 +378,7 @@ class ReviewNotes(TempDirTestCase):
 
     def test_generated_report_passes_check_page(self):
         import report_html
-        sys.path.insert(0, str(PLUGIN / "skills" / "trang-artifact" / "scripts"))
+        sys.path.insert(0, str(PLUGIN / "skills" / "reader-page" / "scripts"))
         import check_page
         md = "# Kiểm duyệt: k\n\n- **Phán quyết: REVIEW**\n\n## Lý do\n\n- ⚠️ Có file chạy được.\n"
         self.assertEqual(check_page.check(report_html.render(md, "k", "REVIEW", {"medium": 1}, "k.md")).errors, [])

@@ -1,5 +1,5 @@
 ---
-name: giong-van
+name: writing-voice
 description: Chỉnh văn bản tiếng Việt hoặc tiếng Anh cho tự nhiên, rõ ràng và đúng giọng của chính người dùng. Bỏ các dấu hiệu văn AI như mở bài sáo, cấu trúc "không chỉ... mà còn", thổi phồng, kết bài nhắc lại, nhịp câu đều đều, nhưng giữ nguyên ý và không bịa thêm sự kiện. Dùng khi người dùng nhờ viết lại, sửa văn, làm mượt đoạn văn, bài luận, blog, email, cover letter, hoặc nói "viết cho tự nhiên", "đúng giọng mình", "đọc như AI viết".
 when_to_use: viết lại, sửa văn, bài luận, essay, blog, email, cover letter, giọng văn, cho tự nhiên, đọc như AI, bớt sến
 argument-hint: "[tao-style-card | <đường dẫn hoặc đoạn văn>]"
@@ -21,7 +21,7 @@ Skill này dùng cho văn bản của chính người dùng: bản nháp, ý ch�
 - `${CLAUDE_SKILL_DIR}/vi-ai-tells.md`: dấu hiệu văn AI trong tiếng Việt, cách sửa, và nguồn nghiên cứu.
 - `${CLAUDE_SKILL_DIR}/scripts/tells.py`: dò dấu hiệu, so từ vựng với bài mẫu cùng ngôn ngữ, cho điểm trên 1.000 từ. Chạy script và dùng kết quả; chỉ đọc mã nguồn khi kết quả không đủ để sửa.
 
-Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/giong-van/`.
+Nếu `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/writing-voice/`.
 
 ## Chỉnh một văn bản
 

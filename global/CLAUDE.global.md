@@ -8,8 +8,8 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 
 | Việc | Model·Effort | Subagent | Skill |
 |---|---|---|---|
-| Hỏi nhanh, tra cú pháp, sửa vài dòng, tin nhắn ngắn | sonnet·low | – | – (giong-van khi viết tin nhắn) |
-| Xem tiến độ; lưu tiến độ, bàn giao | sonnet·low | – | tien-do; session-keeper |
+| Hỏi nhanh, tra cú pháp, sửa vài dòng, tin nhắn ngắn | sonnet·low | – | – (writing-voice khi viết tin nhắn) |
+| Xem tiến độ; lưu tiến độ, bàn giao | sonnet·low | – | progress; session-keeper |
 | Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite chạy Haiku 5.5, rẻ hơn) | – |
 | Việc cơ học hàng loạt có kiểm tra tự động, dịch tài liệu | claude-haiku-5-5·low | – | – |
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
@@ -20,12 +20,12 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Debug nhiều file, race, lỗi lúc được lúc không | opus·medium, chưa ra thì high | – | – |
 | Lỗi chỉ có trên production, không tái hiện được | opus·high | – | – |
 | Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | – |
-| Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán) | sonnet·medium | – | mo-hinh-de-doa trước khi code; reuse-best |
-| Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | chot-viec |
+| Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán) | sonnet·medium | – | threat-model trước khi code; reuse-best |
+| Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | done-gate |
 | Review PR lớn; review bảo mật code thường | opus·high | reviewer | differential-review* |
 | Review bảo mật mã hóa, token, thanh toán, sandbox | opus·xhigh | reviewer | differential-review* |
 | Audit bảo mật cả repo trước phát hành | opus·max | reviewer | static-analysis* (Semgrep) rồi claude-security* |
-| Kế hoạch việc vừa; văn bản dài | sonnet·high | Plan khi lập kế hoạch | reuse-best; giong-van; trang-artifact (hay html-plan*) khi ra file |
+| Kế hoạch việc vừa; văn bản dài | sonnet·high | Plan khi lập kế hoạch | reuse-best; writing-voice; reader-page (hay html-plan*) khi ra file |
 | Thiết kế kiến trúc; refactor lớn nhiều module | opus·high (hoặc opusplan) | Plan | reuse-best |
 | Quyết định khó đảo ngược (schema dữ liệu thật, giao thức) | opus·xhigh | Plan | reuse-best |
 | Agent tự chạy trên 30 phút | opus·xhigh (hoặc `/effort ultracode`) | – | – |
@@ -44,7 +44,7 @@ Model trong bảng là model hợp với việc, không phải lệnh đổi nga
 
 ## Trang HTML và Artifact
 
-- Nội dung trang theo skill `trang-artifact`; trình bày (màu, chữ, bố cục, sáng tối) theo hướng dẫn `artifact-design` mà công cụ Artifact nạp. Skill có sẵn của Anthropic thì dùng đúng việc của nó (* là chỉ dùng khi đã cài):
+- Nội dung trang theo skill `reader-page`; trình bày (màu, chữ, bố cục, sáng tối) theo hướng dẫn `artifact-design` mà công cụ Artifact nạp. Skill có sẵn của Anthropic thì dùng đúng việc của nó (* là chỉ dùng khi đã cài):
 
   | Việc | Dùng |
   |---|---|
@@ -53,11 +53,11 @@ Model trong bảng là model hợp với việc, không phải lệnh đổi nga
   | Trang tổng quan project nhiều nhánh việc để gửi người khác, làm mới cùng link | `project-artifact`* |
   | Giao diện sản phẩm thật (landing, màn hình app, poster) | `frontend-design`* |
   | Tài liệu nhiều người cùng sửa, bình luận | Claude Docs (skill `docs`) khi phiên có |
-  | Cây kế hoạch, tiến độ | `tien-do` (đã là widget, pane Kế hoạch) |
+  | Cây kế hoạch, tiến độ | `progress` (đã là widget, pane Kế hoạch) |
 
 - Đưa trang cho người dùng xem: `SendUserFile` với `display: "render"`, hoặc mở ở pane trình duyệt của app. Đăng Artifact khi người dùng cần link hay đọc trên máy khác, và theo hai luật dưới.
 - Kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng trang Artifact riêng tư đặt phương án cạnh nhau và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay không có công cụ Artifact, thì không đăng Artifact; ngắn thì giữ trong chat, dài thì viết file HTML theo luật chung (hay `html-plan`*).
-- Mọi trang để đọc (so sánh, kế hoạch, báo cáo, giải thích; không tính app, dashboard, game) viết theo skill `trang-artifact` (chưa thấy skill thì đọc `~/Documents/Claude/agent-stack/plugin/skills/trang-artifact/SKILL.md`): giải thích từ gốc cho người không nhớ phiên, ví dụ và mức kiểm theo loại trang (trang đề xuất ít nhất 3 ví dụ), đối chiếu mỗi đề xuất với luật của project và không khuyên phương án vi phạm; `check_page.py` đạt rồi mới đưa người dùng (trang `html-plan` kiểm bằng `pack.mjs --lint-only` của nó).
+- Mọi trang để đọc (so sánh, kế hoạch, báo cáo, giải thích; không tính app, dashboard, game) viết theo skill `reader-page` (chưa thấy skill thì đọc `~/Documents/Claude/agent-stack/plugin/skills/reader-page/SKILL.md`): giải thích từ gốc cho người không nhớ phiên, ví dụ và mức kiểm theo loại trang (trang đề xuất ít nhất 3 ví dụ), đối chiếu mỗi đề xuất với luật của project và không khuyên phương án vi phạm; `check_page.py` đạt rồi mới đưa người dùng (trang `html-plan` kiểm bằng `pack.mjs --lint-only` của nó).
 
 ## Subagent
 

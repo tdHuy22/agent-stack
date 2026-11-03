@@ -19,7 +19,7 @@ LEVEL_NAMES = {"thap": "thấp", "vua": "vừa", "cao": "cao"}
 KIND_NAMES = {"code": "code", "test": "test", "doc": "tài liệu", "instr": "chỉ dẫn cho agent"}
 DOC_EXT = {".md", ".txt", ".rst", ".adoc"}
 # HTML mặc định là code (trang của web app, template). Trang cho người đọc (luật chung: báo cáo, kế hoạch viết bằng
-# .html) là tài liệu khi nằm trong .agent/ hay docs/, hoặc mang dấu của skill trang-artifact trong nội dung file.
+# .html) là tài liệu khi nằm trong .agent/ hay docs/, hoặc mang dấu của skill reader-page trong nội dung file.
 PAGE_EXT = {".html", ".htm"}
 READER_PAGE_RE = re.compile(r"<main\b[^>]*\bdata-loai=|\bdata-phan=[\"']tom-tat[\"']")
 MAX_UNTRACKED_BYTES = 1_000_000
@@ -62,7 +62,7 @@ CODE_RULES = [
 
 
 # Ranh giới tin cậy: (tên, mẫu đường dẫn, mẫu nội dung dòng thêm vào ở file code). Đụng ranh giới thì ít nhất mức vừa,
-# và chot-viec cần một mục trong .agent/threat-model.md (skill mo-hinh-de-doa) để reviewer kiểm từng chốt chặn.
+# và done-gate cần một mục trong .agent/threat-model.md (skill threat-model) để reviewer kiểm từng chốt chặn.
 BOUNDARY_RULES = [
     ("input từ bên ngoài", None,
      re.compile(r"@(app|router|bp|blueprint|api)\.(get|post|put|patch|delete|route|websocket)\(|"
@@ -325,7 +325,7 @@ def render(r: dict, base: str = "HEAD") -> str:
                   for b in r["boundaries"]]
         lines.append(f"Threat model: {'có mục mới trong' if r.get('threat_model_updated') else 'chưa có mục mới trong'} "
                      f"`{THREAT_MODEL_REL}`" + ("" if r.get("threat_model_updated") else
-                                                "; nếu chưa có mục cho việc này, chạy skill mo-hinh-de-doa trước bước review")
+                                                "; nếu chưa có mục cho việc này, chạy skill threat-model trước bước review")
                      + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
     lines.append(f"Review đề nghị: {r['review']}")
     return "\n".join(lines)
@@ -354,7 +354,7 @@ def previous_marks(root) -> dict:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
         import agentstack
-        return agentstack.chot_viec_mark(agentstack.project_root(Path(root).resolve())).get("files") or {}
+        return agentstack.done_gate_mark(agentstack.project_root(Path(root).resolve())).get("files") or {}
     except Exception:  # noqa: BLE001
         return {}
 
@@ -399,7 +399,7 @@ def mark_ran(root, changes=()) -> None:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
         import agentstack
-        agentstack.mark_chot_viec(Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes})
+        agentstack.mark_done_gate(Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes})
     except Exception:  # noqa: BLE001
         pass
 

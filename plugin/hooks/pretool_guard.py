@@ -8,9 +8,9 @@
 - Ghi báo cáo `*DIFFERENTIAL_REVIEW*.md` vào trong project thay vì thư mục tạm: từ chối (TM-4: danh sách lỗ hổng chưa
   vá bị commit lẫn).
 - Sửa file mã nguồn khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model: từ chối
-  một lần, nhắc chạy mo-hinh-de-doa trước khi code.
+  một lần, nhắc chạy threat-model trước khi code.
 - Tạo file `.md` mới không thuộc loại bắt buộc Markdown: từ chối một lần cho mỗi file trong lượt, nhắc viết HTML
-  theo skill trang-artifact (luật chung "File cho người đọc viết bằng HTML"); ghi lại thì cho qua.
+  theo skill reader-page (luật chung "File cho người đọc viết bằng HTML"); ghi lại thì cho qua.
 - Tạo tag git hay `gh release create` (sắp phát hành): nhắc bước 3 của quy trình bảo mật là audit cả repo (Semgrep
   qua static-analysis, rồi claude-security). Lần đầu thì từ chối để lời nhắc tới Claude, Claude hỏi người dùng; lệnh
   chỉ qua khi người dùng đã nhắn sau lần từ chối đó. Không theo dõi được phiên thì hỏi người dùng như cũ.
@@ -303,7 +303,7 @@ def check_new_markdown(full: Path, cwd: str, session_id: str):
     turn["md_nudged"] = nudged + [key]
     A.save_turn(session_id, turn)
     return "deny", (f"agent-stack: file cho người đọc viết bằng HTML (luật chung, mục \"File cho người đọc viết bằng "
-                    f"HTML\"). Viết `{full.with_suffix('.html').name}` theo skill trang-artifact thay cho `{full.name}`. "
+                    f"HTML\"). Viết `{full.with_suffix('.html').name}` theo skill reader-page thay cho `{full.name}`. "
                     "Nếu file này bắt buộc là Markdown (agent hay script đọc nó, nền tảng đòi Markdown, project quy "
                     "ước Markdown, người dùng xin .md) thì ghi lại đúng lệnh này: nhắc chỉ hiện một lần cho file này.")
 
@@ -343,7 +343,7 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
     turn["threat_model_nudged"] = True
     A.save_turn(session_id, turn)
     own = (root / ".claude" / "skills" / "threat-model" / "SKILL.md").exists()
-    skill = "skill threat-model của project này" if own else "skill mo-hinh-de-doa"
+    skill = "skill threat-model của project này" if own else "skill agent-stack:threat-model"
     return "deny", (f"agent-stack: lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model. Trước khi "
                     f"code, chạy {skill} (ghi `.agent/threat-model.md`), rồi viết code kèm các chốt chặn. Nếu chức "
                     "năng thật ra không đụng ranh giới tin cậy thì cứ ghi lại file này: nhắc này chỉ hiện một lần.")

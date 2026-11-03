@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hook SessionEnd: ghi lại phiên vừa kết thúc, để skill tien-do gợi ý `claude --resume`.
+"""Hook SessionEnd: ghi lại phiên vừa kết thúc, để skill progress gợi ý `claude --resume`.
 
 SessionEnd chỉ có khoảng 1,5 giây, nên hook này chỉ ghi một dòng vào file.
 """

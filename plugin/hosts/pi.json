@@ -70,12 +70,12 @@
     },
     "no_pi_tool": ["NotebookEdit", "MultiEdit"],
     "drop_fields": ["model", "effort", "maxTurns", "color", "disallowedTools"],
-    "use": ["explore-lite", "nguoi-doc-la", "researcher", "reviewer", "test-runner"],
+    "use": ["explore-lite", "cold-reader", "researcher", "reviewer", "test-runner"],
     "skip": {}
   },
   "skills": {
-    "use": ["chot-viec", "giong-van", "goi-mcp", "mo-hinh-de-doa", "reuse-best", "session-keeper", "task-router",
-            "tien-do", "trang-artifact", "vet-skill"],
+    "use": ["done-gate", "writing-voice", "remote-mcp", "threat-model", "reuse-best", "session-keeper", "task-router",
+            "progress", "reader-page", "vet-skill"],
     "skip": {}
   }
 }

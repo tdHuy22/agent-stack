@@ -1,5 +1,5 @@
 """GĐ20: skill cần thiết tự chạy. Hook PreToolUse (pretool_guard.py) chặn cài đồ chưa vet, hỏi trước khi git checkout
-trên cây bẩn, chặn ghi báo cáo lỗ hổng vào project, nhắc threat model trước khi code; hook Stop buộc chạy chot-viec
+trên cây bẩn, chặn ghi báo cáo lỗ hổng vào project, nhắc threat model trước khi code; hook Stop buộc chạy done-gate
 khi lượt đổi code có rủi ro."""
 import json
 import os
@@ -11,7 +11,7 @@ from pathlib import Path
 from tests._util import PLUGIN, TempDirTestCase, git
 
 HOOKS = PLUGIN / "hooks"
-RISK = PLUGIN / "skills" / "chot-viec" / "scripts" / "risk.py"
+RISK = PLUGIN / "skills" / "done-gate" / "scripts" / "risk.py"
 LOGIN = "def login(user, password):\n" + "".join(f"    step_{i} = check(user, password, {i})\n" for i in range(30))
 
 
@@ -155,7 +155,7 @@ class WriteGuard(GuardBase):
         self.assertEqual(self.bash("git tag v1.0", "phien-khac")[0], "deny", "phiên khác không dùng chung mốc chặn")
 
     def test_slash_command_counts_as_the_users_reply(self):
-        self.start("/loop 5m /tien-do", "sl")
+        self.start("/loop 5m /progress", "sl")
         self.assertEqual(self.bash("git tag v1.0", "sl")[0], "deny", "phiên mở bằng lệnh slash vẫn bị chặn, không rơi về ask")
         self.start("/claude-security", "sl")
         self.assertIsNone(self.bash("git tag v1.0", "sl"))
@@ -215,7 +215,7 @@ class WriteGuard(GuardBase):
         decision, reason = self.guard("Write", report, "md1")
         self.assertEqual(decision, "deny")
         self.assertIn("bao-cao-do.html", reason)
-        self.assertIn("trang-artifact", reason)
+        self.assertIn("reader-page", reason)
         self.assertIsNone(self.guard("Write", report, "md1"), "ghi lại thì cho qua: Claude đã cân nhắc")
         self.start("Viết thêm ghi chú", "md1")
         self.assertEqual(self.guard("Write", report, "md1")[0], "deny", "lượt mới thì nhắc lại")
@@ -270,7 +270,7 @@ class WriteGuard(GuardBase):
                           "file test không bị nhắc")
         decision, reason = self.guard("Write", target, "tm1")
         self.assertEqual(decision, "deny")
-        self.assertIn("mo-hinh-de-doa", reason)
+        self.assertIn("threat-model", reason)
         self.assertIsNone(self.guard("Write", target, "tm1"), "chỉ nhắc một lần mỗi lượt")
 
     def test_no_nudge_when_threat_model_written_or_feature_is_plain(self):
@@ -307,17 +307,17 @@ class StopRequiresChotViec(GuardBase):
         return self.hook("stop.py", {"session_id": sid, "cwd": str(self.project), "stop_hook_active": active,
                                      "last_assistant_message": "Xong.\n\n➡️ Tiếp: chờ bạn"})
 
-    def test_risky_code_change_without_chot_viec_is_blocked_once(self):
+    def test_risky_code_change_without_done_gate_is_blocked_once(self):
         self.turn("s1")
         (self.project / "app" / "auth").mkdir()
         (self.project / "app" / "auth" / "login.py").write_text(LOGIN)
         out = self.stop("s1")
         self.assertEqual(out["decision"], "block")
-        self.assertIn("chưa chạy chot-viec", out["reason"])
+        self.assertIn("chưa chạy done-gate", out["reason"])
         self.assertIn("mức rủi ro cao", out["reason"])
         self.assertIsNone(self.stop("s1", active=True), "lần dừng thứ hai không chặn nữa")
 
-    def test_running_risk_py_counts_as_chot_viec(self):
+    def test_running_risk_py_counts_as_done_gate(self):
         self.turn("s2")
         (self.project / "app" / "auth").mkdir()
         (self.project / "app" / "auth" / "login.py").write_text(LOGIN)
@@ -340,7 +340,7 @@ class StopRequiresChotViec(GuardBase):
                               env=self.env(), timeout=30)
         self.assertEqual(done.returncode, 0, done.stderr)
 
-    def test_only_lines_new_since_last_chot_viec_are_scored(self):
+    def test_only_lines_new_since_last_done_gate_are_scored(self):
         self.turn("d1")
         (self.project / "app" / "auth").mkdir()
         login = self.project / "app" / "auth" / "login.py"
@@ -372,7 +372,7 @@ class StopRequiresChotViec(GuardBase):
         out = self.stop("f2")
         self.assertEqual(out["decision"], "block")
         self.assertIn("đổi hay commit", out["reason"])
-        self.assertIn("mà chưa chạy chot-viec", out["reason"], "mod giao diện nhận câu nhắc theo cụm này")
+        self.assertIn("mà chưa chạy done-gate", out["reason"], "mod giao diện nhận câu nhắc theo cụm này")
         cmd = re.search(r"`risk\.py (--new --base [0-9a-f]{12})`", out["reason"])
         self.assertIsNotNone(cmd, "lượt đã commit: câu nhắc phải in sẵn --base")
         # Quên --base: diff rỗng, không được tính là đã chốt việc.
@@ -430,7 +430,7 @@ class StopRequiresChotViec(GuardBase):
         git(self.project, "commit", "-q", "-m", "commit vội")
         out = self.stop("s4")
         self.assertEqual(out["decision"], "block")
-        self.assertIn("chot-viec", out["reason"])
+        self.assertIn("done-gate", out["reason"])
 
     def test_preexisting_risky_change_is_not_blamed_on_this_turn(self):
         (self.project / "app" / "auth").mkdir()

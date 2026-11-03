@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kiểm tĩnh một trang HTML cho người đọc (file trong project hay trang Artifact), theo khuôn của skill trang-artifact.
+"""Kiểm tĩnh một trang HTML cho người đọc (file trong project hay trang Artifact), theo khuôn của skill reader-page.
 
   python3 check_page.py <trang.html>
 
@@ -396,7 +396,7 @@ def check(html: str) -> Report:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Kiểm trang Artifact theo khuôn trang-artifact trước khi đăng.")
+    ap = argparse.ArgumentParser(description="Kiểm trang Artifact theo khuôn reader-page trước khi đăng.")
     ap.add_argument("file", help="file HTML sắp đăng")
     args = ap.parse_args(argv)
     try:

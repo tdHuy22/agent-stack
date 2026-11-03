@@ -1,4 +1,4 @@
-"""Biên nhận kiểm tra (session-keeper/scripts/receipt.py) và cách tien-do dùng nó."""
+"""Biên nhận kiểm tra (session-keeper/scripts/receipt.py) và cách progress dùng nó."""
 import json
 import os
 import sys
@@ -7,7 +7,7 @@ from tests._util import PLUGIN, TempDirTestCase, git, run_script
 
 RECEIPT = PLUGIN / "skills" / "session-keeper" / "scripts" / "receipt.py"
 sys.path.insert(0, str(PLUGIN / "lib"))
-sys.path.insert(0, str(PLUGIN / "skills" / "tien-do" / "scripts"))
+sys.path.insert(0, str(PLUGIN / "skills" / "progress" / "scripts"))
 import agentstack as A  # noqa: E402
 import collect  # noqa: E402
 

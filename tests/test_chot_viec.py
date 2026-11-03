@@ -1,4 +1,4 @@
-"""Test cho skill chot-viec: script chấm mức rủi ro của thay đổi."""
+"""Test cho skill done-gate: script chấm mức rủi ro của thay đổi."""
 from __future__ import annotations
 
 import subprocess
@@ -7,7 +7,7 @@ import unittest
 
 from tests._util import PLUGIN, TempDirTestCase
 
-SCRIPTS = PLUGIN / "skills" / "chot-viec" / "scripts"
+SCRIPTS = PLUGIN / "skills" / "done-gate" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import risk  # noqa: E402
 
@@ -116,7 +116,7 @@ class Assess(unittest.TestCase):
         self.assertFalse(r["threat_model_updated"])
         out = risk.render(r)
         self.assertIn("Ranh giới tin cậy bị đụng:", out)
-        self.assertIn("chạy skill mo-hinh-de-doa", out)
+        self.assertIn("chạy skill threat-model", out)
 
     def test_each_boundary_kind_is_detected(self):
         cases = {

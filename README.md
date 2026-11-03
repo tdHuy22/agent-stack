@@ -30,7 +30,7 @@ Làm việc nhiều ngày với agent lập trình hay vấp bốn chuyện:
 | Vấn đề | Cách agent-stack xử lý |
 |---|---|
 | **Mất tiến độ** khi hết hạn mức, crash, compact hay đổi công cụ | Trạng thái nằm trên đĩa: mục §0 "Đang ở đâu, việc tiếp theo" của `PLAN.md`, `.agent/HANDOFF.md`, `.agent/LAST-TURN.md`. Hook tự nạp lại khi mở phiên và tự ghi lúc gửi tin (đang chạy), khi xong lượt và khi lỗi API kết thúc lượt, kể cả ở thư mục không phải project. |
-| **Không biết làm gì tiếp** khi quay lại project sau vài ngày | Skill `tien-do` đọc §0, git, TODO rồi xếp việc theo 5 bậc ưu tiên; cây kế hoạch bấm chọn được. |
+| **Không biết làm gì tiếp** khi quay lại project sau vài ngày | Skill `progress` đọc §0, git, TODO rồi xếp việc theo 5 bậc ưu tiên; cây kế hoạch bấm chọn được. |
 | **Tốn hạn mức** vì chọn model quá mạnh, hoặc làm hỏng việc vì chọn quá yếu | Router gợi ý model, effort, subagent, skill cho từng tin nhắn, dựa trên hồ sơ project và số liệu eval của chính người dùng. Đổi model giữa phiên làm mất prompt cache, nên router đọc số liệu phiên (của mod giao diện, không có thì transcript) và chỉ gợi ý `/model` khi rẻ; lúc khác gợi ý giữ model và giao subagent. Cuối mỗi câu trả lời có dòng `➡️`. |
 | **Cài đồ bên thứ ba thiếu kiểm tra** | Skill `vet-skill` ghim commit, quét dấu hiệu độc hại, ghi kết quả vào `vetted.lock`. Hook chặn các lệnh cài quen thuộc khi đích chưa được duyệt. |
 
@@ -52,7 +52,7 @@ flowchart LR
         H1[SessionStart: nạp §0, hồ sơ project, lượt cuối]
         H2[UserPromptSubmit: ghi lượt đang chạy, router, cảnh báo hạn mức]
         H3[PreToolUse: chặn cài chưa vet, nhắc threat model]
-        H4[Stop, StopFailure: ghi LAST-TURN, buộc chot-viec khi rủi ro]
+        H4[Stop, StopFailure: ghi LAST-TURN, buộc done-gate khi rủi ro]
     end
 
     subgraph Proj["Project đang làm"]
@@ -83,15 +83,15 @@ Skill tự kích hoạt theo từ khóa tiếng Việt hoặc tiếng Anh; gọi
 | Skill | Việc | Script chính |
 |---|---|---|
 | `session-keeper` | Lưu và khôi phục trạng thái: cập nhật §0, viết `HANDOFF.md` khi bàn giao, chạy bước kiểm sau khi bị ngắt. Ghi biên nhận kiểm chứng gắn với nội dung code lúc chạy, để phiên sau biết kết quả còn đúng hay code đã đổi. | `state.py`, `receipt.py` |
-| `tien-do` | Tiến độ và việc nên làm tiếp (chặn đường, dang dở, giai đoạn hiện tại, nợ TODO, bị bỏ quên), kèm gợi ý model và câu `/goal`. `--all` cho mọi project. Vẽ cây kế hoạch dạng widget có ô tick. | `collect.py`, `plan_tree.py` |
+| `progress` | Tiến độ và việc nên làm tiếp (chặn đường, dang dở, giai đoạn hiện tại, nợ TODO, bị bỏ quên), kèm gợi ý model và câu `/goal`. `--all` cho mọi project. Vẽ cây kế hoạch dạng widget có ô tick. | `collect.py`, `plan_tree.py` |
 | `task-router` | Gợi ý model, effort, subagent, skill cho một việc, tính cả hồ sơ project (ngôn ngữ, test, CI, code nhạy cảm) và việc tiếp theo trong §0. Tính chi phí ghi lại cache trước khi gợi ý đổi model. `merge_back.py` gộp nhánh worktree của subagent khi test đạt và fast-forward được, dừng khi đụng file nhạy cảm. `--session` in hồ sơ project cho công cụ không có hook. | `route.py`, `rules.json`, `merge_back.py` |
 | `vet-skill` | Kiểm duyệt skill, plugin, MCP, marketplace của bên thứ ba: ghim commit, quét dấu hiệu độc hại (tải rồi chạy mã, đọc khóa, prompt injection, ký tự ẩn, hook tự chạy), chạy thử trong sandbox, chạy SkillSpector, kiểm lệch so với bản đã duyệt, ghi `vetted.lock`. | `vet.py`, `redflags.py`, `dynamic.py`, `drift.py`, `mcp_remote.py`, `spector.py` |
 | `reuse-best` | Trước khi tự làm tool, tính năng, thuật toán: tìm thứ có sẵn tốt nhất theo thứ tự tính năng sẵn có, code trong project, skill đã duyệt, GitHub, bài nghiên cứu SOTA; kiểm từng tiêu chí bằng bằng chứng rồi quyết định dùng lại, điều chỉnh hay tự viết, và nêu phần còn phải làm. | `scout.py` |
-| `chot-viec` | Cổng kiểm trước khi báo xong hay commit: nêu lại ý định, chấm rủi ro của diff (kể cả ranh giới tin cậy bị đụng), chạy kiểm chứng có biên nhận, tái hiện như người dùng sẽ dùng, review ở context mới với độ sâu theo rủi ro, rà tài liệu. | `risk.py` |
-| `mo-hinh-de-doa` | Threat model ngắn cho một chức năng trước khi code, chỉ khi đụng ranh giới tin cậy. Tối đa 5 mối đe dọa kèm chốt chặn, ghi vào `.agent/threat-model.md` để reviewer kiểm lúc chốt việc. | – |
-| `giong-van` | Chỉnh văn tiếng Việt hoặc tiếng Anh cho tự nhiên và đúng giọng người viết, bỏ dấu hiệu văn AI, không bịa thêm sự kiện. | `tells.py` |
-| `goi-mcp` | Gọi MCP từ xa đã kiểm duyệt (DeepWiki, Parallel Search) qua script mà không cài vào Claude Code; mỗi lần gọi kiểm định nghĩa tool còn khớp bản đã duyệt. | `call.py` |
-| `trang-artifact` | Viết mọi file HTML cho người đọc thay cho Markdown (file trong project hay trang Artifact; bốn loại: đề xuất, giải thích, báo cáo, công cụ) cho người không nhớ phiên làm việc: giải thích từ gốc, thuật ngữ định nghĩa trước khi dùng, ít nhất 3 ví dụ cụ thể chạy qua từng phương án, đối chiếu mỗi đề xuất với luật của project kèm nguồn, soát pattern xấu, không khuyên phương án vi phạm luật. Script kiểm trang trước khi đăng. | `check_page.py`, `mau.html` |
+| `done-gate` | Cổng kiểm trước khi báo xong hay commit: nêu lại ý định, chấm rủi ro của diff (kể cả ranh giới tin cậy bị đụng), chạy kiểm chứng có biên nhận, tái hiện như người dùng sẽ dùng, review ở context mới với độ sâu theo rủi ro, rà tài liệu. | `risk.py` |
+| `threat-model` | Threat model ngắn cho một chức năng trước khi code, chỉ khi đụng ranh giới tin cậy. Tối đa 5 mối đe dọa kèm chốt chặn, ghi vào `.agent/threat-model.md` để reviewer kiểm lúc chốt việc. | – |
+| `writing-voice` | Chỉnh văn tiếng Việt hoặc tiếng Anh cho tự nhiên và đúng giọng người viết, bỏ dấu hiệu văn AI, không bịa thêm sự kiện. | `tells.py` |
+| `remote-mcp` | Gọi MCP từ xa đã kiểm duyệt (DeepWiki, Parallel Search) qua script mà không cài vào Claude Code; mỗi lần gọi kiểm định nghĩa tool còn khớp bản đã duyệt. | `call.py` |
+| `reader-page` | Viết mọi file HTML cho người đọc thay cho Markdown (file trong project hay trang Artifact; bốn loại: đề xuất, giải thích, báo cáo, công cụ) cho người không nhớ phiên làm việc: giải thích từ gốc, thuật ngữ định nghĩa trước khi dùng, ít nhất 3 ví dụ cụ thể chạy qua từng phương án, đối chiếu mỗi đề xuất với luật của project kèm nguồn, soát pattern xấu, không khuyên phương án vi phạm luật. Script kiểm trang trước khi đăng. | `check_page.py`, `mau.html` |
 
 Ngoài plugin, `claude-ai-skills/paper-anatomy` là skill "giải phẫu" bài báo khoa học, đồng bộ qua tài khoản claude.ai nên nằm riêng, kèm bench so phiên bản.
 
@@ -105,7 +105,7 @@ Tên có tiền tố `agent-stack:`.
 | `researcher` | sonnet | Nghiên cứu web và tài liệu, trả bản tóm tắt có nguồn; không sửa file. |
 | `test-runner` | Haiku 5.5 | Chạy test, lint, build, chỉ trả phần lỗi để context chính gọn. |
 | `explore-lite` | Haiku 5.5 | Tìm và đọc code diện rộng với model rẻ. |
-| `nguoi-doc-la` | sonnet | Đọc thử một trang như người chưa biết gì về project (bước đọc thử của `trang-artifact`); chỉ có quyền Read, hook SubagentStart không đưa bối cảnh phiên cho nó. |
+| `cold-reader` | sonnet | Đọc thử một trang như người chưa biết gì về project (bước đọc thử của `reader-page`); chỉ có quyền Read, hook SubagentStart không đưa bối cảnh phiên cho nó. |
 
 ### 3.3 Hook (`plugin/hooks/`)
 
@@ -115,19 +115,19 @@ Tất cả viết bằng Python thư viện chuẩn, bắt mọi lỗi, thoát m
 |---|---|---|
 | `SessionStart` | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project, lượt cuối vào context; in dòng 📍 🧭 🕘. Báo plugin lệch bản đã kiểm duyệt; kiểm nền MCP từ xa mỗi ngày một lần. |
 | `UserPromptSubmit` | Mỗi tin nhắn | Ghi lượt cuối ở trạng thái đang chạy; gợi ý `[router]` có tính chi phí ghi lại cache khi đổi model; cảnh báo hạn mức 5 giờ (90%) và tuần (80%); nhắc khi phiên chạy plugin cũ hơn bản đã cài; lưu yêu cầu gần nhất (đã che khóa) cho subagent; ghi mốc bắt đầu lượt cho hook Stop. |
-| `PreToolUse` | Trước Bash và mỗi lần ghi, sửa file | Chặn cài đồ chưa vet (mỗi lần); hỏi trước marketplace lạ và `git checkout` trên cây bẩn; khi router thấy lượt đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa mã nguồn đầu tiên để chạy `mo-hinh-de-doa`; chặn lần tạo tag git hay `gh release create` đầu tiên cho tới khi người dùng trả lời đã audit cả repo chưa; tạo file `.md` mới không thuộc loại bắt buộc Markdown thì chặn một lần, nhắc viết HTML theo `trang-artifact`. |
+| `PreToolUse` | Trước Bash và mỗi lần ghi, sửa file | Chặn cài đồ chưa vet (mỗi lần); hỏi trước marketplace lạ và `git checkout` trên cây bẩn; khi router thấy lượt đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa mã nguồn đầu tiên để chạy `threat-model`; chặn lần tạo tag git hay `gh release create` đầu tiên cho tới khi người dùng trả lời đã audit cả repo chưa; tạo file `.md` mới không thuộc loại bắt buộc Markdown thì chặn một lần, nhắc viết HTML theo `reader-page`. |
 | `SubagentStart` | Mỗi subagent, skill `context: fork` | Đưa yêu cầu gần nhất và 1–2 việc đầu trong §0 cho subagent, vì chúng không thấy hội thoại. |
 | `PreCompact` | Trước compact | Nhắc nếu §0 đã lâu chưa cập nhật; không chặn compact. |
-| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `chot-viec` thì chặn một lần; nếu có sửa file mà §0 chưa cập nhật thì chặn một lần (lượt chỉ commit phần sửa ở lượt trước thì không); file mà phiên khác đang làm cùng project sửa (theo transcript của hai phiên) không tính cho lượt này; nhắc vẽ cây kế hoạch khi bạn hỏi tiến độ mà pane Kế hoạch không hiện (không tính "lưu tiến độ", không còn ở lượt đầu phiên hay sau mỗi việc xong). |
+| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC; nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `done-gate` thì chặn một lần; nếu có sửa file mà §0 chưa cập nhật thì chặn một lần (lượt chỉ commit phần sửa ở lượt trước thì không); file mà phiên khác đang làm cùng project sửa (theo transcript của hai phiên) không tính cho lượt này; nhắc vẽ cây kế hoạch khi bạn hỏi tiến độ mà pane Kế hoạch không hiện (không tính "lưu tiến độ", không còn ở lượt đầu phiên hay sau mỗi việc xong). |
 | `StopFailure` | Lỗi API kết thúc lượt | Ghi lượt cuối ở trạng thái "dừng vì lỗi", kèm file đã đổi và phần trả lời dở. |
-| `SessionEnd` | Đóng phiên | Ghi `state/sessions.jsonl` để `tien-do` gợi ý `claude --resume`. |
+| `SessionEnd` | Đóng phiên | Ghi `state/sessions.jsonl` để `progress` gợi ý `claude --resume`. |
 
 ### 3.4 Các phần khác
 
 | Thành phần | Vị trí | Việc |
 |---|---|---|
 | Statusline | `statusline/statusline.py` | `Opus 5.5 · high · ctx 23% · 5h 41% · 7d 12%`, đổi màu khi gần ngưỡng; ghi `state/limits.json` cho hook cảnh báo hạn mức. Chỉ chạy trong CLI terminal. |
-| Mod giao diện | `plugin/hooks/ui.tsx` | Chỉ Claude Code 2.1.295 trở lên. Pane "Kế hoạch" vẽ cây từ `plan_tree.py --json`, tự mở khi project có file kế hoạch, tự làm mới sau mỗi lượt và khi file kế hoạch đổi; bấm một việc thì điền mã (như `T.2`) vào ô nhập. `/cay` mở lại pane (ở nơi mod không vẽ được, như cloud session hay `claude -p`, thì in cây dạng chữ), `/cay T.2` in chi tiết một việc, `/cay ?` in chẩn đoán, `/bien-nhan` in biên nhận kiểm chứng; các lệnh này không gọi model. Toast tóm tắt khi hook Stop chặn lượt hay lượt dừng vì lỗi API. Dải trên ô nhập hiện gợi ý `[router]` của tin vừa gửi, kèm nút điền `/model` (chỉ khi đổi còn rẻ) hay `/effort` vào ô nhập trống. Phiên có pane thì model thôi vẽ widget cây (mục `agent-stack:ui` trong system prompt, hằng nên không làm mất prompt cache; hook Stop đọc biến `AGENT_STACK_UI=1` do mod đặt, đừng tự đặt biến này). Sau mỗi lượt, `plugin/hooks/ui_status.py` ghi `state/limits.json` (cảnh báo hạn mức chạy cả trên app desktop) và số liệu phiên cho router; mod không vẽ status line vì app đã hiện context và hạn mức. Logic vẫn ở Python, module chỉ vẽ. |
+| Mod giao diện | `plugin/hooks/ui.tsx` | Chỉ Claude Code 2.1.295 trở lên. Pane "Kế hoạch" vẽ cây từ `plan_tree.py --json`, tự mở khi project có file kế hoạch, tự làm mới sau mỗi lượt và khi file kế hoạch đổi; bấm một việc thì điền mã (như `T.2`) vào ô nhập. `/tree` mở lại pane (ở nơi mod không vẽ được, như cloud session hay `claude -p`, thì in cây dạng chữ), `/tree T.2` in chi tiết một việc, `/tree ?` in chẩn đoán, `/receipts` in biên nhận kiểm chứng; các lệnh này không gọi model. Toast tóm tắt khi hook Stop chặn lượt hay lượt dừng vì lỗi API. Dải trên ô nhập hiện gợi ý `[router]` của tin vừa gửi, kèm nút điền `/model` (chỉ khi đổi còn rẻ) hay `/effort` vào ô nhập trống. Phiên có pane thì model thôi vẽ widget cây (mục `agent-stack:ui` trong system prompt, hằng nên không làm mất prompt cache; hook Stop đọc biến `AGENT_STACK_UI=1` do mod đặt, đừng tự đặt biến này). Sau mỗi lượt, `plugin/hooks/ui_status.py` ghi `state/limits.json` (cảnh báo hạn mức chạy cả trên app desktop) và số liệu phiên cho router; mod không vẽ status line vì app đã hiện context và hạn mức. Logic vẫn ở Python, module chỉ vẽ. |
 | Luật chung | `global/` | `SHARED.global.md` (chung), `CLAUDE.global.md` (riêng Claude Code, import SHARED, có bảng chọn cho dòng ➡️). |
 | Bảng định tuyến | `routing-table.md` | Thang effort, model theo loại việc, mỗi dòng ghi căn cứ: số đo của người dùng (E), tài liệu Anthropic (A) hay phán đoán (P). |
 | Eval | `evals/` | 24 việc (coding, debug khó, đọc tài liệu, review bảo mật, QA bằng mutation, viết, reuse có bẫy) để chọn cấu hình rẻ nhất mà vẫn giữ chất lượng; chạy trong thư mục tạm cách ly. |
@@ -238,9 +238,9 @@ python3 plugin/hosts/pi_host.py check
 
 Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
 
-1. **Mở project.** Đọc dòng 📍. Quên đang làm gì thì hỏi "làm gì tiếp?": `tien-do` trả tối đa 3 việc kèm lý do và cây kế hoạch. Gõ mã như `T.2` hay `13` để chọn việc trên cây, `xem 13` để chỉ xem đủ mốc đó; trong widget, nút "Xem đủ" mở mốc dài ngay tại chỗ.
+1. **Mở project.** Đọc dòng 📍. Quên đang làm gì thì hỏi "làm gì tiếp?": `progress` trả tối đa 3 việc kèm lý do và cây kế hoạch. Gõ mã như `T.2` hay `13` để chọn việc trên cây, `xem 13` để chỉ xem đủ mốc đó; trong widget, nút "Xem đủ" mở mốc dài ngay tại chỗ.
 2. **Trước việc lớn.** "Có sẵn thư viện nào làm X chưa?": `reuse-best` tìm rồi ra quyết định có nguồn.
-3. **Chức năng đụng đăng nhập, upload, webhook, API ngoài.** Hook nhắc chạy `mo-hinh-de-doa` trước lần sửa mã nguồn đầu tiên.
+3. **Chức năng đụng đăng nhập, upload, webhook, API ngoài.** Hook nhắc chạy `threat-model` trước lần sửa mã nguồn đầu tiên.
 4. **Trong lúc làm.** Để ý dòng cuối mỗi câu trả lời, gợi ý cho *việc kế tiếp*:
 
    ```
@@ -254,7 +254,7 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
    python3 plugin/skills/session-keeper/scripts/receipt.py run -- python3 -m unittest discover -s tests -t .
    ```
 
-6. **Trước khi báo xong.** Hook Stop buộc chạy `chot-viec` khi lượt đổi code có rủi ro từ vừa trở lên.
+6. **Trước khi báo xong.** Hook Stop buộc chạy `done-gate` khi lượt đổi code có rủi ro từ vừa trở lên.
 7. **Gần hết hạn mức.** Hook nhắc; nói "lưu tiến độ" để `session-keeper` cập nhật §0. Phiên sau tự đọc lại.
 8. **Bàn giao.** Nói "bàn giao" để `session-keeper` viết `.agent/HANDOFF.md`; phiên mới trong project tự nạp file này.
 
@@ -263,7 +263,7 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
 - **Trạng thái nằm trên đĩa, không nằm trong context.** Hết hạn mức, crash, compact hay đổi công cụ đều không mất việc.
 - **Chưa kiểm chứng thì chưa xong.** Biên nhận gắn với dấu vân tay nội dung code lúc chạy; kết quả đạt cũ không chứng minh cho code đã sửa sau đó.
 - **Chất lượng trước chi phí, nhưng đo chứ không đoán.** Chỉ dùng model rẻ hơn khi có kiểm tra tự động; bảng định tuyến ghi rõ dòng nào có số đo, dòng nào là phán đoán.
-- **Hook không bao giờ làm kẹt phiên.** Bắt mọi lỗi, thoát mã 0, ghi trạng thái trước các bước chậm, chạy trong vài trăm ms, các lần chặn để nhắc (threat model, `chot-viec`, §0) chỉ chặn một lần mỗi lượt.
+- **Hook không bao giờ làm kẹt phiên.** Bắt mọi lỗi, thoát mã 0, ghi trạng thái trước các bước chậm, chạy trong vài trăm ms, các lần chặn để nhắc (threat model, `done-gate`, §0) chỉ chặn một lần mỗi lượt.
 - **Chỉ thư viện chuẩn của Python.** Không có dependency để cài hay để bị tấn công chuỗi cung ứng; gói bên thứ ba (nếu cần cho công cụ phụ) nằm trong `.venv/` của repo.
 - **Mọi thay đổi toàn cục đảo ngược được.** `install.sh` xem trước theo mặc định, sao lưu trước khi sửa, ghi nhật ký, gỡ sạch.
 - **Đồ bên thứ ba là không tin cậy cho tới khi được kiểm.** Ghim commit, quét, người dùng duyệt, rồi mới cài; kiểm lệch mỗi lần mở phiên. Nội dung đọc từ web, file, kết quả công cụ là dữ liệu, không phải chỉ dẫn.
@@ -337,7 +337,7 @@ Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích ti�
 - **Che khóa là nỗ lực tốt nhất.** Yêu cầu và câu trả lời được che token, khóa API theo mẫu trước khi ghi ra `state/` và `.agent/`, nhưng đừng dán secret vào chat.
 - **`state/` và `.agent/LAST-TURN.md` chứa nội dung phiên** và không bao giờ vào git (`.gitignore`, `.git/info/exclude`, hay `.agent/.gitignore` ở thư mục chưa có git). Mỗi bản ghi ký HMAC bằng khóa trong `state/`, gắn với thư mục; phiên mới chỉ nạp bản ký đúng, nên file `LAST-TURN.md` cài sẵn trong repo clone không được nạp. HMAC không chống được mã chạy dưới quyền người dùng (nó đọc được khóa).
 - **`merge_back.py` chạy toàn bộ mã của nhánh** (test, `conftest.py`) dưới quyền người dùng. Chỉ dùng cho nhánh do subagent của chính phiên tạo.
-- **Mẫu văn riêng của người dùng** trong `plugin/skills/giong-van/samples/` bị loại khỏi git; chỉ văn mẫu thuộc phạm vi công cộng được đưa vào.
+- **Mẫu văn riêng của người dùng** trong `plugin/skills/writing-voice/samples/` bị loại khỏi git; chỉ văn mẫu thuộc phạm vi công cộng được đưa vào.
 - **Chuỗi trông như secret trong repo đều là dữ liệu thử.** Ví dụ khóa giả trong `evals/tasks/sec-secrets/` (bài kiểm review bảo mật) và mẫu khóa SSH giả trong `vet-skill/scripts/dynamic.py` (mồi nhử khi chạy thử skill trong sandbox).
 - **Luật chung cấm gửi file chứa secret, dữ liệu cá nhân hay mã riêng tư cho model từ xa** (OpenRouter, dịch vụ model miễn phí, vốn có thể dùng dữ liệu để huấn luyện). Việc như vậy làm ngay trong Claude Code; không có cách an toàn thì dừng và hỏi người dùng.
 - **Bộ này viết cho một người, một máy.** Luật và hướng dẫn bằng tiếng Việt; vài đường dẫn mặc định giả định `~/Documents/Claude/agent-stack`. Dùng lại thì nên đọc `KE-HOACH.md` và chỉnh cho hợp.

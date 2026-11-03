@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-TELLS_DIR = Path(__file__).resolve().parents[3] / "plugin" / "skills" / "giong-van" / "scripts"
+TELLS_DIR = Path(__file__).resolve().parents[3] / "plugin" / "skills" / "writing-voice" / "scripts"
 sys.path.insert(0, str(TELLS_DIR))
 import tells  # noqa: E402
 

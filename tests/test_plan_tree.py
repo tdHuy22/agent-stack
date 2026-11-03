@@ -1,4 +1,4 @@
-"""Cây kế hoạch (tien-do/scripts/plan_tree.py) và hai hàm thư viện hook Stop dùng để nhắc hiện cây."""
+"""Cây kế hoạch (progress/scripts/plan_tree.py) và hai hàm thư viện hook Stop dùng để nhắc hiện cây."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from tests._util import PLUGIN, TempDirTestCase
 
-SCRIPT = PLUGIN / "skills" / "tien-do" / "scripts" / "plan_tree.py"
+SCRIPT = PLUGIN / "skills" / "progress" / "scripts" / "plan_tree.py"
 sys.path.insert(0, str(SCRIPT.parent))
 sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402

@@ -65,7 +65,7 @@
     "docs": {
       "label": "tài liệu",
       "skills": [
-        "giong-van"
+        "writing-voice"
       ]
     }
   },
@@ -241,14 +241,14 @@
       ],
       "only_refine": true,
       "skills": [
-        "chot-viec"
+        "done-gate"
       ],
-      "note": "chot-viec chấm rủi ro bằng risk.py rồi mới quyết có giao reviewer không"
+      "note": "done-gate chấm rủi ro bằng risk.py rồi mới quyết có giao reviewer không"
     },
     {
       "id": "finish-gate",
       "skills": [
-        "chot-viec"
+        "done-gate"
       ],
       "agent": "agent-stack:reviewer",
       "model": "sonnet",
@@ -404,7 +404,7 @@
     {
       "id": "progress",
       "skills": [
-        "tien-do"
+        "progress"
       ],
       "model": "sonnet",
       "effort": "low",
@@ -508,7 +508,7 @@
     {
       "id": "github-repo-question",
       "skills": [
-        "goi-mcp"
+        "remote-mcp"
       ],
       "model": "sonnet",
       "effort": "low",
@@ -582,7 +582,7 @@
     {
       "id": "writing",
       "skills": [
-        "giong-van"
+        "writing-voice"
       ],
       "model": "sonnet",
       "effort": "medium",
@@ -607,7 +607,7 @@
       "model": "sonnet",
       "effort": "high",
       "skills": [
-        "giong-van"
+        "writing-voice"
       ],
       "match": [
         "luan van",
@@ -666,10 +666,10 @@
       "refines": "feature",
       "only_refine": true,
       "skills": [
-        "mo-hinh-de-doa",
+        "threat-model",
         "reuse-best"
       ],
-      "note": "chức năng đụng ranh giới tin cậy: trước khi code, chạy mo-hinh-de-doa (threat model ngắn); chốt chặn của nó được reviewer kiểm lúc chốt việc",
+      "note": "chức năng đụng ranh giới tin cậy: trước khi code, chạy threat-model (threat model ngắn); chốt chặn của nó được reviewer kiểm lúc chốt việc",
       "model": "sonnet",
       "effort": "medium",
       "match": [
@@ -861,7 +861,7 @@
       "model": "sonnet",
       "effort": "low",
       "skills": [
-        "giong-van"
+        "writing-voice"
       ],
       "match": [
         "email ngan",

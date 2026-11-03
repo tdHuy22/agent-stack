@@ -9,7 +9,7 @@ Lệnh:
   route.py --eval FILE.jsonl [--min 0.85]   đo độ chính xác trên bộ prompt có nhãn
 
 Dùng làm thư viện:
-  suggest(text)                  -> dict hoặc None (skill tien-do dùng)
+  suggest(text)                  -> dict hoặc None (skill progress dùng)
   hook_suggestion(prompt, data)  -> dict {context, user} hoặc None (hook UserPromptSubmit dùng)
   session_hint(root)             -> dict {context, user} hoặc None (hook SessionStart dùng)
 
@@ -411,7 +411,7 @@ def usd(value: float) -> str:
 
 def turn_flags(prompt: str, cwd) -> dict:
     """Cờ của lượt cho các hook khác: threat_model khi việc là chức năng đụng ranh giới tin cậy (luật
-    feature-boundary), để hook PreToolUse nhắc chạy mo-hinh-de-doa trước khi code; progress khi người dùng hỏi tiến
+    feature-boundary), để hook PreToolUse nhắc chạy threat-model trước khi code; progress khi người dùng hỏi tiến
     độ hay việc tiếp theo (is_progress_question), để hook Stop nhắc hiện cây kế hoạch. Không phụ thuộc việc gợi ý có bị ẩn
     vì đã nhắc trong giờ qua hay không."""
     prompt = (prompt or "").strip()

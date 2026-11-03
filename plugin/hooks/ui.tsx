@@ -1,4 +1,4 @@
-// Lớp giao diện của agent-stack (GĐ26): pane cây kế hoạch và lệnh /cay.
+// Lớp giao diện của agent-stack (GĐ26): pane cây kế hoạch và lệnh /tree.
 // Logic nằm ở script Python; module chỉ gọi script rồi vẽ. Lỗi ở đây không
 // chạm tới hook Python: engine bỏ qua hook hỏng và chạy tiếp.
 import { atom, read, update } from 'claude-code'
@@ -6,9 +6,9 @@ import type { Color, EngineInterface, Register } from 'claude-code'
 
 import type { PlanTree, PlanView, RouterHint } from '../types'
 
-const PANE = 'ke-hoach'
-const COMMAND = 'cay'
-const RECEIPT_COMMAND = 'bien-nhan'
+const PANE = 'plan'
+const COMMAND = 'tree'
+const RECEIPT_COMMAND = 'receipts'
 const RECEIPT_LINES = 15
 const CLOSED_KEY = 'planPaneClosed'
 // Mã lá hay mốc của plan_tree.py (T.2, 14, 25.1.2); chặn mọi thứ khác (TM-28, TM-30).
@@ -36,14 +36,14 @@ const UI_SECTION = {
   text:
     'agent-stack:ui. Phiên này có mod giao diện của agent-stack. Khi project có file kế hoạch, pane "Kế hoạch" cạnh ' +
     'hội thoại hiện cây kế hoạch và tự cập nhật khi file đổi; người dùng bấm mã một việc để điền mã vào ô nhập, gõ ' +
-    '/cay để mở lại pane hay /cay <mã> để xem một việc. Khi luật chung bảo hiện cây kế hoạch, đừng chạy ' +
-    'plan_tree.py --widget hay vẽ widget cây: thay vào đó viết một dòng nhắc xem pane Kế hoạch (hoặc gõ /cay). ' +
+    '/tree để mở lại pane hay /tree <mã> để xem một việc. Khi luật chung bảo hiện cây kế hoạch, đừng chạy ' +
+    'plan_tree.py --widget hay vẽ widget cây: thay vào đó viết một dòng nhắc xem pane Kế hoạch (hoặc gõ /tree). ' +
     'Dòng ➡️ vẫn ghi đủ như luật chung.',
   scope: 'session',
 } as const
 
 let uiEnvSet = false
-// Chẩn đoán cho `/cay ?`: nơi vẽ ở lần compose gần nhất và số lần compose từ khi nạp module.
+// Chẩn đoán cho `/tree ?`: nơi vẽ ở lần compose gần nhất và số lần compose từ khi nạp module.
 let lastSurfaces: readonly string[] | null = null
 let composeCount = 0
 
@@ -51,7 +51,7 @@ let composeCount = 0
 let inflight: Promise<void> | null = null
 
 function script($: EngineInterface): string {
-  return `${$.plugin.root}/skills/tien-do/scripts/plan_tree.py`
+  return `${$.plugin.root}/skills/progress/scripts/plan_tree.py`
 }
 
 function firstLine(text: string): string {
@@ -147,8 +147,8 @@ async function recordUsage($: EngineInterface, turnEnd = false): Promise<void> {
 /** Một dòng tóm tắt cho toast khi hook Stop của agent-stack chặn lượt (lý do đầy đủ vẫn ở transcript). */
 function stopToast(reason: string): string | null {
   if (!reason.includes('agent-stack (hook Stop)')) return null
-  // Neo vào cụm cố định của stop.py, không vào tên file trong lý do (tên file có thể chứa "chot-viec").
-  if (reason.includes('mà chưa chạy chot-viec')) return 'agent-stack: chạy chốt việc trước khi báo xong'
+  // Neo vào cụm cố định của stop.py, không vào tên file trong lý do (tên file có thể chứa "done-gate").
+  if (reason.includes('mà chưa chạy done-gate')) return 'agent-stack: chạy chốt việc trước khi báo xong'
   if (reason.includes('chưa đổi. Cập nhật §0')) return 'agent-stack: cập nhật §0 của file kế hoạch'
   if (reason.includes('mà người dùng chưa thấy cây kế hoạch')) return 'agent-stack: hiện cây kế hoạch cho bạn chọn việc'
   return 'agent-stack: hook Stop nhắc thêm một bước trước khi xong'
@@ -271,7 +271,7 @@ function bar(done: number, total: number, width = 10): string {
   return `${'▰'.repeat(filled)}${'▱'.repeat(width - filled)} ${done}/${total}`
 }
 
-// Viền và biểu tượng theo loại mốc, như widget của tien-do (màu là khóa theme nên hợp cả nền sáng lẫn tối).
+// Viền và biểu tượng theo loại mốc, như widget của progress (màu là khóa theme nên hợp cả nền sáng lẫn tối).
 const KIND_STYLE: Record<string, { icon: string; color: Color }> = {
   blocked: { icon: '⚠', color: 'error' },
   wip: { icon: '◐', color: 'warning' },
@@ -302,7 +302,7 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: COMMAND,
-      description: 'Mở pane cây kế hoạch; /cay <mã> xem một việc (vd /cay T.2)',
+      description: 'Mở pane cây kế hoạch; /tree <mã> xem một việc (vd /tree T.2)',
     })
     return started
   })
@@ -420,7 +420,7 @@ export const register: Register = on => {
     } catch (err) {
       return { text: `Không chạy được receipt.py: ${String(err).slice(0, 200)}` }
     }
-  }).catch(() => ({ text: 'Lệnh /bien-nhan gặp lỗi; xem `claude --debug`.' }))
+  }).catch(() => ({ text: 'Lệnh /receipts gặp lỗi; xem `claude --debug`.' }))
 
   on('command.run', { command: COMMAND }, async ($, e) => {
     const codes = e.args.split(/[\s,]+/).filter(Boolean)
@@ -458,7 +458,7 @@ export const register: Register = on => {
     } catch (err) {
       return { text: `Không chạy được plan_tree.py: ${String(err).slice(0, 200)}` }
     }
-  }).catch(() => ({ text: 'Lệnh /cay gặp lỗi; xem `claude --debug`.' }))
+  }).catch(() => ({ text: 'Lệnh /tree gặp lỗi; xem `claude --debug`.' }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
@@ -532,7 +532,7 @@ export const register: Register = on => {
               ))}
               {m.hidden > 0 && (
                 <Text dimColor>
-                  +{m.hidden} việc nữa: /cay {m.id}
+                  +{m.hidden} việc nữa: /tree {m.id}
                 </Text>
               )}
             </Box>

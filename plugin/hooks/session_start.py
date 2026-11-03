@@ -41,8 +41,8 @@ def main():
         cloud_update.maybe_start(A.home_dir())
     except Exception:  # việc phụ: lỗi ở đây không được làm mất phần còn lại của hook
         pass
-    try:  # bản tóm tắt giàu hơn của skill tien-do; không có thì dùng bản của thư viện
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "tien-do" / "scripts"))
+    try:  # bản tóm tắt giàu hơn của skill progress; không có thì dùng bản của thư viện
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "progress" / "scripts"))
         import collect  # noqa: E402
         info = collect.brief(root)
     except ImportError:

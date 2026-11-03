@@ -1077,31 +1077,31 @@ def start_turn(session_id, cwd, extra=None):
         return None
 
 
-CHOT_VIEC_DIR = "chot-viec"
+DONE_GATE_DIR = "chot-viec"  # tên thư mục trạng thái cũ, giữ để không mất dấu đã chấm
 
 
-def _chot_viec_path(root: Path) -> Path:
-    return state_dir() / CHOT_VIEC_DIR / (hashlib.sha1(str(Path(root).resolve()).encode()).hexdigest()[:16] + ".json")
+def _done_gate_path(root: Path) -> Path:
+    return state_dir() / DONE_GATE_DIR / (hashlib.sha1(str(Path(root).resolve()).encode()).hexdigest()[:16] + ".json")
 
 
-def mark_chot_viec(root, files=None) -> None:
-    """risk.py (bước 3 của chot-viec) ghi lúc nó chạy cho project này, và dấu băm các dòng thêm vào lúc đó theo từng
+def mark_done_gate(root, files=None) -> None:
+    """risk.py (bước 3 của done-gate) ghi lúc nó chạy cho project này, và dấu băm các dòng thêm vào lúc đó theo từng
     file, để hook Stop biết lượt đã chốt việc chưa và ở lượt sau chỉ chấm phần mới."""
     try:
-        path = _chot_viec_path(project_root(root))
+        path = _done_gate_path(project_root(root))
         path.parent.mkdir(mode=0o700, exist_ok=True)
         write_json_atomic(path, {"ts": time.time(), "root": str(project_root(root)), "files": files or {}})
     except Exception as exc:  # noqa: BLE001
-        log_event("hook-error", {"hook": "mark_chot_viec", "error": repr(exc)[:300]})
+        log_event("hook-error", {"hook": "mark_done_gate", "error": repr(exc)[:300]})
 
 
-def chot_viec_mark(root) -> dict:
-    data = read_json(_chot_viec_path(root)) or {}
+def done_gate_mark(root) -> dict:
+    data = read_json(_done_gate_path(root)) or {}
     return data if isinstance(data, dict) and isinstance(data.get("ts"), (int, float)) else {}
 
 
-def chot_viec_ran_since(root, since: float) -> bool:
-    return chot_viec_mark(root).get("ts", 0) >= since
+def done_gate_ran_since(root, since: float) -> bool:
+    return done_gate_mark(root).get("ts", 0) >= since
 
 
 def load_turn(session_id):
@@ -1913,12 +1913,12 @@ def _whole(value) -> int | None:
 
 
 def tree_shown_path(session_id: str) -> Path:
-    """Lúc người dùng thấy cây kế hoạch dạng chữ qua lệnh /cay của mod (nơi pane không hiện, như cloud session)."""
+    """Lúc người dùng thấy cây kế hoạch dạng chữ qua lệnh /tree của mod (nơi pane không hiện, như cloud session)."""
     return state_dir() / "tree-shown" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
 
 
 def mark_tree_shown(session_id) -> None:
-    """Mod gọi (qua ui_status.py --tree-shown) sau khi /cay in cây dạng chữ; hook Stop đọc để thôi nhắc hiện cây."""
+    """Mod gọi (qua ui_status.py --tree-shown) sau khi /tree in cây dạng chữ; hook Stop đọc để thôi nhắc hiện cây."""
     if not isinstance(session_id, str) or not session_id:
         return
     path = tree_shown_path(session_id)
@@ -1930,7 +1930,7 @@ def mark_tree_shown(session_id) -> None:
 
 
 def tree_shown_at(session_id):
-    """Lần gần nhất /cay in cây dạng chữ trong phiên (giây epoch), hay None."""
+    """Lần gần nhất /tree in cây dạng chữ trong phiên (giây epoch), hay None."""
     if not isinstance(session_id, str) or not session_id:
         return None
     ts = (read_json(tree_shown_path(session_id)) or {}).get("ts")
@@ -2105,7 +2105,7 @@ def plugin_staleness():
 
 
 # ---------------------------------------------------------------- dời lịch sử của file kế hoạch ra nhật ký
-# Lõi của `state.py trim` (session-keeper). tien-do và hook Stop chạy thử nó để chỉ nhắc trim khi trim rút được §0.
+# Lõi của `state.py trim` (session-keeper). progress và hook Stop chạy thử nó để chỉ nhắc trim khi trim rút được §0.
 
 TRIM_DONE_STARTS = ("xong", "da xong", "hoan thanh", "done")
 _LIST_RE = re.compile(r"^([ \t]*)(?:[-*]|\d+[.)])\s+")
@@ -2122,17 +2122,17 @@ class TrimOrderUnknown(ValueError):
 
 
 class TrimUnsafe(ValueError):
-    """Dời xong thì mốc kiểm tra mà hook và tien-do đọc được bị đổi: không dời gì."""
+    """Dời xong thì mốc kiểm tra mà hook và progress đọc được bị đổi: không dời gì."""
 
 
 def _mentions_checks(lines: list) -> bool:
     """Đoạn có nhắc mốc kiểm tra ("Mốc kiểm tra:", "MỐC KIỂM TRA", "Mốc test"): giữ lại trong §0, kẻo mốc mà hook và
-    tien-do đọc được đi theo một bước đã xong sang nhật ký (archctl 29/10/2026)."""
+    progress đọc được đi theo một bước đã xong sang nhật ký (archctl 29/10/2026)."""
     return any("moc kiem tra" in fold(x) or "moc test" in fold(x) for x in lines)
 
 
 def _plan_checks(text: str):
-    """Mốc kiểm tra như tien-do và hook SessionStart đọc: trường của §0, không có thì tìm cả file."""
+    """Mốc kiểm tra như progress và hook SessionStart đọc: trường của §0, không có thì tìm cả file."""
     return parse_section0(text)["fields"].get("checks") or baseline_anywhere(text)
 
 
