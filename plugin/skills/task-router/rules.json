@@ -671,7 +671,7 @@
       ],
       "note": "chức năng đụng ranh giới tin cậy: trước khi code, chạy threat-model (threat model ngắn); chốt chặn của nó được reviewer kiểm lúc chốt việc",
       "model": "sonnet",
-      "effort": "medium",
+      "effort": "high",
       "match": [
         "dang nhap",
         "dang ky tai khoan",

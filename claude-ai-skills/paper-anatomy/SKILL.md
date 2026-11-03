@@ -249,9 +249,10 @@ người dùng: đó là việc của bước này, không phải nội dung ng�
 ### Bước 5: trình bày
 
 - Phân tích ngắn đến vừa: để trong khung chat.
-- Giải phẫu đầy đủ hoặc bài dài: đề nghị xuất file `.md` (mặc định) hoặc `.docx` (dùng skill `docx`). Trên
-  claude.ai lưu vào `/mnt/user-data/outputs/` và gọi `present_files`; trong Claude Code ghi vào nơi người dùng
-  muốn, không thì để trong chat.
+- Giải phẫu đầy đủ hoặc bài dài: đề nghị xuất file `.html` tự chứa (mặc định; mở thẳng bằng trình duyệt, đọc được
+  trên điện thoại) hoặc `.docx` (dùng skill `docx`). Bản nháp `analysis.md` vẫn là Markdown vì script kiểm neo đọc
+  nó; chỉ bản gửi người đọc là HTML. Trên claude.ai lưu vào `/mnt/user-data/outputs/` và gọi `present_files`;
+  trong Claude Code ghi vào nơi người dùng muốn, không thì để trong chat.
 
 ## Mẫu giải phẫu
 

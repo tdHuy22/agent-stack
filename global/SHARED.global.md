@@ -31,6 +31,7 @@
 - Câu trả lời trong chat vẫn là chữ. Ở phiên chính, khi câu trả lời cho người dùng dài hơn khoảng một màn hình và cần bảng so sánh, sơ đồ, biểu đồ, thì viết thành trang HTML; trong chat chỉ tóm tắt và đưa đường dẫn. Subagent gửi báo cáo về phiên chính bằng chữ, không viết trang.
 - Trang của phiên (kế hoạch, báo cáo, review) cần giữ thì đặt trong `.agent/trang/` của project, không cần giữ thì trong thư mục tạm; tài liệu của project đặt đúng chỗ file `.md` lẽ ra nằm.
 - Script tự sinh báo cáo cho người đọc thì sinh `.html` (vẫn in tóm tắt chữ ra terminal). Chữ lấy từ nguồn không tin cậy (repo lạ, log, web) phải qua `html.escape` hay cách làm sạch tương đương trước khi vào trang.
+- Skill hay plugin, kể cả của bên thứ ba, dặn xuất báo cáo hay bản phân tích cho người đọc bằng `.md`: vẫn viết `.html` theo luật này. File trung gian mà agent hay script của skill đọc lại (như bản nháp `analysis.md` của paper-anatomy) giữ đúng định dạng skill cần.
 - File `.md` cũ cho người đọc chưa đổi thì cứ để; khi sửa lớn file đó thì hỏi người dùng có chuyển sang HTML không.
 
 ## Dòng ➡️ cuối mỗi câu trả lời

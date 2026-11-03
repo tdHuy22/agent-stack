@@ -488,6 +488,7 @@ class ProjectAware(ProjectFixtures):
         self.assertIn("feature-boundary", hit["context"])
         self.assertIn("threat-model", hit["context"])
         self.assertIn("trước khi code", hit["context"])
+        self.assertIn("model sonnet · high", hit["context"])  # có test cũng không hạ xuống haiku
         plain = route.hook_suggestion("Thêm tính năng xuất CSV cho trang báo cáo", {"session_id": "f2", "cwd": str(root)})
         self.assertNotIn("threat-model", plain["context"])
 
