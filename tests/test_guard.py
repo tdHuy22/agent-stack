@@ -12,6 +12,7 @@ from tests._util import PLUGIN, TempDirTestCase, git
 
 HOOKS = PLUGIN / "hooks"
 RISK = PLUGIN / "skills" / "done-gate" / "scripts" / "risk.py"
+RECEIPT = PLUGIN / "skills" / "session-keeper" / "scripts" / "receipt.py"
 LOGIN = "def login(user, password):\n" + "".join(f"    step_{i} = check(user, password, {i})\n" for i in range(30))
 
 
@@ -37,14 +38,14 @@ class GuardBase(TempDirTestCase):
         git(self.project, "add", "-A")
         git(self.project, "commit", "-q", "-m", "init")
 
-    def env(self):
+    def env(self, **extra):
         return dict(os.environ, AGENT_STACK_STATE=str(self.state), AGENT_STACK_HOME=str(self.stack),
-                    AGENT_STACK_PLUGINS_DIR=str(self.tmp / "no-plugins"))
+                    AGENT_STACK_PLUGINS_DIR=str(self.tmp / "no-plugins"), **extra)
 
-    def hook(self, name, payload, raw=None):
+    def hook(self, name, payload, raw=None, **env):
         start = time.time()
         out = subprocess.run(["python3", str(HOOKS / name)], input=raw if raw is not None else json.dumps(payload),
-                             capture_output=True, text=True, env=self.env(), timeout=30)
+                             capture_output=True, text=True, env=self.env(**env), timeout=30)
         self.elapsed = time.time() - start
         self.assertEqual((out.returncode, out.stderr), (0, ""))
         return json.loads(out.stdout) if out.stdout.strip() else None
@@ -298,7 +299,9 @@ class WriteGuard(GuardBase):
                 self.assertIsNone(self.hook("pretool_guard.py", None, raw=raw))
 
 
-class StopRequiresChotViec(GuardBase):
+class StopBase(GuardBase):
+    """Lượt giả cho hook Stop: bắt đầu lượt, dừng, chạy chốt việc, ghi biên nhận, giao reviewer."""
+
     def turn(self, sid):
         self.hook("prompt_submit.py", {"session_id": sid, "cwd": str(self.project), "prompt": "sửa giúp mình phần này"})
         time.sleep(1.1)  # mtime của file đổi phải sau lúc bắt đầu lượt
@@ -307,6 +310,29 @@ class StopRequiresChotViec(GuardBase):
         return self.hook("stop.py", {"session_id": sid, "cwd": str(self.project), "stop_hook_active": active,
                                      "last_assistant_message": "Xong.\n\n➡️ Tiếp: chờ bạn"})
 
+    def chot(self):
+        done = subprocess.run(["python3", str(RISK), str(self.project)], capture_output=True, text=True,
+                              env=self.env(), timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def receipt(self, *cmd, label=None):
+        args = ["--label", label] if label else []
+        out = subprocess.run(["python3", str(RECEIPT), "run", "--project", str(self.project), *args, "--", *cmd],
+                             capture_output=True, text=True, env=self.env(), timeout=60)
+        return out.returncode
+
+    def reviewer(self, sid):
+        self.hook("subagent_start.py", {"session_id": sid, "cwd": str(self.project),
+                                        "agent_type": "agent-stack:reviewer"})
+
+    def evidence(self, sid):
+        """Bằng chứng done-gate đòi từ mức vừa: biên nhận đạt cho code hiện tại và một lần giao reviewer."""
+        time.sleep(1.1)  # biên nhận ghi thời điểm theo giây: phải sau mtime của file vừa sửa
+        self.assertEqual(self.receipt("python3", "-c", "pass"), 0)
+        self.reviewer(sid)
+
+
+class StopRequiresChotViec(StopBase):
     def test_risky_code_change_without_done_gate_is_blocked_once(self):
         self.turn("s1")
         (self.project / "app" / "auth").mkdir()
@@ -317,13 +343,12 @@ class StopRequiresChotViec(GuardBase):
         self.assertIn("mức rủi ro cao", out["reason"])
         self.assertIsNone(self.stop("s1", active=True), "lần dừng thứ hai không chặn nữa")
 
-    def test_running_risk_py_counts_as_done_gate(self):
+    def test_done_gate_with_evidence_passes(self):
         self.turn("s2")
         (self.project / "app" / "auth").mkdir()
         (self.project / "app" / "auth" / "login.py").write_text(LOGIN)
-        done = subprocess.run(["python3", str(RISK), str(self.project)], capture_output=True, text=True,
-                              env=self.env(), timeout=30)
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.chot()
+        self.evidence("s2")
         self.assertIsNone(self.stop("s2"))
 
     def test_stop_gate_never_runs_fsmonitor_of_the_project(self):
@@ -335,17 +360,13 @@ class StopRequiresChotViec(GuardBase):
         self.assertEqual(self.stop("s6")["decision"], "block")
         self.assertFalse(marker.exists())
 
-    def chot(self):
-        done = subprocess.run(["python3", str(RISK), str(self.project)], capture_output=True, text=True,
-                              env=self.env(), timeout=30)
-        self.assertEqual(done.returncode, 0, done.stderr)
-
     def test_only_lines_new_since_last_done_gate_are_scored(self):
         self.turn("d1")
         (self.project / "app" / "auth").mkdir()
         login = self.project / "app" / "auth" / "login.py"
         login.write_text(LOGIN)
         self.chot()
+        self.evidence("d1")
         self.assertIsNone(self.stop("d1"))
         self.turn("d2")  # lượt sau: chỉ đổi tên một biến trong file đã chốt, chưa commit
         login.write_text(LOGIN.replace("step_3 ", "buoc_3 "))
@@ -365,6 +386,7 @@ class StopRequiresChotViec(GuardBase):
         login.write_text(LOGIN)
         self.chot()
         login.write_text(login.read_text() + "    eval(user)\n")
+        self.evidence("f1")
         self.assertIsNone(self.stop("f1"))
         self.turn("f2")
         git(self.project, "add", "-A")
@@ -385,6 +407,7 @@ class StopRequiresChotViec(GuardBase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("1 file, +1/−0", done.stdout, "chỉ chấm dòng sửa sau lần chấm trước")
         self.assertIn("eval", done.stdout)
+        self.reviewer("f2")  # phần sửa mức vừa trở lên phải được review lại; biên nhận của f1 vẫn khớp nội dung
         self.assertIsNone(self.stop("f2"))
 
     def test_new_from_a_subdirectory_reads_the_project_marks(self):
@@ -438,3 +461,198 @@ class StopRequiresChotViec(GuardBase):
         self.turn("s5")
         (self.project / "README.md").write_text("# Ghi chú\n")
         self.assertIsNone(self.stop("s5"))
+
+
+class StopRequiresEvidence(StopBase):
+    """Lượt đã chạy done-gate ở mức vừa trở lên mà thiếu bằng chứng: hook Stop nhắc một lần (cải tiến 1 của trang
+    đánh giá pipeline, 03/11/2026)."""
+
+    def risky(self):
+        (self.project / "app" / "auth").mkdir()
+        login = self.project / "app" / "auth" / "login.py"
+        login.write_text(LOGIN)
+        return login
+
+    def test_risk_py_alone_is_not_enough_and_the_reminder_comes_once(self):
+        # Tái hiện ví dụ 1: chạy bước chấm rủi ro rồi báo xong, không test, không review.
+        self.turn("v1")
+        self.risky()
+        self.chot()
+        out = self.stop("v1")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("nhưng còn thiếu bằng chứng", out["reason"], "mod giao diện nhận câu nhắc theo cụm này")
+        self.assertIn("không có biên nhận đạt", out["reason"])
+        self.assertIn("agent-stack:reviewer", out["reason"])
+        self.assertIn("chưa có biên nhận đạt, chưa review", out["systemMessage"])
+        self.assertLess(self.elapsed, 3)
+        self.assertIsNone(self.stop("v1", active=True), "chỉ nhắc một lần mỗi lượt")
+        self.assertIsNone(self.stop("v1"))
+
+    def test_evidence_is_checked_after_the_gate_blocked_and_done_gate_ran(self):
+        # Đường thường gặp: hook chặn vì chưa chốt việc, Claude chạy risk.py rồi dừng lại (stop_hook_active).
+        self.turn("v2")
+        self.risky()
+        self.assertIn("mà chưa chạy done-gate", self.stop("v2")["reason"])
+        self.chot()
+        out = self.stop("v2", active=True)
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("mức rủi ro cao", out["reason"])
+        self.assertIsNone(self.stop("v2", active=True))
+
+    def test_code_edited_after_the_tests_needs_a_new_receipt(self):
+        self.turn("v3")
+        login = self.risky()
+        self.chot()
+        self.evidence("v3")
+        login.write_text(login.read_text() + "    step_x = 1\n")
+        out = self.stop("v3")
+        self.assertIn("không có biên nhận đạt", out["reason"])
+        self.assertNotIn("agent-stack:reviewer", out["reason"], "reviewer đã chạy trong lượt")
+
+    def test_docs_edited_after_the_tests_keep_the_receipt(self):
+        self.turn("v4")
+        self.risky()
+        self.chot()
+        self.evidence("v4")
+        (self.project / "README.md").write_text("# Ghi chú sau khi test\n")
+        (self.project / ".agent").mkdir(exist_ok=True)
+        (self.project / ".agent" / "threat-model.md").write_text("## mục mới\n")
+        # Trang cho người đọc ở gốc repo (như HUONG-DAN.html) là tài liệu nhờ dấu của reader-page; hook từng chặn
+        # nhầm ở chính phiên làm việc này (03/11/2026).
+        (self.project / "HUONG-DAN.html").write_text('<main data-loai="giai-thich"><p>Hướng dẫn</p></main>\n')
+        self.assertIsNone(self.stop("v4"))
+
+    def test_updating_plan_after_the_tests_keeps_the_receipt(self):
+        # Reviewer tái hiện 03/11/2026: done-gate chạy test (bước 4) rồi mới cập nhật §0 (bước 6); hook chặn vì §0
+        # trước, rồi ở lần dừng thứ hai lại chặn sai vì "chưa có biên nhận đạt" (file kế hoạch bị bỏ khi dò file đổi).
+        (self.project / "PLAN.md").write_text("# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- Xong: chưa có\n")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "kế hoạch")
+        self.turn("v11")
+        self.risky()
+        self.chot()
+        self.evidence("v11")
+        self.assertIn("Cập nhật §0", self.stop("v11")["reason"])
+        (self.project / "PLAN.md").write_text("# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- Xong: đăng nhập\n")
+        self.assertIsNone(self.stop("v11", active=True))
+
+    def test_commit_after_the_tests_keeps_the_receipt(self):
+        self.turn("v12")
+        self.risky()
+        self.chot()
+        self.evidence("v12")
+        (self.project / "README.md").write_text("# Ghi chú sau khi test\n")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "đăng nhập")
+        self.assertIsNone(self.stop("v12"))
+
+    def test_deleting_code_after_the_tests_needs_a_new_receipt(self):
+        self.turn("v13")
+        (self.project / "app" / "views.py").unlink()
+        self.risky()
+        self.chot()
+        self.evidence("v13")
+        (self.project / "app" / "auth" / "login.py").unlink()
+        out = self.stop("v13")
+        self.assertIn("không có biên nhận đạt", out["reason"])
+
+    def test_check_failing_on_current_code_is_named(self):
+        self.turn("v5")
+        self.risky()
+        self.chot()
+        self.evidence("v5")
+        self.assertEqual(self.receipt("python3", "-c", "import sys; sys.exit(3)", label="lint"), 3)
+        out = self.stop("v5")
+        self.assertIn("`lint` (mã 3)", out["reason"])
+        self.assertNotIn("không có biên nhận đạt", out["reason"], "biên nhận đạt khác vẫn còn đúng")
+
+    def test_failing_reproduction_before_the_fix_is_not_a_gap(self):
+        self.turn("v6")
+        login = self.risky()
+        time.sleep(1.1)
+        self.assertEqual(self.receipt("python3", "-c", "import sys; sys.exit(1)", label="tai-hien"), 1)
+        time.sleep(1.1)
+        login.write_text(login.read_text() + "    fixed = True\n")
+        self.chot()
+        self.evidence("v6")
+        self.assertIsNone(self.stop("v6"))
+
+    def test_receipt_counts_when_the_fingerprint_cannot_be_computed(self):
+        # Reviewer 03/11/2026: repo git lồng chưa ignore làm hash-object lỗi, mọi biên nhận không có dấu vân tay.
+        nested = self.project / "nested"
+        nested.mkdir()
+        git(nested, "init", "-q")
+        self.turn("v14")
+        self.risky()
+        self.chot()
+        self.evidence("v14")
+        self.assertIsNone(self.stop("v14"), "biên nhận chạy trong lượt được tính khi không tính được dấu vân tay")
+
+    def test_low_level_done_gate_needs_no_evidence(self):
+        self.turn("v7")
+        (self.project / "README.md").write_text("# Ghi chú\n")
+        self.chot()
+        self.assertIsNone(self.stop("v7"))
+
+    def test_pi_has_no_subagent_hook_so_reviewer_is_not_required(self):
+        self.turn("v8")
+        self.risky()
+        self.chot()
+        time.sleep(1.1)
+        self.assertEqual(self.receipt("python3", "-c", "pass"), 0)
+        out = self.hook("stop.py", {"session_id": "v8", "cwd": str(self.project), "stop_hook_active": False,
+                                    "last_assistant_message": "Xong."}, AGENT_STACK_HOST="pi")
+        self.assertIsNone(out)
+
+    def test_evidence_check_never_runs_commands_of_the_repo(self):
+        self.turn("v9")
+        self.risky()
+        self.chot()
+        time.sleep(1.1)
+        self.assertEqual(self.receipt("python3", "-c", "pass"), 0)  # có biên nhận thì hook mới tính dấu vân tay
+        marker = self.tmp / "fsmonitor-ran"
+        git(self.project, "config", "core.fsmonitor", f"touch {marker}; false")
+        out = self.stop("v9")
+        self.assertIn("agent-stack:reviewer", out["reason"])
+        self.assertNotIn("không có biên nhận đạt", out["reason"], "đã tính dấu vân tay và thấy biên nhận còn đúng")
+        self.assertFalse(marker.exists())
+
+    def test_repo_with_its_own_clean_filter_is_not_checked(self):
+        self.turn("v10")
+        self.risky()
+        self.chot()
+        git(self.project, "config", "filter.x.clean", f"sh -c 'touch {self.tmp / 'clean-ran'}; cat'")
+        (self.project / ".git" / "info" / "attributes").write_text("*.py filter=x\n")
+        # Chỉ kiểm được là bỏ kiểm bằng chứng: `git status` ở đầu hook (có từ trước) đã có thể chạy filter, phần còn
+        # lại của mối đe dọa đã ghi trong threat model; hash-object của dấu vân tay thì chạy filter trên mọi file đổi.
+        self.assertIsNone(self.stop("v10"), "tính dấu vân tay sẽ chạy clean filter của repo lạ: bỏ kiểm")
+
+    def test_asserts_committed_after_done_gate_are_not_counted_as_removed(self):
+        # Reviewer tái hiện 03/11/2026: assert đã qua chốt việc rồi được commit không còn là dòng thêm vào; lượt sau
+        # chỉ thêm test mới mà bị báo "nới assert".
+        (self.project / "tests").mkdir()
+        test_file = self.project / "tests" / "test_x.py"
+        self.turn("w3")
+        test_file.write_text("def test_f(self):\n    self.assertEqual(f(1), 1)\n")
+        self.chot()
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "test f")
+        self.assertIsNone(self.stop("w3"))
+        self.turn("w4")
+        test_file.write_text(test_file.read_text() + "def test_g(self):\n    self.assertTrue(g())\n"
+                             "    self.assertIn(1, h())\n")
+        self.assertIsNone(self.stop("w4"))
+
+    def test_loosened_assert_after_done_gate_is_flagged_next_turn(self):
+        # Tái hiện ví dụ 3: test đã qua chốt việc, lượt sau đổi assertEqual thành assertIn cho đạt (+1/−1 dòng).
+        (self.project / "tests").mkdir()
+        test_file = self.project / "tests" / "test_level.py"
+        self.turn("w1")
+        test_file.write_text("def test_level(self):\n    self.assertEqual(r['level'], 'cao')\n")
+        self.chot()
+        self.assertIsNone(self.stop("w1"), "chỉ có file test mới: mức thấp")
+        self.turn("w2")
+        test_file.write_text("def test_level(self):\n    self.assertIn(r['level'], ('vua', 'cao'))\n")
+        out = self.stop("w2")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("nới assert", out["reason"])

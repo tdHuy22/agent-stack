@@ -574,10 +574,9 @@ def project_profile(root: Path, use_cache: bool = True):
 
 # ---------------------------------------------------------------- biên nhận kiểm tra
 
-def tree_fingerprint(root: Path):
-    """Dấu vân tay nội dung của cây làm việc: file đang theo dõi và file mới chưa bị ignore.
-    Chỉ phụ thuộc nội dung, nên giống nhau trước và sau khi commit. Chỉ đọc (hash-object không ghi object).
-    None nếu không phải git repo hoặc git lỗi."""
+def tree_blobs(root: Path):
+    """{đường dẫn tính từ gốc repo: mã băm nội dung} của cây làm việc: file đang theo dõi và file mới chưa bị
+    ignore. Chỉ đọc (hash-object không ghi object). None nếu không phải git repo hoặc git lỗi."""
     top = (git_out(root, "rev-parse", "--show-toplevel") or "").strip()
     if not top:
         return None
@@ -614,28 +613,47 @@ def tree_fingerprint(root: Path):
         if out.returncode != 0 or len(shas) != len(changed):
             return None
         blobs.update(zip(changed, shas))
+    return blobs
+
+
+def blobs_digest(blobs: dict, exclude=None) -> str:
+    """Dấu vân tay của tree_blobs; `exclude(đường dẫn)` đúng thì bỏ file đó (ví dụ tài liệu)."""
     digest = hashlib.sha1()
     for path in sorted(blobs):
-        digest.update(f"{path}\0{blobs[path]}\n".encode("utf-8", "surrogateescape"))
+        if exclude is None or not exclude(path):
+            digest.update(f"{path}\0{blobs[path]}\n".encode("utf-8", "surrogateescape"))
     return digest.hexdigest()[:16]
+
+
+def tree_fingerprint(root: Path, exclude=None):
+    """Dấu vân tay nội dung của cây làm việc (tree_blobs), bỏ file mà `exclude` chọn. Chỉ phụ thuộc nội dung, nên
+    giống nhau trước và sau khi commit. None nếu không phải git repo hoặc git lỗi."""
+    blobs = tree_blobs(root)
+    return None if blobs is None else blobs_digest(blobs, exclude)
 
 
 def receipt_path(root: Path) -> Path:
     return state_dir() / "tests" / (hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json")
 
 
-def receipt_status(root: Path) -> dict:
+def receipt_status(root: Path, exclude=None) -> dict:
     """Các lần kiểm tra đã ghi cho project, kèm cờ fresh: kết quả còn khớp nội dung code hiện tại không.
-    {} nếu chưa có biên nhận nào. fresh là None khi không xác định được (không phải git repo)."""
+    {} nếu chưa có biên nhận nào. fresh là None khi không xác định được (không phải git repo).
+    Có `exclude` (bộ chọn file tài liệu, như lúc receipt.py ghi code_fingerprint) thì thêm cờ code_fresh: phần không
+    phải tài liệu còn khớp không; None khi biên nhận cũ chưa có dấu đó."""
     data = read_json(receipt_path(root), {}) or {}
     checks = data.get("checks") or {}
     if not checks:
         return {}
-    now = tree_fingerprint(root)
+    blobs = tree_blobs(root)
+    now = None if blobs is None else blobs_digest(blobs)
+    now_code = None if blobs is None or exclude is None else blobs_digest(blobs, exclude)
     out = {}
     for label, rec in checks.items():
         fresh = None if now is None or not rec.get("fingerprint") else rec["fingerprint"] == now
-        out[label] = dict(rec, fresh=fresh)
+        code_fresh = (None if now_code is None or not rec.get("code_fingerprint")
+                      else rec["code_fingerprint"] == now_code)
+        out[label] = dict(rec, fresh=fresh, code_fresh=code_fresh)
     return out
 
 # ---------------------------------------------------------------- bản tóm tắt cho hook
@@ -1084,13 +1102,24 @@ def _done_gate_path(root: Path) -> Path:
     return state_dir() / DONE_GATE_DIR / (hashlib.sha1(str(Path(root).resolve()).encode()).hexdigest()[:16] + ".json")
 
 
-def mark_done_gate(root, files=None) -> None:
-    """risk.py (bước 3 của done-gate) ghi lúc nó chạy cho project này, và dấu băm các dòng thêm vào lúc đó theo từng
-    file, để hook Stop biết lượt đã chốt việc chưa và ở lượt sau chỉ chấm phần mới."""
+DONE_GATE_RUNS = 20  # số lần chấm gần nhất giữ lại (thời điểm, mức) để hook Stop biết mức cao nhất trong lượt
+
+
+def mark_done_gate(root, files=None, level=None, removed=None, asserts=None) -> None:
+    """risk.py (bước 3 của done-gate) ghi lúc nó chạy cho project này: dấu băm các dòng thêm vào và dòng bị xóa lúc
+    đó theo từng file, các dòng assert của file test (dấu băm, có chặt không), và mức rủi ro vừa chấm, để hook Stop
+    biết lượt đã chốt việc chưa, ở mức nào, và ở lượt sau chỉ chấm phần mới."""
     try:
-        path = _done_gate_path(project_root(root))
+        top = project_root(root)
+        path = _done_gate_path(top)
         path.parent.mkdir(mode=0o700, exist_ok=True)
-        write_json_atomic(path, {"ts": time.time(), "root": str(project_root(root)), "files": files or {}})
+        now = time.time()
+        runs = [r for r in done_gate_mark(top).get("runs") or [] if isinstance(r, dict)]
+        if level:
+            runs.append({"ts": now, "level": level})
+        write_json_atomic(path, {"ts": now, "root": str(top), "files": files or {},
+                                 "removed": removed or {}, "asserts": asserts or {},
+                                 "runs": runs[-DONE_GATE_RUNS:]})
     except Exception as exc:  # noqa: BLE001
         log_event("hook-error", {"hook": "mark_done_gate", "error": repr(exc)[:300]})
 
@@ -1102,6 +1131,12 @@ def done_gate_mark(root) -> dict:
 
 def done_gate_ran_since(root, since: float) -> bool:
     return done_gate_mark(root).get("ts", 0) >= since
+
+
+def done_gate_levels_since(root, since: float) -> list:
+    """Các mức rủi ro risk.py đã chấm cho project từ thời điểm `since` (dấu cũ không ghi mức thì rỗng)."""
+    return [r.get("level") for r in done_gate_mark(root).get("runs") or []
+            if isinstance(r, dict) and isinstance(r.get("ts"), (int, float)) and r["ts"] >= since]
 
 
 def load_turn(session_id):
@@ -1936,6 +1971,47 @@ def tree_shown_at(session_id):
     ts = (read_json(tree_shown_path(session_id)) or {}).get("ts")
     return ts if isinstance(ts, (int, float)) and not isinstance(ts, bool) else None
 
+
+
+SUBAGENT_KEYS = 50  # số loại subagent nhớ cho mỗi phiên
+
+
+def subagent_name(agent_type) -> str:
+    """Tên ngắn của loại subagent: bỏ tiền tố plugin ("agent-stack:reviewer" → "reviewer")."""
+    return agent_type.split(":")[-1].strip()[:80] if isinstance(agent_type, str) else ""
+
+
+def subagent_mark_path(session_id: str, agent_type) -> Path:
+    """Dấu "phiên vừa tạo subagent loại này": một file rỗng cho mỗi cặp (phiên, loại), thời điểm là mtime. Mỗi loại một
+    file nên hai subagent tạo song song không ghi đè dấu của nhau (hook SubagentStart ghi, hook Stop đọc)."""
+    sid = hashlib.sha1(session_id.encode()).hexdigest()[:16]
+    name = hashlib.sha1(subagent_name(agent_type).encode()).hexdigest()[:12]
+    return state_dir() / "subagents" / f"{sid}-{name}"
+
+
+def mark_subagent(session_id, agent_type) -> None:
+    if not isinstance(session_id, str) or not session_id or not subagent_name(agent_type):
+        return
+    path = subagent_mark_path(session_id, agent_type)
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.touch()  # file đã có thì touch cập nhật mtime
+        mine = sorted(path.parent.glob(path.name.split("-")[0] + "-*"), key=lambda f: f.stat().st_mtime)
+        for old in mine[:-SUBAGENT_KEYS]:
+            old.unlink(missing_ok=True)
+        prune(path.parent, TURN_DAYS)
+    except OSError:
+        pass
+
+
+def subagent_started_since(session_id, agent_type, since: float) -> bool:
+    """Phiên đã tạo subagent loại này từ thời điểm `since`."""
+    if not isinstance(session_id, str) or not session_id or not subagent_name(agent_type):
+        return False
+    try:
+        return subagent_mark_path(session_id, agent_type).stat().st_mtime >= since
+    except OSError:
+        return False
 
 
 def pane_path(session_id: str) -> Path:

@@ -60,6 +60,32 @@ CODE_RULES = [
      3, "SQL ghép chuỗi"),
 ]
 
+# Nới test, hay gặp ở vòng sửa cho test đạt: assert chặt (so bằng, so đúng đối tượng, đòi lỗi) đổi thành dạng lỏng
+# hơn, bớt assert, thêm skip. Chỉ xét file test, bỏ dòng chú thích (comment một assert là bỏ nó).
+COMMENT_LINE_RE = re.compile(r"^\s*(#(?!\[)|//|/\*|\*|--)")
+ASSERT_RE = re.compile(r"\bassert\w*\s*\(|\bassert\s|\bassert_\w*!|\bexpect\s*\(|\bpytest\.raises\b|"
+                       r"\bassert\.\w+\s*\(")
+STRICT_ASSERT_RE = re.compile(
+    r"\bassert(Equals?|Is|IsNone|Raises|RaisesRegex|Warns|WarnsRegex|AlmostEqual|CountEqual|DictEqual|ListEqual|"
+    r"TupleEqual|SetEqual|SequenceEqual|MultiLineEqual|_called_once_with|_called_with)\s*\(|"
+    r"\bassert\s[^\n]*(==|\bis\s+(?!not\b))|\bassert_eq!|\bpytest\.raises\b|"
+    r"\.to(Be|Equal|StrictEqual|Throw|BeNull|HaveLength)\s*\(|"
+    r"\bassert\.(equal|strictEqual|deepEqual|deepStrictEqual|throws|rejects)\s*\(")
+# Neo ở đầu dòng: decorator hay lời gọi skip đứng thành câu lệnh, không phải chuỗi mẫu nằm trong dữ liệu của test.
+SKIP_RE = re.compile(r"^\s*(@(unittest\.)?skip(If|Unless)?\b|@pytest\.mark\.(skip|skipif|xfail)\b|(self\.)?skipTest\(|"
+                     r"pytest\.(skip|xfail)\(|(it|test|describe)\.(skip|todo)\(|x(it|test|describe)\(|"
+                     r"t\.Skip(Now|f)?\(|#\[ignore\])")
+
+
+def assert_lines(text: str) -> list:
+    """[(dòng, có chặt không)] cho các dòng assert không nằm trong chú thích."""
+    return [(line, bool(STRICT_ASSERT_RE.search(line))) for line in text.splitlines()
+            if not COMMENT_LINE_RE.match(line) and ASSERT_RE.search(line)]
+
+
+def has_skip(text: str) -> bool:
+    return any(SKIP_RE.search(line) for line in text.splitlines() if not COMMENT_LINE_RE.match(line))
+
 
 # Ranh giới tin cậy: (tên, mẫu đường dẫn, mẫu nội dung dòng thêm vào ở file code). Đụng ranh giới thì ít nhất mức vừa,
 # và done-gate cần một mục trong .agent/threat-model.md (skill threat-model) để reviewer kiểm từng chốt chặn.
@@ -129,6 +155,28 @@ def kind(path: str, page: bool = False) -> str:
     return "code"
 
 
+# Tài liệu mà sửa sau bước kiểm chứng không làm cũ biên nhận: hẹp hơn kind() == "doc", vì nhắc thừa một lần còn hơn
+# bỏ sót. Không tính .txt (requirements.txt), file code trong docs/, và file trong thư mục mà test hay build hay đọc.
+RECEIPT_DOC_EXT = {".md", ".rst", ".adoc"} | PAGE_EXT
+FIXTURE_DIR_RE = re.compile(r"(^|/)(tests?|spec|__tests__|samples?|fixtures?|testdata|examples?|references?|"
+                            r"templates?)/")
+
+
+def doc_only(path: str, top: Path = None) -> bool:
+    """File chỉ là tài liệu: sửa nó sau bước kiểm chứng không làm cũ biên nhận (receipt.py, hook Stop). `top`: gốc
+    repo, để đọc dấu trang cho người đọc của file HTML nằm ngoài .agent/, docs/ (như HUONG-DAN.html ở gốc repo)."""
+    if Path(path).suffix.lower() not in RECEIPT_DOC_EXT or FIXTURE_DIR_RE.search(path.lower()):
+        return False
+    return kind(path, bool(top) and reader_page(Path(top) / path)) == "doc"
+
+
+def doc_filter(root):
+    """doc_only cho đường dẫn tính từ gốc repo chứa `root` (khóa của agentstack.tree_blobs)."""
+    out = git(Path(root), "rev-parse", "--show-toplevel")
+    top = Path(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
+    return lambda path: doc_only(path, top)
+
+
 def change_kind(c: dict) -> str:
     """Loại của một thay đổi: dấu trang cho người đọc lấy từ cờ page (collect đọc cả file) hay từ dòng thêm vào."""
     page = Path(c["path"]).suffix.lower() in PAGE_EXT and (c.get("page") or READER_PAGE_RE.search(c.get("text") or ""))
@@ -193,7 +241,8 @@ def assess(changes: list, reviewed=frozenset()) -> dict:
     if test_del > test_add and test_del >= 10:
         score += 2
         reasons.append(f"bớt test (+{test_add}/−{test_del} dòng test)")
-    binary = [c["path"] for c in changes if c.get("added") is None]
+    weakening(changes, hit)
+    binary =[c["path"] for c in changes if c.get("added") is None]
     if binary:
         reasons.append("có file nhị phân, không đọc được nội dung: " + ", ".join(binary[:3]))
 
@@ -208,6 +257,33 @@ def assess(changes: list, reviewed=frozenset()) -> dict:
     result.update(level=level, score=score, reasons=reasons, review=review_hint(level),
                   hotspots=[(p, v[1]) for p, v in sorted(hot.items(), key=lambda kv: (-kv[1][0], kv[0]))])
     return result
+
+
+def weakening(changes: list, hit) -> None:
+    """Luật nới test. Đếm gộp mọi file test (đổi tên file test không bị tính là bớt assert), nhưng chỉ ghi tên file
+    có assert bị bớt hay bị nới. `vanished`: assert đã qua chốt việc rồi biến mất khỏi dòng thêm vào (fresh_changes)."""
+    totals = [0, 0, 0, 0]  # thêm, thêm chặt, bớt, bớt chặt
+    loosened, fewer, skipped = [], [], []
+    for c in changes:
+        if change_kind(c) != "test":
+            continue
+        added = assert_lines(c.get("text") or "")
+        gone = [strict for _, strict in assert_lines(c.get("removed") or "")] + list(c.get("vanished") or [])
+        counts = (len(added), sum(s for _, s in added), len(gone), sum(1 for s in gone if s))
+        totals = [a + b for a, b in zip(totals, counts)]
+        if counts[3] > counts[1]:
+            loosened.append(c["path"])
+        elif counts[2] > counts[0]:
+            fewer.append(c["path"])
+        if has_skip(c.get("text") or ""):
+            skipped.append(c["path"])
+    add, add_strict, rem, rem_strict = totals
+    if rem_strict > add_strict and add >= rem:
+        hit(2, "nới assert (assert chặt như so bằng đổi thành dạng lỏng hơn)", loosened)
+    elif rem > add:
+        hit(1, f"bớt assert (+{add}/−{rem} dòng assert)", loosened + fewer)
+    if skipped:
+        hit(2, "thêm skip hay xfail trong test", skipped)
 
 
 def review_hint(level: str) -> str:
@@ -227,16 +303,32 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, errors="replace")
 
 
-def added_text(patch: str) -> dict:
-    """Gom các dòng thêm vào theo file từ một patch -U0."""
-    texts, current = {}, None
+def diff_lines(patch: str):
+    """(dòng thêm vào, dòng bị xóa) theo file từ một patch -U0. Tiêu đề `--- a/…`, `+++ b/…` chỉ được hiểu là tiêu đề
+    khi chưa vào hunk, để dòng nội dung bắt đầu bằng "--" hay "++" không bị nhầm. File bị xóa ghi theo đường dẫn cũ."""
+    added, removed = {}, {}
+    old = current = None
+    in_hunk = False
     for line in patch.splitlines():
-        if line.startswith("+++ "):
-            target = line[4:].strip()
-            current = None if target == "/dev/null" else (target[2:] if target.startswith("b/") else target)
-        elif line.startswith("+") and current is not None:
-            texts.setdefault(current, []).append(line[1:])
-    return {k: "\n".join(v)[:MAX_TEXT] for k, v in texts.items()}
+        if line.startswith("diff --git "):
+            in_hunk, old, current = False, None, None
+        elif not in_hunk and line.startswith("--- "):
+            old = patch_path(line[4:])
+        elif not in_hunk and line.startswith("+++ "):
+            current = patch_path(line[4:]) or old
+        elif line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and current is not None and line[:1] in ("+", "-"):
+            (added if line[0] == "+" else removed).setdefault(current, []).append(line[1:])
+    return ({k: "\n".join(v)[:MAX_TEXT] for k, v in added.items()},
+            {k: "\n".join(v)[:MAX_TEXT] for k, v in removed.items()})
+
+
+def patch_path(value: str):
+    value = value.strip()
+    if value == "/dev/null":
+        return None
+    return value[2:] if value[:2] in ("a/", "b/") else value
 
 
 def checked(root: Path, *args: str) -> str:
@@ -263,8 +355,9 @@ def collect(root, base: str = None) -> list:
     # --no-ext-diff, --no-textconv: không chạy lệnh diff ngoài hay textconv do config đặt (repo lạ có thể đặt lệnh
     # bất kỳ; diff.external toàn cục như difftastic còn làm mất các dòng thêm vào cần chấm).
     numstat = checked(root, "diff", ref, "--numstat", "--no-renames", "--no-ext-diff", "--no-textconv", "-z")
-    texts = added_text(checked(root, "diff", ref, "-U0", "--no-color", "--no-renames", "--no-ext-diff",
-                               "--no-textconv"))
+    # Tiền tố a/, b/ đặt rõ: config diff.noprefix hay diff.mnemonicPrefix của người dùng làm sai đường dẫn.
+    texts, removed = diff_lines(checked(root, "diff", ref, "-U0", "--no-color", "--no-renames", "--no-ext-diff",
+                                        "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/"))
     # --full-name: đường dẫn tính từ gốc repo như của git diff, để dấu đã chấm khớp dù chạy từ thư mục con.
     top = Path(checked(root, "rev-parse", "--show-toplevel").strip())
     changes = []
@@ -274,7 +367,8 @@ def collect(root, base: str = None) -> list:
             continue
         a, d, path = parts
         changes.append({"path": path, "added": None if a == "-" else int(a), "deleted": 0 if d == "-" else int(d),
-                         "text": texts.get(path, ""), "page": reader_page(top / path)})
+                         "text": texts.get(path, ""), "removed": removed.get(path, ""),
+                         "page": reader_page(top / path), "content": test_content(top / path)})
     for path in git(root, "ls-files", "--others", "--exclude-standard", "--full-name", "-z").stdout.split("\0"):
         if not path:
             continue
@@ -289,8 +383,22 @@ def collect(root, base: str = None) -> list:
         text = data.decode("utf-8", errors="replace")
         # dấu trang tính trên cả file: fresh_changes cắt text còn dòng mới, dấu ở dòng cũ sẽ mất
         changes.append({"path": path, "added": len(text.splitlines()), "deleted": 0, "text": text[:MAX_TEXT],
-                        "page": Path(path).suffix.lower() in PAGE_EXT and bool(READER_PAGE_RE.search(text))})
+                        "page": Path(path).suffix.lower() in PAGE_EXT and bool(READER_PAGE_RE.search(text)),
+                        "content": text if kind(path) == "test" else None})
     return sorted(changes, key=lambda c: c["path"])
+
+
+def test_content(path: Path):
+    """Nội dung hiện tại của file test (để biết assert đã qua chốt việc còn trong file không, kể cả sau commit, khi nó
+    không còn là dòng thêm vào); None với file khác, file quá lớn hay đã bị xóa."""
+    if kind(path.as_posix()) != "test":
+        return None
+    try:
+        if path.stat().st_size > MAX_UNTRACKED_BYTES:
+            return None
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "" if not path.exists() else None
 
 
 def reader_page(path: Path) -> bool:
@@ -331,30 +439,50 @@ def render(r: dict, base: str = "HEAD") -> str:
     return "\n".join(lines)
 
 
-def fresh_changes(changes, seen: dict):
+def fresh_changes(changes, seen: dict, removed_seen: dict = None, asserts_seen: dict = None):
     """Bỏ các dòng đã qua lần chấm trước (dấu băm trong `seen`, theo file). File đã có dấu chỉ giữ dòng mới và
-    nằm trong tập trả về thứ hai, để `assess` không tính lại luật theo đường dẫn; file chưa có dấu giữ nguyên."""
+    nằm trong tập trả về thứ hai, để `assess` không tính lại luật theo đường dẫn; file chưa có dấu giữ nguyên.
+    `removed_seen`: dấu dòng bị xóa lúc chấm trước; dấu cũ không có mục này thì coi mọi dòng bị xóa là đã chấm.
+    `asserts_seen`: assert của file test lúc chấm trước; assert không còn trong file (`content`, thiếu thì dòng thêm
+    vào) và không nằm trong dòng bị xóa (đã đếm ở đó) thì vào `vanished` (có chặt không), để `assess` thấy assert đã
+    qua chốt việc bị sửa lỏng hay bị xóa."""
     picked, reviewed = [], set()
     for c in changes:
         known = seen.get(c["path"])
         if isinstance(known, list):
             known = set(known)
-            fresh = [line for line in (c.get("text") or "").splitlines()
-                     if line.strip() and line_hashes(line)[0] not in known]
-            if not fresh:
+            text = c.get("text") or ""
+            fresh = [line for line in text.splitlines() if line.strip() and line_hashes(line)[0] not in known]
+            removed = []
+            if isinstance(removed_seen, dict):
+                gone = set(removed_seen.get(c["path"]) or [])
+                removed = [line for line in (c.get("removed") or "").splitlines()
+                           if line.strip() and line_hashes(line)[0] not in gone]
+            # So với cả file khi có (dòng đã commit không còn là dòng thêm vào); file quá lớn thì không xét.
+            content = c.get("content", text)
+            now = set(line_hashes(content)) | set(line_hashes("\n".join(removed))) if content is not None else None
+            vanished = [] if now is None else [bool(p[1]) for p in (asserts_seen or {}).get(c["path"]) or []
+                                               if isinstance(p, list) and len(p) == 2 and p[0] not in now]
+            if not fresh and not removed and not vanished:
                 continue
-            c = dict(c, text="\n".join(fresh), added=len(fresh), deleted=0)
+            c = dict(c, text="\n".join(fresh), added=len(fresh), deleted=len(removed), removed="\n".join(removed),
+                     vanished=vanished)
             reviewed.add(c["path"])
         picked.append(c)
     return picked, frozenset(reviewed)
 
 
-def previous_marks(root) -> dict:
-    """Dấu băm theo file của lần chạy trước; thiếu thư viện agent-stack hay chưa chạy lần nào thì rỗng."""
+def fresh_since_mark(changes, mark: dict):
+    """fresh_changes theo dấu của lần chốt việc trước (dict của agentstack.done_gate_mark)."""
+    return fresh_changes(changes, mark.get("files") or {}, mark.get("removed"), mark.get("asserts"))
+
+
+def previous_mark(root) -> dict:
+    """Dấu của lần chạy trước; thiếu thư viện agent-stack hay chưa chạy lần nào thì rỗng."""
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
         import agentstack
-        return agentstack.done_gate_mark(agentstack.project_root(Path(root).resolve())).get("files") or {}
+        return agentstack.done_gate_mark(agentstack.project_root(Path(root).resolve()))
     except Exception:  # noqa: BLE001
         return {}
 
@@ -369,7 +497,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     try:
         changes = collect(args.root, args.base)
-        result = assess(*fresh_changes(changes, previous_marks(args.root))) if args.new else assess(changes)
+        result = assess(*fresh_since_mark(changes, previous_mark(args.root))) if args.new else assess(changes)
     except NotARepo:
         print(f"Không phải git repo: {args.root}. Script cần git để đọc thay đổi.")
         return 2
@@ -378,7 +506,7 @@ def main(argv=None) -> int:
         return 2
     # Diff rỗng (thường do quên --base sau khi commit) thì không ghi dấu: dấu rỗng sẽ làm hook Stop tưởng đã chốt việc.
     if changes:
-        mark_ran(args.root, changes)
+        mark_ran(args.root, changes, result["level"])
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=1))
     else:
@@ -393,13 +521,22 @@ def line_hashes(text: str) -> list:
                    for line in text.splitlines() if line.strip()})
 
 
-def mark_ran(root, changes=()) -> None:
-    """Ghi dấu "đã chốt việc" cho project, kèm dấu băm các dòng thêm vào lúc đó theo từng file, để hook Stop chỉ
-    chấm phần mới ở lượt sau. Thiếu thư viện agent-stack thì bỏ qua."""
+def mark_ran(root, changes=(), level=None) -> None:
+    """Ghi dấu "đã chốt việc" cho project, kèm mức vừa chấm và dấu băm các dòng thêm vào, dòng bị xóa và assert của
+    file test lúc đó theo từng file, để hook Stop chỉ chấm phần mới ở lượt sau và biết lượt cần bằng chứng tới đâu.
+    Thiếu thư viện agent-stack thì bỏ qua."""
+    asserts = {}
+    for c in changes:
+        if change_kind(c) == "test":
+            pairs = [[line_hashes(line)[0], strict] for line, strict in assert_lines(c.get("text") or "")]
+            if pairs:
+                asserts[c["path"]] = pairs
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
         import agentstack
-        agentstack.mark_done_gate(Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes})
+        agentstack.mark_done_gate(
+            Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes}, level=level,
+            removed={c["path"]: line_hashes(c["removed"]) for c in changes if c.get("removed")}, asserts=asserts)
     except Exception:  # noqa: BLE001
         pass
 

@@ -48,13 +48,14 @@ def summary_line(output: str) -> str:
 
 
 def record(root: Path, label: str, cmd: list, code: int, output: str, seconds: float,
-           before, after) -> dict:
+           before, after, code_fingerprint=None) -> dict:
     path = A.receipt_path(root)
     data = A.read_json(path, {}) or {}
     checks = data.get("checks") or {}
     rec = {"cmd": cmd, "ok": code == 0, "exit": code, "summary": summary_line(output),
            "tail": output[-TAIL_CHARS:], "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
-           "seconds": round(seconds, 1), "fingerprint": after, "fingerprint_before": before,
+           "seconds": round(seconds, 1), "fingerprint": after, "code_fingerprint": code_fingerprint,
+           "fingerprint_before": before,
            "changed_tree": before is not None and after is not None and before != after}
     checks[label] = rec
     if len(checks) > MAX_CHECKS:  # giữ các lần kiểm tra mới nhất
@@ -67,6 +68,17 @@ def record(root: Path, label: str, cmd: list, code: int, output: str, seconds: f
         rec["saved"] = False
         rec["save_error"] = str(exc)
     return rec
+
+
+def doc_filter(root: Path):
+    """Bộ chọn file tài liệu của done-gate (risk.doc_filter), cho dấu vân tay phần code: hook Stop dùng nó để biết sửa
+    tài liệu sau bước kiểm (cập nhật §0, README) không làm cũ biên nhận. Không nạp được thì None."""
+    try:
+        sys.path.insert(0, str(HERE.parents[2] / "done-gate" / "scripts"))
+        import risk
+        return risk.doc_filter(root)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def cmd_run(root: Path, label: str, cmd: list, timeout: float) -> int:
@@ -82,7 +94,10 @@ def cmd_run(root: Path, label: str, cmd: list, timeout: float) -> int:
     except OSError as exc:
         code, output = 127, f"[receipt] không chạy được lệnh: {exc}"
     seconds = time.time() - start
-    rec = record(root, label, cmd, code, output, seconds, before, A.tree_fingerprint(root))
+    blobs, docs = A.tree_blobs(root), doc_filter(root)
+    after = None if blobs is None else A.blobs_digest(blobs)
+    code_fp = None if blobs is None or docs is None else A.blobs_digest(blobs, docs)
+    rec = record(root, label, cmd, code, output, seconds, before, after, code_fp)
     sys.stdout.write(output if output.endswith("\n") or not output else output + "\n")
     mark = "✓ đạt" if rec["ok"] else f"✗ trượt (mã {code})"
     note = " · lệnh đã làm thay đổi file trong project" if rec["changed_tree"] else ""

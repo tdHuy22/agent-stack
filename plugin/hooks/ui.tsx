@@ -149,6 +149,7 @@ function stopToast(reason: string): string | null {
   if (!reason.includes('agent-stack (hook Stop)')) return null
   // Neo vào cụm cố định của stop.py, không vào tên file trong lý do (tên file có thể chứa "done-gate").
   if (reason.includes('mà chưa chạy done-gate')) return 'agent-stack: chạy chốt việc trước khi báo xong'
+  if (reason.includes('nhưng còn thiếu bằng chứng')) return 'agent-stack: chốt việc còn thiếu bằng chứng (test, review)'
   if (reason.includes('chưa đổi. Cập nhật §0')) return 'agent-stack: cập nhật §0 của file kế hoạch'
   if (reason.includes('mà người dùng chưa thấy cây kế hoạch')) return 'agent-stack: hiện cây kế hoạch cho bạn chọn việc'
   return 'agent-stack: hook Stop nhắc thêm một bước trước khi xong'

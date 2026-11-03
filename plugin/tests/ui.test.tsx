@@ -405,6 +405,7 @@ test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, k
   const reasons = [
     'agent-stack (hook Stop): lượt này đã đổi 2 file (plugin/skills/done-gate/SKILL.md, a.py) nhưng mục §0 của `PLAN.md` chưa đổi. Cập nhật §0 cho khớp',
     'agent-stack (hook Stop): lượt này đổi code có mức rủi ro vừa (hook) mà chưa chạy done-gate. Chạy skill',
+    'agent-stack (hook Stop): lượt này đã chạy done-gate (mức rủi ro vừa) nhưng còn thiếu bằng chứng: (1) chưa giao',
     'agent-stack (hook Stop): lượt này vừa xong việc mà người dùng chưa thấy cây kế hoạch (chạy plan_tree.py',
     'hook khác chặn: không phải của agent-stack',
   ]
@@ -417,6 +418,7 @@ test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, k
   expect(toasts).toEqual([
     'agent-stack: cập nhật §0 của file kế hoạch',
     'agent-stack: chạy chốt việc trước khi báo xong',
+    'agent-stack: chốt việc còn thiếu bằng chứng (test, review)',
     'agent-stack: hiện cây kế hoạch cho bạn chọn việc',
   ])
 })

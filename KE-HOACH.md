@@ -593,6 +593,17 @@ pi (công cụ lập trình bằng AI khác, project `~/Documents/Claude/pi-agen
 
 ---
 
+### 6.23 Cổng chốt việc đòi bằng chứng; soi nới test (03/11/2026)
+
+Nguồn: trang đánh giá pipeline "người đặt khung, agent làm, công cụ kiểm" (`.agent/trang/danh-gia-pipeline-2026-11-03.html`, https://claude.ai/artifact/NFyu868tmQuG6D8ytU2QXH). Bạn chọn hướng B (cổng bằng công cụ, không siết chữ) và làm cải tiến 1, 2 trước.
+
+- **Cải tiến 1, hook Stop đòi bằng chứng.** Trước đó hook coi "đã chốt việc" ngay khi `risk.py` chạy, nên agent chấm rủi ro rồi bỏ test và review vẫn qua. Nay khi lượt đã chạy done-gate và mức cao nhất trong lượt từ vừa trở lên (lịch sử mức trong dấu chốt việc, và mức hook đã chặn trong lượt), hook đòi: một biên nhận đạt còn đúng cho code hiện tại (dấu vân tay khớp, hay sau đó chỉ tài liệu đổi), không biên nhận nào chạy trong lượt mà trượt trên code hiện tại, và một lần giao reviewer (hook SubagentStart ghi dấu theo phiên; bỏ kiểm ở pi). Chặn một lần mỗi lượt, xét cả ở lần dừng thứ hai. Threat model TM-53 đến TM-55.
+- **Cải tiến 2, trần vòng sửa và soi nới test.** done-gate dừng sau 3 vòng sửa rồi review lại. `risk.py` đọc cả dòng bị xóa, báo "nới assert", "bớt assert", "thêm skip"; dấu chốt việc lưu dòng bị xóa và assert của file test để bắt assert đã qua chốt việc rồi bị sửa lỏng.
+- **Lệch so với trang:** trang ghi "có biên nhận đạt" mà không giới hạn mức; khi làm, chỉ đòi từ mức vừa (mức thấp không bị cổng done-gate ép, đòi bằng chứng ở đó thì phạt việc tự chạy done-gate).
+- **Giới hạn:** hook là lớp nhắc (cùng lớp TM-6): biên nhận cho lệnh `true` vẫn qua. Mẫu assert là regex cho Python, JS, Rust; ngôn ngữ khác không được soi.
+- **Review** (3 vòng, 03–04/11/2026): opus·high 1 cao (biên nhận bị coi là cũ khi chỉ sửa PLAN.md hay commit sau test, vì dò theo thời điểm sửa file), 1 vừa (assert đã commit bị tính biến mất), 2 thấp; sonnet 3 thấp (mất lịch sử mức khi chạy từ thư mục con, đòi điều không làm được khi không tính được dấu vân tay, bộ chọn tài liệu quá rộng). Sửa: so nội dung bằng `code_fingerprint` thay cho thời điểm sửa file; so assert với nội dung file; dấu subagent mỗi loại một file. Hook mới chặn nhầm một lần ngay trong phiên làm (`HUONG-DAN.html` bị tính là code), đã sửa bằng dấu trang của reader-page.
+- Cải tiến 3 đến 6 trên trang chưa làm; reviewer khác model chờ số liệu.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

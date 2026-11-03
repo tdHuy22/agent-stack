@@ -4,6 +4,9 @@
 để phiên mới làm tiếp được. Ghi trước các bước chậm. Chặn một lần để Claude làm nốt trước khi xong:
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của done-gate) mà chưa chạy done-gate: chạy done-gate (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
+- lượt đã chạy done-gate ở mức vừa trở lên mà thiếu bằng chứng: không có biên nhận đạt nào còn đúng cho code hiện
+  tại, có lệnh kiểm tra trượt trên code hiện tại, hay chưa giao reviewer. Xét cả ở lần Stop thứ hai (đường thường
+  gặp: hook chặn, Claude chạy done-gate rồi dừng lại), nhưng chỉ nhắc một lần mỗi lượt;
 - còn lại, lượt có đổi file mà §0 chưa đổi: cập nhật §0;
 - §0 vừa được cập nhật trong lượt mà dài quá ngưỡng, và `state.py trim` rút được nó: chạy trim (chạy xong thì §0 gọn
   nên lần sau không nhắc lại);
@@ -12,11 +15,13 @@
   hay cây chữ trong câu trả lời cuối khi phiên không có công cụ widget.
 
 Lúc bắt đầu lượt và dấu §0 lúc đó do hook UserPromptSubmit ghi (state/turns/). Lần Stop thứ hai của cùng lượt
-(stop_hook_active) không chặn nữa, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập nhật §0".
+(stop_hook_active) chỉ còn xét bằng chứng của done-gate, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập
+nhật §0".
 """
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parents[1]
@@ -136,9 +141,65 @@ def done_gate_gate(root: Path, turn: dict, changed: list):
     # commit thì không bị ép chốt lại toàn bộ diff cũ.
     top = (A.git_out(root, "rev-parse", "--show-prefix") or "").strip()
     mine = set(changed) | {top + c for c in changed}
-    seen = (A.done_gate_mark(root).get("files") or {})
-    result = risk.assess(*risk.fresh_changes([c for c in changes if c["path"] in mine], seen))
+    result = risk.assess(*risk.fresh_since_mark([c for c in changes if c["path"] in mine], A.done_gate_mark(root)))
     return None if result["empty"] or result["level"] == "thap" else result
+
+
+def receipt_epoch(rec: dict):
+    try:
+        return datetime.fromisoformat(rec["ts"]).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def receipt_current(rec: dict, since: float) -> bool:
+    """Biên nhận còn đúng cho code hiện tại: dấu vân tay phần không phải tài liệu khớp, nên cập nhật §0, threat model,
+    README hay commit sau bước kiểm chứng không làm cũ nó (so nội dung, không so thời điểm sửa file). Biên nhận cũ
+    chưa có dấu đó thì xét cả cây. Không tính được dấu vân tay (repo git lồng chưa ignore làm hash-object lỗi) thì
+    tính biên nhận chạy trong lượt (từ `since`), để không đòi một điều không làm được."""
+    if rec.get("code_fresh") is not None:
+        return rec["code_fresh"]
+    if rec.get("fresh") is not None:
+        return rec["fresh"]
+    return (receipt_epoch(rec) or 0) >= since
+
+
+def evidence_gaps(root: Path, turn: dict, sid: str):
+    """(mức, [bằng chứng còn thiếu]) khi lượt đã chạy done-gate và mức cao nhất trong lượt từ vừa trở lên. None khi
+    đủ bằng chứng hay không xét: chưa chạy done-gate (cổng ở trên lo), mức thấp, đã nhắc trong lượt, hay repo có
+    clean filter riêng (tính dấu vân tay sẽ chạy lệnh của repo lạ, TM-53)."""
+    if turn.get("evidence_asked") or not A.done_gate_ran_since(root, turn["ts"]):
+        return None
+    levels = set(A.done_gate_levels_since(root, turn["ts"])) | {turn.get("gate_level")}
+    level = "cao" if "cao" in levels else "vua" if "vua" in levels else None
+    if level is None or foreign_filters(root):
+        return None
+    sys.path.insert(0, str(PLUGIN / "skills" / "done-gate" / "scripts"))
+    import risk  # noqa: E402
+    checks = A.receipt_status(root, exclude=risk.doc_filter(root))
+    gaps = []
+    failing = [label for label, rec in checks.items()
+               if not rec.get("ok") and (receipt_epoch(rec) or 0) >= turn["ts"] and receipt_current(rec, turn["ts"])]
+    if failing:
+        gaps.append(("test trượt", "lệnh kiểm tra trượt trên code hiện tại: "
+                     + ", ".join(f"`{label}` (mã {checks[label].get('exit')})" for label in failing[:3])))
+    if not any(rec.get("ok") and receipt_current(rec, turn["ts"]) for rec in checks.values()):
+        gaps.append(("chưa có biên nhận đạt", "không có biên nhận đạt nào còn đúng cho code hiện tại: chạy mốc kiểm "
+                     "tra của project qua `receipt.py run -- <lệnh>`"))
+    # pi không có SubagentStart nên không có dấu reviewer để kiểm (plugin/hosts/pi.json)
+    if A.host() != "pi" and not A.subagent_started_since(sid, "reviewer", turn["ts"]):
+        gaps.append(("chưa review", "chưa giao `agent-stack:reviewer` (bước 5 của done-gate, bắt buộc từ mức vừa)"))
+    return (level, gaps) if gaps else None
+
+
+def evidence_reason(level: str, gaps: list, plan_rel: str, plan_block: bool) -> str:
+    items = "; ".join(f"({i}) {detail}" for i, (_, detail) in enumerate(gaps, 1))
+    plan = f" Rồi cập nhật §0 của `{plan_rel}`." if plan_block else ""
+    return (f"agent-stack (hook Stop): lượt này đã chạy done-gate (mức rủi ro {'cao' if level == 'cao' else 'vừa'}) "
+            f"nhưng còn thiếu bằng chứng: {items}. Làm nốt đúng các bước đó của done-gate (bước 4: mốc kiểm tra qua "
+            "receipt.py; bước 5: reviewer), sửa nếu trượt, rồi kết thúc lượt bằng báo cáo ngắn của done-gate." + plan
+            + " Bước nào không làm được (thiếu môi trường, project không có test) thì ghi rõ trong báo cáo bước đó "
+            "chưa kiểm và vì sao, không báo xong. Hook chỉ nhắc điều này một lần mỗi lượt.")
 
 
 def foreign_filters(root: Path) -> bool:
@@ -235,28 +296,45 @@ def main():
             gate = done_gate_gate(root, turn, changed)
         except Exception as exc:  # noqa: BLE001 (chấm rủi ro lỗi thì không chặn, chỉ ghi log)
             A.log_event("hook-error", {"hook": "done_gate_gate", "error": repr(exc)[:300]})
+    # Cả ở lần Stop thứ hai: đường thường gặp là hook chặn ở trên, Claude chạy done-gate rồi dừng lại. Không cần
+    # `changed`: lượt chỉ xóa file thì danh sách đó rỗng (changed_since bỏ file đã xóa), mà done-gate vẫn đã chạy.
+    evidence = None
+    if gate is None and turn is not None and A.is_project(root):
+        try:
+            evidence = evidence_gaps(root, turn, sid)
+        except Exception as exc:  # noqa: BLE001 (lỗi thì không chặn, chỉ ghi log)
+            A.log_event("hook-error", {"hook": "evidence_gaps", "error": repr(exc)[:300]})
     tree_block = []
     if not active and turn is not None:
         try:
             tree_block = tree_due(root, turn, data)
         except Exception as exc:  # noqa: BLE001
             A.log_event("hook-error", {"hook": "tree_due", "error": repr(exc)[:300]})
-    should_block = plan_block or gate is not None
+    should_block = plan_block or gate is not None or evidence is not None
     final = plan_state(digest_now, plan_updated, should_block, gate, changed)
     if final != status:
         write(final)
     A.log_event("stop", {"session": sid, "cwd": str(root), "changed": len(changed), "plan_updated": plan_updated,
                          "blocked": should_block or bool(tree_block), "done_gate": gate["level"] if gate else None,
+                         "evidence": [short for short, _ in evidence[1]] if evidence else None,
                          "tree": tree_block or False})
 
     tree_extra = tree_after(tree_block) if tree_block else ""
 
     if gate is not None:
+        turn["gate_level"] = gate["level"]  # để lần Stop sau biết lượt cần bằng chứng tới đâu
+        A.save_turn(sid, turn)
         head_now = (A.git_out(root, "rev-parse", "--verify", "-q", "HEAD") or "").strip()
         base = turn.get("head") if turn.get("head") and turn.get("head") != head_now else None
         A.emit_block(gate_reason(gate, plan_rel, base) + tree_extra,
                      f"🔒 Lượt này đổi code mức rủi ro {'cao' if gate['level'] == 'cao' else 'vừa'} mà chưa chốt việc: "
                      "Claude chạy done-gate trước khi xong.")
+    elif evidence is not None:
+        turn["evidence_asked"] = True
+        A.save_turn(sid, turn)
+        A.emit_block(evidence_reason(evidence[0], evidence[1], plan_rel, plan_block) + tree_extra,
+                     "🧾 Chốt việc còn thiếu bằng chứng (" + ", ".join(short for short, _ in evidence[1])
+                     + "): nhờ Claude làm nốt trước khi xong.")
     elif should_block:
         advice = current_trim_advice(root)
         A.emit_block(block_reason(changed, plan_rel, advice) + tree_extra,

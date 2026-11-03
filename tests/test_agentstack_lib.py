@@ -453,6 +453,62 @@ class LastTurn(TempDirTestCase):
         self.assertTrue(A.done_gate_ran_since(self.root, record["ts"]))
         self.assertFalse(A.done_gate_ran_since(other, record["ts"]), "dấu theo từng project")
 
+    def test_done_gate_marker_keeps_the_levels_of_recent_runs(self):
+        start = time.time()
+        A.mark_done_gate(self.root, {"a.py": ["h1"]}, level="cao", removed={"a.py": ["h2"]},
+                         asserts={"tests/test_a.py": [["h3", True]]})
+        A.mark_done_gate(self.root, {"a.py": ["h1", "h4"]}, level="thap")  # risk.py --new chấm phần sửa
+        self.assertEqual(A.done_gate_levels_since(self.root, start), ["cao", "thap"])
+        self.assertEqual(A.done_gate_levels_since(self.root, time.time() + 1), [])
+        mark = A.done_gate_mark(self.root)
+        self.assertEqual((mark["files"], mark["removed"], mark["asserts"]), ({"a.py": ["h1", "h4"]}, {}, {}),
+                         "dấu dòng là của lần chấm cuối, chỉ lịch sử mức được giữ")
+        for _ in range(A.DONE_GATE_RUNS + 5):
+            A.mark_done_gate(self.root, level="vua")
+        self.assertEqual(len(A.done_gate_mark(self.root)["runs"]), A.DONE_GATE_RUNS)
+
+    def test_done_gate_levels_survive_runs_from_a_subdirectory(self):
+        # Reviewer 03/11/2026: đọc dấu ở thư mục con, ghi ở gốc project, nên mất mức "cao" của lần chạy trước.
+        from tests._util import git
+        git(self.root, "init", "-q")
+        sub = self.root / "app"
+        sub.mkdir()
+        start = time.time()
+        A.mark_done_gate(sub, level="cao")
+        A.mark_done_gate(sub, level="thap")
+        self.assertEqual(A.done_gate_levels_since(self.root, start), ["cao", "thap"])
+
+    def test_subagent_marker_is_per_session_and_by_short_name(self):
+        start = time.time()
+        self.assertFalse(A.subagent_started_since("s1", "reviewer", start))
+        A.mark_subagent("s1", "agent-stack:reviewer")
+        self.assertTrue(A.subagent_started_since("s1", "reviewer", start))
+        self.assertTrue(A.subagent_started_since("s1", "agent-stack:reviewer", start))
+        self.assertFalse(A.subagent_started_since("s1", "reviewer", time.time() + 1), "dấu cũ hơn lượt")
+        self.assertFalse(A.subagent_started_since("s2", "reviewer", start), "dấu theo từng phiên")
+        for bad in (None, "", 3, ["x"]):
+            A.mark_subagent("s3", bad)
+            self.assertFalse(A.subagent_started_since("s3", bad, start))
+        self.assertEqual(list((A.state_dir() / "subagents").glob(A.subagent_mark_path("s3", "x").name[:16] + "-*")),
+                         [])
+        self.assertNotIn("/", A.subagent_mark_path("s4", "../../x").name, "tên file là mã băm")
+        for i in range(A.SUBAGENT_KEYS + 10):
+            A.mark_subagent("s5", f"loai-{i}")
+        mine = list((A.state_dir() / "subagents").glob(A.subagent_mark_path("s5", "x").name[:16] + "-*"))
+        self.assertEqual(len(mine), A.SUBAGENT_KEYS)
+
+    def test_subagents_started_together_keep_both_markers(self):
+        # Reviewer tái hiện 03/11/2026: hai hook SubagentStart chạy song song, bản đọc-sửa-ghi mất một dấu.
+        import threading
+        start = time.time()
+        names = [f"agent-stack:loai-{i}" for i in range(8)] + ["agent-stack:reviewer"]
+        threads = [threading.Thread(target=A.mark_subagent, args=("song-song", n)) for n in names]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertTrue(all(A.subagent_started_since("song-song", n, start) for n in names))
+
     def test_next_step_is_taken_from_the_arrow_line(self):
         msg = "Xong.\n\n➡️ Tiếp: chạy test tích hợp · Model: sonnet · Effort: low · Subagent: không · Skill: không"
         self.assertEqual(A.extract_next(msg), "chạy test tích hợp")

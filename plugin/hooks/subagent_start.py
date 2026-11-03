@@ -7,6 +7,7 @@ Subagent và skill chạy `context: fork` có context riêng, không thấy hộ
   theo cwd vì có thể có phiên khác chạy cùng thư mục), trình bày như dữ liệu bối cảnh, không phải chỉ dẫn mới;
 - 1 đến 2 việc đầu trong danh sách "việc tiếp theo" ở mục §0 của PLAN.md hoặc .agent/PLAN.md.
 Trừ subagent trong NO_CONTEXT_AGENTS (người đọc lạ của skill reader-page): không thêm gì.
+Mọi subagent đều được ghi dấu theo phiên (A.mark_subagent), để hook Stop biết lượt đã giao reviewer chưa.
 
 SubagentStart không chặn được việc tạo subagent và bỏ qua systemMessage, nên hook chỉ trả additionalContext.
 Hook phải nhanh, im lặng (không in gì ra stderr) và luôn thoát 0.
@@ -117,6 +118,10 @@ def build_context(request, items, now=None) -> str:
 def main():
     data = A.read_hook_input()
     sid = data.get("session_id")
+    try:  # hook Stop đọc dấu này để biết lượt đã giao reviewer chưa
+        A.mark_subagent(sid, data.get("agent_type"))
+    except Exception:  # noqa: BLE001
+        pass
     if str(data.get("agent_type") or "").split(":")[-1] in NO_CONTEXT_AGENTS:
         try:
             A.log_event("subagent-start", {"session": sid, "agent_type": data.get("agent_type"), "skipped": True})

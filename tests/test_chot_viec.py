@@ -12,8 +12,8 @@ sys.path.insert(0, str(SCRIPTS))
 import risk  # noqa: E402
 
 
-def change(path, added=1, deleted=0, text=""):
-    return {"path": path, "added": added, "deleted": deleted, "text": text}
+def change(path, added=1, deleted=0, text="", removed=""):
+    return {"path": path, "added": added, "deleted": deleted, "text": text, "removed": removed}
 
 
 class FreshChanges(unittest.TestCase):
@@ -29,6 +29,40 @@ class FreshChanges(unittest.TestCase):
     def test_file_with_no_new_lines_is_dropped(self):
         seen = {"app.py": risk.line_hashes("a = 1\n")}
         self.assertEqual(risk.fresh_changes([change("app.py", 1, 0, "a = 1\n")], seen), ([], frozenset()))
+
+    def test_removed_lines_count_only_when_new_since_the_mark(self):
+        removed = "    self.assertEqual(a, 1)\n    self.assertEqual(b, 2)"
+        seen, gone = {"tests/test_a.py": []}, {"tests/test_a.py": risk.line_hashes("    self.assertEqual(a, 1)")}
+        picked, _ = risk.fresh_changes([change("tests/test_a.py", 0, 2, "", removed)], seen, gone)
+        self.assertEqual((picked[0]["removed"], picked[0]["deleted"]), ("    self.assertEqual(b, 2)", 1))
+        # Dấu cũ (trước khi lưu dòng bị xóa): coi mọi dòng bị xóa là đã chấm, không chặn lại việc cũ.
+        self.assertEqual(risk.fresh_changes([change("tests/test_a.py", 0, 2, "", removed)], seen), ([], frozenset()))
+
+    def test_reviewed_assert_that_vanished_is_kept_with_its_strictness(self):
+        before = "    self.assertEqual(r['level'], 'cao')"
+        after = "    self.assertIn(r['level'], ('vua', 'cao'))"
+        h = risk.line_hashes(before)[0]
+        picked, reviewed = risk.fresh_since_mark([change("tests/test_a.py", 1, 0, after)],
+                                                 {"files": {"tests/test_a.py": [h]}, "removed": {},
+                                                  "asserts": {"tests/test_a.py": [[h, True], "hỏng"]}})
+        self.assertEqual(picked[0]["vanished"], [True])
+        r = risk.assess(picked, reviewed)
+        self.assertTrue(any("nới assert" in x for x in r["reasons"]), r["reasons"])
+
+    def test_reviewed_assert_still_in_the_file_is_not_vanished(self):
+        kept = "    self.assertEqual(f(1), 1)"
+        h = risk.line_hashes(kept)[0]
+        mark = {"files": {"tests/test_x.py": [h]}, "removed": {}, "asserts": {"tests/test_x.py": [[h, True]]}}
+        c = dict(change("tests/test_x.py", 1, 0, "    self.assertTrue(g())"),
+                 content=kept + "\n    self.assertTrue(g())")
+        picked, _ = risk.fresh_since_mark([c], mark)
+        self.assertEqual(picked[0]["vanished"], [], "assert đã commit vẫn nằm trong file")
+        gone = dict(change("tests/test_x.py", 1, 1, "    self.assertTrue(f(1))", kept),
+                    content="    self.assertTrue(f(1))")
+        picked, reviewed = risk.fresh_since_mark([gone], mark)
+        self.assertEqual(picked[0]["vanished"], [], "đã đếm ở dòng bị xóa, không đếm hai lần")
+        r = risk.assess(picked, reviewed)
+        self.assertTrue(any("nới assert" in x for x in r["reasons"]), r["reasons"])
 
 
 class Assess(unittest.TestCase):
@@ -145,6 +179,78 @@ class Assess(unittest.TestCase):
         self.assertIn("Không có thay đổi", risk.render(risk.assess([])))
 
 
+class Weakening(unittest.TestCase):
+    """Nới test để cho đạt: assert chặt đổi sang dạng lỏng, bớt assert, thêm skip (ví dụ 3 của trang đánh giá)."""
+
+    def reasons(self, *changes):
+        return risk.assess([change("src/a.py", 2), *changes])
+
+    def test_loosened_assert_with_same_line_count_is_flagged(self):
+        r = self.reasons(change("tests/test_a.py", 1, 1, '        self.assertIn(r["level"], ("vừa", "cao"))',
+                                '        self.assertEqual(r["level"], "cao")'))
+        self.assertTrue(any("nới assert" in x for x in r["reasons"]), r["reasons"])
+        self.assertIn("tests/test_a.py", dict(r["hotspots"]))
+        self.assertEqual(r["level"], "vua")
+
+    def test_pytest_equality_to_not_none_is_loosening(self):
+        r = self.reasons(change("tests/test_b.py", 1, 1, "    assert x is not None", "    assert x == 3"))
+        self.assertTrue(any("nới assert" in x for x in r["reasons"]), r["reasons"])
+
+    def test_removed_and_commented_out_asserts_are_fewer_asserts(self):
+        for added in ("", "    # self.assertEqual(a, 1)"):
+            with self.subTest(added=added):
+                r = self.reasons(change("tests/test_a.py", 1, 1, added, "    self.assertEqual(a, 1)"))
+                self.assertTrue(any("bớt assert (+0/−1" in x for x in r["reasons"]), r["reasons"])
+
+    def test_added_skip_is_flagged(self):
+        for line in ("    @unittest.skip('tạm')", "@pytest.mark.xfail", "  it.skip('đăng nhập', () => {",
+                     "        self.skipTest('chưa sửa')"):
+            with self.subTest(line=line):
+                r = self.reasons(change("tests/test_a.py", 1, 0, line))
+                self.assertTrue(any("thêm skip" in x for x in r["reasons"]), r["reasons"])
+
+    def test_legit_changes_are_not_flagged(self):
+        cases = {
+            "đổi giá trị mong đợi": [change("tests/test_a.py", 1, 1, "    self.assertEqual(x, 2)",
+                                            "    self.assertEqual(x, 1)")],
+            "đổi tên file test": [change("tests/test_old.py", 0, 2, "", "    assert a == 1\n    assert b == 2"),
+                                  change("tests/test_new.py", 2, 0, "    assert a == 1\n    assert b == 2")],
+            "thêm assert": [change("tests/test_a.py", 2, 0, "    self.assertTrue(ok)\n    assert y")],
+            "assert trong code không phải test": [change("src/b.py", 1, 1, "    assert x", "    assert x == 1")],
+            "skip trong chú thích": [change("tests/test_a.py", 1, 0, "    # @unittest.skip bỏ ngày 03/11")],
+            "skip trong dữ liệu của test": [change("tests/test_a.py", 1, 0,
+                                                   "        for line in (\"@unittest.skip('x')\", \"it.skip(\"):")],
+        }
+        for name, changes in cases.items():
+            with self.subTest(name):
+                r = self.reasons(*changes)
+                self.assertFalse(any("assert" in x or "skip" in x for x in r["reasons"]), r["reasons"])
+
+    def test_diff_lines_reads_removed_lines_and_content_that_looks_like_headers(self):
+        patch = ("diff --git a/t.sql b/t.sql\n--- a/t.sql\n+++ b/t.sql\n@@ -1,2 +1,2 @@\n"
+                 "--- ghi chú SQL bị xóa\n-select 1;\n+++ dòng thêm vào\n+select 2;\n"
+                 "diff --git a/gone.py b/gone.py\ndeleted file mode 100644\n--- a/gone.py\n+++ /dev/null\n"
+                 "@@ -1 +0,0 @@\n-x = 1\n")
+        added, removed = risk.diff_lines(patch)
+        self.assertEqual(added, {"t.sql": "++ dòng thêm vào\nselect 2;"})
+        self.assertEqual(removed, {"t.sql": "-- ghi chú SQL bị xóa\nselect 1;", "gone.py": "x = 1"})
+
+
+class DocOnly(TempDirTestCase):
+    def test_reader_page_outside_agent_dir_is_a_doc_only_when_marked(self):
+        (self.tmp / "HUONG-DAN.html").write_text('<main data-loai="giai-thich"></main>')
+        (self.tmp / "index.html").write_text("<div id=app></div>")
+        self.assertTrue(risk.doc_only("HUONG-DAN.html", self.tmp))
+        self.assertFalse(risk.doc_only("index.html", self.tmp), "trang của web app là code")
+        self.assertFalse(risk.doc_only("HUONG-DAN.html"), "không có gốc repo thì không đọc được dấu")
+        self.assertTrue(risk.doc_only("PLAN.md") and risk.doc_only(".agent/trang/a.html"))
+        self.assertFalse(risk.doc_only("plugin/skills/x/SKILL.md"), "chỉ dẫn cho agent không phải tài liệu")
+        # Reviewer 03/11/2026: file mà test hay build đọc không được coi là tài liệu.
+        for path in ("requirements.txt", "docs/conf.py", "docs/examples/a.py",
+                     "plugin/skills/writing-voice/samples/kinh-dien/vi/a.md", "tests/data/expected.md"):
+            self.assertFalse(risk.doc_only(path, self.tmp), path)
+
+
 class Collect(TempDirTestCase):
     def git(self, *args):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
@@ -162,6 +268,7 @@ class Collect(TempDirTestCase):
         self.assertEqual((changes["a.py"]["added"], changes["a.py"]["deleted"]), (2, 1))
         self.assertIn("shell=True", changes["a.py"]["text"])
         self.assertEqual(changes["new.md"]["added"], 2)
+        self.assertEqual(changes["a.py"]["removed"], "x = 1")
 
     def test_reader_mark_outside_the_diff_still_counts(self):
         # sửa giữa trang HUONG-DAN.html: diff không chứa <main data-loai>, collect phải đọc cả file
