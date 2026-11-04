@@ -150,6 +150,10 @@ class WriteGuard(GuardBase):
         self.assertEqual(self.bash("git tag v1.0", "rel")[0], "deny", "tin hệ thống không phải câu trả lời của người dùng")
         self.start("Đã audit rồi, tạo tag đi", "rel")
         self.assertIsNone(self.bash("git tag v1.0", "rel"))
+        self.assertIsNone(self.bash("git tag -f v1.0", "rel"))
+        # Đẩy tag lên là lệnh không đảo ngược: cần lời đồng ý riêng, sau lần chặn của chính nó.
+        self.assertEqual(self.bash("git tag -f v1.0 && git push origin v1.0", "rel")[0], "deny")
+        self.start("Đẩy luôn", "rel")
         self.assertIsNone(self.bash("git tag -f v1.0 && git push origin v1.0", "rel"))
         self.assertEqual(self.bash("git tag v2.0", "rel")[0], "deny", "tag khác phải được nhắc riêng")
         self.assertEqual(self.bash("git -C /khac tag v1.0", "rel")[0], "deny", "repo khác phải được nhắc riêng")
@@ -347,6 +351,161 @@ class WriteGuard(GuardBase):
                     json.dumps({"tool_name": "Write", "tool_input": {}})):
             with self.subTest(raw=raw[:20]):
                 self.assertIsNone(self.hook("pretool_guard.py", None, raw=raw))
+
+
+class IrreversibleGuard(GuardBase):
+    """Cải tiến 6: lệnh không đảo ngược bị chặn một lần để Claude hỏi người dùng; người dùng nhắn lại thì cho qua."""
+
+    def setUp(self):
+        super().setUp()
+        # Remote giả: một repo trần, đẩy commit init lên để có commit "đã đẩy".
+        self.remote = self.tmp / "remote.git"
+        git(self.tmp, "init", "-q", "--bare", str(self.remote))
+        git(self.project, "remote", "add", "origin", str(self.remote))
+        git(self.project, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.project, "fetch", "-q", "origin")
+        git(self.project, "branch", "-q", "--set-upstream-to=origin/main")
+        (self.project / ".gitignore").write_text(".tmp/\nbuild/\ndist/\nbackups/\nstate/\n")
+        (self.project / ".tmp" / "x").mkdir(parents=True)
+        (self.project / "build" / "out").mkdir(parents=True)
+        (self.project / "backups").mkdir()
+        (self.project / "state").mkdir()
+        (self.project / "src").mkdir()
+
+    def assert_gated(self, cmd, sid="ir", needle=None):
+        self.start("Làm tiếp việc của project", sid)
+        result = self.bash(cmd, sid)
+        # Project nằm trong thư mục tạm của hệ điều hành (như bản chép của `receipt.py fails-before`): ở đó mọi đích
+        # của rm là chỗ ghi tạm, nên ca rm không kiểm được.
+        in_os_temp = str(self.project.resolve()).startswith(("/tmp/", "/private/tmp/", "/private/var/folders/"))
+        self.assertIsNotNone(result, f"`{cmd}` không bị chặn" + (" (project nằm trong thư mục tạm của hệ điều hành)"
+                                                                 if in_os_temp else ""))
+        decision, reason = result
+        self.assertEqual(decision, "deny", cmd)
+        self.assertIn("không đảo ngược", reason)
+        self.assertIn("hỏi họ có muốn chạy đúng lệnh này", reason)
+        if needle:
+            self.assertIn(needle, reason)
+        return reason
+
+    def test_each_irreversible_command_is_stopped_once(self):
+        cases = ["git push", "git push origin main", "git push --force origin main", "git push -f",
+                 "git push origin +main", "git push --delete origin old", "git -C proj push", "sudo git push",
+                 'bash -c "git push origin main"', "cd app && git push", "git reset --hard",
+                 "git reset --hard HEAD~1", "git clean -fd", "git clean -xdf", "git clean --force",
+                 "rm -rf src", "rm -fr src", "rm -Rf src", "rm -r src", "rm --recursive --force src",
+                 "sudo rm -rf /", "rm -rf ~", "rm -rf .", "rm -rf *", "rm -rf .tmp/../src", "rm -rf $(pwd)",
+                 "rm -rf $KHONG_CO_BIEN/x", "env X=1 rm -rf src", "rm -rf src 2>/dev/null",
+                 # Từ khóa shell và lệnh bọc (review 04/11/2026: cả Opus và Sonnet thấy lọt).
+                 "if [ -d src ]; then rm -rf src; fi", "for d in src app; do rm -rf $d; done", "{ git push; }",
+                 "if git push; then echo ok; fi", "while true; do git push; break; done", "timeout 60 git push",
+                 "timeout -s KILL 30 git push", "for d in a b; do git -C $d push; done", "test -d x && { git push; }",
+                 "env -i git push", "sudo -u root rm -rf /x", "git --git-dir .git push", "time -p git push",
+                 # Chỉ thư mục tạm thật (bạn chọn 04/11/2026): thư mục git bỏ qua khác vẫn hỏi.
+                 "rm -rf backups", "rm -rf state", "rm -rf src/*", "rm -rf .tmp/$X",
+                 # Chính thư mục tạm của hệ điều hành và glob ngay dưới nó.
+                 "rm -rf $TMPDIR", 'rm -rf "$TMPDIR/"', "rm -rf $TMPDIR/*", "rm -rf /tmp/*", "rm -rf /tmp",
+                 "rm -rf /private/var/folders/zz",
+                 # Thoát ra ngoài sau glob, brace.
+                 "rm -rf .tmp/*/../..", "rm -rf .tmp/{x,../src}", "d=$(mktemp -d -p /x) && rm -rf \"$d\"",
+                 # Re-review 04/11/2026: nối dòng bằng `\`, `bash -lc`, `eval`, cờ dài của sudo, biến mktemp gán lại.
+                 "rm -rf \\\n  src", "git reset \\\n  --hard HEAD~1", "git \\\n push", "bash -lc 'git push'",
+                 "sh -ec 'rm -rf src'", "eval 'git push'", "sudo --user root rm -rf src",
+                 'd=$(mktemp -d); d=src; rm -rf "$d"', 'd=$(mktemp -d); rm -rf "$d"/*', 'd=$(mktemp -d); rm -rf "$d/.."',
+                 'd=$(mktemp -dp /x) && rm -rf "$d"',
+                 # Re-review vòng 2: hai dấu `\` là một dấu thật (không nối dòng); biến mktemp gán lại qua for, read;
+                 # template có đường dẫn.
+                 "echo C:\\\\\ngit push", 'd=$(mktemp -d); for d in src; do rm -rf "$d"; done',
+                 'd=$(mktemp -d); read d; rm -rf "$d"', 'd=$(mktemp -d /x/XXXX) && rm -rf "$d"']
+        for i, cmd in enumerate(cases):
+            with self.subTest(cmd=cmd):
+                self.assert_gated(cmd, f"ir{i}")
+
+    def test_force_push_says_it_rewrites_remote_history(self):
+        reason = self.assert_gated("git push --force origin main")
+        self.assertIn("ghi đè hay xóa lịch sử trên remote", reason)
+
+    def test_amend_and_rebase_only_when_commits_are_already_pushed(self):
+        self.assert_gated("git commit --amend --no-edit", "am1")  # HEAD đã đẩy
+        self.assert_gated("git rebase --root 2>/dev/null || true", "rb1")
+        (self.project / "app" / "views.py").write_text("x = 2\n")
+        git(self.project, "commit", "-qam", "chưa đẩy")
+        self.start("Sửa thông điệp commit", "am2")
+        self.assertIsNone(self.bash("git commit --amend -m 'sửa'", "am2"), "commit chưa đẩy: amend được")
+        self.assertIsNone(self.bash("git rebase origin/main", "am2"), "chỉ viết lại commit chưa đẩy")
+        self.assertIsNone(self.bash("git rebase", "am2"), "mặc định là @{upstream}")
+        self.assertIsNone(self.bash("git rebase --continue", "am2"))
+        self.assert_gated("git rebase --root", "rb2")  # gồm commit init đã đẩy
+        self.assert_gated("git rebase khong-co-ref", "rb3")  # git không trả lời được: hỏi cho chắc
+
+    def test_passes_only_after_the_user_replies(self):
+        self.start("Đẩy code lên đi", "pu")
+        self.assertEqual(self.bash("git push origin main", "pu")[0], "deny", "lời nhờ trước lần chặn chưa tính")
+        self.assertEqual(self.bash("git push origin main", "pu")[0], "deny", "chạy lại trong cùng lượt vẫn bị chặn")
+        self.start("<task-notification>agent nền xong</task-notification>", "pu")
+        self.assertEqual(self.bash("git push origin main", "pu")[0], "deny", "tin hệ thống không phải câu trả lời")
+        self.start("Ừ, push đi", "pu")
+        self.assertIsNone(self.bash("git push origin main", "pu"))
+        self.assertEqual(self.bash("git push --force origin main", "pu")[0], "deny", "lệnh khác phải hỏi riêng")
+        self.assertEqual(self.bash("git push origin main", "phien-khac")[0], "deny", "phiên khác không dùng chung")
+
+    def test_approval_is_used_once_and_only_in_the_next_turn(self):
+        self.start("Đẩy code lên đi", "one")
+        self.assertEqual(self.bash("git push origin main", "one")[0], "deny")
+        self.start("Ừ, push đi", "one")
+        self.assertIsNone(self.bash("git push origin main", "one"))
+        self.assertEqual(self.bash("git push origin main", "one")[0], "deny", "lần chạy thứ hai phải hỏi lại")
+        # Người dùng trả lời, rồi sang việc khác: lời đồng ý cũ không còn dùng được ở lượt sau.
+        self.start("Không, để mai", "one")
+        self.start("Làm việc khác: sửa README", "one")
+        self.assertEqual(self.bash("git push origin main", "one")[0], "deny", "chỉ lượt ngay sau lần chặn mới qua")
+
+    def test_same_rm_text_in_another_folder_is_a_new_question(self):
+        self.start("Dọn src", "sub")
+        self.assertEqual(self.bash("rm -rf src", "sub")[0], "deny")
+        self.start("Ừ xóa đi", "sub")
+        decision, reason = self.bash("cd app && rm -rf src", "sub")
+        self.assertEqual(decision, "deny", "đích tuyệt đối khác: phải hỏi riêng")
+        self.assertIn(str((self.project / "app" / "src").resolve()), reason)
+        self.assertIsNone(self.bash("rm -rf src", "sub"))
+
+    def test_scratch_cwd_itself_is_not_scratch(self):
+        self.assert_gated("cd .tmp/x && rm -rf .", "cw")
+
+    def test_tag_and_push_in_one_command_need_one_reply(self):
+        self.start("Gắn tag v1.0 rồi đẩy lên", "tp")
+        decision, reason = self.bash("git tag v1.0 && git push origin v1.0", "tp")
+        self.assertEqual(decision, "deny")
+        self.assertIn("hỏi họ đã audit", reason)
+        self.assertIn("`git push origin v1.0`", reason)
+        self.start("Đã audit, đẩy đi", "tp")
+        self.assertIsNone(self.bash("git tag v1.0 && git push origin v1.0", "tp"))
+
+    def test_untracked_session_falls_back_to_asking(self):
+        decision, reason = self.bash("git push", "")
+        self.assertEqual(decision, "ask")
+        self.assertIn("`git push`", reason)
+
+    def test_harmless_forms_pass_silently(self):
+        link = self.project / ".tmp" / "link"
+        link.symlink_to(self.project / "src")
+        for cmd in ('git commit -m "sửa lỗi git push và rm -rf"', 'echo "git push --force"',
+                    "git log --oneline | grep 'git push'", "git push --dry-run", "git push -n origin main",
+                    "git push --help", "git reset --soft HEAD~1", "git reset HEAD app/views.py", "git clean -n",
+                    "git clean -fdn", "git clean -fdX", "rm -rf .tmp/x", "rm -rf .tmp/*", "rm -rf build/out",
+                    "rm -rf /tmp/agent-test", 'rm -rf "$TMPDIR/agent-test"', "cd .tmp && rm -rf x",
+                    "rm -f app/views.py", "rm app/views.py", "rm -rf .tmp/link",
+                    "rm -rf .tmp/x 2>/dev/null || true", "git push --dry-run 2>&1", "rm -rf dist build",
+                    'd=$(mktemp -d) && echo hi > "$d/a" && rm -rf "$d"', "T=$(mktemp -d); rm -rf ${T}/sub",
+                    "git rebase --continue", "git rebase --abort",
+                    "cat <<'EOF' > .tmp/note.txt\ngit push --force\nrm -rf /\nEOF"):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(self.bash(cmd))
+
+    def test_symlink_in_scratch_pointing_out_is_not_scratch(self):
+        link = self.project / ".tmp" / "link"
+        link.symlink_to(self.project / "src")
+        self.assert_gated("rm -rf .tmp/link/", "sl")
 
 
 class StopBase(GuardBase):

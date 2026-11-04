@@ -910,7 +910,8 @@ def load_last_request(session_id):
 # hiện cho người dùng, và ở auto mode câu hỏi có thể được duyệt mà không ai đọc (kiểm 10/10/2026, Claude Code 2.1.295).
 # Lệnh chỉ qua khi người dùng đã nhắn sau lần chặn. Mốc chặn lưu ở state/audit-nudge/<session_id>.json: {khóa: ts};
 # lúc người dùng nhắn gần nhất ở state/user-msg/<session_id>.json: {ts}. Mốc này tính cả lệnh slash (`/claude-security`
-# là câu trả lời tự nhiên cho lời nhắc), khác state/last-request vốn bỏ lệnh. Khóa đã qua thì cả phiên không nhắc lại.
+# là câu trả lời tự nhiên cho lời nhắc), khác state/last-request vốn bỏ lệnh. Khóa nhắc audit đã qua thì cả phiên không
+# nhắc lại. Khóa dùng một lần (lệnh không đảo ngược, cải tiến 6) chỉ qua ở lượt ngay sau lần chặn, và bị xóa khi qua.
 AUDIT_NUDGE_DIR = "audit-nudge"
 USER_MSG_DIR = "user-msg"
 AUDIT_NUDGE_DAYS = 7
@@ -925,30 +926,49 @@ def mark_user_message(session_id, prompt) -> None:
             return
         directory = state_dir() / USER_MSG_DIR
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        write_json_atomic(directory / f"{key}.json", {"ts": time.time()})
+        old = read_json(directory / f"{key}.json", {}) or {}
+        prev = old.get("ts") if isinstance(old, dict) else None
+        record = {"ts": time.time()}
+        if isinstance(prev, (int, float)) and not isinstance(prev, bool):
+            record["prev"] = prev  # tin trước đó: khóa dùng một lần chỉ qua khi lần chặn nằm sau tin này
+        write_json_atomic(directory / f"{key}.json", record)
         prune(directory, AUDIT_NUDGE_DAYS)
     except Exception:  # noqa: BLE001
         pass
 
 
-def release_gate(session_id, keys: list):
+def release_gate(session_id, keys: list, once=()):
     """"pass" khi người dùng đã nhắn (tin thật, không phải tin hệ thống) sau lần chặn của mọi khóa; "nudge" khi phải chặn,
     sau khi ghi mốc chặn cho các khóa chưa qua; None khi không theo dõi được phiên (session_id lạ, không ghi được
-    state). Phiên chưa ghi tin nào của người dùng thì vẫn chặn. Không bao giờ văng lỗi."""
+    state). Phiên chưa ghi tin nào của người dùng thì vẫn chặn. Khóa trong `once` chỉ qua khi tin gần nhất là tin đầu
+    tiên sau lần chặn (lượt ngay sau đó), và bị xóa khi qua, nên lần chạy sau phải hỏi lại. Không bao giờ văng lỗi."""
     try:
         key = _session_key(session_id)
         if key is None:
             return None
-        spoke = (read_json(state_dir() / USER_MSG_DIR / f"{key}.json", {}) or {})
-        spoke = spoke.get("ts") if isinstance(spoke, dict) else None
-        spoke = spoke if isinstance(spoke, (int, float)) and not isinstance(spoke, bool) else None
+        msg = read_json(state_dir() / USER_MSG_DIR / f"{key}.json", {}) or {}
+        msg = msg if isinstance(msg, dict) else {}
+        spoke, prev = (v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+                       for v in (msg.get("ts"), msg.get("prev")))
         directory = state_dir() / AUDIT_NUDGE_DIR
         path = directory / f"{key}.json"
         nudges = read_json(path, {})
         nudges = nudges if isinstance(nudges, dict) else {}
-        pending = [k for k in keys
-                   if not (spoke is not None and isinstance(nudges.get(k), (int, float)) and nudges[k] < spoke)]
+        once = set(once)
+
+        def answered(k) -> bool:
+            at = nudges.get(k)
+            if spoke is None or not isinstance(at, (int, float)) or at >= spoke:
+                return False
+            return k not in once or prev is None or at > prev
+
+        pending = [k for k in keys if not answered(k)]
         if not pending:
+            used = [k for k in keys if k in once]
+            if used:
+                for k in used:
+                    nudges.pop(k, None)
+                write_json_atomic(path, nudges)
             return "pass"
         nudges.update({k: time.time() for k in pending})
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
