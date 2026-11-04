@@ -264,6 +264,56 @@ class WriteGuard(GuardBase):
         self.assertTrue(pretool_guard.markdown_required(claude_dir / "note.md", str(claude_dir), A))
         self.assertFalse(pretool_guard.markdown_required(self.tmp / "agents" / "p" / "a.md", str(self.tmp / "agents" / "p"), A))
 
+    def plan(self, criteria=""):
+        (self.project / "PLAN.md").write_text("# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Đang dở:** a\n"
+                                              + criteria, encoding="utf-8")
+
+    def test_criteria_nudge_once_before_first_source_edit(self):
+        self.plan()
+        self.start("thêm tính năng xuất CSV cho trang báo cáo", "c1")
+        target = {"file_path": str(self.project / "app" / "csv.py"), "content": "x"}
+        self.assertIsNone(self.guard("Write", {"file_path": str(self.project / "tests" / "test_csv.py")}, "c1"),
+                          "file test không bị nhắc")
+        decision, reason = self.guard("Write", target, "c1")
+        self.assertEqual(decision, "deny")
+        self.assertIn("chưa có tiêu chí xong", reason)
+        self.assertIn("`PLAN.md`", reason)
+        self.assertNotIn("threat model", reason)
+        self.assertIsNone(self.guard("Write", target, "c1"), "chỉ nhắc một lần mỗi lượt")
+
+    def test_no_criteria_nudge_when_written_without_plan_or_for_small_work(self):
+        self.plan("- **Tiêu chí xong** (xuất CSV, nguồn: lời bạn): 1) `python3 -m app.csv` ra file CSV\n")
+        self.start("thêm tính năng xuất CSV cho trang báo cáo", "c2")
+        self.assertIsNone(self.guard("Write", {"file_path": str(self.project / "app" / "csv.py")}, "c2"))
+        self.plan()
+        self.start("sửa typo trong README", "c3")
+        self.assertIsNone(self.guard("Edit", {"file_path": str(self.project / "app" / "views.py")}, "c3"))
+        (self.project / "PLAN.md").unlink()
+        self.start("thêm tính năng xuất CSV cho trang báo cáo", "c4")
+        self.assertIsNone(self.guard("Write", {"file_path": str(self.project / "app" / "csv.py")}, "c4"),
+                          "không có file kế hoạch: chốt việc tự viết tiêu chí và báo là viết ở cuối việc")
+
+    def test_subagent_in_a_worktree_inside_the_project_is_not_nudged(self):
+        self.plan()
+        worktree = self.project / ".claude" / "worktrees" / "w1"
+        (worktree / "app").mkdir(parents=True)
+        (worktree / ".git").write_text("gitdir: ../../../.git/worktrees/w1\n")
+        self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "c6")
+        self.assertIsNone(self.guard("Write", {"file_path": str(worktree / "app" / "upload.py")}, "c6"),
+                          "phiên chính lo threat model và §0; subagent không được sửa file kế hoạch")
+        self.assertEqual(self.guard("Write", {"file_path": str(self.project / "app" / "upload.py")}, "c6")[0],
+                         "deny", "file của chính project vẫn bị nhắc")
+
+    def test_threat_model_and_criteria_nudges_come_together(self):
+        self.plan()
+        self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "c5")
+        target = {"file_path": str(self.project / "app" / "upload.py"), "content": "x"}
+        decision, reason = self.guard("Write", target, "c5")
+        self.assertEqual(decision, "deny")
+        self.assertIn("threat-model", reason)
+        self.assertIn("chưa có tiêu chí xong", reason)
+        self.assertIsNone(self.guard("Write", target, "c5"), "một lần từ chối cho cả hai")
+
     def test_threat_model_nudge_once_before_first_source_edit(self):
         self.start("Thêm tính năng upload ảnh đại diện cho người dùng", "tm1")
         target = {"file_path": str(self.project / "app" / "upload.py"), "content": "x"}

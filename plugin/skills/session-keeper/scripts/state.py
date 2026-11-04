@@ -93,6 +93,8 @@ def cmd_handoff(root: Path) -> int:
     body = (template.replace("{project}", root.name).replace("{date}", today())
             .replace("{done}", f.get("done") or "(chưa ghi)")
             .replace("{in_progress}", f.get("in_progress") or "(chưa ghi)")
+            # "chưa có" là giá trị rỗng với has_value: hook PreToolUse vẫn nhắc ghi tiêu chí khi chưa có
+            .replace("{criteria}", f.get("criteria") or "chưa có")
             .replace("{next}", bullet_list(A.next_open(sec)))
             .replace("{decisions}", f.get("decisions") or "không có")
             .replace("{checks}", f.get("checks") or A.baseline_anywhere(text) or "(chưa ghi)")

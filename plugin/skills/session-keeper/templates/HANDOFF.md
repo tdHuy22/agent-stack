@@ -7,6 +7,7 @@
 - **Mục tiêu:** <!-- điền: việc này nhằm đạt điều gì -->
 - **Xong:** {done}
 - **Đang dở:** {in_progress}
+- **Tiêu chí xong:** {criteria}
 - **Việc tiếp theo, theo thứ tự:**
 {next}
 - **Quyết định còn treo:** {decisions}

@@ -251,6 +251,9 @@ def find_plans(root: Path) -> list:
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 SECTION0_RE = re.compile(r"^0\s*[.):]?\s|dang o dau|viec tiep theo|where (we are|things stand)|next steps?", re.I)
+# Tiêu chí xong chỉ nhận khi nhãn mở đầu bằng cụm này: "Đang dở: …, tiêu chí xong ghi từ đầu việc" vẫn là Đang dở,
+# và "Tiêu chí xong" có chữ "xong" nên phải xét trước nhãn Xong.
+CRITERIA_LABELS = ("tieu chi xong", "tieu chi nghiem thu", "acceptance criteria", "definition of done")
 LABELS = (
     ("in_progress", ("dang do", "dang lam", "in progress", "wip", "unfinished")),
     ("done", ("xong", "da xong", "hoan thanh", "done")),
@@ -267,6 +270,8 @@ def classify_label(label: str):
     """Loại nhãn của §0 theo từ khóa; bỏ phần trong ngoặc, để "Việc của user (không chặn việc tiếp theo)" hay
     "Ghi nhớ (đã xong, …)" không bị nhận là "Việc tiếp theo", "Xong"."""
     f = fold(re.sub(r"\([^)]*\)", " ", label))
+    if f.strip().startswith(CRITERIA_LABELS):
+        return "criteria"
     for key, needles in LABELS:
         if any(n in f for n in needles):
             return key
@@ -291,8 +296,8 @@ def section0(text: str):
 
 
 def parse_section0(text: str) -> dict:
-    """Đọc mục §0 thành các trường: done, in_progress, next (danh sách phẳng mọi cấp), next_open (bước chưa xong,
-    bỏ cả mục con của bước đã xong), decisions, checks, after_interrupt."""
+    """Đọc mục §0 thành các trường: done, in_progress, criteria (tiêu chí xong của việc đang làm), next (danh sách
+    phẳng mọi cấp), next_open (bước chưa xong, bỏ cả mục con của bước đã xong), decisions, checks, after_interrupt."""
     found = section0(text)
     result = {"heading": None, "updated": None, "fields": {}, "next": [], "next_open": [], "after_interrupt": [],
               "notes": []}
@@ -694,6 +699,8 @@ def brief(root: Path, max_next: int = 3) -> dict:
              + (f" (cập nhật {sec['updated']})" if sec["updated"] else "") + ":"]
     if has_value(f.get("in_progress")):
         lines.append(f"- Đang dở: {clip(f['in_progress'], 220)}")
+    if has_value(f.get("criteria")):
+        lines.append(f"- Tiêu chí xong của việc đang làm: {clip(f['criteria'], 220)}")
     steps = next_open(sec)
     if steps:
         lines.append("- Việc tiếp theo: " + " | ".join(f"{i}) {clip(x, 160)}" for i, x in enumerate(steps[:max_next], 1)))

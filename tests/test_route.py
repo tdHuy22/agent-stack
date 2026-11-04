@@ -31,6 +31,7 @@ class RouterRules(TempDirTestCase):
         self.assertEqual(route.turn_flags("tiến độ tới đâu rồi?", str(self.tmp)), {"progress": True})
         self.assertEqual(route.turn_flags("làm tiếp đi", str(self.tmp)), {})  # chấm theo §0, không phải câu hỏi
         self.assertEqual(route.turn_flags("sửa lỗi parser đọc sai ngày", str(self.tmp)), {})
+
         for prompt in ("lỗi đang do hàm parse gây ra, sửa giúp tôi", "giải thích đoạn code này đang do ai gọi",
                        "refactor module thanh toán, việc tiếp theo là viết test", "sửa màu status bar",
                        "có vẻ như nhiều lúc claude vẫn quên vẽ tree graph cho tiến độ, như các phiên khác đang làm",
@@ -41,6 +42,14 @@ class RouterRules(TempDirTestCase):
         for prompt in ("còn việc gì đang dở", "what's next?", "status", "đang ở đâu rồi",
                        "đã lưu tiến độ chưa, làm gì tiếp?", "tiến độ đã lưu tới đâu rồi"):
             self.assertTrue(route.is_progress_question(prompt), prompt)
+
+    def test_turn_flags_ask_for_criteria_on_features_and_refactors(self):
+        self.assertEqual(route.turn_flags("thêm tính năng xuất CSV cho trang báo cáo", str(self.tmp)),
+                         {"criteria": True})
+        self.assertEqual(route.turn_flags("Thêm tính năng upload ảnh đại diện cho người dùng", str(self.tmp)),
+                         {"threat_model": True, "criteria": True})
+        self.assertEqual(route.turn_flags("refactor module thanh toán", str(self.tmp)), {"criteria": True})
+        self.assertEqual(route.turn_flags("sửa typo trong README", str(self.tmp)), {}, "việc nhỏ không cần")
 
     def test_word_boundaries(self):
         # "secretary" không được khớp "secret"

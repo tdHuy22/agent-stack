@@ -13,13 +13,13 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
 
 ## Các bước
 
-1. **Ý định.** Viết 2–4 dòng: người dùng muốn gì (dựa trên lời của họ trong hội thoại), thay đổi này làm gì, và tiêu chí xong. Hội thoại không đủ rõ để viết thì hỏi người dùng, đừng đoán.
+1. **Ý định và tiêu chí xong.** Project có file kế hoạch thì đọc dòng **Tiêu chí xong** trong §0: tiêu chí ghi từ đầu việc là chuẩn để so, không viết lại. Viết 2–4 dòng: người dùng muốn gì (dựa trên lời của họ trong hội thoại), thay đổi này làm gì. Không có tiêu chí cho việc này (§0 không có, hay tiêu chí đó của việc khác) thì viết tiêu chí từ lời người dùng và ghi "viết ở cuối việc" trong báo cáo, để người dùng biết chuẩn không được đặt trước. Kết quả lệch tiêu chí (làm thêm, làm bớt, đổi hành vi): không sửa tiêu chí cho khớp cái đã làm; đưa vào "cần bạn quyết". Hội thoại không đủ rõ để viết thì hỏi người dùng, đừng đoán.
 2. **Phạm vi.** Chạy `git status --short`. Tách file thuộc việc này khỏi file đã đổi từ trước hoặc do người khác đổi. Không sửa, không commit file không thuộc việc này; nêu chúng trong báo cáo.
 3. **Mức rủi ro.** Chạy `python3 <risk.py>` (thêm `--base <ref>` nếu `$ARGUMENTS` có). Việc đã commit một phần hay toàn bộ thì thêm `--base <commit ngay trước việc>`: không có nó thì diff so với HEAD thiếu phần đã commit, hay rỗng. Hook Stop in sẵn lệnh có `--base` khi lượt đã commit. Mức thấp, vừa hay cao quyết độ sâu ở bước 5. Lý do của script chỉ là gợi ý thô: nếu nó báo nhầm (ví dụ secret giả trong test), ghi một dòng vì sao bỏ qua.
    - Script báo **ranh giới tin cậy bị đụng** (input từ ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh): tìm mục của việc này trong `.agent/threat-model.md` bằng `grep -n '^## ' .agent/threat-model.md` rồi chỉ đọc mục đó (file gom mọi chức năng cũ, đọc cả file tốn token). Chưa có mục cho việc này thì chạy skill `threat-model` ngay (muộn còn hơn không), rồi làm các chốt chặn còn `cần làm` trước khi đi tiếp. Báo nhầm (ví dụ `subprocess` chạy lệnh cố định, không có input từ ngoài) thì ghi một dòng lý do và bỏ qua.
 4. **Kiểm chứng có biên nhận.** Chạy qua `python3 <receipt.py> run -- <lệnh>`:
    - mốc kiểm tra của project, lấy từ `CLAUDE.md`, `AGENTS.md` hoặc mục "Mốc kiểm tra" trong §0 của `PLAN.md`;
-   - **tái hiện như người dùng sẽ dùng**: chạy đúng lệnh, script hay hook mà người dùng sẽ chạy, với đầu vào thật, rồi xem kết quả có khớp tiêu chí xong không. Với bản sửa lỗi, chạy lại đúng bước đã tái hiện lỗi. Test đơn vị không thay được bước này.
+   - **tái hiện như người dùng sẽ dùng**: chạy đúng lệnh, script hay hook mà người dùng sẽ chạy, với đầu vào thật, rồi xem kết quả có khớp từng tiêu chí xong không (tiêu chí là lệnh thì chạy qua `receipt.py`). Với bản sửa lỗi, chạy lại đúng bước đã tái hiện lỗi. Test đơn vị không thay được bước này.
    - Còn đỏ thì sửa rồi chạy lại. Không đi tiếp khi còn lệnh thoát mã khác 0.
    - Sửa code để test đạt, không sửa test cho đạt: không nới assert (`assertEqual` thành `assertIn`, `assertTrue`), không xóa assert, không thêm skip hay xfail. `risk.py` báo "nới assert", "bớt assert", "thêm skip". Test phải đổi vì hành vi đổi có chủ ý thì ghi lý do trong báo cáo; hành vi người dùng thấy đổi thì đưa vào "cần bạn quyết".
    - Từ mức vừa, hook Stop kiểm bằng chứng: phải có ít nhất một biên nhận đạt còn đúng cho code hiện tại (sửa tài liệu sau đó không làm cũ), không lệnh nào vừa trượt trên code hiện tại, và đã giao reviewer trong lượt. Thiếu thì hook chặn một lần.
@@ -34,11 +34,12 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
      - lỗi máy móc, sửa đúng một cách rõ ràng và không đổi hành vi người dùng thấy: tự sửa rồi quay lại bước 4. Sau đó chấm riêng phần vừa sửa bằng `python3 <risk.py> --new` (chỉ dòng thêm sau lần chấm trước; lệnh này cũng ghi dấu cho phần sửa). Mức vừa trở lên thì giao reviewer xem lại đúng phần sửa (nêu lỗi cũ, cách đã sửa, hàm hay dòng đã đổi), lặp tới khi phần sửa ở mức thấp hay reviewer không còn lỗi, **tối đa 3 vòng sửa rồi review lại**. Hết 3 vòng mà reviewer vẫn báo lỗi thì dừng sửa: đưa các lỗi còn lại vào "cần bạn quyết", kèm lỗi nào đã sửa ở từng vòng, vì vòng lặp không hội tụ thường là dấu hiệu hiểu sai ý định hay thiết kế. Không chấm lại thì hook Stop nhắc mãi, và phần sửa lọt qua review;
      - lỗi đụng tới ý định, phạm vi hay một đánh đổi: không tự quyết; đưa vào mục "cần bạn quyết" của báo cáo, kèm các lựa chọn;
      - phát hiện bác bỏ được: ghi một dòng lý do.
-6. **Tài liệu.** Tìm bằng `grep` những chỗ nhắc tới thứ vừa đổi (tên lệnh, cờ, hàm, đường dẫn) trong README, tài liệu hướng dẫn, help và ví dụ, rồi sửa cho khớp. Project có `PLAN.md` thì cập nhật §0: đã xong gì, kèm bằng chứng.
+6. **Tài liệu.** Tìm bằng `grep` những chỗ nhắc tới thứ vừa đổi (tên lệnh, cờ, hàm, đường dẫn) trong README, tài liệu hướng dẫn, help và ví dụ, rồi sửa cho khớp. Project có `PLAN.md` thì cập nhật §0: đã xong gì, kèm bằng chứng; chuyển tiêu chí xong của việc này vào mục Xong (đạt n/n) rồi xóa dòng **Tiêu chí xong**, để việc sau không mượn nhầm.
 7. **Báo cáo.** Ngắn, theo mẫu:
 
    ```
    Ý định: …
+   Tiêu chí xong: đạt n/n; ghi từ đầu việc (ngày, nguồn: lời bạn | bạn xác nhận | agent tự ghi) hoặc "viết ở cuối việc"
    Đã đổi: n file (liệt kê ngắn); không đụng: …
    Kiểm chứng: <lệnh> → <kết quả> (có biên nhận); tái hiện: <lệnh> → <thấy gì>
    Threat model: n mối đe dọa, n chốt chặn đã có, n còn thiếu (hoặc "không đụng ranh giới tin cậy")

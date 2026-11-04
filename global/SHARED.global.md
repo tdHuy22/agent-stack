@@ -12,6 +12,7 @@
 
 ## Chất lượng trước chi phí
 
+- Trước khi code tính năng, sửa lỗi hay refactor ở project có §0: ghi 2–4 tiêu chí xong vào §0 (`**Tiêu chí xong**`), mỗi tiêu chí là một lệnh phải đạt hay một cặp đầu vào và đầu ra, lấy nguyên lời người dùng khi có. Việc từ mức vừa mà tiêu chí do agent tự suy thì hỏi người dùng xác nhận rồi mới code. Đổi tiêu chí giữa chừng thì hỏi; không sửa tiêu chí cho khớp cái đã làm.
 - Chưa chạy kiểm chứng (test, lint, build) và đưa kết quả thì không nói "xong". Mã thoát khác 0 không bao giờ là thành công; kết quả đạt cũ không chứng minh cho code sửa sau đó.
 - Kiểm chứng qua `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận gắn với nội dung code lúc chạy.
 - Trước khi code chức năng đụng ranh giới tin cậy (input từ bên ngoài, xác thực hay phân quyền, gọi dịch vụ ngoài, dữ liệu nhạy cảm, dependency mới, chạy lệnh), chạy skill `threat-model`: threat model ngắn, ghi chốt chặn phải có vào `.agent/threat-model.md`. Chức năng không đụng ranh giới thì bỏ qua. Hook PreToolUse của agent-stack nhắc một lần nếu quên.

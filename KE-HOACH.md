@@ -604,6 +604,15 @@ Nguồn: trang đánh giá pipeline "người đặt khung, agent làm, công c�
 - **Review** (3 vòng, 03–04/11/2026): opus·high 1 cao (biên nhận bị coi là cũ khi chỉ sửa PLAN.md hay commit sau test, vì dò theo thời điểm sửa file), 1 vừa (assert đã commit bị tính biến mất), 2 thấp; sonnet 3 thấp (mất lịch sử mức khi chạy từ thư mục con, đòi điều không làm được khi không tính được dấu vân tay, bộ chọn tài liệu quá rộng). Sửa: so nội dung bằng `code_fingerprint` thay cho thời điểm sửa file; so assert với nội dung file; dấu subagent mỗi loại một file. Hook mới chặn nhầm một lần ngay trong phiên làm (`HUONG-DAN.html` bị tính là code), đã sửa bằng dấu trang của reader-page.
 - Cải tiến 3 đến 6 trên trang chưa làm; reviewer khác model chờ số liệu.
 
+### 6.24 Tiêu chí xong ghi từ đầu việc (cải tiến 3, 04/11/2026)
+
+Bạn bảo "Làm cải tiến 3" mà chưa trả lời câu 3 trên trang đánh giá, nên làm theo khuyến nghị: tiêu chí ghi trong §0 (dòng **Tiêu chí xong**, không thêm file), hỏi bạn xác nhận chỉ khi việc từ mức vừa mà tiêu chí do agent tự suy.
+
+- **Chặn trước khi code, không ở cuối lượt.** Trang ghi "hook cuối lượt nhắc"; khi làm, chuyển sang hook PreToolUse như nhắc threat model, vì nhắc ở cuối lượt thì tiêu chí lại được viết sau khi code, đúng điều cần tránh. Router gắn cờ `criteria` cho tính năng, refactor, kiến trúc, sửa lỗi (`CRITERIA_RULES` trong `route.py`); §0 chưa có tiêu chí thì chặn lần sửa mã nguồn đầu tiên, một lần mỗi lượt, gộp với nhắc threat model khi cả hai đến hạn.
+- **§0:** nhãn chỉ nhận là tiêu chí khi mở đầu bằng "Tiêu chí xong" (hay "Tiêu chí nghiệm thu", "Definition of done"); thử trên `PLAN.md` của repo thấy nhãn Đang dở có cụm "tiêu chí xong" bị đọc nhầm, đã sửa kèm test. Hook SessionStart in tiêu chí của việc đang làm.
+- **done-gate:** bước 1 đọc tiêu chí từ §0 làm chuẩn, không viết lại; không có thì ghi "viết ở cuối việc" trong báo cáo; kết quả lệch tiêu chí thì vào "cần bạn quyết"; bước 6 chuyển tiêu chí vào mục Xong (đạt n/n) rồi xóa dòng đó.
+- **Giới hạn:** router chỉ nhận ra một phần việc (câu "sửa lỗi parser đọc sai ngày", "Làm cải tiến 3" chưa khớp luật nào), nên nhắc không phủ hết; phần còn lại dựa vào luật chung và báo cáo của done-gate. Không kiểm được tiêu chí cũ của việc trước còn sót trong §0; done-gate xóa dòng khi xong việc để giảm chuyện đó.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

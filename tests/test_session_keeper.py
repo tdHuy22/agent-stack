@@ -50,6 +50,20 @@ class StateCli(TempDirTestCase):
         run_script(STATE, "handoff", "--project", str(self.tmp))
         self.assertTrue((self.tmp / ".agent" / "HANDOFF.prev.md").exists())
 
+    def test_handoff_keeps_the_criteria_of_the_work_in_progress(self):
+        # Reviewer 04/11/2026: HANDOFF mới hơn PLAN nên hook đọc nó thay PLAN; thiếu dòng tiêu chí thì phiên sau bị
+        # nhắc viết lại tiêu chí giữa việc.
+        self.write("PLAN.md", "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Đang dở:** xuất CSV\n"
+                              "- **Tiêu chí xong** (xuất CSV, 04/11, nguồn: lời bạn): 1) lệnh A đạt\n")
+        self.assertEqual(run_script(STATE, "handoff", "--project", str(self.tmp)).returncode, 0)
+        path, _, sec = A.read_plan(self.tmp)
+        self.assertEqual(path.name, "HANDOFF.md")
+        self.assertIn("lệnh A đạt", sec["fields"]["criteria"])
+        self.write("PLAN.md", "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Đang dở:** xuất CSV\n")
+        self.assertEqual(run_script(STATE, "handoff", "--project", str(self.tmp)).returncode, 0)
+        self.assertFalse(A.has_value(A.read_plan(self.tmp)[2]["fields"].get("criteria")),
+                         "chưa có tiêu chí thì bản bàn giao ghi giá trị rỗng, hook vẫn nhắc")
+
     def test_handoff_keeps_only_open_steps(self):
         # Bước ✅ và mục con của nó không sang HANDOFF: HANDOFF mới hơn PLAN nên hook đọc nó thay PLAN.
         self.write("PLAN.md", "# PLAN\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Việc tiếp theo:**\n"

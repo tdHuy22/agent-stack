@@ -79,6 +79,28 @@ class Section0(unittest.TestCase):
     def test_fold(self):
         self.assertEqual(A.fold("Đang dở, Việc tiếp theo"), "dang do, viec tiep theo")
 
+    def test_criteria_label_only_when_the_label_starts_with_it(self):
+        # Tái hiện 04/11/2026 trên PLAN.md của repo: nhãn Đang dở có cụm "tiêu chí xong" bị đọc thành tiêu chí,
+        # mất luôn mục Đang dở.
+        text = ("## 0. Đang ở đâu\n"
+                "- **Đang dở (04/11/2026): cải tiến 3, tiêu chí xong ghi từ đầu việc** hook nhắc\n"
+                "- **Tiêu chí xong** (cải tiến 3, nguồn: lời bạn): 1) lệnh A đạt 2) B ra C\n"
+                "- **Xong (03/11/2026): tiêu chí xong của việc cũ, đạt 2/2** commit abc\n")
+        f = A.parse_section0(text)["fields"]
+        self.assertIn("hook nhắc", f["in_progress"])
+        self.assertIn("lệnh A đạt", f["criteria"])
+        self.assertIn("commit abc", f["done"])
+        for label, key in (("Tiêu chí xong", "criteria"), ("Tiêu chí nghiệm thu (việc X)", "criteria"),
+                           ("Definition of done", "criteria"), ("Xong", "done"), ("Xong: tiêu chí xong", "done")):
+            self.assertEqual(A.classify_label(label), key, label)
+
+    def test_brief_shows_the_criteria_of_the_work_in_progress(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "PLAN.md").write_text("# P\n## 0. Đang ở đâu\n- **Tiêu chí xong** (việc X): 1) lệnh A đạt\n",
+                                            encoding="utf-8")
+            self.assertIn("Tiêu chí xong của việc đang làm: (việc X): 1) lệnh A đạt", A.brief(Path(tmp))["context"])
+
 
 class PlanFilesAndGit(TempDirTestCase):
     def test_no_plan_means_empty_brief(self):

@@ -409,11 +409,17 @@ def usd(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
 
 
+# Việc đủ lớn để ghi tiêu chí xong vào §0 trước khi code (cải tiến 3 của trang đánh giá pipeline, 04/11/2026).
+CRITERIA_RULES = {"feature", "feature-boundary", "refactor", "architecture", "architecture-critical", "debug-simple",
+                  "debug-hard", "debug-production", "debug-stuck", "long-agent"}
+
+
 def turn_flags(prompt: str, cwd) -> dict:
     """Cờ của lượt cho các hook khác: threat_model khi việc là chức năng đụng ranh giới tin cậy (luật
-    feature-boundary), để hook PreToolUse nhắc chạy threat-model trước khi code; progress khi người dùng hỏi tiến
-    độ hay việc tiếp theo (is_progress_question), để hook Stop nhắc hiện cây kế hoạch. Không phụ thuộc việc gợi ý có bị ẩn
-    vì đã nhắc trong giờ qua hay không."""
+    feature-boundary), để hook PreToolUse nhắc chạy threat-model trước khi code; criteria khi việc là tính năng, sửa
+    lỗi, refactor hay kiến trúc (CRITERIA_RULES), để hook PreToolUse nhắc ghi tiêu chí xong vào §0 trước khi code;
+    progress khi người dùng hỏi tiến độ hay việc tiếp theo (is_progress_question), để hook Stop nhắc hiện cây kế hoạch.
+    Không phụ thuộc việc gợi ý có bị ẩn vì đã nhắc trong giờ qua hay không."""
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
         return {}
@@ -422,9 +428,12 @@ def turn_flags(prompt: str, cwd) -> dict:
         return {"progress": True}
     continuing = bool(root and CONTINUE_RE.match(A.fold(prompt)))
     hit = suggest((next_task(root) or prompt) if continuing else prompt)
+    flags = {}
     if hit and hit["rule"] == "feature-boundary":
-        return {"threat_model": True}
-    return {}
+        flags["threat_model"] = True
+    if hit and hit["rule"] in CRITERIA_RULES:
+        flags["criteria"] = True
+    return flags
 
 
 def is_progress_question(prompt: str) -> bool:

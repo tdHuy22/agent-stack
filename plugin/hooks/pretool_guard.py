@@ -9,6 +9,9 @@
   vá bị commit lẫn).
 - Sửa file mã nguồn khi router thấy lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model: từ chối
   một lần, nhắc chạy threat-model trước khi code.
+- Sửa file mã nguồn khi router thấy lượt này làm tính năng, sửa lỗi, refactor hay kiến trúc mà §0 của file kế hoạch
+  chưa có tiêu chí xong: từ chối một lần, nhắc ghi tiêu chí (việc từ mức vừa mà tiêu chí do agent suy thì hỏi người
+  dùng xác nhận). Hai nhắc cùng đến hạn thì gộp vào một lần từ chối.
 - Tạo file `.md` mới không thuộc loại bắt buộc Markdown: từ chối một lần cho mỗi file trong lượt, nhắc viết HTML
   theo skill reader-page (luật chung "File cho người đọc viết bằng HTML"); ghi lại thì cho qua.
 - Tạo tag git hay `gh release create` (sắp phát hành): nhắc bước 3 của quy trình bảo mật là audit cả repo (Semgrep
@@ -325,7 +328,7 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
         return None
     A = lib()
     turn = A.load_turn(session_id)
-    if not turn or not turn.get("threat_model") or turn.get("threat_model_nudged"):
+    if not turn or not (turn.get("threat_model") or turn.get("criteria")):
         return None
     root = Path(turn.get("root") or "")
     try:
@@ -334,20 +337,63 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
         return None
     if re.search(r"(^|/)(tests?|spec|__tests__)/", str(full)) or re.match(r"test_|.*_test\.", full.name):
         return None
-    model = root / ".agent" / "threat-model.md"
-    try:
-        if model.stat().st_mtime >= turn["ts"]:
-            return None
-    except OSError:
-        pass
-    turn["threat_model_nudged"] = True
+    if in_nested_repo(full, root):
+        return None  # subagent làm trong worktree: phiên chính lo threat model và §0 (luật không sửa file kế hoạch)
+    reasons = []
+    if turn.get("threat_model") and not turn.get("threat_model_nudged") and not threat_model_written(root, turn):
+        turn["threat_model_nudged"] = True
+        own = (root / ".claude" / "skills" / "threat-model" / "SKILL.md").exists()
+        skill = "skill threat-model của project này" if own else "skill agent-stack:threat-model"
+        reasons.append(f"lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model. Trước khi code, chạy "
+                       f"{skill} (ghi `.agent/threat-model.md`), rồi viết code kèm các chốt chặn")
+    plan = None if turn.get("criteria_nudged") else plan_without_criteria(A, root)
+    if turn.get("criteria") and plan:
+        turn["criteria_nudged"] = True
+        reasons.append(
+            f"lượt này làm tính năng, sửa lỗi hay refactor mà §0 của `{plan}` chưa có tiêu chí xong. Trước khi code, "
+            "ghi 2–4 tiêu chí vào §0 dạng `- **Tiêu chí xong** (việc, ngày, nguồn): 1) … 2) …`, mỗi tiêu chí là một "
+            "lệnh phải đạt hay một cặp đầu vào và đầu ra mong đợi, lấy nguyên lời người dùng khi có (nguồn: lời "
+            "bạn). Việc từ mức vừa (đụng hook hay code chạy tự động, nhiều file, ranh giới tin cậy, hành vi người "
+            "dùng thấy) mà tiêu chí do agent tự suy thì hỏi người dùng xác nhận rồi mới code (nguồn: bạn xác nhận); "
+            "chốt việc sẽ so kết quả với chính các tiêu chí này")
+    if not reasons:
+        return None
     A.save_turn(session_id, turn)
-    own = (root / ".claude" / "skills" / "threat-model" / "SKILL.md").exists()
-    skill = "skill threat-model của project này" if own else "skill agent-stack:threat-model"
-    return "deny", (f"agent-stack: lượt này làm chức năng đụng ranh giới tin cậy mà chưa có threat model. Trước khi "
-                    f"code, chạy {skill} (ghi `.agent/threat-model.md`), rồi viết code kèm các chốt chặn. Nếu chức "
-                    "năng thật ra không đụng ranh giới tin cậy thì cứ ghi lại file này: nhắc này chỉ hiện một lần.")
+    return "deny", ("agent-stack: " + ". Ngoài ra, ".join(reasons) + ". Nếu nhắc không hợp (việc thật ra nhỏ, hay "
+                    "không đụng ranh giới tin cậy) thì cứ ghi lại file này: mỗi nhắc chỉ hiện một lần mỗi lượt.")
 
+
+def in_nested_repo(full: Path, root: Path) -> bool:
+    """File nằm trong worktree hay repo lồng bên trong project (có `.git` ở thư mục giữa file và gốc project)."""
+    try:
+        top = root.resolve()
+        for folder in full.resolve().parents:
+            if folder == top or top not in folder.parents:
+                return False
+            if (folder / ".git").exists():
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def threat_model_written(root: Path, turn: dict) -> bool:
+    try:
+        return (root / ".agent" / "threat-model.md").stat().st_mtime >= turn["ts"]
+    except OSError:
+        return False
+
+
+def plan_without_criteria(A, root: Path):
+    """Đường dẫn file kế hoạch (tính từ project) khi §0 của nó chưa có tiêu chí xong; None khi đã có, hay project
+    không có file kế hoạch có §0 (khi đó chốt việc tự viết tiêu chí và báo là viết ở cuối việc)."""
+    found = A.read_plan(root)
+    if not found or not found[2]["heading"] or A.has_value(found[2]["fields"].get("criteria")):
+        return None
+    try:
+        return found[0].relative_to(root).as_posix()
+    except ValueError:
+        return found[0].name
 
 def main():
     try:

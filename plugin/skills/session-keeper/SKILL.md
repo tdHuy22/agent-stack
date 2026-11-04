@@ -22,6 +22,7 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
    - **Cập nhật** = ngày hôm nay, dạng `*Cập nhật DD/MM/YYYY.*`
    - **Xong:** kết quả kèm bằng chứng (commit, kết quả test), vài dòng mỗi mục, ngày ở dòng đầu (`Xong (29/10/2026): …`) để `state.py trim` biết mục nào mới nhất; chi tiết để ở commit.
    - **Đang dở:** việc gì, ở file nào, nhánh nào, còn thiếu gì.
+   - **Tiêu chí xong** (việc, ngày, nguồn: lời bạn, bạn xác nhận hay agent tự ghi): 2–4 tiêu chí của việc đang làm, ghi trước khi code, mỗi tiêu chí là một lệnh phải đạt hay một cặp đầu vào và đầu ra. Skill done-gate so kết quả với chính các tiêu chí này; xong việc thì chuyển vào mục Xong (đạt n/n) và xóa dòng này.
    - **Việc tiếp theo, theo thứ tự:** danh sách đánh số; mỗi bước bắt đầu bằng một động từ.
    - **Quyết định còn treo:** điều cần người dùng chốt.
    - **Mốc kiểm tra:** lệnh và kết quả mong đợi, đúng với lần chạy gần nhất. Chạy lệnh đó qua `receipt.py run` để có biên nhận.
