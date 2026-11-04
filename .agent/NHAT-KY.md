@@ -2,6 +2,13 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 04/11/2026 15:01
+
+### Từ §0 của `PLAN.md`: Xong
+
+- **Xong (03/11/2026), chưa push: đổi mọi tên tiếng Việt sang tiếng Anh, plugin 0.20.0** (bạn chọn "mọi tên nhưng không cần tên file", "toàn bộ tiếng Anh"). Skill `chot-viec`→`done-gate`, `goi-mcp`→`remote-mcp`, `giong-van`→`writing-voice`, `mo-hinh-de-doa`→`threat-model`, `tien-do`→`progress`, `trang-artifact`→`reader-page`; subagent `nguoi-doc-la`→`cold-reader`; lệnh `/cay`→`/tree`, `/bien-nhan`→`/receipts`; pane `ke-hoach`→`plan`; định danh `chot_viec`→`done_gate`. Giữ tên thư mục dữ liệu (`state/chot-viec`, `state/tien-do`, `.agent/giong-van/samples` ở project khác) và lịch sử (`NHAT-KY`, `vetted.lock`, `INSTALLED.md`). Thư mục skill buộc phải đổi theo tên skill (chuẩn Agent Skills). 828 test, `plugin validate`, `plugin test` 24, eval router 109/109 đạt (biên nhận); reviewer opus: 0 lỗi trong repo. Phiên đang mở cần `/reload-plugins`. Còn ngoài repo: `pi-agent/config/APPEND_SYSTEM.md` và README của pi-agent, `free-yr-sense/CLAUDE.md` vẫn ghi tên cũ.
+- **Xong (03/11/2026), commit `267ced5`, `65a87f6`: prompt-audit cấu hình nạp vào phiên** (`/claude-api prompt-audit`, đích Opus 5.5). Báo cáo `.agent/trang/prompt-audit-2026-11-03.html` (`check_page.py` đạt), bản vá `.agent/trang/prompt-audit-2026-11-03.patch` (2 khối bỏ chữ kể lịch sử ở `CLAUDE.md:38`, `global/SHARED.global.md:25`; đã áp dụng theo lời bạn; 828 test đạt, có biên nhận). Bạn chốt tiếp: tính năng đụng ranh giới tin cậy lên `sonnet·high` (bảng chung, `rules.json`, `routing-table.md`, `task-router` dòng 29, test mới trượt khi bỏ); skill dặn xuất `.md` cho người đọc thì vẫn ra `.html` (thêm câu vào `SHARED.global.md`, sửa nguồn paper-anatomy, đã tải lên claude.ai thành v5 ngày 03/11 qua Chrome, trang skill hiện câu xuất `.html`). 828 test, eval router 109/109, `plugin validate` đạt (biên nhận). Ba file hướng dẫn chính sạch, mọi đường dẫn và cờ đều khớp code; phát hiện ở plugin chỉ báo, không vá.
+
 ## Đợt 04/11/2026 09:33
 
 ### Từ §0 của `PLAN.md`: Xong
