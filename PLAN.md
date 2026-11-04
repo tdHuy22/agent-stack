@@ -11,10 +11,13 @@
 - **Xong (04/11/2026): cải tiến 4, bằng chứng test bắt được lỗi** (bạn: "Cải tiến 4"; bạn duyệt 5 tiêu chí và chọn thư mục tạm của hệ điều hành). `receipt.py fails-before -- <lệnh test>` (logic ở `fails_before.py`): dựng cây ở commit gốc bằng `git ls-tree` + `git cat-file` (không checkout, không hook hay filter), hai cây trước và sau bản sửa trong thư mục tạm, mã 0 bắt được lỗi, 1 không bắt được, 2 không kết luận được (kể cả trượt vì import, tên, lệnh, fixture, và môi trường nạp code thật như PYTHONPATH, `pip install -e`). reuse-best: tự làm, lấy FAIL_TO_PASS của SWE-bench. TM-56..59 đã có; done-gate bước 4, session-keeper, HUONG-DAN, KE-HOACH 6.25, ngoại lệ thư mục tạm trong CLAUDE.md. Tái hiện trên repo này: bản sửa của cải tiến 2 cho "test bắt được lỗi", git status không đổi. Review: differential review tự làm, opus·high 2 vừa, sonnet 2 vừa và 3 thấp, đã sửa hết kèm test (3 vòng). Tiêu chí 5/5 đạt: lỗi `--link .venv` (venv trong repo làm test yếu ra mã 2) đã sửa ở vòng thứ 4 theo lời bạn, tiêu chí của vòng đó 3/3 đạt. Commit `f2ece14` làm lệch `tools/cloud-files.txt` (file mới chưa có trong danh sách cho cloud), đã tạo lại; bài học ghi vào `CLAUDE.md` mục Mốc kiểm tra (bạn chọn): `git add` file mới trước lần chạy bộ test cuối. 883 test, `plugin validate`, `plugin test` đạt (biên nhận).
 - **Xong trước đó:** ở `.agent/NHAT-KY.md` (chuyển bằng `state.py trim`).
 - **Việc tiếp theo, theo thứ tự:**
-  1. Bạn chọn cải tiến 5 (tài liệu khớp code) hay 6 (hỏi trước push, reset --hard); câu 4 (reviewer khác model) còn mở. `@ban`
-  2. Push 9 commit chưa push khi bạn bảo (luật repo: không tự push). `@ban`
-  3. `receipt.py show` (và progress) còn so dấu vân tay cả cây nên sửa §0 sau khi test làm biên nhận hiện "code đã đổi"; hook Stop đã dùng `code_fresh` (bỏ tài liệu). Cho `show` dùng `code_fresh` khi có để hai nơi khớp nhau.
-  4. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
+  1. Đổi cấu hình review trong done-gate theo lời bạn (04/11/2026): mức vừa, Opus viết thì Sonnet·high review, Sonnet viết thì Opus review; mức cao, Opus viết thì cả Opus và Sonnet review, Sonnet viết thì Opus review; mức cao và bảo mật thì cả Opus và Sonnet review. Kèm đề xuất cấu hình tiết kiệm theo việc; việc review tốn nhiều hạn mức thì hỏi bạn trước.
+  2. Cải tiến 5: test đọc tài liệu (README, HUONG-DAN, SKILL.md, CLAUDE.md), so lệnh, cờ, đường dẫn với `--help` và file thật.
+  3. Cải tiến 6: hook trước lệnh hỏi bạn trước `git push`, `git reset --hard`, `rm -rf` ngoài thư mục tạm, sửa lịch sử git.
+  (Câu 4 giải quyết bằng cấu hình review mới: review kép ở mức cao ghi lỗi nào do reviewer nào tìm, thành số liệu để đo.)
+  4. Push 9 commit chưa push khi bạn bảo (luật repo: không tự push). `@ban`
+  5. `receipt.py show` (và progress) còn so dấu vân tay cả cây nên sửa §0 sau khi test làm biên nhận hiện "code đã đổi"; hook Stop đã dùng `code_fresh` (bỏ tài liệu). Cho `show` dùng `code_fresh` khi có để hai nơi khớp nhau.
+  6. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
 - **Ghi nhớ (đã xong, không phải việc):**
   - Bỏ bench agent-stack và pi-agent trên Harbor/TBLite (02/11/2026, lời bạn); chi tiết ở `.agent/NHAT-KY.md`.
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
