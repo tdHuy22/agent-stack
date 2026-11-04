@@ -156,11 +156,10 @@ def receipt_current(rec: dict, since: float) -> bool:
     """Biên nhận còn đúng cho code hiện tại: dấu vân tay phần không phải tài liệu khớp, nên cập nhật §0, threat model,
     README hay commit sau bước kiểm chứng không làm cũ nó (so nội dung, không so thời điểm sửa file). Biên nhận cũ
     chưa có dấu đó thì xét cả cây. Không tính được dấu vân tay (repo git lồng chưa ignore làm hash-object lỗi) thì
-    tính biên nhận chạy trong lượt (từ `since`), để không đòi một điều không làm được."""
-    if rec.get("code_fresh") is not None:
-        return rec["code_fresh"]
-    if rec.get("fresh") is not None:
-        return rec["fresh"]
+    tính biên nhận chạy trong lượt (từ `since`), để không đòi một điều không làm được. Cờ current của
+    A.receipt_status, cùng cờ receipt.py show và progress hiện."""
+    if rec.get("current") is not None:
+        return rec["current"]
     return (receipt_epoch(rec) or 0) >= since
 
 
@@ -174,9 +173,7 @@ def evidence_gaps(root: Path, turn: dict, sid: str):
     level = "cao" if "cao" in levels else "vua" if "vua" in levels else None
     if level is None or foreign_filters(root):
         return None
-    sys.path.insert(0, str(PLUGIN / "skills" / "done-gate" / "scripts"))
-    import risk  # noqa: E402
-    checks = A.receipt_status(root, exclude=risk.doc_filter(root))
+    checks = A.receipt_status(root)
     gaps = []
     failing = [label for label, rec in checks.items()
                if not rec.get("ok") and (receipt_epoch(rec) or 0) >= turn["ts"] and receipt_current(rec, turn["ts"])]

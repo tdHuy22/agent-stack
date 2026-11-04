@@ -82,6 +82,32 @@ class ReceiptCli(Base):
         self.write("proj/app.py", "print('v3')\n")
         self.assertIn("code đã đổi", self.receipt("show", "--project", str(self.repo)).stdout)
 
+    def test_editing_docs_after_the_run_keeps_the_result_current(self):
+        # Cập nhật §0, thêm README sau bước kiểm: show khớp hook Stop (code_fresh), không đòi chạy lại.
+        self.receipt("run", "--project", str(self.repo), "--label", "unit", "--", sys.executable, "-c", PASS)
+        self.write("proj/PLAN.md", "# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Xong:** unit đạt.\n")
+        self.write("proj/README.md", "# Proj\n")
+        out = self.receipt("show", "--project", str(self.repo)).stdout
+        self.assertIn("còn khớp code hiện tại (sau đó chỉ tài liệu đổi)", out)
+        self.assertNotIn("code đã đổi", out)
+        rec = A.receipt_status(self.repo)["unit"]
+        self.assertEqual((rec["fresh"], rec["code_fresh"], rec["current"]), (False, True, True))
+        self.write("proj/app.py", "print('v3')\n")
+        self.assertIn("code đã đổi", self.receipt("show", "--project", str(self.repo)).stdout)
+        self.assertIs(A.receipt_status(self.repo)["unit"]["current"], False)
+
+    def test_old_receipt_without_code_fingerprint_still_uses_the_whole_tree(self):
+        self.receipt("run", "--project", str(self.repo), "--label", "unit", "--", sys.executable, "-c", PASS)
+        path = A.receipt_path(self.repo)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        del data["checks"]["unit"]["code_fingerprint"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("còn khớp code hiện tại", self.receipt("show", "--project", str(self.repo)).stdout)
+        self.write("proj/PLAN.md", "# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Xong:** unit đạt.\n")
+        self.assertIn("code đã đổi", self.receipt("show", "--project", str(self.repo)).stdout)
+        rec = A.receipt_status(self.repo)["unit"]
+        self.assertEqual((rec["code_fresh"], rec["current"]), (None, False))
+
     def test_missing_command_and_timeout(self):
         out = self.receipt("run", "--project", str(self.repo), "--", "lenh-khong-ton-tai-xyz")
         self.assertEqual(out.returncode, 127)
@@ -207,6 +233,20 @@ class TienDoUsesReceipts(Base):
         self.assertIn("còn khớp code hiện tại", collect.render_md(collect.collect(self.repo, scan_todos=False)))
         self.write("proj/app.py", "print('v4')\n")
         self.assertIn((3, "Chạy lại mốc kiểm tra: `unit`"), self.actions())
+
+    def test_docs_edit_after_the_run_is_not_a_code_change(self):
+        # progress và cây kế hoạch dùng cùng cờ current với receipt.py show và hook Stop.
+        import plan_tree
+        self.run_check(PASS)
+        self.write("proj/PLAN.md", "# Kế hoạch\n\n## 0. Đang ở đâu, việc tiếp theo\n- **Xong:** unit đạt.\n")
+        self.assertFalse(any("kiểm tra" in x.lower() for _, x in self.actions()))
+        self.assertIn("còn khớp code hiện tại", collect.render_md(collect.collect(self.repo, scan_todos=False)))
+        self.run_check(FAIL)
+        self.write("proj/README.md", "# Proj\n")
+        self.assertIn((1, "Sửa kiểm tra đang trượt `unit`: FAILED (failures=1)"), self.actions())
+        self.assertIn("code chưa đổi từ lần trượt", plan_tree.failing_checks(self.repo)[0])
+        self.write("proj/app.py", "print('đã sửa')\n")
+        self.assertIn("code đã đổi sau lần trượt", plan_tree.failing_checks(self.repo)[0])
 
     def test_session_start_brief_shows_failing_check(self):
         self.run_check(FAIL)

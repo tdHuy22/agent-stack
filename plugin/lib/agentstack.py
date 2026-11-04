@@ -648,24 +648,45 @@ def receipt_path(root: Path) -> Path:
     return state_dir() / "tests" / (hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json")
 
 
+def doc_filter(root: Path):
+    """Bộ chọn file tài liệu của done-gate (risk.doc_filter), cùng bộ receipt.py dùng khi ghi code_fingerprint.
+    None khi không nạp được (thiếu skill done-gate, lỗi bất ngờ)."""
+    try:
+        scripts = str(LIB_DIR.parent / "skills" / "done-gate" / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import risk
+        return risk.doc_filter(root)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def receipt_status(root: Path, exclude=None) -> dict:
-    """Các lần kiểm tra đã ghi cho project, kèm cờ fresh: kết quả còn khớp nội dung code hiện tại không.
-    {} nếu chưa có biên nhận nào. fresh là None khi không xác định được (không phải git repo).
-    Có `exclude` (bộ chọn file tài liệu, như lúc receipt.py ghi code_fingerprint) thì thêm cờ code_fresh: phần không
-    phải tài liệu còn khớp không; None khi biên nhận cũ chưa có dấu đó."""
+    """Các lần kiểm tra đã ghi cho project. {} nếu chưa có biên nhận nào. Mỗi biên nhận thêm ba cờ, None khi không xác
+    định được (không phải git repo, biên nhận cũ chưa có dấu đó):
+      fresh: cả cây còn khớp lúc chạy;
+      code_fresh: phần không phải tài liệu còn khớp (`exclude`, mặc định doc_filter của done-gate);
+      current: cờ để báo và quyết, code_fresh khi có, không thì fresh. Sửa §0, README sau bước kiểm không làm cũ
+        kết quả; mọi nơi hiện biên nhận (receipt.py show, progress, hook Stop) đọc cờ này để khớp nhau."""
     data = read_json(receipt_path(root), {}) or {}
     checks = data.get("checks") or {}
     if not checks:
         return {}
     blobs = tree_blobs(root)
     now = None if blobs is None else blobs_digest(blobs)
-    now_code = None if blobs is None or exclude is None else blobs_digest(blobs, exclude)
+    now_code = None
+    if blobs is not None and any(isinstance(rec, dict) and rec.get("code_fingerprint") for rec in checks.values()):
+        exclude = exclude or doc_filter(root)
+        now_code = None if exclude is None else blobs_digest(blobs, exclude)
     out = {}
     for label, rec in checks.items():
+        if not isinstance(rec, dict):
+            continue
         fresh = None if now is None or not rec.get("fingerprint") else rec["fingerprint"] == now
         code_fresh = (None if now_code is None or not rec.get("code_fingerprint")
                       else rec["code_fingerprint"] == now_code)
-        out[label] = dict(rec, fresh=fresh, code_fresh=code_fresh)
+        out[label] = dict(rec, fresh=fresh, code_fresh=code_fresh,
+                          current=code_fresh if code_fresh is not None else fresh)
     return out
 
 # ---------------------------------------------------------------- bản tóm tắt cho hook

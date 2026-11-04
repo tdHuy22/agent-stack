@@ -180,7 +180,8 @@ def recent_sessions(root: Path, limit: int = 3) -> list:
 
 
 def last_tests(root: Path) -> dict:
-    """Biên nhận kiểm tra do session-keeper/scripts/receipt.py ghi, kèm cờ fresh (còn khớp code không)."""
+    """Biên nhận kiểm tra do session-keeper/scripts/receipt.py ghi, kèm cờ current (còn khớp code không; sửa tài liệu
+    sau bước kiểm không làm cũ, như hook Stop và receipt.py show)."""
     return A.receipt_status(root)
 
 
@@ -255,12 +256,12 @@ def rank(d: dict) -> list:
         if rec.get("ok"):
             continue
         detail = f": {A.clip(rec['summary'], 80)}" if rec.get("summary") else ""
-        if rec.get("fresh") is False:
+        if rec.get("current") is False:
             actions.append((1, f"Chạy lại kiểm tra `{label}`: lần gần nhất trượt{detail}, code đã đổi sau đó; {STALE_HINT}",
                             "chưa biết bản sửa có làm kiểm tra đạt lại không"))
         else:
             actions.append((1, f"Sửa kiểm tra đang trượt `{label}`{detail}", "lần chạy gần nhất trượt và code chưa đổi từ đó"))
-    stale = sorted(label for label, rec in tests.items() if rec.get("ok") and rec.get("fresh") is False)
+    stale = sorted(label for label, rec in tests.items() if rec.get("ok") and rec.get("current") is False)
     if stale:
         actions.append((3, "Chạy lại mốc kiểm tra: " + ", ".join(f"`{x}`" for x in stale[:3]),
                         "code đã đổi sau lần đạt gần nhất; kết quả cũ không chứng minh cho code mới"))
@@ -673,7 +674,7 @@ def render_md(d: dict) -> str:
     for label, rec in sorted((d.get("tests") or {}).items(), key=lambda kv: kv[1].get("ts", ""), reverse=True)[:3]:
         mark = "✓ đạt" if rec.get("ok") else f"✗ trượt (mã {rec.get('exit')})"
         fresh = {True: "còn khớp code hiện tại", False: "code đã đổi sau đó",
-                 None: "không rõ code có đổi sau đó không"}[rec.get("fresh")]
+                 None: "không rõ code có đổi sau đó không"}[rec.get("current")]
         L.append(f"- Kiểm tra `{label}`: {mark}, {rec.get('ts', '?')[:16].replace('T', ' ')}, {fresh}")
     if d.get("changes"):
         L += [""] + render_changes(d["changes"])

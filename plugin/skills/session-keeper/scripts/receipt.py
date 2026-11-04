@@ -3,7 +3,8 @@
 lúc chạy, để phiên sau và skill progress biết kết quả đó còn đúng cho code hiện tại hay đã cũ.
 
 Kết quả đạt cũ không chứng minh cho code đã sửa sau đó. Biên nhận lưu dấu vân tay nội dung của cây làm
-việc (file đang theo dõi và file mới), nên commit mà không đổi nội dung thì biên nhận vẫn còn khớp.
+việc (file đang theo dõi và file mới), nên commit mà không đổi nội dung thì biên nhận vẫn còn khớp. Thêm một dấu cho
+phần code (bỏ tài liệu theo done-gate), nên cập nhật §0, README sau bước kiểm cũng không làm cũ biên nhận.
 
 Lệnh:
   receipt.py run [--project DIR] [--label TÊN] [--timeout GIÂY] -- <lệnh> [tham số...]
@@ -76,17 +77,6 @@ def record(root: Path, label: str, cmd: list, code: int, output: str, seconds: f
     return rec
 
 
-def doc_filter(root: Path):
-    """Bộ chọn file tài liệu của done-gate (risk.doc_filter), cho dấu vân tay phần code: hook Stop dùng nó để biết sửa
-    tài liệu sau bước kiểm (cập nhật §0, README) không làm cũ biên nhận. Không nạp được thì None."""
-    try:
-        sys.path.insert(0, str(HERE.parents[2] / "done-gate" / "scripts"))
-        import risk
-        return risk.doc_filter(root)
-    except Exception:  # noqa: BLE001
-        return None
-
-
 def risk_module():
     sys.path.insert(0, str(HERE.parents[2] / "done-gate" / "scripts"))
     import risk
@@ -94,8 +84,9 @@ def risk_module():
 
 
 def fingerprints(root: Path):
-    """(dấu vân tay cả cây, dấu vân tay phần code) của cây làm việc hiện tại."""
-    blobs, docs = A.tree_blobs(root), doc_filter(root)
+    """(dấu vân tay cả cây, dấu vân tay phần code) của cây làm việc hiện tại. Phần code bỏ tài liệu (A.doc_filter), để
+    cập nhật §0, README sau bước kiểm không làm cũ biên nhận (show, progress, hook Stop đọc cờ current)."""
+    blobs, docs = A.tree_blobs(root), A.doc_filter(root)
     after = None if blobs is None else A.blobs_digest(blobs)
     return after, (None if blobs is None or docs is None else A.blobs_digest(blobs, docs))
 
@@ -290,10 +281,17 @@ def ago(ts: str) -> str:
     return f"{int(delta // 86400)} ngày trước"
 
 
+def freshness(rec: dict) -> str:
+    """Kết quả còn đúng cho code hiện tại không, theo cờ current của A.receipt_status."""
+    if rec.get("current") and rec.get("fresh") is False:
+        return "còn khớp code hiện tại (sau đó chỉ tài liệu đổi)"
+    return {True: "còn khớp code hiện tại", False: "code đã đổi sau lần chạy này, cần chạy lại",
+            None: "không rõ code có đổi sau đó không"}[rec.get("current")]
+
+
 def describe(label: str, rec: dict) -> str:
     mark = "✓ đạt" if rec.get("ok") else f"✗ trượt (mã {rec.get('exit')})"
-    fresh = {True: "còn khớp code hiện tại", False: "code đã đổi sau lần chạy này, cần chạy lại",
-             None: "không rõ code có đổi sau đó không"}[rec.get("fresh")]
+    fresh = freshness(rec)
     summary = f" · {rec['summary']}" if rec.get("summary") else ""
     return f"- {label}: {mark}, {ago(rec.get('ts'))}, {fresh}{summary}"
 
