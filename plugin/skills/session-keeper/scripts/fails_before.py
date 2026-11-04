@@ -256,13 +256,20 @@ def interpreter(cmd, cwd: Path):
     return parts[0] if parts and PYTHON_RE.match(Path(parts[0]).name) else None
 
 
-def env_points_home(top: Path, cmd, cwd: Path, env=None):
+def env_points_home(top: Path, cmd, cwd: Path, env=None, links=()):
     """(lý do hay None, đã dò được không): lệnh có thể nạp code từ thư mục làm việc thật thay vì cây tạm, qua biến
-    môi trường, hay qua `sys.path` và file `.pth`, `__editable__*` (pip install -e) của trình thông dịch Python."""
+    môi trường, hay qua `sys.path` và file `.pth`, `__editable__*` (pip install -e) của trình thông dịch Python.
+    Đường dẫn nằm trong chính thư mục được `--link` (như `.venv` trong repo) không tính: nó là môi trường, không phải
+    code của repo; nhưng nội dung `.pth` trong đó vẫn được soi."""
     env = os.environ if env is None else env
     real = os.path.realpath(top)
+    linked = [os.path.realpath(top / rel) for rel in links]
+
+    def home(path: str, base: Path) -> bool:
+        return under(path, real, base) and not any(under(path, ex, base) for ex in linked)
+
     for var in HOME_VARS:
-        if any(under(p, real, cwd) for p in env.get(var, "").split(os.pathsep)):
+        if any(home(p, cwd) for p in env.get(var, "").split(os.pathsep)):
             return f"biến {var} trỏ về thư mục làm việc", True
     python = interpreter(cmd, cwd)
     if not python:
@@ -273,7 +280,7 @@ def env_points_home(top: Path, cmd, cwd: Path, env=None):
         return None, False
     paths = [p for p in out.stdout.splitlines() if p]
     for p in paths:
-        if under(p, real, cwd):
+        if home(p, cwd):
             return f"sys.path của {python} có {p}", True
     for p in paths:
         folder = Path(p)
@@ -286,7 +293,7 @@ def env_points_home(top: Path, cmd, cwd: Path, env=None):
                 continue
             candidates = [ln for ln in text.splitlines() if ln and not ln.startswith(("#", "import"))]
             candidates += re.findall(r"""['"](/[^'"]+)['"]""", text)
-            if any(under(c, real, folder) for c in candidates):
+            if any(home(c, folder) for c in candidates):
                 return f"{f.name} trong {folder} trỏ về thư mục làm việc (cài kiểu editable)", True
     return None, True
 
@@ -341,7 +348,7 @@ def fails_before(root: Path, cmd: list, base: str, tests, links, timeout: float,
                 put(tree, rel, SYMLINK, os.fsencode(str(top / rel)))
             trees[side] = tree / sub if sub != "." else tree
         sides = {side: run(cmd, cwd, timeout) for side, cwd in trees.items()}
-        home, probed = (env_points_home(top, cmd, trees["before"]) if sides["before"][0] == 0
+        home, probed = (env_points_home(top, cmd, trees["before"], links=rel_links) if sides["before"][0] == 0
                         and sides["after"][0] == 0 else (None, True))
     finally:
         signal.signal(signal.SIGTERM, previous)

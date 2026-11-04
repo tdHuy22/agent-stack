@@ -69,6 +69,7 @@ plugin/skills/remote-mcp/scripts/call.py
 plugin/skills/reuse-best/SKILL.md
 plugin/skills/reuse-best/scripts/scout.py
 plugin/skills/session-keeper/SKILL.md
+plugin/skills/session-keeper/scripts/fails_before.py
 plugin/skills/session-keeper/scripts/receipt.py
 plugin/skills/session-keeper/scripts/state.py
 plugin/skills/session-keeper/templates/HANDOFF.md

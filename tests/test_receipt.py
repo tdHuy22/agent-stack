@@ -427,6 +427,18 @@ class FailsBefore(TempDirTestCase):
         self.assertEqual(out.returncode, 1, out.stdout)
         self.assertIn("không dò được môi trường", out.stdout)
 
+    def test_venv_inside_the_repo_linked_in_still_reports_a_weak_test(self):
+        # Reviewer vòng 3 (04/11/2026): site-packages của chính .venv được link bị coi là "trỏ về thư mục làm việc",
+        # nên test yếu ra mã 2 thay vì 1 với cách đặt venv phổ biến nhất.
+        (self.repo / ".gitignore").write_text("local_cfg.py\n.venv/\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "ignore venv")
+        subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.repo / ".venv")], check=True)
+        self.fix_with(self.MISSES)
+        out = self.receipt("--link", ".venv", "--", ".venv/bin/python", "-m", "unittest", "test_calc")
+        self.assertEqual(out.returncode, 1, out.stdout)
+        self.assertIn("test không bắt được lỗi", out.stdout)
+
     def test_unsafe_paths_are_refused(self):
         sys.path.insert(0, str(RECEIPT.parent))
         import fails_before as FB
