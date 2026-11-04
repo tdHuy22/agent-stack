@@ -33,6 +33,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 - `python3 -m unittest discover -s tests -t .` phải đạt (Python 3.11).
 - `"$(python3 tools/claude_app.py)" plugin validate plugin` phải ra `Validation passed`.
 - `"$(python3 tools/claude_app.py)" plugin test plugin` phải đạt (test của mod; `tests/test_ui_mod.py` cũng gọi lệnh này).
+- File mới thì `git add` trước lần chạy bộ test cuối: vài test so với file git đang theo dõi (`tests/test_cloud_setup.py` so `tools/cloud-files.txt`), nên file chưa add không làm lộ chỗ lệch. Thêm file vào `plugin/`, `global/` thì tạo lại `tools/cloud-files.txt` theo dòng `# Tạo lại` của nó.
 
 ## Git
 
