@@ -613,6 +613,16 @@ Bạn bảo "Làm cải tiến 3" mà chưa trả lời câu 3 trên trang đán
 - **done-gate:** bước 1 đọc tiêu chí từ §0 làm chuẩn, không viết lại; không có thì ghi "viết ở cuối việc" trong báo cáo; kết quả lệch tiêu chí thì vào "cần bạn quyết"; bước 6 chuyển tiêu chí vào mục Xong (đạt n/n) rồi xóa dòng đó.
 - **Giới hạn:** router chỉ nhận ra một phần việc (câu "sửa lỗi parser đọc sai ngày", "Làm cải tiến 3" chưa khớp luật nào), nên nhắc không phủ hết; phần còn lại dựa vào luật chung và báo cáo của done-gate. Không kiểm được tiêu chí cũ của việc trước còn sót trong §0; done-gate xóa dòng khi xong việc để giảm chuyện đó.
 
+### 6.25 Bằng chứng test bắt được lỗi (cải tiến 4, 04/11/2026)
+
+Bạn duyệt 5 tiêu chí (gồm phần chạy đối chứng sau bản sửa mà agent thêm) và chọn thư mục tạm của hệ điều hành (thêm ngoại lệ vào luật file tạm của `CLAUDE.md`).
+
+- **reuse-best:** tự làm. Harness của SWE-bench cần Docker và nhiều phụ thuộc, không nhận lệnh test tùy ý; mutation testing (mutmut, cosmic-ray) giải bài khác; `git worktree` chạy hook post-checkout, `git archive` có thể chạy smudge filter. Lấy từ SWE-bench khái niệm FAIL_TO_PASS và ba kết luận.
+- **Cách làm:** `receipt.py fails-before` (logic ở `fails_before.py`) dựng cây gốc bằng `git ls-tree` và `git cat-file --batch`, đọc file hiện tại thẳng từ đĩa và tự tính mã băm kiểu git (không `git diff`), mỗi phía một cây riêng. Không ghi qua symlink; `--link` chỉ nhận đường dẫn bị git bỏ qua. Repo có clean filter riêng thì không tính dấu vân tay cho biên nhận (tính nó sẽ chạy filter). Threat model TM-56 đến TM-59.
+- **Tái hiện trên repo này:** bản sửa của cải tiến 2 (`--base 35ef77e`, `tests/test_chot_viec.py`) cho "test bắt được lỗi", `git status` không đổi, không còn thư mục tạm.
+- **Review** (differential review tự làm theo skill, opus·high, sonnet hai vòng): sửa lỗi bất ngờ thoát mã 1 (trùng nghĩa "test yếu"); dựng cả hai cây trước khi chạy; phía trước trượt vì import, tên, lệnh, fixture hay lỗi build thì mã 2; môi trường nạp code thật (PYTHONPATH, `.pth`, `__editable__`, kể cả qua shebang) thì mã 2; so đường dẫn sau khi giải symlink, theo cấp thư mục. Không làm theo gợi ý hạ mã 1 thành 2 cho mọi lệnh không dò được môi trường, vì trái tiêu chí 2 bạn đã duyệt; thay bằng cảnh báo kiểm tay.
+- **Giới hạn:** lệnh test vẫn chạy code của repo (như `receipt.py run`); submodule không được dựng; file LFS giữ dạng con trỏ; cả repo được đọc vào bộ nhớ hai lần (cây gốc và cây hiện tại); nhận dạng lỗi nạp và lỗi assert là mẫu chữ cho Python, Go, Rust, Jest, ngôn ngữ khác có thể ra mã 0 khi phía trước trượt vì thiếu tên mới. Còn một lỗi sau 3 vòng (chờ bạn quyết): `--link .venv` với venv trong repo làm test yếu ra mã 2 thay vì 1, vì site-packages của venv được link bị coi là thư mục làm việc.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

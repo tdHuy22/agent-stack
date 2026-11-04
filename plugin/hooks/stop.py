@@ -203,10 +203,7 @@ def evidence_reason(level: str, gaps: list, plan_rel: str, plan_block: bool) -> 
 
 
 def foreign_filters(root: Path) -> bool:
-    """Repo tự khai báo clean filter (cấu hình local, kể cả file include): git diff sẽ chạy lệnh đó, và không có cờ
-    tắt. Filter toàn cục của người dùng (như git-lfs) là đáng tin."""
-    out = A.git_out(root, "config", "--show-scope", "--get-regexp", r"^filter\..*\.(clean|process)$") or ""
-    return any(line.split("\t", 1)[0] in ("local", "worktree", "command") for line in out.splitlines())
+    return A.local_clean_filters(root)
 
 
 def gate_reason(result: dict, plan_rel: str, base: str = None) -> str:

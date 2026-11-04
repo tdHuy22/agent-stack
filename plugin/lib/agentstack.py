@@ -637,6 +637,13 @@ def tree_fingerprint(root: Path, exclude=None):
     return None if blobs is None else blobs_digest(blobs, exclude)
 
 
+def local_clean_filters(root: Path) -> bool:
+    """Repo tự khai báo clean filter (cấu hình local, kể cả file include): `git status`, `git diff`, `hash-object`
+    sẽ chạy lệnh đó, và không có cờ tắt. Filter toàn cục của người dùng (như git-lfs) là đáng tin."""
+    out = git_out(root, "config", "--show-scope", "--get-regexp", r"^filter\..*\.(clean|process)$") or ""
+    return any(line.split("\t", 1)[0] in ("local", "worktree", "command") for line in out.splitlines())
+
+
 def receipt_path(root: Path) -> Path:
     return state_dir() / "tests" / (hashlib.sha1(str(root).encode()).hexdigest()[:12] + ".json")
 

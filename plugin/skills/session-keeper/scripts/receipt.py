@@ -12,6 +12,12 @@ Lệnh:
       In các lần kiểm tra đã ghi và cho biết từng kết quả còn khớp code hiện tại không.
   receipt.py forget [--project DIR] TÊN [TÊN...]
       Xoá biên nhận theo tên (tên như `show` in ra). Mã thoát 1 nếu có tên không tìm thấy.
+  receipt.py fails-before [--project DIR] [--base REF] [--tests FILE...] [--link PATH...] [--label TÊN]
+                          [--timeout GIÂY] -- <lệnh test> [tham số...]
+      Bằng chứng test bắt được lỗi: chạy lệnh trên code trước bản sửa (commit REF, mặc định HEAD, cộng file test
+      hiện tại) và sau bản sửa, trong thư mục tạm của hệ điều hành (fails_before.py). Mã 0: test bắt được lỗi;
+      1: test đạt cả trên code cũ; 2: không kết luận được (sau bản sửa cũng trượt, hay đầu vào sai). File test mặc
+      định là file đổi mà done-gate coi là test; `--link .venv` nối thư mục bị git bỏ qua mà lệnh cần.
   receipt.py prune [--project DIR] [--dry-run]
       Xoá biên nhận trượt của lệnh test trỏ tới module hay file test không còn trong project (ví dụ
       `python3 -m unittest tests.test_cu` sau khi xoá tests/test_cu.py), vì chạy lại lệnh đó chỉ trượt mãi.
@@ -48,7 +54,7 @@ def summary_line(output: str) -> str:
 
 
 def record(root: Path, label: str, cmd: list, code: int, output: str, seconds: float,
-           before, after, code_fingerprint=None) -> dict:
+           before, after, code_fingerprint=None, extra=None) -> dict:
     path = A.receipt_path(root)
     data = A.read_json(path, {}) or {}
     checks = data.get("checks") or {}
@@ -56,7 +62,7 @@ def record(root: Path, label: str, cmd: list, code: int, output: str, seconds: f
            "tail": output[-TAIL_CHARS:], "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
            "seconds": round(seconds, 1), "fingerprint": after, "code_fingerprint": code_fingerprint,
            "fingerprint_before": before,
-           "changed_tree": before is not None and after is not None and before != after}
+           "changed_tree": before is not None and after is not None and before != after, **(extra or {})}
     checks[label] = rec
     if len(checks) > MAX_CHECKS:  # giữ các lần kiểm tra mới nhất
         checks = dict(sorted(checks.items(), key=lambda kv: kv[1].get("ts", ""))[-MAX_CHECKS:])
@@ -81,6 +87,50 @@ def doc_filter(root: Path):
         return None
 
 
+def risk_module():
+    sys.path.insert(0, str(HERE.parents[2] / "done-gate" / "scripts"))
+    import risk
+    return risk
+
+
+def fingerprints(root: Path):
+    """(dấu vân tay cả cây, dấu vân tay phần code) của cây làm việc hiện tại."""
+    blobs, docs = A.tree_blobs(root), doc_filter(root)
+    after = None if blobs is None else A.blobs_digest(blobs)
+    return after, (None if blobs is None or docs is None else A.blobs_digest(blobs, docs))
+
+
+def cmd_fails_before(root: Path, label: str, cmd: list, base: str, tests, links, timeout: float) -> int:
+    # Mọi lỗi đều thoát 2: traceback thoát 1, trùng nghĩa "test không bắt được lỗi".
+    try:
+        import fails_before as FB
+    except Exception as exc:  # noqa: BLE001
+        print(f"[receipt] không chạy được (lỗi bất ngờ): {exc!r}")
+        return 2
+    try:
+        # Repo có clean filter riêng: tính dấu vân tay (git status, hash-object) sẽ chạy lệnh của repo (TM-57). Bỏ
+        # dấu vân tay; hook Stop khi đó tính biên nhận chạy trong lượt.
+        filtered = A.local_clean_filters(root)
+        before = None if filtered else A.tree_fingerprint(root)
+        risk = risk_module()
+        result = FB.fails_before(root, cmd, base, tests, links, timeout, lambda p: risk.kind(p) == "test")
+        after, code_fp = (None, None) if filtered else fingerprints(root)
+    except FB.Problem as exc:
+        print(f"[receipt] không chạy được: {exc}")
+        return 2
+    except Exception as exc:  # noqa: BLE001
+        print(f"[receipt] không chạy được (lỗi bất ngờ): {exc!r}")
+        return 2
+    extra = {"kind": "fails-before", "verdict": result["verdict"], "base": result["base"], "tests": result["tests"],
+             "before_exit": result["before_exit"], "after_exit": result["after_exit"]}
+    rec = record(root, label, cmd, result["exit"], result["output"], result["seconds"], before, after, code_fp, extra)
+    print(result["output"])
+    note = " · thư mục làm việc đã đổi trong lúc chạy (không phải do lệnh này)" if rec["changed_tree"] else ""
+    saved = "đã ghi biên nhận" if rec["saved"] else f"KHÔNG ghi được biên nhận ({rec['save_error']})"
+    print(f"[receipt] {result['verdict']} · {', '.join(result['tests'][:3])} · {saved}{note}")
+    return result["exit"]
+
+
 def cmd_run(root: Path, label: str, cmd: list, timeout: float) -> int:
     before = A.tree_fingerprint(root)
     start = time.time()
@@ -94,9 +144,7 @@ def cmd_run(root: Path, label: str, cmd: list, timeout: float) -> int:
     except OSError as exc:
         code, output = 127, f"[receipt] không chạy được lệnh: {exc}"
     seconds = time.time() - start
-    blobs, docs = A.tree_blobs(root), doc_filter(root)
-    after = None if blobs is None else A.blobs_digest(blobs)
-    code_fp = None if blobs is None or docs is None else A.blobs_digest(blobs, docs)
+    after, code_fp = fingerprints(root)
     rec = record(root, label, cmd, code, output, seconds, before, after, code_fp)
     sys.stdout.write(output if output.endswith("\n") or not output else output + "\n")
     mark = "✓ đạt" if rec["ok"] else f"✗ trượt (mã {code})"
@@ -278,6 +326,15 @@ def main(argv=None) -> int:
     forget = sub.add_parser("forget", help="xoá biên nhận theo tên")
     forget.add_argument("--project", default=".")
     forget.add_argument("labels", nargs="+", metavar="TÊN")
+    fb = sub.add_parser("fails-before", help="chứng minh test mới bắt được lỗi: trượt trước bản sửa, đạt sau")
+    fb.add_argument("--project", default=".")
+    fb.add_argument("--base", default="HEAD", help="commit ngay trước bản sửa (mặc định HEAD, khi chưa commit)")
+    fb.add_argument("--tests", nargs="+", metavar="FILE", help="file test (mặc định: file test đổi so với --base)")
+    fb.add_argument("--link", action="append", metavar="PATH",
+                    help="nối thư mục bị git bỏ qua mà lệnh cần, ví dụ .venv (lặp lại được)")
+    fb.add_argument("--label", help="tên biên nhận (mặc định: fails-before + câu lệnh)")
+    fb.add_argument("--timeout", type=float, default=1800, help="giới hạn mỗi phía, giây")
+    fb.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh test> [tham số...]")
     prune = sub.add_parser("prune", help="xoá biên nhận trượt của test đã bị xoá khỏi project")
     prune.add_argument("--project", default=".")
     prune.add_argument("--dry-run", action="store_true", help="chỉ in, không xoá")
@@ -292,6 +349,9 @@ def main(argv=None) -> int:
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         ap.error("thiếu lệnh kiểm tra, ví dụ: receipt.py run -- python3 -m pytest -q")
+    if args.cmd == "fails-before":
+        label = args.label or A.clip("fails-before: " + " ".join(command), 80)
+        return cmd_fails_before(root, label, command, args.base, args.tests, args.link, args.timeout)
     return cmd_run(root, args.label or A.clip(" ".join(command), 80), command, args.timeout)
 
 

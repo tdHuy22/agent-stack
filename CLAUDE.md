@@ -20,6 +20,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 - Ngoại lệ:
   - Khi người dùng chạy eval thật (`run_eval.py --yes`), thư mục làm việc của model nằm trong thư mục tạm của hệ điều hành, để model không đọc được `CLAUDE.md`, grader hay lời giải. Script tự xóa thư mục đó sau khi chấm.
   - Test mô phỏng bản chép plugin nằm ngoài repo (như `~/.claude/plugins/cache`) dùng thư mục tạm của hệ điều hành và tự xóa.
+  - `receipt.py fails-before` dựng code trước bản sửa trong thư mục tạm của hệ điều hành rồi tự xóa, vì lệnh chạy ở mọi project, và `.tmp/` của project khác có thể chưa bị git bỏ qua (bạn chọn 04/11/2026).
 - Docstring và chú thích viết tiếng Việt, ngắn. Tên biến và hàm viết tiếng Anh.
 
 ## Skill
