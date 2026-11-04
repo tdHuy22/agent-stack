@@ -103,7 +103,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao | done-gate | E: `review-diff` sonnet·medium 2/2, Haiku 4.5 0/2; P: nâng lên `high` vì lỗi lọt đắt |
+| Review diff nhỏ của mình trước commit | `sonnet · high` | `opus · high` | agent-stack:reviewer khi `risk.py` báo vừa hoặc cao, khác model người viết: vừa, Opus viết → sonnet·high, Sonnet viết → opus·medium; cao, Opus viết → opus·high và sonnet·high song song, Sonnet viết → opus·high; cao và bảo mật → cả hai; review lại phần sửa → sonnet·high, opus·high khi phần sửa ở mức cao | done-gate | E: `review-diff` sonnet·medium 2/2, Haiku 4.5 0/2; P: nâng lên `high` vì lỗi lọt đắt; bạn chốt reviewer khác model 04/11/2026 (`review_log.py summary` đo) |
 | Review PR lớn trước khi merge | `opus · high` | `opus · xhigh` | agent-stack:reviewer | — | P |
 | Review bảo mật code thường | `opus · high` | `opus · xhigh` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | P |
 | Review bảo mật phần nhạy cảm (mã hóa, token, chữ ký, thanh toán, sandbox, leo thang quyền) | `opus · xhigh` | `opus · max` | agent-stack:reviewer | differential-review (chưa bật thì `/security-review`) | A: việc bảo mật là ví dụ chính thức cho mức cao nhất |

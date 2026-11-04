@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Chấm mức rủi ro của thay đổi chưa commit, để quyết review sâu tới đâu.
 
-  python3 risk.py [thư mục] [--base REF] [--json]
+  python3 risk.py [thư mục] [--base REF] [--new] [--writer opus|sonnet] [--json]
 
-Chỉ đọc. In mức (thấp, vừa, cao), lý do, file nên đọc kỹ và cách review đề nghị.
+Chỉ đọc. In mức (thấp, vừa, cao), lý do, file nên đọc kỹ và cách review đề nghị: reviewer nào (model, effort) theo
+mức rủi ro và model người viết, và có phải hỏi người dùng trước vì hạn mức hay diff lớn không.
 Mức là gợi ý thô dựa trên đường dẫn và các dòng thêm vào; nó không thay review.
 """
 from __future__ import annotations
@@ -59,6 +60,13 @@ CODE_RULES = [
     (re.compile(r"""(?i)execute\(\s*f["']|["']\s*(select|insert|update|delete)\b[^"'\n]*["']\s*(\+|%)"""),
      3, "SQL ghép chuỗi"),
 ]
+# Lý do thuộc phần bảo mật (xác thực, mã hóa, secret, chạy lệnh, SQL): mức cao kèm một trong số này thì review kép.
+SECURITY_REASONS = {PATH_RULES[0][2], "có thể lộ secret trong dòng thêm vào", CODE_RULES[0][2], CODE_RULES[2][2],
+                    CODE_RULES[3][2]}
+# Ranh giới tin cậy tính là đụng bảo mật (done-gate bước 5: xác thực, mã hóa, input, chạy lệnh, dữ liệu nhạy cảm).
+# "Gọi ra ngoài" và "thêm dependency" không kéo review kép, để tiết kiệm hạn mức.
+SECURITY_BOUNDARIES = {"input từ bên ngoài", "xác thực, phân quyền", "dữ liệu nhạy cảm",
+                       "chạy mã, lệnh hay đường dẫn từ input"}
 
 # Nới test, hay gặp ở vòng sửa cho test đạt: assert chặt (so bằng, so đúng đối tượng, đòi lỗi) đổi thành dạng lỏng
 # hơn, bớt assert, thêm skip. Chỉ xét file test, bỏ dòng chú thích (comment một assert là bỏ nó).
@@ -75,6 +83,16 @@ STRICT_ASSERT_RE = re.compile(
 SKIP_RE = re.compile(r"^\s*(@(unittest\.)?skip(If|Unless)?\b|@pytest\.mark\.(skip|skipif|xfail)\b|(self\.)?skipTest\(|"
                      r"pytest\.(skip|xfail)\(|(it|test|describe)\.(skip|todo)\(|x(it|test|describe)\(|"
                      r"t\.Skip(Now|f)?\(|#\[ignore\])")
+
+# Cấu hình review (bạn chốt 04/11/2026): reviewer khác model người viết, để giảm điểm mù chung của một model.
+# Fable mạnh hơn Opus nên xếp như Opus viết; Haiku yếu hơn Sonnet nên xếp như Sonnet viết (reviewer là Opus).
+WRITER_SIDE = {"opus": "opus", "fable": "opus", "sonnet": "sonnet", "haiku": "sonnet"}
+WRITER_NAMES = {"opus": "Opus", "sonnet": "Sonnet"}
+# Phần nhạy cảm cần Opus effort xhigh khi review mức cao (bảng router: mã hóa, token, thanh toán, sandbox).
+CRYPTO_RE = re.compile(r"(^|[/_.-])(crypto\w*|encrypt\w*|decrypt\w*|cipher|signing|signatures?|tokens?|jwt|"
+                       r"payments?|billing|sandbox)([/_.-]|$)")
+# Trước review kép hay review có Opus: hỏi người dùng khi hạn mức tuần, 5 giờ chạm ngưỡng, hay diff mức cao quá lớn.
+ASK_WEEK, ASK_FIVE_HOUR, ASK_CODE_LINES = 80, 90, 800
 
 
 def assert_lines(text: str) -> list:
@@ -183,19 +201,24 @@ def change_kind(c: dict) -> str:
     return kind(c["path"], bool(page))
 
 
-def assess(changes: list, reviewed=frozenset()) -> dict:
+def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, limits=None,
+           writer_guessed=False) -> dict:
     """Chấm điểm từ danh sách {path, added, deleted, text}. added là None với file nhị phân. File trong `reviewed`
-    đã qua chốt việc, `text` chỉ còn dòng mới: bỏ luật theo đường dẫn cho chúng (hook Stop dùng)."""
+    đã qua chốt việc, `text` chỉ còn dòng mới: bỏ luật theo đường dẫn cho chúng (hook Stop dùng).
+    writer, rereview, limits: để chọn reviewer (xem review_plan)."""
     result = {"level": "thap", "score": 0, "files": len(changes), "added": 0, "deleted": 0,
               "by_kind": {k: 0 for k in KIND_NAMES}, "reasons": [], "hotspots": [], "empty": not changes}
     if not changes:
-        result["review"] = review_hint("thap")
+        result.update(review_plan("thap", writer, rereview=rereview, limits=limits))
         return result
     score, reasons, hot = 0, [], {}
     test_add = test_del = 0
+    security = []  # lý do thuộc phần bảo mật, để mức cao giao cả hai reviewer
 
     def hit(points, reason, paths):
         nonlocal score
+        if reason in SECURITY_REASONS:
+            security.append(reason)
         score += points
         shown = ", ".join(paths[:3]) + (f" và {len(paths) - 3} file khác" if len(paths) > 3 else "")
         reasons.append(f"{reason}: {shown}" if shown else reason)
@@ -254,7 +277,12 @@ def assess(changes: list, reviewed=frozenset()) -> dict:
     result.update(boundaries=[{"kind": name, "paths": paths} for name, paths in crossed],
                   threat_model_updated=any(c["path"] == THREAT_MODEL_REL or c["path"].endswith("/" + THREAT_MODEL_REL)
                                            for c in changes))
-    result.update(level=level, score=score, reasons=reasons, review=review_hint(level),
+    crypto = [c["path"] for c in changes
+              if c["path"] not in reviewed and change_kind(c) != "test" and CRYPTO_RE.search(c["path"].lower())]
+    secure = bool(security or crypto or any(name in SECURITY_BOUNDARIES for name, _ in crossed))
+    result.update(review_plan(level, writer, security=secure, crypto=bool(crypto), rereview=rereview,
+                              code_lines=code_lines, limits=limits, writer_guessed=writer_guessed))
+    result.update(level=level, score=score, reasons=reasons,
                   hotspots=[(p, v[1]) for p, v in sorted(hot.items(), key=lambda kv: (-kv[1][0], kv[0]))])
     return result
 
@@ -286,14 +314,101 @@ def weakening(changes: list, hit) -> None:
         hit(2, "thêm skip hay xfail trong test", skipped)
 
 
-def review_hint(level: str) -> str:
-    return {
-        "thap": "tự rà `git diff` một lượt, không cần subagent; người dùng không cần đọc diff.",
-        "vua": "giao `agent-stack:reviewer` trong context mới, chọn model sonnet; "
-               "người dùng đọc lướt các file nên đọc kỹ.",
-        "cao": "giao `agent-stack:reviewer` trong context mới (mặc định opus · high); "
-               "người dùng nên đọc kỹ các file nên đọc kỹ trước khi commit.",
-    }[level]
+def writer_side(writer) -> str:
+    """Họ model người viết ("opus", "sonnet") từ tên ngắn hay id model ("claude-opus-5-5"); chưa rõ thì chuỗi rỗng."""
+    text = str(writer or "").lower()
+    return next((side for name, side in WRITER_SIDE.items() if name in text), "")
+
+
+def reviewers_for(level: str, side: str, security=False, crypto=False, rereview=False) -> list:
+    """[(model, effort)] cho một mức rủi ro và họ model người viết, theo cấu hình bạn chốt 04/11/2026:
+    vừa: Opus viết → sonnet·high, Sonnet viết → opus·medium; cao: Opus viết → opus·high và sonnet·high, Sonnet viết →
+    opus·high; cao và đụng bảo mật → cả hai; mã hóa, token, thanh toán, sandbox → opus·xhigh. Review lại phần sửa
+    (`--new`): một sonnet·high bất kể ai viết, lên opus khi chính phần sửa ở mức cao."""
+    if level == "thap":
+        return []
+    opus = ("opus", "xhigh" if crypto else "high")
+    if rereview:
+        return [opus] if level == "cao" else [("sonnet", "high")]
+    if level == "vua":
+        return [("sonnet", "high")] if side == "opus" else [("opus", "medium")]
+    return [opus, ("sonnet", "high")] if side == "opus" or security else [opus]
+
+
+def window_pct(limits, window: str, now: float):
+    """Phần trăm đã dùng của một cửa sổ hạn mức trong state/limits.json, hay None (không có, hay đã qua giờ reset:
+    số cũ hơn lúc reset không còn đúng). Trước giờ reset, số cũ là cận dưới nên vẫn dùng được để so ngưỡng."""
+    windows = limits.get("rate_limits") if isinstance(limits, dict) else None
+    info = windows.get(window) if isinstance(windows, dict) else None
+    if not isinstance(info, dict):
+        return None
+    pct, resets = info.get("used_percentage"), info.get("resets_at")
+    if not isinstance(pct, (int, float)) or isinstance(pct, bool):
+        return None
+    if isinstance(resets, (int, float)) and resets < now:
+        return None
+    return float(pct)
+
+
+def budget_asks(reviewers: list, level: str, code_lines: int, limits, now=None) -> list:
+    """Lý do phải hỏi người dùng trước khi giao review kép hay review có Opus (đề xuất b, 04/11/2026)."""
+    import time
+    if len(reviewers) < 2 and not any(model == "opus" for model, _ in reviewers):
+        return []
+    now = time.time() if now is None else now
+    asks = []
+    week, five = window_pct(limits, "seven_day", now), window_pct(limits, "five_hour", now)
+    if week is not None and week >= ASK_WEEK:
+        asks.append(f"hạn mức tuần đã dùng {week:.0f}% (từ {ASK_WEEK}%)")
+    if five is not None and five >= ASK_FIVE_HOUR:
+        asks.append(f"hạn mức 5 giờ đã dùng {five:.0f}% (từ {ASK_FIVE_HOUR}%)")
+    if level == "cao" and code_lines > ASK_CODE_LINES:
+        asks.append(f"diff lớn ({code_lines} dòng code, trên {ASK_CODE_LINES})")
+    return asks
+
+
+def describe(reviewers: list) -> str:
+    names = [f"{model}·{effort}" for model, effort in reviewers]
+    if len(names) == 1:
+        return f"giao `agent-stack:reviewer` trong context mới, model {reviewers[0][0]}, effort {reviewers[0][1]}"
+    return (f"giao song song {len(names)} `agent-stack:reviewer` trong context mới, cùng một prompt: "
+            f"{' và '.join(names)}; gộp lỗi trùng rồi ghi lỗi nào do reviewer nào tìm bằng `review_log.py add`")
+
+
+def review_plan(level: str, writer=None, security=False, crypto=False, rereview=False, code_lines=0,
+                limits=None, writer_guessed=False) -> dict:
+    """{review: câu đề nghị, reviewers: [{model, effort}] (rỗng khi chưa rõ người viết hay mức thấp), ask: [lý do hỏi
+    người dùng trước]}. Chưa rõ người viết thì câu đề nghị nêu cả hai trường hợp. writer_guessed: người viết suy từ
+    state/limits.json (có thể của phiên khác), nên câu đề nghị nói rõ."""
+    if level == "thap":
+        return {"review": "tự rà `git diff` một lượt, không cần subagent; người dùng không cần đọc diff.",
+                "reviewers": [], "ask": []}
+    side = writer_side(writer)
+    tail = ("người dùng nên đọc kỹ các file nên đọc kỹ trước khi commit." if level == "cao" and not rereview
+            else "người dùng đọc lướt các file nên đọc kỹ.")
+    if level == "cao" and security and not rereview:
+        tail = "chạy differential-review trước nếu có (bước 5); " + tail
+    sides = [side] if side else ["opus", "sonnet"]
+    plans = {s: reviewers_for(level, s, security, crypto, rereview) for s in sides}
+    if side:
+        reviewers = plans[side]
+        source = ", suy từ state/limits.json, có thể của phiên khác: truyền --writer cho chắc" if writer_guessed else ""
+        text = f"{describe(reviewers)} (người viết: {WRITER_NAMES[side]}{source}); {tail}"
+        asks = budget_asks(reviewers, level, code_lines, limits)
+    else:
+        if plans["opus"] == plans["sonnet"]:
+            text = f"{describe(plans['opus'])}; {tail}"
+        else:
+            text = (f"Opus viết: {describe(plans['opus'])}. Sonnet viết: {describe(plans['sonnet'])}. "
+                    f"Truyền --writer opus|sonnet để chọn sẵn; {tail}")
+        reviewers = plans["opus"] if plans["opus"] == plans["sonnet"] else []
+        asks = budget_asks(plans["opus"] + plans["sonnet"], level, code_lines, limits)
+    return {"review": text, "reviewers": [{"model": m, "effort": e} for m, e in reviewers], "ask": asks}
+
+
+def review_hint(level: str, writer=None) -> str:
+    """Câu đề nghị review cho một mức (giữ cho nơi gọi cũ)."""
+    return review_plan(level, writer)["review"]
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -436,6 +551,9 @@ def render(r: dict, base: str = "HEAD") -> str:
                                                 "; nếu chưa có mục cho việc này, chạy skill threat-model trước bước review")
                      + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
     lines.append(f"Review đề nghị: {r['review']}")
+    if r.get("ask"):
+        lines.append("Hỏi người dùng trước khi giao review này: " + "; ".join(r["ask"])
+                     + ". Cho họ chọn chỉ một reviewer sonnet·high (rẻ hơn), trừ khi họ đã chọn cho việc này.")
     return "\n".join(lines)
 
 
@@ -487,17 +605,35 @@ def previous_mark(root) -> dict:
         return {}
 
 
+def load_limits() -> dict:
+    """state/limits.json (hạn mức, model của phiên ghi gần nhất); thiếu thư viện agent-stack hay file thì rỗng."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+        import agentstack
+        data = agentstack.read_json(agentstack.state_dir() / "limits.json", {})
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Chấm mức rủi ro của thay đổi chưa commit (chỉ đọc).")
     ap.add_argument("root", nargs="?", default=".")
     ap.add_argument("--base", help="so với ref này thay vì HEAD, ví dụ main")
     ap.add_argument("--new", action="store_true",
                     help="chỉ chấm dòng thêm sau lần chạy trước, ví dụ phần sửa theo review")
+    ap.add_argument("--writer", help="model của phiên viết code (opus, sonnet, haiku, fable hay id model), để chọn "
+                                     "reviewer khác model; thiếu thì lấy từ state/limits.json")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
+    limits = load_limits()
+    writer = args.writer or ((limits.get("model") or {}).get("id") if isinstance(limits.get("model"), dict) else None)
+    guessed = bool(writer) and not args.writer
     try:
         changes = collect(args.root, args.base)
-        result = assess(*fresh_since_mark(changes, previous_mark(args.root))) if args.new else assess(changes)
+        options = {"writer": writer, "rereview": args.new, "limits": limits, "writer_guessed": guessed}
+        result = (assess(*fresh_since_mark(changes, previous_mark(args.root)), **options) if args.new
+                  else assess(changes, **options))
     except NotARepo:
         print(f"Không phải git repo: {args.root}. Script cần git để đọc thay đổi.")
         return 2

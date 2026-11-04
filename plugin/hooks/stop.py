@@ -186,7 +186,8 @@ def evidence_gaps(root: Path, turn: dict, sid: str):
     if not any(rec.get("ok") and receipt_current(rec, turn["ts"]) for rec in checks.values()):
         gaps.append(("chưa có biên nhận đạt", "không có biên nhận đạt nào còn đúng cho code hiện tại: chạy mốc kiểm "
                      "tra của project qua `receipt.py run -- <lệnh>`"))
-    # pi không có SubagentStart nên không có dấu reviewer để kiểm (plugin/hosts/pi.json)
+    # pi không có SubagentStart nên không có dấu reviewer để kiểm (plugin/hosts/pi.json). Payload SubagentStart không
+    # có model, nên chỉ kiểm có ít nhất một lần giao reviewer, không kiểm đúng model hay đủ hai reviewer (done-gate bước 5).
     if A.host() != "pi" and not A.subagent_started_since(sid, "reviewer", turn["ts"]):
         gaps.append(("chưa review", "chưa giao `agent-stack:reviewer` (bước 5 của done-gate, bắt buộc từ mức vừa)"))
     return (level, gaps) if gaps else None

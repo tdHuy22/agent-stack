@@ -21,7 +21,7 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Lỗi chỉ có trên production, không tái hiện được | opus·high | – | – |
 | Debug thử hai lần ở mức cao vẫn bế tắc | opus·xhigh, rồi fable·high | – | – |
 | Tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, API ngoài, thanh toán) | sonnet·high | – | threat-model trước khi code; reuse-best |
-| Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khi rủi ro vừa, cao | done-gate |
+| Kiểm thay đổi trước khi báo xong hay commit | sonnet·high | reviewer khác model người viết khi rủi ro vừa, cao (`risk.py --writer` chọn sẵn; mức cao Opus viết thì hai reviewer) | done-gate |
 | Review PR lớn; review bảo mật code thường | opus·high | reviewer | differential-review* |
 | Review bảo mật mã hóa, token, thanh toán, sandbox | opus·xhigh | reviewer | differential-review* |
 | Audit bảo mật cả repo trước phát hành | opus·max | reviewer | static-analysis* (Semgrep) rồi claude-security* |

@@ -179,6 +179,125 @@ class Assess(unittest.TestCase):
         self.assertIn("Không có thay đổi", risk.render(risk.assess([])))
 
 
+class ReviewPlan(unittest.TestCase):
+    """Cấu hình review bạn chốt 04/11/2026: reviewer khác model người viết, hỏi trước khi tốn hạn mức."""
+
+    def plan(self, level, writer, **kw):
+        return [(r["model"], r["effort"]) for r in risk.review_plan(level, writer, **kw)["reviewers"]]
+
+    def test_each_cell_of_the_table(self):
+        cases = [
+            (("vua", "opus"), {}, [("sonnet", "high")]),
+            (("vua", "sonnet"), {}, [("opus", "medium")]),
+            (("cao", "opus"), {}, [("opus", "high"), ("sonnet", "high")]),
+            (("cao", "sonnet"), {}, [("opus", "high")]),
+            (("cao", "sonnet"), {"security": True}, [("opus", "high"), ("sonnet", "high")]),
+            (("cao", "opus"), {"security": True, "crypto": True}, [("opus", "xhigh"), ("sonnet", "high")]),
+            (("cao", "sonnet"), {"security": True, "crypto": True}, [("opus", "xhigh"), ("sonnet", "high")]),
+            (("thap", "opus"), {}, []),
+        ]
+        for (level, writer), kw, want in cases:
+            with self.subTest(level=level, writer=writer, **kw):
+                self.assertEqual(self.plan(level, writer, **kw), want)
+
+    def test_rereview_of_a_fix_is_one_sonnet_unless_the_fix_itself_is_high(self):
+        for writer in ("opus", "sonnet"):
+            self.assertEqual(self.plan("vua", writer, rereview=True), [("sonnet", "high")])
+            self.assertEqual(self.plan("cao", writer, rereview=True, security=True), [("opus", "high")])
+        self.assertEqual(self.plan("thap", "opus", rereview=True), [])
+
+    def test_writer_from_model_id_and_other_families(self):
+        self.assertEqual(self.plan("vua", "claude-opus-5-5"), [("sonnet", "high")])
+        self.assertEqual(self.plan("vua", "claude-sonnet-5-5"), [("opus", "medium")])
+        self.assertEqual(self.plan("vua", "claude-fable-5-1"), [("sonnet", "high")])
+        self.assertEqual(self.plan("vua", "claude-haiku-5-5"), [("opus", "medium")])
+
+    def test_unknown_writer_names_both_cases(self):
+        r = risk.review_plan("vua", None)
+        self.assertEqual(r["reviewers"], [])
+        self.assertIn("Opus viết: giao `agent-stack:reviewer` trong context mới, model sonnet, effort high", r["review"])
+        self.assertIn("Sonnet viết: giao `agent-stack:reviewer` trong context mới, model opus, effort medium",
+                      r["review"])
+
+    def test_dual_review_text_asks_for_parallel_and_log(self):
+        text = risk.review_plan("cao", "opus")["review"]
+        self.assertIn("giao song song 2 `agent-stack:reviewer`", text)
+        self.assertIn("opus·high và sonnet·high", text)
+        self.assertIn("review_log.py add", text)
+
+    def test_assess_marks_security_and_crypto_from_paths(self):
+        auth = risk.assess([change("app/auth/login.py", 40)], writer="sonnet")
+        self.assertEqual(auth["level"], "cao", auth)
+        self.assertEqual([(r["model"], r["effort"]) for r in auth["reviewers"]], [("opus", "high"), ("sonnet", "high")])
+        self.assertIn("differential-review", auth["review"])
+        pay = risk.assess([change("src/payments/charge.py", 40)], writer="sonnet")
+        self.assertEqual(pay["reviewers"][0], {"model": "opus", "effort": "xhigh"})
+        # Mức cao vì hook và xóa file, không đụng bảo mật: Sonnet viết thì một Opus.
+        plain = risk.assess([change("plugin/hooks/clean.py", 10, 0, "shutil.rmtree(p)\n")], writer="sonnet")
+        self.assertEqual(plain["level"], "cao", plain)
+        self.assertEqual(plain["reviewers"], [{"model": "opus", "effort": "high"}])
+
+    def limits(self, week=None, five=None, reset_in=3600):
+        now = 1_000_000.0
+        windows = {}
+        if week is not None:
+            windows["seven_day"] = {"used_percentage": week, "resets_at": now + reset_in}
+        if five is not None:
+            windows["five_hour"] = {"used_percentage": five, "resets_at": now + reset_in}
+        return {"rate_limits": windows}, now
+
+    def test_budget_asks_before_opus_or_dual_review(self):
+        limits, now = self.limits(week=84)
+        self.assertEqual(risk.budget_asks([("opus", "medium")], "vua", 10, limits, now),
+                         ["hạn mức tuần đã dùng 84% (từ 80%)"])
+        self.assertEqual(len(risk.budget_asks([("opus", "high"), ("sonnet", "high")], "cao", 10, limits, now)), 1)
+        # Chỉ một Sonnet: rẻ, không hỏi.
+        self.assertEqual(risk.budget_asks([("sonnet", "high")], "vua", 10, limits, now), [])
+        limits, now = self.limits(week=79, five=90)
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 10, limits, now),
+                         ["hạn mức 5 giờ đã dùng 90% (từ 90%)"])
+        limits, now = self.limits(week=10)
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 801, limits, now),
+                         ["diff lớn (801 dòng code, trên 800)"])
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 800, limits, now), [])
+
+    def test_window_past_reset_is_ignored(self):
+        limits, now = self.limits(week=95, five=99, reset_in=-1)
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 10, limits, now), [])
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 10, {"rate_limits": "x"}, now), [])
+        self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 10, None, now), [])
+
+    def test_threshold_edges_and_security_from_boundary_alone(self):
+        limits, now = self.limits(week=80)
+        self.assertEqual(risk.budget_asks([("opus", "medium")], "vua", 10, limits, now),
+                         ["hạn mức tuần đã dùng 80% (từ 80%)"])
+        limits, now = self.limits(week=10)
+        self.assertEqual(risk.budget_asks([("opus", "medium")], "vua", 5000, limits, now), [],
+                         "diff lớn chỉ hỏi ở mức cao")
+        # Mức cao vì hook, khá lớn, không đổi test.
+        body = "x = 1\n" * 199
+        plain = risk.assess([change("plugin/hooks/sync.py", 200, 0, body)], writer="sonnet")
+        called = risk.assess([change("plugin/hooks/sync.py", 200, 0, body + "requests.post(url)\n")], writer="sonnet")
+        self.assertEqual((plain["level"], called["level"]), ("cao", "cao"), (plain, called))
+        self.assertEqual(len(plain["reviewers"]), 1)
+        # Gọi ra ngoài, thêm dependency: ranh giới tin cậy nhưng không kéo review kép (bước 5 chỉ tính xác thực, mã
+        # hóa, input, chạy lệnh, dữ liệu nhạy cảm).
+        self.assertEqual(len(called["reviewers"]), 1, called)
+        ran = risk.assess([change("plugin/hooks/sync.py", 200, 0, body + "subprocess.run(cmd)\n")], writer="sonnet")
+        self.assertEqual((ran["level"], len(ran["reviewers"])), ("cao", 2), ran)
+        # Đường dẫn ký, jwt chỉ có trong CRYPTO_RE: vẫn là bảo mật, nên Sonnet viết thì hai reviewer, Opus xhigh.
+        signing = risk.assess([change("plugin/hooks/signing.py", 200, 0, body)], writer="sonnet")
+        self.assertEqual(signing["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "high"}])
+        self.assertIn("differential-review", signing["review"])
+
+    def test_render_shows_ask_line(self):
+        future = {"rate_limits": {"seven_day": {"used_percentage": 90, "resets_at": 4_000_000_000}}}
+        out = risk.render(risk.assess([change("app/auth/login.py", 40)], writer="opus", limits=future))
+        self.assertIn("Review đề nghị: giao song song 2", out)
+        self.assertIn("Hỏi người dùng trước khi giao review này: hạn mức tuần đã dùng 90% (từ 80%)", out)
+        self.assertIn("chỉ một reviewer sonnet·high", out)
+
+
 class Weakening(unittest.TestCase):
     """Nới test để cho đạt: assert chặt đổi sang dạng lỏng, bớt assert, thêm skip (ví dụ 3 của trang đánh giá)."""
 
@@ -332,6 +451,43 @@ class Collect(TempDirTestCase):
                              capture_output=True, text=True)
         self.assertEqual(out.returncode, 2)
         self.assertIn("nosuchref", out.stdout + out.stderr)
+
+    def test_cli_writer_limits_and_new_reach_the_review_plan(self):
+        import json
+        import os
+        self.git("init", "-q")
+        (self.tmp / "app" / "auth").mkdir(parents=True)
+        (self.tmp / "app" / "auth" / "login.py").write_text("x = 1\n")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "init")
+        (self.tmp / "app" / "auth" / "login.py").write_text("x = 1\n" + "y = 2\n" * 40)
+        state = self.tmp / "state"
+        state.mkdir()
+        (state / "limits.json").write_text(json.dumps({
+            "rate_limits": {"seven_day": {"used_percentage": 85, "resets_at": 4_000_000_000}},
+            "model": {"id": "claude-sonnet-5-5"}}))
+        env = dict(os.environ, AGENT_STACK_STATE=str(state))
+
+        def run(*args):
+            out = subprocess.run([sys.executable, str(SCRIPTS / "risk.py"), str(self.tmp), "--json", *args],
+                                 capture_output=True, text=True, env=env)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            return json.loads(out.stdout)
+
+        first = run("--writer", "opus")
+        self.assertEqual(first["level"], "cao")
+        self.assertEqual(first["reviewers"], [{"model": "opus", "effort": "high"}, {"model": "sonnet", "effort": "high"}])
+        self.assertEqual(first["ask"], ["hạn mức tuần đã dùng 85% (từ 80%)"])
+        self.assertIn("(người viết: Opus)", first["review"])
+        # Không truyền --writer: lấy model trong limits.json và nói rõ là suy đoán.
+        guessed = run()
+        self.assertIn("người viết: Sonnet, suy từ state/limits.json", guessed["review"])
+        # Phần sửa sau lần chấm (mức vừa vì xóa file): một sonnet·high, dù Sonnet viết.
+        with (self.tmp / "app" / "auth" / "login.py").open("a") as f:
+            f.write("os.remove(path)\n")
+        fix = run("--new", "--writer", "sonnet")
+        self.assertEqual(fix["level"], "vua", fix)
+        self.assertEqual(fix["reviewers"], [{"model": "sonnet", "effort": "high"}])
 
     def test_cli_outside_repo_exits_2(self):
         out = subprocess.run([sys.executable, str(SCRIPTS / "risk.py"), str(self.tmp)], capture_output=True, text=True)

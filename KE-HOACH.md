@@ -623,6 +623,15 @@ Bạn duyệt 5 tiêu chí (gồm phần chạy đối chứng sau bản sửa m
 - **Review** (differential review tự làm theo skill, opus·high, sonnet hai vòng): sửa lỗi bất ngờ thoát mã 1 (trùng nghĩa "test yếu"); dựng cả hai cây trước khi chạy; phía trước trượt vì import, tên, lệnh, fixture hay lỗi build thì mã 2; môi trường nạp code thật (PYTHONPATH, `.pth`, `__editable__`, kể cả qua shebang) thì mã 2; so đường dẫn sau khi giải symlink, theo cấp thư mục. Không làm theo gợi ý hạ mã 1 thành 2 cho mọi lệnh không dò được môi trường, vì trái tiêu chí 2 bạn đã duyệt; thay bằng cảnh báo kiểm tay.
 - **Giới hạn:** lệnh test vẫn chạy code của repo (như `receipt.py run`); submodule không được dựng; file LFS giữ dạng con trỏ; cả repo được đọc vào bộ nhớ hai lần (cây gốc và cây hiện tại); nhận dạng lỗi nạp và lỗi assert là mẫu chữ cho Python, Go, Rust, Jest, ngôn ngữ khác có thể ra mã 0 khi phía trước trượt vì thiếu tên mới. Sau 3 vòng còn một lỗi (`--link .venv` với venv trong repo làm test yếu ra mã 2 thay vì 1, vì site-packages của venv được link bị coi là thư mục làm việc); bạn cho sửa ở vòng thứ 4: đường dẫn nằm trong chính thư mục được link không tính, nội dung `.pth` trong đó vẫn soi.
 
+### 6.26 Reviewer khác model người viết (04/11/2026)
+
+Review cùng model vẫn bắt được lỗi nhưng có điểm mù chung (câu 4 của trang đánh giá pipeline), nên bạn chốt cấu hình review chéo model và nhận cả 4 đề xuất tiết kiệm.
+
+- **Cấu hình:** vừa, Opus viết → sonnet·high, Sonnet viết → opus·medium; cao, Opus viết → opus·high và sonnet·high song song, Sonnet viết → opus·high; cao và đụng bảo mật → cả hai (mã hóa, token, thanh toán, sandbox: opus·xhigh); thấp tự rà. Review lại phần sửa: một sonnet·high, lên opus·high khi phần sửa ở mức cao. Fable xếp như Opus, Haiku như Sonnet.
+- **Cách làm:** `risk.py --writer <model>` (thiếu thì lấy `model.id` trong `state/limits.json`, có thể của phiên khác) in reviewer trong dòng "Review đề nghị" và trả `reviewers` trong `--json`. Trước review kép hay review có Opus, in dòng hỏi người dùng khi hạn mức tuần từ 80%, 5 giờ từ 90% (cửa sổ đã qua giờ reset thì bỏ), hay mức cao với diff trên 800 dòng code. `review_log.py add` ghi mỗi lần review vào `state/review-log.jsonl` (mỗi lỗi: ai tìm, mức, sửa hay bác bỏ); `summary` đếm lỗi thật chỉ Opus, chỉ Sonnet, cả hai, và lỗi reviewer khác model người viết tìm riêng.
+- **Giới hạn:** payload SubagentStart (app 2.1.317) chỉ có `agent_id` và `agent_type`, không có model, nên hook Stop vẫn chỉ kiểm có ít nhất một lần giao reviewer; chọn đúng ô và đủ hai reviewer dựa vào agent. "Đụng bảo mật" (luật nhạy cảm theo đường dẫn, secret, chạy lệnh, SQL, đường dẫn mã hóa, và ranh giới xác thực, input, chạy lệnh, dữ liệu nhạy cảm; không tính gọi ra ngoài, thêm dependency) và "mã hóa" là gợi ý thô theo đường dẫn và luật nội dung của `risk.py`. Mã hóa ở mức vừa giữ ô của bảng (chờ bạn quyết có nâng không).
+- **Review** (kép, opus·high và sonnet·high, cùng một đề): Sonnet 2 vừa, 4 thấp, 1 cần bạn quyết; Opus 3 thấp; trùng 1. Đã sửa hết kèm test; lần đầu ghi vào `state/review-log.jsonl`.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

@@ -9,13 +9,13 @@ argument-hint: "[--base <ref>]"
 
 Mục tiêu: bạn chỉ cần bỏ công ở đầu việc (nói rõ muốn gì) và ở cuối việc (quyết những điểm cần con người). Phần giữa do agent tự kiểm, có bằng chứng, nên bạn không phải đọc mọi diff.
 
-Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/done-gate/scripts/risk.py`. Biên nhận kiểm chứng: `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py`.
+Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`; nhật ký review: `${CLAUDE_SKILL_DIR}/scripts/review_log.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/done-gate/scripts/risk.py`. Biên nhận kiểm chứng: `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/receipt.py`.
 
 ## Các bước
 
 1. **Ý định và tiêu chí xong.** Project có file kế hoạch thì đọc dòng **Tiêu chí xong** trong §0: tiêu chí ghi từ đầu việc là chuẩn để so, không viết lại. Viết 2–4 dòng: người dùng muốn gì (dựa trên lời của họ trong hội thoại), thay đổi này làm gì. Không có tiêu chí cho việc này (§0 không có, hay tiêu chí đó của việc khác) thì viết tiêu chí từ lời người dùng và ghi "viết ở cuối việc" trong báo cáo, để người dùng biết chuẩn không được đặt trước. Kết quả lệch tiêu chí (làm thêm, làm bớt, đổi hành vi): không sửa tiêu chí cho khớp cái đã làm; đưa vào "cần bạn quyết". Hội thoại không đủ rõ để viết thì hỏi người dùng, đừng đoán.
 2. **Phạm vi.** Chạy `git status --short`. Tách file thuộc việc này khỏi file đã đổi từ trước hoặc do người khác đổi. Không sửa, không commit file không thuộc việc này; nêu chúng trong báo cáo.
-3. **Mức rủi ro.** Chạy `python3 <risk.py>` (thêm `--base <ref>` nếu `$ARGUMENTS` có). Việc đã commit một phần hay toàn bộ thì thêm `--base <commit ngay trước việc>`: không có nó thì diff so với HEAD thiếu phần đã commit, hay rỗng. Hook Stop in sẵn lệnh có `--base` khi lượt đã commit. Mức thấp, vừa hay cao quyết độ sâu ở bước 5. Lý do của script chỉ là gợi ý thô: nếu nó báo nhầm (ví dụ secret giả trong test), ghi một dòng vì sao bỏ qua.
+3. **Mức rủi ro.** Chạy `python3 <risk.py> --writer <opus|sonnet>` (họ model của chính bạn, để dòng "Review đề nghị" chọn sẵn reviewer khác model; thêm `--base <ref>` nếu `$ARGUMENTS` có). Việc đã commit một phần hay toàn bộ thì thêm `--base <commit ngay trước việc>`: không có nó thì diff so với HEAD thiếu phần đã commit, hay rỗng. Hook Stop in sẵn lệnh có `--base` khi lượt đã commit. Mức thấp, vừa hay cao quyết độ sâu ở bước 5. Lý do của script chỉ là gợi ý thô: nếu nó báo nhầm (ví dụ secret giả trong test), ghi một dòng vì sao bỏ qua.
    - Script báo **ranh giới tin cậy bị đụng** (input từ ngoài, xác thực, gọi ra ngoài, dữ liệu nhạy cảm, dependency, chạy lệnh): tìm mục của việc này trong `.agent/threat-model.md` bằng `grep -n '^## ' .agent/threat-model.md` rồi chỉ đọc mục đó (file gom mọi chức năng cũ, đọc cả file tốn token). Chưa có mục cho việc này thì chạy skill `threat-model` ngay (muộn còn hơn không), rồi làm các chốt chặn còn `cần làm` trước khi đi tiếp. Báo nhầm (ví dụ `subprocess` chạy lệnh cố định, không có input từ ngoài) thì ghi một dòng lý do và bỏ qua.
 4. **Kiểm chứng có biên nhận.** Chạy qua `python3 <receipt.py> run -- <lệnh>`:
    - mốc kiểm tra của project, lấy từ `CLAUDE.md`, `AGENTS.md` hoặc mục "Mốc kiểm tra" trong §0 của `PLAN.md`;
@@ -24,15 +24,25 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
    - Còn đỏ thì sửa rồi chạy lại. Không đi tiếp khi còn lệnh thoát mã khác 0.
    - Sửa code để test đạt, không sửa test cho đạt: không nới assert (`assertEqual` thành `assertIn`, `assertTrue`), không xóa assert, không thêm skip hay xfail. `risk.py` báo "nới assert", "bớt assert", "thêm skip". Test phải đổi vì hành vi đổi có chủ ý thì ghi lý do trong báo cáo; hành vi người dùng thấy đổi thì đưa vào "cần bạn quyết".
    - Từ mức vừa, hook Stop kiểm bằng chứng: phải có ít nhất một biên nhận đạt còn đúng cho code hiện tại (sửa tài liệu sau đó không làm cũ), không lệnh nào vừa trượt trên code hiện tại, và đã giao reviewer trong lượt. Thiếu thì hook chặn một lần.
-5. **Review đối kháng ở context mới**, theo mức rủi ro:
-   - thấp: tự đọc `git diff` một lượt, soát theo tiêu chí xong; không gọi subagent.
-   - vừa: giao `agent-stack:reviewer`, chọn model `sonnet`.
-   - cao: giao `agent-stack:reviewer` với model mặc định của nó (opus · high).
+5. **Review đối kháng ở context mới**, theo mức rủi ro và model người viết (model của phiên đang viết code). Reviewer khác model người viết để giảm điểm mù chung của một model (bạn chốt 04/11/2026). Dòng "Review đề nghị" của `risk.py --writer …` ghi sẵn ô cần dùng:
+
+   | Mức | Opus viết | Sonnet viết |
+   |---|---|---|
+   | thấp | tự đọc `git diff` một lượt, soát theo tiêu chí xong; không gọi subagent | như bên trái |
+   | vừa | reviewer sonnet · high | reviewer opus · medium |
+   | cao | hai reviewer song song: opus · high và sonnet · high | reviewer opus · high |
+   | cao, đụng bảo mật (xác thực, mã hóa, secret, dữ liệu nhạy cảm, input, chạy lệnh; không tính gọi ra ngoài hay thêm dependency) | hai reviewer: opus · high và sonnet · high | như bên trái |
+
+   - Mã hóa, token, thanh toán, sandbox (theo đường dẫn file): ở mức cao, reviewer Opus dùng effort xhigh (như bảng router); mức vừa giữ ô của bảng. Fable viết tính như Opus, Haiku viết tính như Sonnet. Không truyền `--writer` thì `risk.py` đoán người viết từ `state/limits.json` (có thể của phiên khác) và nói rõ là đoán.
+   - Giao `agent-stack:reviewer` bằng công cụ Agent với đúng `model` và `effort` của ô (skill này yêu cầu effort, nên được đặt).
+   - **Review kép** (hai reviewer): giao cả hai trong cùng một tin nhắn để chạy song song, cùng một prompt. Gộp lỗi trùng, rồi ghi lần review bằng `python3 <review_log.py> add --writer <opus|sonnet> --level <mức> --reviewers opus,sonnet --task "<việc>" --found "<opus|sonnet|both>:<cao|vua|thap>:<sua|bac-bo|hoi>:<mô tả ngắn>"` (một `--found` cho mỗi lỗi, `both` khi cả hai cùng tìm; không có lỗi nào thì bỏ `--found` nhưng vẫn ghi). `python3 <review_log.py> summary` tổng hợp lỗi nào do reviewer nào tìm, để sau vài tuần trả lời "reviewer khác model có bắt nhiều lỗi hơn không".
+   - **Hỏi trước khi tốn hạn mức**: trước review kép hay review có Opus, `risk.py` in dòng "Hỏi người dùng trước khi giao review này" khi hạn mức tuần từ 80%, 5 giờ từ 90% (đọc `state/limits.json`), hay mức cao với diff trên 800 dòng code. Khi có dòng đó, hỏi người dùng (cho chọn chỉ một reviewer sonnet · high) rồi mới giao, trừ khi họ đã chọn cho việc này.
+   - Hook Stop chỉ kiểm được đã giao `agent-stack:reviewer` ít nhất một lần trong lượt: payload SubagentStart chỉ có loại subagent, không có model, nên việc chọn đúng ô và đủ hai reviewer do bạn tự giữ.
    - Reviewer không thấy hội thoại. Prompt giao việc phải tự đủ: ý định và tiêu chí xong (bước 1), danh sách file thuộc việc này, lệnh xem diff, mức rủi ro kèm lý do, và yêu cầu trả về từng lỗi kèm `file:dòng` và kịch bản gây lỗi.
    - Có mục threat model cho việc này (bước 3): chép bảng mối đe dọa vào prompt, yêu cầu reviewer chỉ ra `file:dòng` thực thi từng chốt chặn và test chạm nhánh bị từ chối. Reviewer xác nhận xong thì sửa trạng thái trong `.agent/threat-model.md` thành `đã có` kèm `file:dòng`.
    - Mức cao và đụng phần bảo mật (xác thực, mã hóa, input, chạy lệnh), khi skill `differential-review` (Trail of Bits) có trong phiên: chạy nó trước trên diff đã xuất ra file, gồm cả phần đã stage và file mới chưa track thuộc việc này: `git diff HEAD` (hay `git diff <ref>` khi có `--base`), nối thêm `git diff --no-index /dev/null <file>` cho từng file mới, ghi vào `.tmp/done-gate.diff` (hoặc thư mục tạm của hệ điều hành nếu project không có `.tmp/`). Dặn nó không `git checkout` (dùng `git show <ref>:<file>`), và ghi báo cáo vào cùng thư mục tạm. Sau đó đưa báo cáo của nó cho reviewer phản biện: skill đó không lọc dương tính giả, reviewer thì có.
    - Xử lý từng phát hiện:
-     - lỗi máy móc, sửa đúng một cách rõ ràng và không đổi hành vi người dùng thấy: tự sửa rồi quay lại bước 4. Sau đó chấm riêng phần vừa sửa bằng `python3 <risk.py> --new` (chỉ dòng thêm sau lần chấm trước; lệnh này cũng ghi dấu cho phần sửa). Mức vừa trở lên thì giao reviewer xem lại đúng phần sửa (nêu lỗi cũ, cách đã sửa, hàm hay dòng đã đổi), lặp tới khi phần sửa ở mức thấp hay reviewer không còn lỗi, **tối đa 3 vòng sửa rồi review lại**. Hết 3 vòng mà reviewer vẫn báo lỗi thì dừng sửa: đưa các lỗi còn lại vào "cần bạn quyết", kèm lỗi nào đã sửa ở từng vòng, vì vòng lặp không hội tụ thường là dấu hiệu hiểu sai ý định hay thiết kế. Không chấm lại thì hook Stop nhắc mãi, và phần sửa lọt qua review;
+     - lỗi máy móc, sửa đúng một cách rõ ràng và không đổi hành vi người dùng thấy: tự sửa rồi quay lại bước 4. Sau đó chấm riêng phần vừa sửa bằng `python3 <risk.py> --new` (chỉ dòng thêm sau lần chấm trước; lệnh này cũng ghi dấu cho phần sửa). Mức vừa trở lên thì giao reviewer xem lại đúng phần sửa (nêu lỗi cũ, cách đã sửa, hàm hay dòng đã đổi): chỉ một reviewer sonnet · high bất kể ai viết, opus · high khi chính phần sửa ở mức cao (dòng "Review đề nghị" của `--new` ghi sẵn), lặp tới khi phần sửa ở mức thấp hay reviewer không còn lỗi, **tối đa 3 vòng sửa rồi review lại**. Hết 3 vòng mà reviewer vẫn báo lỗi thì dừng sửa: đưa các lỗi còn lại vào "cần bạn quyết", kèm lỗi nào đã sửa ở từng vòng, vì vòng lặp không hội tụ thường là dấu hiệu hiểu sai ý định hay thiết kế. Không chấm lại thì hook Stop nhắc mãi, và phần sửa lọt qua review;
      - lỗi đụng tới ý định, phạm vi hay một đánh đổi: không tự quyết; đưa vào mục "cần bạn quyết" của báo cáo, kèm các lựa chọn;
      - phát hiện bác bỏ được: ghi một dòng lý do.
 6. **Tài liệu.** Tìm bằng `grep` những chỗ nhắc tới thứ vừa đổi (tên lệnh, cờ, hàm, đường dẫn) trong README, tài liệu hướng dẫn, help và ví dụ, rồi sửa cho khớp. Project có `PLAN.md` thì cập nhật §0: đã xong gì, kèm bằng chứng; chuyển tiêu chí xong của việc này vào mục Xong (đạt n/n) rồi xóa dòng **Tiêu chí xong**, để việc sau không mượn nhầm.
@@ -44,7 +54,7 @@ Script chấm rủi ro: `${CLAUDE_SKILL_DIR}/scripts/risk.py`. Nếu biến này
    Đã đổi: n file (liệt kê ngắn); không đụng: …
    Kiểm chứng: <lệnh> → <kết quả> (có biên nhận); tái hiện: <lệnh> → <thấy gì>
    Threat model: n mối đe dọa, n chốt chặn đã có, n còn thiếu (hoặc "không đụng ranh giới tin cậy")
-   Review: tìm n, đã sửa n, bác bỏ n
+   Review: <reviewer (model · effort)>: tìm n, đã sửa n, bác bỏ n (review kép: đã ghi review_log.py)
    Cần bạn quyết: … (hoặc "không")
    Rủi ro: thấp | vừa | cao — nên đọc: file:dòng … (mức thấp: "không cần đọc diff")
    ```

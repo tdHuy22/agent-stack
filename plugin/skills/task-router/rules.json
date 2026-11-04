@@ -253,7 +253,7 @@
       "agent": "agent-stack:reviewer",
       "model": "sonnet",
       "effort": "high",
-      "note": "reviewer chỉ khi risk.py báo rủi ro vừa hoặc cao; cao thì để reviewer chạy opus · high",
+      "note": "reviewer chỉ khi risk.py báo rủi ro vừa hoặc cao; chạy risk.py --writer <model của bạn>, dòng Review đề nghị ghi reviewer khác model người viết (mức cao Opus viết thì hai reviewer song song)",
       "match": [
         "chot viec",
         "chot lai viec",
