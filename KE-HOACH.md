@@ -632,6 +632,15 @@ Review cùng model vẫn bắt được lỗi nhưng có điểm mù chung (câu
 - **Giới hạn:** payload SubagentStart (app 2.1.317) chỉ có `agent_id` và `agent_type`, không có model, nên hook Stop vẫn chỉ kiểm có ít nhất một lần giao reviewer; chọn đúng ô và đủ hai reviewer dựa vào agent. "Đụng bảo mật" (luật nhạy cảm theo đường dẫn, secret, chạy lệnh, SQL, đường dẫn mã hóa, và ranh giới xác thực, input, chạy lệnh, dữ liệu nhạy cảm; không tính gọi ra ngoài, thêm dependency) và "mã hóa" là gợi ý thô theo đường dẫn và luật nội dung của `risk.py`. Mã hóa ở mức vừa giữ ô của bảng (chờ bạn quyết có nâng không).
 - **Review** (kép, opus·high và sonnet·high, cùng một đề): Sonnet 2 vừa, 4 thấp, 1 cần bạn quyết; Opus 3 thấp; trùng 1. Đã sửa hết kèm test; lần đầu ghi vào `state/review-log.jsonl`.
 
+### 6.27 Tài liệu khớp code (cải tiến 5, 04/11/2026)
+
+`tests/test_docs_match.py` đọc `README.md`, `HUONG-DAN.html`, `CLAUDE.md`, `global/*.md`, `plugin/skills/*/SKILL.md`, `plugin/agents/*.md`, lấy các đoạn code (`…`, khối ```, `<code>`, `<pre>`), rồi kiểm hai thứ: lần gọi `<script>.py [lệnh con] --cờ` với script git theo dõi trong repo (lệnh con và cờ phải có trong `--help` thật, của lệnh con nếu có; cờ ẩn bằng `argparse.SUPPRESS` thì tìm trong `add_argument`; script không dùng argparse thì cờ phải có trong mã nguồn cùng thư mục), và đường dẫn bắt đầu bằng `plugin/`, `tools/`, `tests/`, `global/`, `evals/`, `.agent/` (phải được git theo dõi hay bị git bỏ qua).
+
+- **reuse-best:** tự viết; test riêng của repo, không có công cụ nào so tài liệu tiếng Việt với `--help` của script Python.
+- **Tránh báo nhầm:** bỏ token có ký hiệu mẫu (`<…>`, `…`, `*`, `{}`, `$`), đường dẫn không có đuôi file hay dấu `/` cuối (như phương thức MCP `tools/list`), file agent-stack tạo trong mọi project (`.agent/HANDOFF.md`, `.agent/PLAN.md`, `.agent/trang/`…), tên script đứng trong câu (`risk.py:` …); trùng tên script thì chỉ báo khi không bản nào nhận.
+- **Lần chạy đầu:** 20 tài liệu, 186 lần gọi script, 202 đường dẫn, khoảng 2,5 giây; một lệch thật: `tools/port_agents.py` là file của pi-agent, đã ghi thành `pi-agent/tools/port_agents.py` trong README và HUONG-DAN.
+- **Giới hạn:** không kiểm giá trị của cờ, lệnh không phải script Python (`install.sh`, lệnh `claude`), hay đường dẫn viết ngoài đoạn code.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

@@ -226,7 +226,7 @@ pi (project `~/Documents/Claude/pi-agent`) chạy đúng thư mục `plugin/` m�
 
 `./install.sh --apply` (bước `pi`, chỉ khi có `~/.pi/agent`) tạo hai đường cố định cho pi: `~/.pi/agent/agent-stack/plugin` → `plugin/` và `~/.pi/agent/agent-stack/agents` → `state/pi/agents`. Mỗi lần mở phiên pi, hook SessionStart (cầu nối đặt `AGENT_STACK_HOST=pi`) sinh lại subagent dạng pi theo đúng `plugin/agents/`, và báo khi plugin lệch hợp đồng; lệch thì giữ bộ subagent cũ.
 
-Phần này có hiệu lực ở pi khi pi-agent dùng hai đường cố định trên (cầu nối gọi hook qua `~/.pi/agent/agent-stack/plugin/hooks`, extension subagent đọc `~/.pi/agent/agent-stack/agents`, `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`); tới 02/11/2026 pi-agent vẫn gọi thẳng repo và chép subagent bằng `tools/port_agents.py` của nó, nên đó là việc còn lại ở pi-agent.
+Phần này có hiệu lực ở pi khi pi-agent dùng hai đường cố định trên (cầu nối gọi hook qua `~/.pi/agent/agent-stack/plugin/hooks`, extension subagent đọc `~/.pi/agent/agent-stack/agents`, `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`); tới 02/11/2026 pi-agent vẫn gọi thẳng repo và chép subagent bằng `pi-agent/tools/port_agents.py` của nó, nên đó là việc còn lại ở pi-agent.
 
 Thêm, đổi tên hay bỏ một hook, subagent hay skill thì ghi vào `plugin/hosts/pi.json` (dùng, hay bỏ kèm lý do); quên thì `tests/test_pi_contract.py` trượt. Kiểm riêng:
 
