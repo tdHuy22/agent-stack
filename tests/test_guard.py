@@ -421,6 +421,23 @@ class IrreversibleGuard(GuardBase):
             with self.subTest(cmd=cmd):
                 self.assert_gated(cmd, f"ir{i}")
 
+    def test_shared_rule_lists_five_kinds_and_the_hook_stops_every_command_it_names(self):
+        # Luật chung (global/SHARED.global.md) và hook phải khớp: lệnh luật nói hook chặn thì hook chặn thật.
+        shared = (PLUGIN.parent / "global" / "SHARED.global.md").read_text(encoding="utf-8")
+        section = shared.split("## Quyết định phải hỏi người dùng", 1)[1].split("\n## ", 1)[0]
+        kinds = re.findall(r"^  (\d)\. ([^:]+):", section, re.M)
+        self.assertEqual(kinds, [("1", "Không đảo ngược được"), ("2", "Ra khỏi máy"),
+                                 ("3", "Đụng ranh giới tin cậy theo cách người dùng chưa yêu cầu"),
+                                 ("4", "Đổi phạm vi hay ý định"), ("5", "Tốn tiền")])
+        named = re.search(r"nhận ra một phần loại 1 và 2 \((.*?)\) và chặn lần đầu", section).group(1)
+        samples = {"git push": "git push origin main", "git reset --hard": "git reset --hard",
+                   "git clean -f": "git clean -fd", "rm -r": "rm -r src",
+                   "amend": "git commit --amend --no-edit", "rebase": "git rebase --root"}
+        self.assertEqual(set(re.findall(r"`([^`]+)`", named)), set(samples), "luật kê lệnh mà test chưa có mẫu")
+        for i, cmd in enumerate(samples.values()):
+            with self.subTest(cmd=cmd):
+                self.assert_gated(cmd, f"rule{i}")
+
     def test_force_push_says_it_rewrites_remote_history(self):
         reason = self.assert_gated("git push --force origin main")
         self.assertIn("ghi đè hay xóa lịch sử trên remote", reason)
