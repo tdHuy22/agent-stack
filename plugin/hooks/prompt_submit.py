@@ -9,7 +9,8 @@ Hook cũng lưu yêu cầu gần nhất của người dùng theo từng phiên 
 không được ghi đè yêu cầu thật và không được router gợi ý; khóa và token được che.
 
 Tin của người dùng (không tính lệnh và tin do hệ thống tạo) được ghi ngay vào lượt cuối ở trạng thái đang chạy
-(.agent/LAST-TURN.md), để Esc, crash hay lượt dài chưa xong vẫn để lại yêu cầu. Phiên còn chạy agent-stack cũ hơn bản
+(.agent/LAST-TURN.md), để Esc, crash hay lượt dài chưa xong vẫn để lại yêu cầu; lệnh không tương tác (`claude -p`,
+`pi -p`) thì không, để không ghi đè lượt của phiên tương tác. Phiên còn chạy agent-stack cũ hơn bản
 đã cài thì nhắc một lần.
 
 Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook ghi lúc bắt đầu lượt, dấu §0 và HEAD lúc đó
@@ -116,7 +117,8 @@ def main():
             transcript = data.get("transcript_path")
             extra = dict(flags or {}, **({"transcript": transcript} if isinstance(transcript, str) else {}))
             A.start_turn(sid, data.get("cwd"), extra)  # tự bắt lỗi, không bao giờ văng
-        A.mark_turn_running(sid, data.get("cwd"), prompt)  # sau cùng vì chậm nhất (vài lệnh git); tự bắt lỗi
+        if not A.non_interactive(data):  # `-p` không ghi đè lượt cuối của phiên tương tác (hook Stop ghi nếu đổi file)
+            A.mark_turn_running(sid, data.get("cwd"), prompt)  # sau cùng vì chậm nhất (vài lệnh git); tự bắt lỗi
 
 
 if __name__ == "__main__":

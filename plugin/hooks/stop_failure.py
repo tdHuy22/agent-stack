@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hook StopFailure: Claude Code gọi hook này thay cho Stop khi lỗi API (rate limit, quá tải, hết hạn mức, lỗi máy
 chủ...) kết thúc lượt. Ghi lượt cuối ở trạng thái "dừng vì lỗi", kèm file đã đổi tới lúc đó và đoạn chữ gần nhất
-Claude viết trong lượt, để phiên sau biết lượt dừng ở đâu. Claude Code bỏ qua đầu ra và mã thoát của hook này, nên
+Claude viết trong lượt, để phiên sau biết lượt dừng ở đâu (`claude -p` chỉ ghi khi lượt đổi file). Claude Code bỏ qua đầu ra và mã thoát của hook này, nên
 hook không in gì.
 """
 import re
@@ -36,7 +36,10 @@ def main():
     partial = A.last_assistant_text(data.get("transcript_path"), since) if data.get("transcript_path") else ""
     request = A.request_text(sid)
     # Ghi ngay, rồi ghi lại khi đã biết file đổi (git status, git log): hook có bị ngắt vì quá giờ thì vẫn còn bản đầu.
-    A.record_turn(root, sid, state="failed", request=request, answer=partial, note=note)
+    # Lệnh không tương tác (`claude -p`) chỉ ghi khi đổi file, để không ghi đè lượt cuối của phiên tương tác.
+    quiet = A.non_interactive(data)
+    if not quiet:
+        A.record_turn(root, sid, state="failed", request=request, answer=partial, note=note)
     changed = A.changed_since(root, since) if turn else []
     if changed:
         A.record_turn(root, sid, state="failed", request=request, answer=partial, changed=changed, note=note)

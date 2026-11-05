@@ -85,8 +85,9 @@ def read_hook_input() -> dict:
 
 def non_interactive(data: dict) -> bool:
     """Phiên không có người ngồi trước màn hình: `claude -p` (Claude Code đặt CLAUDE_CODE_ENTRYPOINT=sdk-cli; app
-    desktop là claude-desktop, terminal là cli) hay cầu nối báo `interactive: false` (pi `-p`, theo payload
-    SessionStart trong plugin/hosts/pi.json). Không rõ thì coi là tương tác."""
+    desktop là claude-desktop, terminal là cli) hay cầu nối báo `interactive: false` (pi `-p`, theo payload_common
+    chung trong plugin/hosts/pi.json). Không rõ thì coi là tương tác. SessionStart dựa vào nó để bỏ ghi chú lượt cuối;
+    UserPromptSubmit, Stop, StopFailure để không ghi đè lượt cuối khi lượt không đổi file."""
     if data.get("interactive") is False:
         return True
     return os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-cli"

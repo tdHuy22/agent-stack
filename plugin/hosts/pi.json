@@ -3,7 +3,8 @@
   "host": "pi",
   "about": "Hợp đồng giữa agent-stack và pi (project pi-agent). Mọi hook trong hooks.json, mọi subagent trong agents/ và mọi skill trong skills/ phải có mục ở đây: dùng hay bỏ kèm lý do. tests/test_pi_contract.py kiểm; plugin/hosts/pi_host.py sinh subagent cho pi (hook SessionStart trong pi và install.sh). Cầu nối agent-stack-bridge.ts của pi-agent đọc file này qua ~/.pi/agent/agent-stack/plugin/hosts/pi.json (từ 02/11/2026).",
   "env": {"AGENT_STACK_HOST": "pi"},
-  "payload_common": ["session_id", "cwd", "hook_event_name", "transcript_path"],
+  "payload_common": ["session_id", "cwd", "hook_event_name", "transcript_path", "interactive"],
+  "payload_about": {"interactive": "ctx.hasUI của pi: false khi chạy `pi -p` (không có người xem). SessionStart bỏ ghi chú lượt cuối để model không chép câu trả lời cũ; UserPromptSubmit, Stop không ghi đè lượt cuối khi lượt không đổi file"},
   "outputs_supported": [
     "systemMessage",
     "decision",
@@ -18,8 +19,7 @@
       "script": "session_start.py",
       "pi_event": "session_start",
       "source_map": {"startup": "startup", "reload": "startup", "new": "clear", "resume": "resume", "fork": "resume"},
-      "payload": ["source", "interactive"],
-      "payload_about": {"interactive": "ctx.hasUI của pi: false khi chạy `pi -p` (không có người xem), hook bỏ ghi chú lượt cuối để model không chép lại câu trả lời cũ"}
+      "payload": ["source"]
     },
     "UserPromptSubmit": {
       "script": "prompt_submit.py",

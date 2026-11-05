@@ -689,6 +689,57 @@ class HookTests(TempDirTestCase):
                     out = self.run_hook("session_start.py", payload, python=py, env_extra=env)
                     self.assertIn("Câu trả lời cuối (rút gọn): Có", out["hookSpecificOutput"]["additionalContext"])
 
+    def test_print_mode_turns_keep_the_interactive_last_turn_unless_they_change_files(self):
+        # Mốc kiểm tra `pi -p "Trả lời đúng một từ: ok"` từng ghi đè lượt làm việc thật của phiên tương tác.
+        git(self.project, "init", "-q")
+        self.submit("work", "sửa parser cho đúng định dạng ngày")
+        def note():  # thư mục tạm của hệ điều hành là thư mục chung: hook ghi vào state/last-turn/
+            files = [self.project / ".agent" / "LAST-TURN.md", *sorted((self.state / "last-turn").glob("*.md"))]
+            return "".join(f.read_text(encoding="utf-8") for f in files if f.exists()) or None
+
+        edited = self.touch("parser.py")
+        self.stop("work")
+        os.utime(edited, (time.time() - 60,) * 2)  # touch đặt mtime ở tương lai; lượt `-p` sau không sửa file này
+        before = note()
+        self.assertIn("sửa parser", before)
+        modes = (("claude -p", {}, {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}),
+                 ("pi -p", {"interactive": False}, {"AGENT_STACK_HOST": "pi"}))
+        for label, extra, env in modes:
+            with self.subTest(mode=label):
+                sid = "p-" + label.split()[0]
+                base = {"session_id": sid, "cwd": str(self.project), **extra}
+                self.run_hook("prompt_submit.py", dict(base, prompt="Trả lời đúng một từ: ok"), env_extra=env)
+                self.assertEqual(note(), before)  # không ghi trạng thái đang chạy
+                self.run_hook("stop.py", dict(base, last_assistant_message="ok"), env_extra=env)
+                self.assertEqual(note(), before)
+                self.run_hook("stop_failure.py", dict(base, error="rate_limit"), env_extra=env)
+                self.assertEqual(note(), before)
+        # Lượt `-p` có đổi file vẫn được ghi.
+        base = {"session_id": "p-edit", "cwd": str(self.project)}
+        env = {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}
+        self.run_hook("prompt_submit.py", dict(base, prompt="thêm hàm format_date"), env_extra=env)
+        self.touch("dates.py")
+        self.run_hook("stop.py", dict(base, last_assistant_message="Đã thêm format_date."), env_extra=env)
+        after = note()
+        self.assertIn("thêm hàm format_date", after)
+        self.assertIn("dates.py", after)
+        # pi -p có đổi file cũng được ghi.
+        base = {"session_id": "p-pi-edit", "cwd": str(self.project), "interactive": False}
+        env = {"AGENT_STACK_HOST": "pi"}
+        self.run_hook("prompt_submit.py", dict(base, prompt="thêm hàm parse_time"), env_extra=env)
+        self.touch("times.py")
+        self.run_hook("stop.py", dict(base, last_assistant_message="Đã thêm parse_time."), env_extra=env)
+        self.assertIn("thêm hàm parse_time", note())
+        self.assertIn("times.py", note())
+        # claude -p dừng vì lỗi API sau khi đã đổi file: vẫn ghi trạng thái dừng vì lỗi.
+        base = {"session_id": "p-fail-edit", "cwd": str(self.project)}
+        env = {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}
+        self.run_hook("prompt_submit.py", dict(base, prompt="thêm hàm parse_zone"), env_extra=env)
+        self.touch("zones.py")
+        self.run_hook("stop_failure.py", dict(base, error="rate_limit"), env_extra=env)
+        self.assertIn("zones.py", note())
+        self.assertIn("dừng vì lỗi", note())
+
     def test_session_start_loads_the_last_turn_even_without_a_plan(self):
         git(self.project, "init", "-q")
         self.submit("np", "sửa script")
