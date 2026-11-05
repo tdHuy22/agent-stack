@@ -3,7 +3,7 @@
 **Đây là nguồn sự thật DUY NHẤT về tiến độ triển khai.** Thiết kế chi tiết ở `KE-HOACH.md`; file này chỉ ghi đang ở đâu và việc gì tiếp theo.
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
-*Cập nhật 05/11/2026. Đã push tới `20aa239`; 20 commit sau đó chưa push (đổi tên, prompt-audit, cải tiến 1–6, cấu hình review mới, `receipt.py show` dùng `code_fresh`, 4 trang `.agent/trang/`, luật năm loại quyết định).*
+*Cập nhật 05/11/2026. Đã push tới `3a5da04` (20 commit, bạn đồng ý qua hook hỏi trước lệnh không đảo ngược); commit §0 này chưa push.*
 
 - **Xong (05/11/2026): năm loại quyết định phải hỏi vào luật chung (hết cải tiến 6)** (bạn: "Làm tiếp"; tiêu chí 3/3 đạt, ghi từ đầu việc, agent ghi từ trang đánh giá). Mục "Quyết định phải hỏi người dùng" trong `global/SHARED.global.md`: không đảo ngược được, ra khỏi máy, đụng ranh giới tin cậy theo cách chưa được yêu cầu, đổi phạm vi hay ý định, tốn tiền; ngoài năm loại thì tự quyết. Loại hook nhận ra thì hook chặn lần đầu cả khi đã được phép, không lách; còn lại hỏi trước hay vào "Cần bạn quyết"; đồng ý chỉ tính khi bạn nhắn trong chat. Claude Code và pi nạp thẳng file này. Test mới trong `tests/test_guard.py` khóa năm loại và kiểm mỗi lệnh luật kê thì hook chặn thật (thử đột biến: bỏ loại 5, thêm lệnh lạ, đều trượt). KE-HOACH 6.28. Mức thấp, tự rà. 918 test, `plugin validate`, router eval 109/109 đạt (biên nhận).
 - **Xong (04/11/2026): `receipt.py show` và progress dùng `code_fresh`** (tiêu chí 4/4 đạt, ghi từ đầu việc từ lời bạn). `A.receipt_status` tự nạp bộ chọn tài liệu (`A.doc_filter`, chỉ khi biên nhận có `code_fingerprint`) và thêm cờ `current` (`code_fresh` khi có, không thì `fresh`); `receipt.py show` (ghi "sau đó chỉ tài liệu đổi"), `collect.py`, `plan_tree.py` và hook Stop cùng đọc cờ này. Biên nhận cũ chưa có dấu phần code vẫn xét cả cây; hook Stop giữ hành vi. 3 test mới, `fails-before` bắt được lỗi; HUONG-DAN, SKILL session-keeper, số dòng TM-53/54. Reviewer sonnet·high: 0 lỗi, 3 ghi chú thấp (sửa 2, bác 1). 917 test, `plugin validate`, `plugin test` 24, router eval 109/109 đạt (biên nhận).
@@ -19,8 +19,7 @@
 - **Xong trước đó:** ở `.agent/NHAT-KY.md` (chuyển bằng `state.py trim`).
 - **Việc tiếp theo, theo thứ tự:**
   (Câu 4: cấu hình review mới đã làm; `review_log.py summary` gom số liệu, sau 2 lần review kép: chỉ Opus 5, chỉ Sonnet 10, cả hai 4; cần khoảng 5 lần mới kết luận. Mã hóa, token, thanh toán sửa nhỏ ở mức vừa: giữ ô của bảng, không nâng Opus xhigh (bạn chốt 04/11/2026).)
-  1. Push 20 commit chưa push khi bạn bảo (luật repo: không tự push; hook giờ cũng hỏi). `@ban`
-  2. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
+  1. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
 - **Ghi nhớ (đã xong, không phải việc):**
   - Bỏ bench agent-stack và pi-agent trên Harbor/TBLite (02/11/2026, lời bạn); chi tiết ở `.agent/NHAT-KY.md`.
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
