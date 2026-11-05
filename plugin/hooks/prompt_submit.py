@@ -116,6 +116,10 @@ def main():
             # transcript: hook Stop của phiên khác cùng project đọc để biết file nào do phiên này sửa.
             transcript = data.get("transcript_path")
             extra = dict(flags or {}, **({"transcript": transcript} if isinstance(transcript, str) else {}))
+            if (prompt.strip() and not A.is_automated_prompt(prompt) and not A.is_command_prompt(prompt)
+                    and not A.non_interactive(data)):  # `-p`: prompt có thể chứa chữ không tin cậy (issue, PR)
+                # đồng ý trước cho lệnh không đảo ngược (pretool_guard): chỉ tin thật của người dùng, đã che khóa
+                extra.update(consent_text=A.redact_secrets(A.own_words(prompt)), consent_ts=time.time())
             A.start_turn(sid, data.get("cwd"), extra)  # tự bắt lỗi, không bao giờ văng
         if not A.non_interactive(data):  # `-p` không ghi đè lượt cuối của phiên tương tác (hook Stop ghi nếu đổi file)
             A.mark_turn_running(sid, data.get("cwd"), prompt)  # sau cùng vì chậm nhất (vài lệnh git); tự bắt lỗi

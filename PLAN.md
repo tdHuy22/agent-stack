@@ -5,6 +5,12 @@
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 *Cập nhật 05/11/2026. Đã push tới `9804bd1`; `5c35f7a` và các commit sau chưa push.*
 
+- **Xong (05/11/2026): tin nhắn hiện tại tính là đồng ý trước cho lệnh không đảo ngược** (bạn: "Làm theo khuyến nghị"; tiêu chí 4/4 đạt, ghi từ đầu việc). Câu mệnh lệnh ngắn trong tin vừa gửi ("Push", "Đồng ý, push", "xóa backups đi") cho lệnh qua ngay, một lần mỗi loại việc mỗi repo mỗi tin; câu điều kiện, hoãn, phủ định, câu hỏi, phần dán, khối code, `-p` không tính; push chỉ tới remote đã có, không `:`/`--mirror`/`--delete`/URL. Reviewer sonnet·high 2 vòng (vòng 1: 1 cao 2 vừa 5 thấp; vòng 2: 1 cao 1 vừa 3 thấp), đã sửa hết trừ một mục thấp chấp nhận (rm khớp tên cuối). 929 test, `fails-before` bắt được lỗi, `plugin validate`, `plugin test` 24 đạt (biên nhận). KE-HOACH 6.30, luật chung, HUONG-DAN, README.
+  **Tiêu chí xong** (từ khuyến nghị bạn chọn):
+  1. Tin "Push" hay "Đồng ý, push", chưa từng bị chặn → `git push` qua ngay; lệnh push thứ hai trong cùng tin → chặn. Tương tự `reset`, `clean`, `amend`, `rebase`.
+  2. "đừng push", "push chưa?", "có nên push không", chữ push chỉ nằm trong phần dán (pasted) hay khối code → vẫn chặn.
+  3. `rm -r backups/old`: tin "xóa backups/old" → qua; "xóa đi" (không nêu đích) → chặn.
+  4. Bộ test, `plugin validate`, `plugin test` đạt (biên nhận).
 - **Rà soát (05/11/2026, sau hai bản sửa lệnh `-p`):** tích hợp pi đủ: `pi_host.py check` khớp hợp đồng, subagent sinh lại giống hệt `state/pi/agents`, `~/.pi/agent/agent-stack/plugin` là symlink tới repo, cầu nối đã cài giống pi-agent `936cdcd` (gửi `interactive` mọi payload). App desktop đặt `CLAUDE_CODE_ENTRYPOINT=claude-desktop` nên không bị coi là `-p`. §0 đã trim (13K còn khoảng 9K ký tự).
 
 - **Xong (05/11/2026): lệnh `-p` không ghi đè ghi chú lượt cuối** (bạn: "Sửa ở đây"; tiêu chí 3/3 đạt, agent ghi từ đầu việc theo hướng bạn chọn: chỉ ghi khi lượt `-p` đổi file). UserPromptSubmit không ghi trạng thái đang chạy khi không tương tác; Stop, StopFailure chỉ ghi khi lượt đổi file (chỉ thấy trong git repo). `interactive` chuyển vào `payload_common` của `pi.json`, cầu nối pi-agent gửi trong mọi payload. pi thật: 5/5 `ok`, ghi chú giữ nguyên từng byte; `pi -p` ghi `hello.txt` trong git repo được ghi. Test mới bắt được lỗi (`fails-before`). Reviewer sonnet·high: 0 cao, 0 vừa, 2 thấp (tài liệu, test thiếu 2 nhánh), đã sửa; giới hạn đã ghi ở KE-HOACH 6.29 (`pi -p` không loại được file phiên khác sửa cùng lúc). Bộ test, `plugin validate`, `plugin test`, `pi_host.py check` đạt (biên nhận).

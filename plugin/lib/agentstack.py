@@ -968,6 +968,136 @@ def mark_user_message(session_id, prompt) -> None:
         pass
 
 
+# Đồng ý trước cho lệnh không đảo ngược (05/11/2026): tin của người dùng mở lượt hiện tại có một mệnh đề mệnh lệnh ngắn
+# gọi đúng tên việc ("Push", "Đồng ý, push", "force push đi", "xóa backups đi") thì lệnh đó qua ngay, một lần cho mỗi loại
+# việc mỗi repo mỗi tin. Chỉ xét chữ của chính người dùng: bỏ phần dán, khối code, dòng trích. Mệnh đề chỉ được có từ
+# trong danh sách cho phép quanh động từ, nên "khoan push", "nếu test đạt thì push", "push sau khi review", "reset the
+# form", "đẩy nhanh tiến độ" đều không tính (rơi về hỏi như cũ). Xem KE-HOACH 6.30.
+CONSENT_TEXT_MAX = 2000
+CONSENT_TURN_SECONDS = 120  # lượt hiện tại phải mở ngay sau tin này (tin do hệ thống tạo mở lượt mà không ghi tin)
+_NOT_OWN_WORDS = (re.compile(r"<pasted_content\b[^>]*>.*?(?:</pasted_content>|\Z)", re.S | re.I),
+                  re.compile(r"```.*?(?:```|\Z)", re.S), re.compile(r"(?m)^[ \t]*>.*$"))
+CONSENT_VERBS = {  # việc → các cách gọi tên (một token, chữ thường)
+    "push": {"push"},
+    "force": {"force", "--force", "-f", "--force-with-lease"},
+    "reset": {"reset"},
+    "clean": {"clean"},
+    "amend": {"amend"},
+    "rebase": {"rebase"},
+    "rm": {"xóa", "xoá", "rm", "delete", "remove"},
+}
+# Từ được đứng trước động từ trong mệnh đề (lời đồng ý, thúc giục) và đứng sau nó (tân ngữ quen thuộc, trợ từ).
+_CONSENT_LEAD = {"ok", "okay", "oke", "ừ", "ừm", "uh", "ờ", "vâng", "dạ", "đồng", "ý", "yes", "yep", "sure", "hãy", "cứ",
+                 "please", "pls", "được", "rồi", "giờ", "bây", "now", "go", "ahead", "and", "và", "git", "thì", "vậy",
+                 "giúp", "giùm", "làm", "cho", "luôn", "force", "đi", "lên", "push", "rebase",
+                 "reset", "amend", "clean", "commit"}
+_CONSENT_TAIL = {"đi", "luôn", "lên", "nhé", "nha", "nhá", "giúp", "giùm", "mình", "tôi", "em", "anh", "ngay", "now", "it",
+                 "please", "pls", "code", "commit", "commits", "nhánh", "branch", "origin", "main", "master", "upstream",
+                 "remote", "lại", "--hard", "hard", "về", "to", "the", "thay", "đổi", "changes", "git", "push", "force",
+                 "--force", "-f", "ghi", "đè", "all", "hết", "cả", "and", "và", "thư", "mục", "folder", "file", "files",
+                 "dir", "directory", "head", "này", "đó", "đấy", "this", "that", "--amend", "-i", "-fd", "-fdx",
+                 "--force-with-lease", "nữa", "rồi", "push", "rebase", "reset", "amend", "clean", "commit"}
+_CONSENT_REF = re.compile(r"(?:origin|upstream)/[a-z0-9_./-]+|head~?\d*|head\^+")
+_CONSENT_STRIP = "\"'`“”‘’()[]{}<>*_:"
+
+
+def own_words(prompt) -> str:
+    """Chữ của chính người dùng trong tin: bỏ phần dán (<pasted_content>), khối code và dòng trích (>), chuẩn NFC; giữ
+    CONSENT_TEXT_MAX ký tự cuối (lời bảo làm hay nằm cuối tin)."""
+    import unicodedata
+    text = prompt if isinstance(prompt, str) else ""
+    for pattern in _NOT_OWN_WORDS:
+        text = pattern.sub(" ", text)
+    return unicodedata.normalize("NFC", text)[-CONSENT_TEXT_MAX:]
+
+
+def _norm_path(path: str) -> str:
+    path = path.strip().rstrip("/")
+    while path.startswith("./"):
+        path = path[2:]
+    return path
+
+
+def _names_target(word: str, path: str) -> bool:
+    """`word` (đã chuẩn) nêu đích `path`: đúng đường dẫn, hay đúng tên cuối khi người dùng chỉ ghi tên."""
+    return word == path or ("/" not in word and word == Path(path).name)
+
+
+def text_consents(text: str, verb: str, targets=()) -> bool:
+    """Tin `text` có bảo làm việc `verb` (khóa của CONSENT_VERBS, nối bằng + khi cần đủ mọi việc) không: có một mệnh đề
+    (tách ở . ! ? ; , xuống dòng; không kết bằng ?) gồm tên việc và chỉ những từ trong _CONSENT_LEAD trước nó,
+    _CONSENT_TAIL sau nó. Với `rm`, mọi đích phải được nêu trong chính mệnh đề đó: đúng đường dẫn, hay đúng tên cuối khi
+    tin chỉ ghi tên; đích có biến, ~, ký tự đại diện thì không tính."""
+    import unicodedata
+    if isinstance(verb, str) and "+" in verb:
+        return all(text_consents(text, v, targets) for v in verb.split("+"))
+    names = CONSENT_VERBS.get(verb)
+    if not names or not isinstance(text, str):
+        return False
+    paths = []
+    for target in targets:
+        if not isinstance(target, str) or re.search(r"[$`~*?\[]", target) or not _norm_path(target):
+            return False
+        paths.append(_norm_path(target))
+    text = unicodedata.normalize("NFC", text).lower()
+    # tách ở dấu chấm chỉ khi sau nó là khoảng trắng hay hết chuỗi, để "xóa file.txt" vẫn nêu được đích
+    for clause, end in re.findall(r"((?:[^.!?;,\n]|\.(?!\s|$))+)([.!?;,\n]?)", text):
+        if "?" in end:
+            continue
+        words = [w.strip(_CONSENT_STRIP) for w in clause.split()]
+        words = [w for w in words if w]
+        at = next((i for i, w in enumerate(words) if w in names), None)
+        if at is None or any(w not in _CONSENT_LEAD for w in words[:at]):
+            continue
+        tail = words[at + 1:]
+        if tail and tail[-1] == "rồi":
+            continue  # "push rồi": đã làm, không phải lời bảo làm
+        if verb == "rm":
+            said = [_norm_path(w) for w in tail]
+            if not all(any(_names_target(w, p) for w in said) for p in paths):
+                continue
+            if any(w not in _CONSENT_TAIL and not any(_names_target(s, p) for p in paths) for w, s in zip(tail, said)):
+                continue
+        elif any(w not in _CONSENT_TAIL and w not in names and not _CONSENT_REF.fullmatch(w) for w in tail):
+            continue
+        return True
+    return False
+
+
+def turn_consent(session_id, use_key: str, verb: str, targets=(), use: bool = False, gate_key: str = "") -> bool:
+    """True khi tin của người dùng mở lượt hiện tại bảo làm việc `verb` (text_consents) và `use_key` (loại việc + repo)
+    chưa dùng lời đồng ý của tin này. `use` thì ghi `use_key` đã dùng và xóa mốc chặn cũ của `gate_key`; ghi không được
+    thì trả False (đóng chứ không mở). Không bao giờ văng lỗi."""
+    try:
+        turn = load_turn(session_id)
+        if not turn or not isinstance(turn.get("consent_text"), str):
+            return False
+        at = turn.get("consent_ts")
+        if not isinstance(at, (int, float)) or not 0 <= turn["ts"] - at <= CONSENT_TURN_SECONDS:
+            return False
+        used = turn.get("consent_used") if isinstance(turn.get("consent_used"), list) else []
+        if use_key in used or not text_consents(turn["consent_text"], verb, targets):
+            return False
+        if use:
+            save_turn(session_id, dict(turn, consent_used=used + [use_key]))
+            if gate_key:
+                _drop_nudges(session_id, [gate_key])
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _drop_nudges(session_id, keys) -> None:
+    """Xóa mốc chặn cũ của `keys`: lệnh đã qua nhờ đồng ý trước thì lần chặn trước đó không còn mở khóa cho lượt sau."""
+    key = _session_key(session_id)
+    path = state_dir() / AUDIT_NUDGE_DIR / f"{key}.json"
+    nudges = read_json(path, {}) if key else None
+    if isinstance(nudges, dict) and any(k in nudges for k in keys):
+        for k in keys:
+            nudges.pop(k, None)
+        write_json_atomic(path, nudges)
+
+
 def release_gate(session_id, keys: list, once=()):
     """"pass" khi người dùng đã nhắn (tin thật, không phải tin hệ thống) sau lần chặn của mọi khóa; "nudge" khi phải chặn,
     sau khi ghi mốc chặn cho các khóa chưa qua; None khi không theo dõi được phiên (session_id lạ, không ghi được

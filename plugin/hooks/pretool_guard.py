@@ -185,8 +185,24 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
     denied = [r for r in results if r[0] == "deny"]
     if denied:
         return denied[0]
+    if any(changes_remote(argv) for argv in simple_commands(command)):
+        # `git remote add evil URL && git push evil`: đổi đích của push trong cùng chuỗi thì luôn hỏi
+        results = [r[:3] + (None,) if r[0] == "confirm" else r for r in results]
     gated = [r for r in results if r[0] in ("audit", "confirm")]
     return (gate_user(gated, session_id) if gated else None) or next((r for r in results if r[0] == "ask"), None)
+
+
+def changes_remote(argv: list) -> bool:
+    """Lệnh đổi remote hay chỗ git đẩy tới: `git remote add|set-url|rename`, `git config` đụng remote.*, url.*,
+    pushurl, insteadOf."""
+    argv = strip_prefixes(argv)
+    if not argv or Path(argv[0]).name != "git":
+        return False
+    words = [a.lower() for a in argv[1:]]
+    if "remote" in words:
+        rest = words[words.index("remote") + 1:]
+        return bool(rest) and rest[0] in ("add", "set-url", "rename")
+    return "config" in words and any(re.match(r"(remote|url|branch)\.|.*(pushurl|insteadof)", w) for w in words)
 
 
 def mktemp_vars(command: str) -> frozenset:
@@ -297,6 +313,19 @@ def gate_user(gated: list, session_id: str):
     nhắn sau lần từ chối thì cho qua (None); một lần trả lời mở mọi khóa của lệnh (tag rồi push). Khóa của lệnh không đảo
     ngược dùng một lần, chỉ ở lượt ngay sau lần chặn (release_gate `once`). Không theo dõi được phiên (session_id lạ,
     không ghi được state) thì hỏi người dùng."""
+    # Tin của người dùng mở lượt này đã bảo đúng việc (A.turn_consent) thì không hỏi lại; chỉ dùng lời đồng ý khi cả
+    # chuỗi lệnh qua, kẻo nhắc audit còn chặn mà lời đồng ý đã mất.
+    # Dùng một lần cho mỗi loại việc mỗi repo mỗi tin (khóa `use`), không theo chữ lệnh: "Push" không mở cho hai lệnh
+    # push khác nhau.
+    def use_key(r):
+        return f"{r[2].split(' confirm ')[0]} {r[3][0]}"
+
+    consented = [r for r in gated if r[0] == "confirm" and len(r) > 3 and r[3]
+                 and lib().turn_consent(session_id, use_key(r), *r[3])]
+    kinds = [use_key(r) for r in consented]
+    if consented and len(consented) == len(gated) and len(set(kinds)) == len(kinds):
+        if all(lib().turn_consent(session_id, use_key(r), *r[3], use=True, gate_key=r[2]) for r in consented):
+            return None
     audits = [r for r in gated if r[0] == "audit"]
     confirms = [r for r in gated if r[0] == "confirm"]
     gate = lib().release_gate(session_id, [r[2] for r in gated], once=[r[2] for r in confirms])
@@ -344,12 +373,35 @@ def short_flags(args: list) -> str:
     return "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--") and len(a) > 1)
 
 
-def confirm(command: str, why: str, where: Path, key_extra: str = ""):
-    """("confirm", việc, khóa): khóa gồm gốc repo (hay thư mục), đúng lệnh và `key_extra` (đích tuyệt đối của rm), để
-    người dùng duyệt lệnh nào thì chỉ lệnh đó qua; đổi lệnh (thêm --force) hay đổi thư mục thì hỏi lại."""
+def confirm(command: str, why: str, where: Path, key_extra: str = "", consent=None):
+    """("confirm", việc, khóa, consent): khóa gồm gốc repo (hay thư mục), đúng lệnh và `key_extra` (đích tuyệt đối của
+    rm), để người dùng duyệt lệnh nào thì chỉ lệnh đó qua; đổi lệnh (thêm --force) hay đổi thư mục thì hỏi lại.
+    `consent` = (việc trong A.CONSENT_VERBS, đích) để tin hiện tại của người dùng gọi đúng việc thì qua ngay."""
     top = (lib().git_out(where.expanduser(), "rev-parse", "--show-toplevel", timeout=1.5) or "").strip()
     shown = command if len(command) <= 160 else command[:159] + "…"
-    return "confirm", f"`{shown}` ({why})", f"{top or where.expanduser().resolve()} confirm {command} {key_extra}".rstrip()
+    key = f"{top or where.expanduser().resolve()} confirm {command} {key_extra}".rstrip()
+    return "confirm", f"`{shown}` ({why})", key, consent
+
+
+PUSH_FORCE_FLAGS = {"-f", "--force", "--force-with-lease", "--force-if-includes"}
+
+
+def push_consent(args: list, rewrite: bool, where: Path = None):
+    """Việc mà tin của người dùng phải gọi tên để `git push` qua không hỏi, hay None (luôn hỏi): chỉ push thường tới
+    remote có tên (không URL, đường dẫn), refspec không có `:` (xóa hay đẩy sang tên khác), không --tags, --all,
+    --mirror, --delete, --prune. Remote phải là remote đã có của repo. Ghi đè lịch sử (--force, +ref) thì tin phải nói
+    cả "force"."""
+    allowed = {"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose", "--no-verify", *PUSH_FORCE_FLAGS}
+    flags = [a.split("=")[0] for a in args if a.startswith("-")]
+    words = [a for a in args if not a.startswith("-")]
+    if any(f not in allowed for f in flags) or len(words) > 2:
+        return None
+    if words and (not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", words[0])
+                  or words[0] not in (lib().git_out(where or Path("."), "remote", timeout=1.5) or "").split()):
+        return None  # URL, đường dẫn, user@host, remote chưa có
+    if any(":" in w or not re.fullmatch(r"\+?[A-Za-z0-9_./-]+", w) for w in words[1:]):
+        return None
+    return ("push+force" if rewrite else "push", ())
 
 
 def check_git_irreversible(verb: str, args: list, where: Path):
@@ -364,23 +416,26 @@ def check_git_irreversible(verb: str, args: list, where: Path):
         rewrite = any(a.split("=")[0] in PUSH_REWRITE_FLAGS or (a.startswith("+") and len(a) > 1) for a in args)
         why = ("ghi đè hay xóa lịch sử trên remote; người khác có thể đã kéo bản cũ về" if rewrite
                else "đẩy commit lên remote; người khác thấy ngay, không rút lại êm được")
-        return confirm(command, why, where)
+        return confirm(command, why, where, consent=push_consent(args, rewrite, where))
     if verb == "reset":
         if "--hard" not in args:
             return None
         return confirm(command, "bỏ mọi thay đổi chưa commit và dời nhánh; git không giữ bản nào của phần chưa commit",
-                       where)
+                       where, consent=("reset", ()))
     if verb == "clean":
         flags = short_flags(args)
         if "n" in flags or "--dry-run" in args or not ("f" in flags or "--force" in args):
             return None
         if "X" in flags and "x" not in flags:
             return None  # -X chỉ xóa file git bỏ qua (build, cache): chỗ ghi tạm
-        return confirm(command, "xóa hẳn file chưa track; git không có bản nào của chúng", where)
+        # -x xóa cả file git bỏ qua (.env, dữ liệu): luôn hỏi
+        return confirm(command, "xóa hẳn file chưa track; git không có bản nào của chúng", where,
+                       consent=None if "x" in flags else ("clean", ()))
     if verb == "commit":
         if "--amend" not in args or rewrites_pushed(where, ["-n", "1", "HEAD"]) is False:
             return None
-        return confirm(command, "viết lại commit đã có trên remote; sau đó phải push --force", where)
+        return confirm(command, "viết lại commit đã có trên remote; sau đó phải push --force", where,
+                       consent=("amend", ()))
     if verb == "rebase":
         if any(a in REBASE_STATE_FLAGS for a in args):
             return None  # tiếp tục hay bỏ một lần rebase đã bắt đầu
@@ -391,7 +446,8 @@ def check_git_irreversible(verb: str, args: list, where: Path):
             revs = [f"{words[0] if words else '@{upstream}'}..{words[1] if len(words) > 1 else 'HEAD'}"]
         if rewrites_pushed(where, revs) is False:
             return None
-        return confirm(command, "viết lại commit đã có trên remote; sau đó phải push --force", where)
+        return confirm(command, "viết lại commit đã có trên remote; sau đó phải push --force", where,
+                       consent=("rebase", ()))
     return None
 
 
@@ -427,7 +483,7 @@ def check_rm(args: list, cwd: str, temp_vars=frozenset()):
     where = Path(cwd or ".").expanduser()
     shown = [str(full_target(t, where)) if not re.search(r"[$`~]", t) else t for t in outside[:3]]
     return confirm(" ".join(["rm", *args]), "xóa hẳn cả cây thư mục ngoài chỗ ghi tạm: " + ", ".join(shown),
-                   where, key_extra=" ".join(sorted(shown)))
+                   where, key_extra=" ".join(sorted(shown)), consent=("rm", tuple(outside)))
 
 
 def full_target(target: str, where: Path) -> Path:
