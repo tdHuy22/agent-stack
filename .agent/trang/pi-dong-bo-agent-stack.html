@@ -1,0 +1,317 @@
+<title>pi theo kịp agent-stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 02/11/2026</div>
+    <h1>Giữ pi luôn khớp với agent-stack mỗi lần nâng cấp</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, pi, pi-agent, Claude Code">
+    <h2>Tóm tắt</h2>
+    <p>pi là một công cụ lập trình bằng AI khác Claude Code. Project pi-agent (thư mục <code>~/Documents/Claude/pi-agent</code>) nối pi vào agent-stack, nên pi đã dùng chung luật, kỹ năng và các bước tự kiểm. Nhưng pi đọc thẳng thư mục agent-stack đang sửa, còn đoạn code nối hai bên nằm ở pi-agent. Khi agent-stack đổi, pi có thể lệch mà không ai biết: bộ test của agent-stack không kiểm phía pi, và đoạn nối bỏ qua lỗi để không làm kẹt phiên. Đã có ba chỗ lệch thật.</p>
+    <p><strong>Đã chốt (02/11/2026):</strong> phương án B, và pi chạy thẳng thư mục <code>plugin/</code> của repo như Claude Code. Bản đầu của trang này nói sai rằng Claude Code chạy một bản cài riêng; câu 2 bên dưới ghi lại vì sao lựa chọn đổi.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack là bộ công cụ cá nhân viết cho Claude Code: luật chung, các kỹ năng (skill: mỗi kỹ năng là một thư mục có file <code>SKILL.md</code>), các bước tự kiểm (hook: script chạy ở thời điểm cố định như mở phiên, gửi tin, trước khi chạy lệnh, khi xong lượt), và các trợ lý phụ (subagent: model chạy riêng với chỉ dẫn riêng, như người review). Trang này dùng tên tiếng Việt; tên tiếng Anh trong ngoặc là tên trong code. Claude Code không đọc thẳng thư mục đang sửa: lệnh <code>./install.sh --apply</code> chép thư mục <code>plugin/</code> thành một bản cài có số phiên bản (hôm nay là 0.18.0).</p>
+    <p>pi là một công cụ lập trình bằng AI khác, chạy được model trên máy riêng. Project pi-agent nối pi vào agent-stack theo bốn đường (sơ đồ dưới): luật chung qua lối tắt, kỹ năng qua file cài đặt của pi, bước tự kiểm qua cầu nối, trợ lý phụ qua bản chép. Cầu nối gọi script trong thư mục repo <code>~/Documents/Claude/agent-stack/plugin/hooks</code>, không gọi bản đã cài.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  subgraph S[agent-stack, thư mục đang sửa]
+    R[luật chung SHARED.global.md]
+    K[plugin/skills]
+    H[plugin/hooks/*.py]
+    A[plugin/agents/*.md]
+  end
+  subgraph P[pi-agent]
+    B[cầu nối agent-stack-bridge.ts]
+    T[port_agents.py]
+    C[agents/ bản chép]
+  end
+  R -- symlink AGENTS.md --> PI[pi]
+  K -- settings.json skills --> PI
+  B -- gọi trực tiếp --> H
+  B --> PI
+  A -- chép khi chạy setup.sh --> T --> C --> PI
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Từ ngày nối pi (28/10/2026) tới nay đã có 12 lần commit đổi các bước tự kiểm, trợ lý phụ hay kỹ năng của agent-stack. Không lần nào chạy kiểm phía pi, vì bộ test của agent-stack không biết pi đang dựa vào gì. Mình chưa soát từng commit xem cái nào làm pi lệch; ba chỗ lệch thật đã thấy nằm ở ví dụ 1, 2 và 4. Chỗ nối lại nằm ở project khác, nên người sửa agent-stack không thấy nó. Trường hợp rõ nhất: <code>hooks.json</code> của agent-stack khai 8 thời điểm chạy bước tự kiểm, cầu nối của pi chỉ chuyển 6; không có chỗ nào ghi hai cái còn lại bị bỏ là cố ý hay bị sót.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Bản cài và bản đang sửa</b>: bản đang sửa là thư mục repo, đổi theo từng lần bạn lưu file; bản cài là bản chép đứng yên tới lần cài sau. Ví dụ: Claude Code chạy <code>~/.claude/plugins/cache/agent-stack-local/agent-stack/0.18.0/</code>, còn pi đọc <code>~/Documents/Claude/agent-stack/plugin/</code>. Cần để hiểu câu chốt số 2.</li>
+      <li><b>Cầu nối</b>: file <code>extensions/agent-stack-bridge.ts</code> trong pi-agent, đổi sự kiện của pi thành dạng dữ liệu mà các script Python của agent-stack chờ, rồi đổi kết quả ngược lại. Ví dụ: sự kiện <code>tool_call</code> của pi thành <code>PreToolUse</code> với <code>tool_name: "Bash"</code>. Cần để hiểu cả ba phương án.</li>
+      <li><b>Hợp đồng</b>: danh sách những gì pi dựa vào ở agent-stack, viết thành dữ liệu để máy kiểm được: thời điểm nào chạy script nào, trường vào và ra nào, trợ lý phụ và kỹ năng nào pi dùng, cái nào cố ý bỏ và vì sao. Ví dụ một dòng: "<code>StopFailure</code>: pi không có sự kiện tương ứng, bỏ". Cần để hiểu phương án B.</li>
+      <li><b>Nuốt lỗi</b>: luật của agent-stack bắt bước tự kiểm không bao giờ được làm kẹt phiên, nên cầu nối coi script lỗi, quá 15 giây hay thiếu file là "không có gì để báo" và cho lệnh chạy tiếp. Đúng luật, nhưng hỏng thì không ai biết. Cần để hiểu ví dụ 3.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>hook</dt><dd>Bước tự kiểm: script chạy ở một thời điểm cố định của phiên (mở phiên, gửi tin, trước khi chạy lệnh, khi xong lượt).</dd>
+        <dt>skill</dt><dd>Kỹ năng: một thư mục có <code>SKILL.md</code> hướng dẫn model làm một loại việc.</dd>
+        <dt>subagent</dt><dd>Trợ lý phụ: một model chạy riêng với chỉ dẫn riêng, như người review.</dd>
+        <dt>guard.ts</dt><dd>Phần mở rộng riêng của pi-agent, hỏi trước các lệnh phá hoại như <code>rm -rf</code>; không thuộc agent-stack.</dd>
+        <dt>AGENT_STACK_HOST</dt><dd>Biến môi trường cầu nối đặt bằng <code>pi</code> để script của agent-stack biết đang chạy trong pi.</dd>
+        <dt>TypeScript</dt><dd>Ngôn ngữ mà pi dùng để viết phần mở rộng; cầu nối viết bằng nó.</dd>
+        <dt>pi package</dt><dd>Gói mở rộng của pi: một thư mục có <code>package.json</code> khai phần mở rộng, kỹ năng, lệnh; cài bằng <code>pi install</code>.</dd>
+        <dt>symlink</dt><dd>Lối tắt trỏ tới file khác; sửa file gốc là lối tắt thấy ngay.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: sửa chỉ dẫn của người review</h3>
+        <p>Tình huống: bạn sửa <code>plugin/agents/reviewer.md</code> trong agent-stack, thêm một mục cần soát.</p>
+        <pre><code>pi-agent/agents/reviewer.md
+&lt;!-- sinh bởi tools/port_agents.py từ .../agent-stack/plugin/agents/reviewer.md; sửa ở nguồn --&gt;</code></pre>
+        <p>Hôm nay: pi vẫn dùng bản chép lúc chạy <code>setup.sh</code> lần cuối, cho tới khi có người nhớ chạy lại. Cùng kiểu đó, người tìm web (<code>researcher</code>) bị bỏ "vì pi chưa có công cụ tìm web", nhưng pi-agent nay đã có <code>web_search</code> và <code>web_fetch</code>, và chưa ai xem lại. Vì sao quan trọng: đây là kiểu đổi xảy ra nhiều nhất, và nó lệch mà không báo.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: agent-stack thêm một thời điểm tự kiểm mới</h3>
+        <p>Tình huống: <code>hooks.json</code> hôm nay có 8 thời điểm: <code>SessionStart</code>, <code>UserPromptSubmit</code>, <code>PreToolUse</code>, <code>SubagentStart</code>, <code>PreCompact</code>, <code>Stop</code>, <code>StopFailure</code>, <code>SessionEnd</code>. Cầu nối chuyển 6, thiếu <code>SubagentStart</code> (chèn bối cảnh project cho trợ lý phụ lúc nó bắt đầu) và <code>StopFailure</code> (ghi lượt bị dừng vì lỗi vào nhật ký lượt cuối). Đây là lệch thật; còn phần tiếp theo là giả định.</p>
+        <p>Hôm nay: nếu mai agent-stack thêm thời điểm thứ chín, hay đổi tên <code>stop.py</code>, cầu nối thấy file không tồn tại thì trả "không có gì" (dòng <code>if (!fs.existsSync(file)) return {}</code>). Bộ test của agent-stack vẫn đạt. Vì sao quan trọng: tính năng mới không tới pi, và không ai biết nó thiếu.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng (giả định, chưa xảy ra): đang sửa dở bước chặn lệnh</h3>
+        <p>Tình huống: bạn đang sửa <code>plugin/hooks/pretool_guard.py</code> trong một phiên Claude Code, file có lỗi cú pháp trong 10 phút. Script này chặn việc cài kỹ năng hay plugin chưa kiểm duyệt và nhắc làm threat model.</p>
+        <p>Hôm nay (đã sửa, xem câu 2): Claude Code cũng chạy thẳng thư mục repo, nên cả Claude Code lẫn pi cùng chạy file đang hỏng trong 10 phút đó. Bản đầu của trang ghi nhầm rằng Claude Code chạy bản cài 0.18.0. Cầu nối của pi gọi thẳng file trong thư mục repo; cầu nối nuốt lỗi và cho lệnh chạy. Phần chặn lệnh phá hoại riêng của pi (<code>guard.ts</code>) vẫn chạy, nhưng chốt "chưa kiểm duyệt thì không cài" của agent-stack thì mất. Vì sao quan trọng: đây là chốt bảo mật, và nó tắt mà không báo.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Ca lệch luật: kỹ năng viết trang HTML</h3>
+        <p>Tình huống: ngày 01/11/2026 agent-stack mở rộng kỹ năng <code>reader-page</code> từ "trang đăng lên claude.ai" thành "mọi file HTML cho người đọc", và thêm bước nhắc khi model tạo file <code>.md</code> mới. Bước nhắc đó chạy cả trong pi qua cầu nối.</p>
+        <p>Hôm nay: <code>README.md</code> của pi-agent vẫn ghi kỹ năng này "không nạp, pi không có Artifact", trong khi file cài đặt của pi trỏ tới cả thư mục kỹ năng. Mình chưa kiểm pi có nạp nó thật không; dù đúng bên nào, ghi chép và luật mới đã lệch nhau và không bài test nào thấy. Vì sao quan trọng: thay đổi về nghĩa của kỹ năng không làm hỏng file nào, nên chỉ có danh sách khai rõ "pi dùng kỹ năng nào" mới bắt được.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option" data-phuong-an="A">
+        <h3>A · Thêm bài kiểm ở pi-agent</h3>
+        <p>Giữ mọi chỗ nối ở pi-agent; thêm một script kiểm agent-stack hiện tại còn khớp với cầu nối, chạy trong <code>tests/run.sh</code> và <code>setup.sh</code> của pi-agent.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Sau khi sửa agent-stack, bạn (hay phiên pi-agent) chạy <code>./tests/run.sh</code> ở pi-agent; script so <code>hooks.json</code>, thư mục trợ lý phụ, kỹ năng với cầu nối.</dd>
+          <dt>Được</dt><dd>Không đổi gì ở agent-stack. Làm nhanh.</dd>
+          <dt>Mất</dt><dd>Kiểm chỉ chạy khi có người nhớ chạy ở pi-agent; bộ test của agent-stack vẫn xanh khi pi hỏng. pi vẫn đọc bản đang sửa nên ví dụ 3 vẫn xảy ra.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Mỗi lần đổi agent-stack có thêm một bước nhớ tay ở project khác.</dd>
+          <dt>Đảo ngược</dt><dd>Dễ: xoá script.</dd>
+        </dl>
+      </article>
+      <article class="option rec" data-phuong-an="B" data-khuyen>
+        <h3>B · Hợp đồng nằm ở agent-stack, pi chạy bản đã cài <span class="chip">khuyên</span></h3>
+        <p>agent-stack giữ một file hợp đồng cho pi và bài kiểm nó; lệnh cài nâng pi cùng lúc với Claude Code; cầu nối ở pi-agent đọc hợp đồng thay vì tự ghi tên script.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>(1) <code>plugin/hosts/pi.json</code>: thời điểm tự kiểm nào ứng với sự kiện pi nào, trường vào ra, trợ lý phụ và kỹ năng nào dùng hay bỏ kèm lý do. (2) <code>tests/test_pi_contract.py</code>: mọi mục trong <code>hooks.json</code>, <code>plugin/agents/</code>, <code>plugin/skills/</code> phải có dòng trong hợp đồng; chạy từng script với dữ liệu kiểu pi (không có lịch sử phiên, <code>AGENT_STACK_HOST=pi</code>) và kiểm kết quả chỉ dùng trường cầu nối hiểu. (3) Chuyển việc chép trợ lý phụ sang agent-stack (Python). (4) Bước <code>pi</code> trong <code>install.sh</code> (bản đã làm): <code>~/.pi/agent/agent-stack/plugin</code> trỏ vào <code>plugin/</code> của repo, <code>agents</code> trỏ vào <code>state/pi/agents</code>; hook SessionStart sinh lại trợ lý phụ mỗi lần mở phiên pi. (5) Một lần ở pi-agent, trong phiên của nó: cầu nối đọc <code>pi.json</code> từ bản cài, báo một lần khi script lỗi thay vì im lặng.</dd>
+          <dt>Được</dt><dd>Đổi agent-stack mà làm lệch pi thì test của agent-stack trượt ngay, trong cùng phiên đang sửa. pi và Claude Code luôn chạy cùng một phiên bản. Sửa dở không lọt sang pi.</dd>
+          <dt>Mất</dt><dd>Thay đổi chỉ tới pi khi bạn chạy <code>./install.sh --apply</code>, như Claude Code hôm nay: sửa luật hay kỹ năng xong mà chưa cài thì cả hai công cụ đều chưa thấy. Khi agent-stack thêm thứ pi cần hỗ trợ thật (không chỉ ghi "bỏ"), vẫn phải sửa cầu nối ở pi-agent. Lần sửa cầu nối đầu tiên (khoảng vài chục dòng) làm trong một phiên riêng ở pi-agent, vì phiên này không được sửa project khác.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Một file dữ liệu và một file test thêm vào agent-stack; mỗi tính năng mới phải khai "pi dùng" hay "pi bỏ, vì …".</dd>
+          <dt>Đảo ngược</dt><dd>Được: bỏ bước <code>pi</code> trong lệnh cài, trỏ <code>settings.json</code> của pi về thư mục repo như cũ.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="C">
+        <h3>C · Đưa cả cầu nối vào agent-stack thành gói pi</h3>
+        <p>agent-stack chứa luôn cầu nối viết bằng TypeScript và khai một pi package; pi cài gói đó từ bản đã cài.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd><code>plugin/pi/package.json</code> khai cầu nối, kỹ năng, lệnh; bước <code>pi</code> trong lệnh cài chạy <code>pi install</code> trỏ vào bản đã cài. pi-agent chỉ còn model, máy chủ model, chặn lệnh, công cụ web.</dd>
+          <dt>Được</dt><dd>Mọi thứ của agent-stack ở một chỗ; thêm thời điểm tự kiểm mới thì sửa cầu nối ngay trong cùng commit.</dd>
+          <dt>Mất</dt><dd>Phải đổi luật của agent-stack về TypeScript; test cầu nối cần chạy pi và Node trong bộ test của agent-stack.</dd>
+          <dt>Chi phí lâu dài</dt><dd>agent-stack phải theo dõi API mở rộng của pi đổi qua từng bản pi, việc mà hiện pi-agent đang lo.</dd>
+          <dt>Đảo ngược</dt><dd>Được, nhưng phải chuyển cầu nối trở lại pi-agent.</dd>
+        </dl>
+        <p class="violation" data-vi-pham>Vi phạm luật "TypeScript chỉ dùng cho lớp giao diện ui.tsx" trong CLAUDE.md dòng 16: không khuyên. Muốn chọn thì phải sửa luật đó trước.</p>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A · kiểm ở pi-agent</th><th>B · hợp đồng ở agent-stack</th><th>C · gói pi trong agent-stack</th></tr></thead>
+        <tbody>
+          <tr><th>1. Sửa người review</th>
+            <td data-cho="A">Script báo "bản chép cũ hơn nguồn" khi có người chạy test pi-agent; trước đó pi dùng bản cũ.</td>
+            <td data-cho="B"><code>install.sh --apply</code> sinh lại trợ lý phụ cho pi từ đúng bản vừa cài; <code>researcher</code> phải có dòng "dùng" hay "bỏ, vì …" nên được xem lại.</td>
+            <td data-cho="C">Như B.</td></tr>
+          <tr><th>2. Thời điểm tự kiểm mới</th>
+            <td data-cho="A">Test agent-stack vẫn đạt; script pi-agent báo thiếu khi có người chạy nó.</td>
+            <td data-cho="B"><code>test_pi_contract</code> trượt ngay trong phiên sửa agent-stack: "SubagentStart chưa có dòng trong pi.json". Ghi "bỏ" thì xong; cần hỗ trợ thật thì mở việc ở pi-agent.</td>
+            <td data-cho="C">Test trượt, sửa cầu nối ngay trong cùng commit.</td></tr>
+          <tr><th>3. Sửa dở bước chặn</th>
+            <td data-cho="A">Vẫn hỏng: pi đọc file đang sửa, chốt "chưa kiểm duyệt thì không cài" tắt 10 phút.</td>
+            <td data-cho="B">Không ảnh hưởng: pi chạy 0.18.0 tới khi bạn cài bản mới sau khi test đạt. Nếu bản cài vẫn lỗi, cầu nối báo một lần.</td>
+            <td data-cho="C">Như B.</td></tr>
+          <tr><th>4. Kỹ năng đổi nghĩa</th>
+            <td data-cho="A">Chỉ bắt được nếu script so cả nội dung; dễ sót.</td>
+            <td data-cho="B">Hợp đồng ghi rõ <code>reader-page</code> pi dùng hay bỏ; đổi nghĩa thì bạn sửa đúng một dòng đó, ghi chép pi đọc từ đây.</td>
+            <td data-cho="C">Như B.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của agent-stack và luật chung <code>global/SHARED.global.md</code>.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:7">
+            <th>Chỉ tạo hay sửa file trong agent-stack; không sửa project khác <span class="src">CLAUDE.md:7–8</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: mọi việc làm trong phiên của pi-agent.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: phần ở agent-stack làm ở đây; lần sửa cầu nối làm trong phiên riêng của pi-agent.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: dọn pi-agent làm trong phiên riêng của nó.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:9">
+            <th>Kích hoạt toàn cục chỉ qua <code>install.sh</code>, khi bạn duyệt <span class="src">CLAUDE.md:9</span></th>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không liên quan: agent-stack không ghi gì vào <code>~/.pi</code>.</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: bước <code>pi</code> mới ghi vào <code>~/.pi/agent</code>, chỉ chạy khi bạn duyệt <code>--apply</code>.</td>
+            <td data-cho="C" data-ket-qua="can-duyet">Cần duyệt: <code>pi install</code> ghi <code>~/.pi/agent/settings.json</code>.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:16">
+            <th>TypeScript chỉ cho lớp giao diện, không gói npm <span class="src">CLAUDE.md:16</span></th>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không liên quan: không thêm code vào agent-stack.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: agent-stack chỉ thêm JSON và Python; TypeScript ở lại pi-agent.</td>
+            <td data-cho="C" data-ket-qua="vi-pham">Vi phạm: cầu nối TypeScript nằm trong agent-stack.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15">
+            <th>Python chỉ dùng thư viện chuẩn <span class="src">CLAUDE.md:15</span></th>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không liên quan ở agent-stack.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: test và script chép trợ lý phụ chỉ dùng thư viện chuẩn.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:17">
+            <th>Hook không bao giờ làm kẹt phiên <span class="src">CLAUDE.md:17</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: cầu nối giữ nguyên.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: vẫn bỏ qua khi lỗi, chỉ thêm một thông báo.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:15">
+            <th>Chưa kiểm chứng thì không nói xong <span class="src">global/SHARED.global.md:15</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: test ở pi-agent kiểm phần pi; mốc kiểm của agent-stack không phủ pi.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: <code>test_pi_contract</code> nằm trong mốc kiểm của agent-stack.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> cầu nối nuốt lỗi là đúng luật "không làm kẹt phiên", nhưng im lặng hoàn toàn thì không phải luật đòi. B giữ việc bỏ qua, thêm một thông báo.</li>
+      <li><b>Chiều theo người dùng:</b> câu hỏi nói "phiên bản agent-stack cho pi". Hiểu theo nghĩa một bản tách riêng (fork) thì sẽ lệch nhanh hơn bây giờ, nên không đưa lên thành phương án. Cả ba phương án giữ một nguồn.</li>
+      <li><b>Chọn vì ít công:</b> A ít công nhất nhưng không bắt được ví dụ 3 và để việc kiểm phụ thuộc trí nhớ; không khuyên.</li>
+      <li><b>Phương án bù nhìn:</b> C là cách nhiều người sẽ chọn (mọi thứ một chỗ, đúng chuẩn gói của pi); nó chỉ vướng luật TypeScript hiện có.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> B có hai điểm trừ đã ghi trên thẻ: thay đổi tới pi chậm hơn (chờ lệnh cài), và hỗ trợ thật một thời điểm mới vẫn phải sửa pi-agent.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. B và C đều đi qua <code>install.sh</code> có duyệt; không cài thêm gì, pi đã có trên máy.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Hai câu đã chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Đặt chỗ nối giữa pi và agent-stack theo cách nào?</h3>
+      <p><strong>Đã chốt (02/11/2026): B</strong>, theo khuyến nghị.</p>
+      <p>Lựa chọn: A, B hay C. Khuyên B. B và C đều làm test của agent-stack trượt khi pi bị lệch; B không cần đổi luật, và để việc theo dõi API mở rộng của pi ở lại pi-agent, nơi đang lo nó. Chọn A thì nhanh nhưng vẫn phải nhớ chạy kiểm ở pi-agent. Chọn C thì trước hết phải sửa luật TypeScript ở <code>CLAUDE.md</code> dòng 16; nếu bạn muốn hướng đó, nói "sửa luật TypeScript" và mình làm thành một việc riêng trước.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: pi chạy bản agent-stack đã cài, hay thư mục đang sửa như bây giờ?</h3>
+      <p><strong>Đã chốt lại (02/11/2026): thư mục repo, cùng thư mục Claude Code chạy.</strong> Lần đầu bạn chọn "bản đã cài" theo khuyến nghị bên dưới, nhưng khuyến nghị đó dựa trên một điều sai: Claude Code không chạy bản chép trong <code>~/.claude/plugins/cache/</code>. Hook SessionStart ghi thư mục plugin của mỗi phiên vào <code>state/sessions.jsonl</code>: phiên app tới 13/10/2026 chạy bản chép, từ 14/10/2026 chạy <code>agent-stack/plugin</code>. <code>claude plugin list --json</code> ghi <code>readFromFolder</code> là thư mục đó, và docs Claude Code (plugins/loading) ghi marketplace thêm từ đường dẫn cục bộ thì plugin nạp tại chỗ. Cho pi chạy bản chép sẽ làm pi chạy code khác Claude Code. Phần dưới là khuyến nghị cũ, giữ để đối chiếu.</p>
+      <p>Câu này chỉ hỏi khi bạn chọn B hay C (với A, pi giữ nguyên thư mục đang sửa). Thẻ B ở trên viết theo khuyến nghị "bản đã cài". Lựa chọn: bản đã cài (nâng khi bạn chạy <code>./install.sh --apply</code>, cùng lúc với Claude Code) hay thư mục đang sửa (thấy ngay mọi thay đổi, kể cả lúc sửa dở). Khuyên bản đã cài: hai công cụ chạy cùng phiên bản và ví dụ 3 không xảy ra. Chọn thư mục đang sửa thì vẫn dùng được hợp đồng và test ở câu 1, nhưng lúc sửa dở pi có thể mất chốt chặn.</p>
+    </div>
+    <p class="note">Trả lời trong chat với Claude Code (ví dụ "1B, 2 bản đã cài"), hoặc bình luận trên trang nếu bạn mở nó trên claude.ai.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li><code>~/Documents/Claude/pi-agent/extensions/agent-stack-bridge.ts</code> (đọc, không sửa): 6 sự kiện, dòng bỏ qua khi thiếu file.</li>
+      <li><code>~/Documents/Claude/pi-agent/tools/port_agents.py</code>, <code>setup.sh</code>, <code>README.md</code>, <code>config/APPEND_SYSTEM.md</code>.</li>
+      <li><code>~/.pi/agent/settings.json</code>: <code>"skills": ["~/Documents/Claude/agent-stack/plugin/skills"]</code>; <code>~/.pi/agent/AGENTS.md</code> trỏ tới <code>global/SHARED.global.md</code>.</li>
+      <li><code>plugin/hooks/hooks.json</code>: 8 thời điểm tự kiểm. <code>git log --since=2026-10-28 -- plugin/hooks plugin/agents plugin/skills</code>: 12 commit.</li>
+      <li>Tài liệu pi 1.4.0, <code>docs/packages.md</code> và <code>docs/settings.md</code> trong thư mục cài của pi: gói pi, khoá <code>packages</code>, <code>skills</code>, <code>extensions</code>.</li>
+      <li><code>CLAUDE.md</code> dòng 7, 8, 9, 15, 16, 17; <code>global/SHARED.global.md</code> dòng 15.</li>
+    </ul>
+  </footer>
+</main>

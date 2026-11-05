@@ -1,0 +1,270 @@
+<title>Kiểm chữ cấu hình agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px; margin: 0 }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0; white-space: pre-wrap }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600 }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples { display: grid; gap: 14px }
+.example { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .92rem }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.lvl { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap }
+.hi { background: var(--bad-soft); color: var(--bad) }
+.mid { background: var(--warn-soft); color: var(--warn) }
+.lo { background: var(--accent-soft); color: var(--accent) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+</style>
+
+<main data-loai="bao-cao">
+  <header>
+    <div class="eyebrow">agent-stack · 03/11/2026</div>
+    <h1>Chữ cấu hình nạp vào mỗi phiên Claude Code còn hợp với model hiện tại không?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code">
+    <h2>Tóm tắt</h2>
+    <p>Mỗi phiên Claude Code mở trong project này đều đọc sẵn một số file chữ hướng dẫn. Mình soát các file đó theo một quy trình kiểm có sẵn của Anthropic, tìm ba loại lỗi: câu viết cho model đời cũ, sự kiện đã sai so với code, và hai file nói ngược nhau. Ba file hướng dẫn bạn tự viết không có câu sai nào: mọi đường dẫn và lệnh chúng nhắc tới đều còn đúng; chỉ có hai câu kể lịch sử nên bỏ, đã viết sẵn thành thay đổi đề xuất, chưa áp dụng. Các phát hiện còn lại nằm trong gói mở rộng đã cài, chỉ được báo. Bạn cần quyết ba việc ở cuối trang.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Cái gì được kiểm</h3>
+    <p>Mỗi khi mở phiên Claude Code trong thư mục <code>agent-stack</code>, công cụ nạp sẵn một số file chữ vào đầu cuộc trò chuyện: file hướng dẫn của project (<code>CLAUDE.md</code>), file hướng dẫn chung cho mọi project (<code>~/.claude/CLAUDE.md</code>, thực ra là liên kết tới <code>global/CLAUDE.global.md</code> trong repo này, và file đó nhập thêm <code>global/SHARED.global.md</code>), cùng phần mô tả của mọi skill và subagent từ các plugin đã cài. Nội dung đầy đủ của một skill chỉ được nạp khi skill đó được gọi.</p>
+    <p>Bản kiểm theo hướng dẫn <code>prompt-audit</code> của skill <code>claude-api</code>, tài liệu Anthropic đi kèm Claude Code. Nó liệt kê các mẫu chữ đã biết là hợp với model cũ nhưng gây hại cho model mới (ví dụ chữ in hoa kiểu <code>PHẢI</code>, <code>KHÔNG BAO GIỜ</code> làm model mới áp dụng quá tay), cùng danh sách những thứ không được xoá. Model đích là Opus 5.5, model đang chạy phiên này. Câu hỏi cho mỗi dòng: dòng này chặn một lỗi nào, trên model nào, và lỗi đó còn xảy ra trên Opus 5.5 không. Độ dài không phải lý do để xoá; ngữ cảnh chỉ tác giả biết (luật của bạn, lý do, sự kiện về máy) luôn giữ.</p>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Chữ cấu hình tích tụ theo thời gian. Ví dụ thật: <code>CLAUDE.md:38</code> vẫn ghi nhánh <code>trien-khai-v1</code> "đã gộp và xoá ngày 03/10/2026". Câu đó không còn điều khiển hành vi nào, nhưng model hiện tại đọc chữ rất sát nghĩa, nên mỗi câu thừa là một thứ nó phải cân nhắc. Nghiêm trọng hơn là khi hai file nói ngược nhau: model không biết file nào mới hơn.</p>
+    <h3>Cần biết trước</h3>
+    <ol>
+      <li><b>Mức tin cậy</b>: cao là repo chứng minh được (đường dẫn không tồn tại, hai luật ngược nhau, công cụ báo khác); vừa là mẫu đã biết gây hại; thấp là dựa vào kiểu chữ, chỉ nêu, không sửa. Cần để đọc bảng phát hiện.</li>
+      <li><b>Hành động</b>: <i>sửa</i> (có chữ thay thế), <i>bỏ</i>, hay <i>nêu</i> (không đề xuất sửa, cần bạn quyết hoặc nằm ngoài phạm vi sửa). Cần để biết phát hiện nào có trong bản vá.</li>
+      <li><b>Phạm vi sửa</b>: chỉ file trong project được vá. File plugin đã cài và file ngoài project chỉ được báo. Riêng hai file trong <code>global/</code> nằm trong project nhưng nạp vào mọi project, nên sửa ở đó ảnh hưởng mọi project.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>skill</dt><dd>Một gói hướng dẫn cho một loại việc; phần mô tả luôn nạp, phần thân chỉ nạp khi dùng.</dd>
+        <dt>subagent</dt><dd>Một agent phụ chạy trong ngữ cảnh riêng, nhận việc từ phiên chính rồi báo lại.</dd>
+        <dt>plugin</dt><dd>Gói cài vào Claude Code chứa skill, subagent, hook.</dd>
+        <dt>hook</dt><dd>Script Claude Code tự chạy ở một thời điểm (mở phiên, kết thúc lượt).</dd>
+        <dt>effort</dt><dd>Mức suy nghĩ của model, từ <code>low</code> tới <code>max</code>; trên Opus 5.5 đây là cách duy nhất chỉnh độ sâu suy nghĩ.</dd>
+        <dt>Opus 5.5</dt><dd>Model đang chạy phiên này, cũng là model đích của bản kiểm.</dd>
+        <dt>A/B</dt><dd>Thử hai cấu hình trên cùng bộ việc rồi so kết quả.</dd>
+        <dt>nạp vào phiên</dt><dd>Claude Code tự đưa nội dung file vào đầu cuộc trò chuyện, model đọc nó như chỉ dẫn.</dd>
+        <dt>model·effort</dt><dd>Cách viết gọn một lựa chọn, ví dụ <code>opus·high</code> là model Opus ở mức suy nghĩ cao.</dd>
+        <dt>ghim model</dt><dd>File subagent tự khai model nó chạy, không theo model của phiên chính.</dd>
+        <dt>đồng bộ từ claude.ai</dt><dd>Skill bạn bật trên web claude.ai được tải về máy; lần đồng bộ sau ghi đè mọi sửa trên máy.</dd>
+        <dt>bản vá</dt><dd>File ghi chính xác các dòng xoá và thêm; áp dụng bằng một lệnh, bỏ qua thì không có gì đổi.</dd>
+        <dt><code>file:38</code></dt><dd>Số sau dấu hai chấm là số dòng trong file.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Câu ghi lịch sử trong luật</h3>
+        <pre><code>global/SHARED.global.md:25
+… qua check_page.py của nó (căn cứ: bài "The unreasonable effectiveness of HTML"
+của đội Claude Code, 05/2026; bạn chọn ngày 01/11/2026).</code></pre>
+        <p>Nguồn bài viết là ngữ cảnh có ích, nên giữ. Vế "bạn chọn ngày 01/11/2026" chỉ kể lại lúc ra quyết định; luật mạnh vì nội dung của nó, không vì ngày. Sau sửa câu kết thúc ở "…05/2026)." Ngày quyết định vẫn còn trong lịch sử git (commit <code>36fae2e</code>). File này nạp vào mọi project.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Hai luật nói ngược nhau</h3>
+        <pre><code>plugin/skills/task-router/SKILL.md:29
+Việc có rủi ro cao (bảo mật, …) thì dùng opus · high
+global/CLAUDE.global.md:23
+Tính năng đụng ranh giới tin cậy (đăng nhập, upload, …) | sonnet·medium</code></pre>
+        <p>Khi bạn hỏi nên dùng model nào cho tính năng đăng nhập, bảng chung nói sonnet·medium (kèm threat-model trước), còn skill chọn model nói opus·high. Lịch sử git không phân định được dòng nào mới hơn (dòng ở bảng chung chỉ bị chạm lại trong đợt đổi tên ngày 03/11), nên đây là câu bạn phải chốt.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Plugin dùng tham số công cụ đã cũ</h3>
+        <pre><code>project-artifact/SKILL.md:79   `favicon` = one or two emoji …
+project-artifact/SKILL.md:101  … WebFetch the URL to see the current content</code></pre>
+        <p>Artifact là trang web riêng tư trên claude.ai do Claude đăng. Công cụ đăng trang hiện tại đánh dấu tham số <code>favicon</code> (biểu tượng trên tab, bằng emoji) là đã bỏ, thay bằng <code>icon</code> nhận một từ như "chart" hay "map". Hậu quả: khi skill này chạy, Claude làm theo chữ cũ và có thể truyền tham số bị bỏ qua. Công cụ cũng yêu cầu đọc trang Artifact bằng <code>action: "read"</code> chứ không qua WebFetch. Đây là plugin chính thức của Anthropic, nên chỉ báo; bản sửa phải đến từ bản plugin mới.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Phạm vi và giả định</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Nhóm file</th><th>Đọc</th><th>Được vá?</th></tr></thead>
+        <tbody>
+          <tr><td><code>CLAUDE.md</code> (project)</td><td>đọc hết, kiểm mọi đường dẫn và lệnh</td><td>có</td></tr>
+          <tr><td><code>global/CLAUDE.global.md</code> (= <code>~/.claude/CLAUDE.md</code>, nạp ở mọi project)</td><td>đọc hết</td><td>có, ghi rõ ảnh hưởng mọi project</td></tr>
+          <tr><td><code>global/SHARED.global.md</code> (được file trên nhập, nạp ở mọi project)</td><td>đọc hết</td><td>có, ghi rõ ảnh hưởng mọi project</td></tr>
+          <tr><td>Skill đồng bộ từ claude.ai trong <code>~/.claude/skills/synced/</code> (10 skill)</td><td><code>paper-anatomy</code> đọc hết; còn lại quét dấu hiệu</td><td>chỉ nêu: nằm ngoài project, và bản đồng bộ sẽ ghi đè sửa cục bộ</td></tr>
+          <tr><td>Plugin agent-stack (nguồn trong <code>plugin/</code>)</td><td>10 skill, 5 subagent, đọc hết</td><td>không, theo yêu cầu: plugin chỉ báo</td></tr>
+          <tr><td>Plugin bên thứ ba: differential-review, html-plan, static-analysis, claude-security, playground, project-artifact, frontend-design, context7, pyright-lsp</td><td>đọc phần thân skill và subagent</td><td>không</td></tr>
+          <tr><td>Không có: <code>.claude/</code> trong project, <code>~/.claude/rules</code>, <code>commands</code>, <code>agents</code>, <code>output-styles</code>, file chính sách quản lý</td><td>đã tìm, không tồn tại</td><td>–</td></tr>
+          <tr><td>Bỏ qua: <code>CLAUDE.md</code>, <code>AGENTS.md</code> trong <code>vendor/</code> và <code>.vet-cache/</code></td><td>đồ bên thứ ba đang kiểm duyệt, git bỏ qua; chỉ nạp nếu agent mở file trong đó</td><td>–</td></tr>
+          <tr><td>Không đọc: file settings, <code>.mcp.json</code>, <code>~/.claude.json</code></td><td>có thể chứa secret</td><td>–</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Model đích: Opus 5.5. Subagent tự ghim model được xét theo model của nó (cả năm subagent agent-stack đều ghim model hiện hành). Không tìm thấy dấu hiệu nhà cung cấp model khác. Skill superpowers trong gói vendor không được nạp (không có trong danh sách plugin đã cài, gói vendor chỉ khai skill <code>frontend-design</code>).</p>
+  </section>
+
+  <section>
+    <h2>Số phát hiện</h2>
+    <p>Mỗi số dưới đây là số dòng trong ba bảng phát hiện bên dưới.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Nơi</th><th>Cao</th><th>Vừa</th><th>Thấp</th><th>Có trong bản vá</th></tr></thead>
+        <tbody>
+          <tr><td>File của project (3 file)</td><td>0</td><td>2</td><td>2</td><td>2 dòng mức vừa</td></tr>
+          <tr><td>Plugin agent-stack (10 skill, 5 subagent)</td><td>0</td><td>4</td><td>5</td><td>không, chỉ báo</td></tr>
+          <tr><td>Plugin bên thứ ba và skill đồng bộ</td><td>3</td><td>4</td><td>3</td><td>không, chỉ báo</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Theo loại: ở file của project, cả bốn phát hiện đều thuộc loại "file cấu hình giòn" (kể lịch sử, sự kiện dễ đổi), không có câu nào viết cho model cũ. Loại "chữ viết cho model cũ" chỉ xuất hiện ở plugin, chủ yếu là trần số chữ như "tối đa 15 từ": model mới tự viết vừa đủ, còn trần cứng có thể cắt phần cần thiết. Loại "mã gọi API" không áp dụng vì phạm vi không có mã gửi request tới model.</p>
+  </section>
+
+  <section>
+    <h2>Phát hiện trong file của project (có bản vá)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Vị trí</th><th>Trích</th><th>Mẫu · vì sao</th><th>Tin cậy</th><th>Hành động</th></tr></thead>
+        <tbody>
+          <tr><td><code>CLAUDE.md:38</code></td><td>"(nhánh <code>trien-khai-v1</code> đã gộp và xoá ngày 03/10/2026)"</td><td>Kể lịch sử: nhánh đã xoá, câu không chỉ dẫn gì; luật hiện hành là "làm trên main".</td><td><span class="lvl mid">vừa</span></td><td>Bỏ vế ngoặc: "Làm trên nhánh <code>main</code>. Commit sau mỗi giai đoạn…"</td></tr>
+          <tr><td><code>global/SHARED.global.md:25</code> <b>(ảnh hưởng mọi project)</b></td><td>"; bạn chọn ngày 01/11/2026"</td><td>Kể lịch sử quyết định. Giữ phần nguồn bài viết.</td><td><span class="lvl mid">vừa</span></td><td>Bỏ vế ngày chọn</td></tr>
+          <tr><td><code>global/CLAUDE.global.md:7</code> <b>(mọi project)</b></td><td>"alias <code>haiku</code> còn trỏ Haiku 4.5, đừng dùng" (kiểm 08/10/2026)</td><td>Sự kiện dễ đổi theo bản Claude Code. Có ngày kiểm là đúng cách; chỉ cần kiểm lại khi có bản mới. Bốn tên model khớp danh sách model hiện hành.</td><td><span class="lvl lo">thấp</span></td><td>Nêu</td></tr>
+          <tr><td><code>CLAUDE.md:9</code></td><td>"Mọi kích hoạt toàn cục đi qua <code>install.sh</code>"</td><td>Đúng cho lần tạo liên kết (<code>tools/install.py</code> dòng 8), nhưng vì <code>~/.claude/CLAUDE.md</code> là liên kết tới <code>global/</code>, mọi sửa ở hai file đó có hiệu lực ngay ở mọi project mà không qua bước duyệt nào. Xếp thấp vì đây là thiết kế bạn đã chọn khi cài, không phải chữ sai; quy trình kiểm chỉ nhận lỗi khớp một mẫu đã biết, nên điều này chỉ được nêu để bạn biết.</td><td><span class="lvl lo">thấp</span></td><td>Nêu; có thể thêm một câu nhắc điều này</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Đã kiểm và đúng: 17 đường dẫn nhắc trong ba file trên (ví dụ <code>routing-table.md</code>, <code>plugin/hosts/pi.json</code>, <code>tests/test_pi_contract.py</code>, <code>.agent/NHAT-KY.md</code>); các cờ <code>merge_back.py --worktree --test</code>, <code>plan_tree.py --widget --text --pick</code>, <code>state.py trim</code>, <code>receipt.py run</code>, <code>run_eval.py --yes</code>; giá trị <code>data-loai="cong-cu"</code>, nhãn <code>@ban @cho @usd</code>, lệnh <code>/tree</code> và mục <code>agent-stack:ui</code> trong mod; 83 file Python đã biên dịch trong thư mục plugin đã cài (<code>~/.claude/plugins/cache</code>) đều là bản 3.11, đúng như <code>CLAUDE.md:15</code> ghi; CodeQL vẫn chưa cài. Từ <code>ultrathink</code> là từ khóa Claude Code tự xử lý, nên là cấu hình, giữ. Chữ in đậm ở <code>CLAUDE.md:3</code> trùng luật chung và hook mở phiên, nhưng ba nơi nói giống nhau, nên giữ.</p>
+  </section>
+
+  <section>
+    <h2>Phát hiện ở plugin agent-stack (chỉ báo)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Vị trí (trong <code>plugin/</code>)</th><th>Mẫu · vì sao</th><th>Tin cậy</th><th>Gợi ý</th></tr></thead>
+        <tbody>
+          <tr><td><code>skills/task-router/SKILL.md:29</code> và <code>global/CLAUDE.global.md:23</code></td><td>Hai luật ngược nhau về model cho tính năng bảo mật (ví dụ 2). <code>git blame</code> ghi dòng của skill từ 04/10/2026, còn dòng của bảng chung chỉ hiện lần chạm cuối trong đợt đổi tên 03/11, nên không biết nội dung bên nào có trước.</td><td><span class="lvl mid">vừa</span></td><td>Bạn chốt; xem câu 2 bên dưới</td></tr>
+          <tr><td><code>skills/task-router/SKILL.md:35</code></td><td>Kể lịch sử: "đã xoá khỏi danh mục ngày 09/10/2026, sau khi A/B 20 lượt…". Sự kiện cần giữ là "các skill này không có trong danh mục".</td><td><span class="lvl mid">vừa</span></td><td>"Skill vendor <code>tdd</code>, <code>diagnosing-bugs</code>, <code>humanizer</code>, <code>handoff</code>, <code>grill-me</code> không có trong danh mục; đừng gợi ý." Số liệu A/B dời sang <code>routing-table.md</code>.</td></tr>
+          <tr><td><code>skills/task-router/SKILL.md:34</code></td><td>Số đo có ngày ("Eval 08/10/2026: 9/9 việc, 18/18 lượt") trong luật; không gì kiểm lại chúng ở đây.</td><td><span class="lvl mid">vừa</span></td><td>Giữ kết luận (Haiku 5.5 ở low hợp việc có test, viết tiếng Việt yếu), dời số sang <code>evals/</code></td></tr>
+          <tr><td><code>skills/task-router/SKILL.md:55, 57</code></td><td>Trần số chữ ("tối đa 15 từ", "tối đa 2 câu") cho phần lý do; giữ định dạng dòng ➡️, bỏ con số.</td><td><span class="lvl mid">vừa</span></td><td>"một mệnh đề ngắn", "một hai câu nếu cần"</td></tr>
+          <tr><td><code>skills/writing-voice/SKILL.md:35</code></td><td>Trần số "tối đa 5 thay đổi chính".</td><td><span class="lvl lo">thấp</span></td><td>"nêu các thay đổi chính, mỗi cái một dòng"</td></tr>
+          <tr><td><code>skills/reader-page/SKILL.md:105</code>, <code>skills/vet-skill/SKILL.md:34, 64</code></td><td>Ngày nguồn gốc và "ở máy này là 3.11" trong chữ hướng dẫn; ngày duyệt đã có trong <code>vetted.lock</code>.</td><td><span class="lvl lo">thấp</span></td><td>Bỏ ngày</td></tr>
+          <tr><td><code>skills/reader-page/SKILL.md:55</code></td><td>Lối dự phòng cho lúc "plugin chưa nạp lại" subagent đọc thử trang (cold-reader); subagent đó đã có.</td><td><span class="lvl lo">thấp</span></td><td>Nêu; có thể còn cần cho máy khác (pi-agent)</td></tr>
+          <tr><td><code>agents/reviewer.md:10</code></td><td>"thà bỏ sót … còn hơn báo động giả" nghiêng sẵn về báo thiếu trước khi các bước lọc ở dòng 16–27 chạy.</td><td><span class="lvl lo">thấp</span></td><td>Nêu</td></tr>
+          <tr><td>Trần số khác: <code>progress:26</code>, <code>done-gate:16</code>, <code>researcher.md:18</code>, <code>cold-reader.md:15</code>, <code>explore-lite.md:15</code>, <code>test-runner.md:19</code></td><td>Ở subagent, các trần này giữ ngữ cảnh phiên chính gọn; ưu tiên thấp nhất.</td><td><span class="lvl lo">thấp</span></td><td>Nêu</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Mọi đường dẫn, cờ script và ngưỡng (600, 80, 150 ký tự của <code>check_page.py</code>; 12.000 ký tự của §0) trong plugin đều khớp code. Ngoài phạm vi (file này không tự nạp vào phiên): <code>routing-table.md:18</code> còn nhắc subagent <code>oc-worker</code> của OpenCode, đã bỏ khỏi repo; ai đọc bảng đó có thể gợi ý một subagent không tồn tại.</p>
+  </section>
+
+  <section>
+    <h2>Phát hiện ở plugin bên thứ ba và skill đồng bộ (chỉ báo)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Vị trí</th><th>Mẫu · vì sao</th><th>Tin cậy</th></tr></thead>
+        <tbody>
+          <tr><td>project-artifact <code>SKILL.md:78–82</code></td><td>Dùng tham số <code>favicon</code> đã bỏ; công cụ hiện dùng <code>icon</code>.</td><td><span class="lvl hi">cao</span></td></tr>
+          <tr><td>project-artifact <code>SKILL.md:100–102, 144, 180</code></td><td>Bảo đọc trang Artifact bằng công cụ tải web (WebFetch); công cụ Artifact yêu cầu đọc bằng chính nó (<code>action: "read"</code>), vì trang riêng tư không tải được từ ngoài.</td><td><span class="lvl hi">cao</span></td></tr>
+          <tr><td>static-analysis semgrep <code>SKILL.md:217</code> và <code>:237</code></td><td>Tự mâu thuẫn: "không subagent nào chạy phần nào của bản quét" và "subagent cần đường dẫn tuyệt đối".</td><td><span class="lvl hi">cao</span></td></tr>
+          <tr><td>static-analysis codeql (mô tả skill; CodeQL là công cụ quét lỗ hổng của GitHub)</td><td>Mô tả kích hoạt rộng (<code>"SAST scan"</code>, <code>"find vulnerabilities"</code>: gần như mọi yêu cầu quét lỗ hổng) trong khi luật chung <code>SHARED.global.md:66</code> cấm dùng skill này.</td><td><span class="lvl mid">vừa</span></td></tr>
+          <tr><td>differential-review <code>SKILL.md:17, 31, 115, 202, 210</code></td><td>Bắt ghi báo cáo Markdown; ngược luật chung "file cho người đọc là HTML" (<code>SHARED.global.md:25</code>).</td><td><span class="lvl mid">vừa</span></td></tr>
+          <tr><td>paper-anatomy <code>SKILL.md:244–246</code> (skill của bạn, đồng bộ từ claude.ai)</td><td>Mặc định xuất <code>.md</code>; ngược cùng luật HTML. Skill này cũng chạy trên claude.ai, nơi luật HTML không nạp.</td><td><span class="lvl mid">vừa</span></td></tr>
+          <tr><td>html-plan <code>SKILL.md:93</code></td><td>Bắt viết tiếng Anh giản lược theo chuẩn ASD-STE100 (tiếng Anh kỹ thuật hàng không, từ vựng hạn chế); ngược "trả lời bằng tiếng Việt" (<code>SHARED.global.md:3</code>) khi trang cho bạn đọc.</td><td><span class="lvl mid">vừa</span></td></tr>
+          <tr><td>differential-review <code>agents/adversarial-modeler.md:154–156</code></td><td>Dùng biến <code>{baseDir}</code> (thư mục của skill), mà file subagent không được điền biến này; subagent có thể không tìm thấy file hướng dẫn được nhắc.</td><td><span class="lvl lo">thấp</span></td></tr>
+          <tr><td>morning <code>SKILL.md:111–125</code></td><td>Đường dẫn của môi trường sandbox (<code>/opt/pw-browsers/chromium</code>) không có trên máy này.</td><td><span class="lvl lo">thấp</span></td></tr>
+          <tr><td>paper-anatomy <code>SKILL.md:27, 34, 57, 188–191</code></td><td>Trần số chữ không có script kiểm; một ví dụ mẫu duy nhất (ResNet) dễ làm model bắt chước.</td><td><span class="lvl lo">thấp</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Sạch: claude-security (luật đều kèm lý do), playground, frontend-design (danh sách mặc định cần tránh được nêu đích danh, đúng cách hướng dẫn khuyên giữ), context7 và pyright-lsp (không có chữ hướng dẫn), xlsx, docx, import-memory, skill-creator, google-workspace.</p>
+  </section>
+
+  <section>
+    <h2>Bản vá đề xuất</h2>
+    <p>Chỉ gồm hai phát hiện mức vừa trong file của project, mỗi phát hiện một khối. Đã kiểm áp được bằng <code>git apply --check</code>, chưa áp dụng.</p>
+    <pre><code>--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -38 +38 @@
+-- Làm trên nhánh `main` (nhánh `trien-khai-v1` đã gộp và xoá ngày 03/10/2026). Commit sau mỗi giai đoạn, …
++- Làm trên nhánh `main`. Commit sau mỗi giai đoạn, …
+
+--- a/global/SHARED.global.md   (nạp ở mọi project)
++++ b/global/SHARED.global.md
+@@ -25 +25 @@
+-… (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026; bạn chọn ngày 01/11/2026).
++… (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026).</code></pre>
+    <p>Áp dụng: <code>git apply .agent/trang/prompt-audit-2026-11-03.patch</code>. Bản vá đầy đủ nằm ở file đó.</p>
+  </section>
+
+  <section>
+    <h2>Câu bạn cần chốt</h2>
+    <ol>
+      <li><b>Áp dụng bản vá hai khối?</b> Đã chốt 03/11/2026: áp dụng, 828 test đạt. Lý do khuyên lúc đó: Không luật nào đổi; chỉ mất hai mẩu lịch sử, vẫn còn trong git (nhánh cũ đã xoá; ngày chọn HTML ở commit <code>36fae2e</code>). Khối thứ hai sửa file nạp vào mọi project, nhưng chỉ bỏ một vế ngoặc, nên không project nào bị ảnh hưởng hành vi. Không áp dụng thì mọi thứ giữ nguyên.</li>
+      <li><b>Model cho tính năng đụng bảo mật</b> (đăng nhập, upload, thanh toán). Đã chốt 03/11/2026: giữ hướng của bảng chung nhưng nâng lên <code>sonnet·high</code>, mọi model dùng bản mới nhất; đã sửa bảng chung, luật router, bảng đầy đủ và dòng 29 của skill chọn model cho khớp. Câu hỏi lúc đó: giữ bảng chung (<code>sonnet·medium</code> để viết, có threat-model trước và review bằng <code>opus·high</code>) hay theo skill chọn model (<code>opus·high</code> cho mọi việc bảo mật)? Git không cho biết bên nào mới hơn, nên khuyến nghị dựa trên nội dung: theo bảng chung, vì nó dồn model đắt vào bước review, nơi lỗi bảo mật được bắt, và giữ rẻ bước viết. Chọn skill thì mọi lượt viết tính năng bảo mật tốn khoảng gấp đôi hạn mức. Dù chọn bên nào, sửa bên còn lại là một việc riêng (skill nằm trong <code>plugin/</code> của repo này), không thuộc bản vá trên.</li>
+      <li><b>Ba skill nói ngược luật chung.</b> Đã chốt 03/11/2026: vẫn theo luật "máy đọc thì <code>.md</code>, người đọc thì HTML". Luật chung có thêm câu nói rõ luật này thắng skill bên thứ ba; nguồn paper-anatomy trong repo đã đổi bản xuất cho người đọc sang <code>.html</code>; html-plan vốn đã ra HTML. Các lựa chọn lúc đó:
+        <ul>
+          <li>differential-review bắt ghi báo cáo Markdown. Thêm ngoại lệ vào luật chung: báo cáo của skill này vẫn ra <code>.md</code> như tác giả thiết kế. Để luật chung thắng: thêm một câu vào <code>SHARED.global.md</code> dặn chuyển báo cáo của nó sang HTML; mỗi lần dùng tốn thêm một bước. Khuyên để luật chung thắng, vì báo cáo này là để bạn đọc.</li>
+          <li>paper-anatomy (skill của bạn) mặc định xuất <code>.md</code>. Khuyên sửa bản gốc trên claude.ai thành "trong Claude Code xuất <code>.html</code>, trên claude.ai giữ như cũ", vì skill chạy ở cả hai nơi. Sửa trên máy sẽ bị lần đồng bộ sau ghi đè.</li>
+          <li>html-plan bắt viết tiếng Anh giản lược. Thêm ngoại lệ: kế hoạch dạng này ra tiếng Anh. Để luật chung thắng: dặn viết tiếng Việt, nhưng công cụ kiểm của nó đo độ dài câu theo tiếng Anh, có thể báo lỗi giả. Khuyên thêm ngoại lệ, vì ép tiếng Việt làm hỏng bước kiểm của chính skill.</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Hướng dẫn kiểm: <code>claude-api/shared/prompt-audit.md</code> (skill đi kèm Claude Code 2.1.309).</li>
+      <li>File đã đọc: <code>CLAUDE.md</code>, <code>global/CLAUDE.global.md</code>, <code>global/SHARED.global.md</code>; <code>plugin/skills/*/SKILL.md</code>, <code>plugin/agents/*.md</code>; plugin trong <code>~/.claude/plugins/cache/</code> theo <code>installed_plugins.json</code>; <code>~/.claude/skills/synced/</code>.</li>
+      <li>Lệnh kiểm: <code>git blame</code> các dòng nêu trên; <code>grep add_argument</code> trong các script được nhắc; <code>git apply --check</code> bản vá; <code>command -v codeql</code>.</li>
+      <li>Phần plugin do hai subagent (model sonnet) đọc và báo lại; các phát hiện mức cao đã được kiểm lại trực tiếp (<code>project-artifact SKILL.md:78–102</code>, <code>semgrep SKILL.md:217, 237</code>, <code>paper-anatomy SKILL.md:244–246</code>, <code>task-router SKILL.md:29</code>).</li>
+    </ul>
+  </footer>
+</main>

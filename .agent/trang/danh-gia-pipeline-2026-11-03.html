@@ -1,0 +1,445 @@
+<title>Pipeline người duyệt, agent làm</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px }
+.ladder { gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options, .changes { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question, .change { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.chip.later { background: var(--warn-soft); color: var(--warn) }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+tbody th { font-weight: 600 }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.gap { color: var(--bad) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 03/11/2026 · cập nhật 04/11/2026</div>
+    <h1>Pipeline "người đặt khung, agent làm, công cụ kiểm" có ổn không, và agent-stack nên sửa gì theo nó?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack">
+    <h2>Tóm tắt</h2>
+    <p>Pipeline năm khâu của bạn đúng hướng, và agent-stack đã làm phần lớn của nó: luật đặt từ đầu, kế hoạch có trang chọn phương án, bước kiểm cuối việc có test lưu kết quả và một agent khác review.</p>
+    <p>Pipeline còn thiếu bốn thứ: tiêu chí "thế nào là xong" do bạn giữ từ đầu, danh sách cụ thể các quyết định phải hỏi, điều kiện dừng cho vòng sửa, và tách rõ kiểm bằng công cụ khỏi review bằng AI.</p>
+    <p>Trong code có một chỗ hở: script canh cuối mỗi lượt coi việc đã kiểm xong ngay khi bước chấm rủi ro chạy. Khuyên kiểm bằng công cụ thay vì dặn bằng chữ (hướng B ở dưới): sáu cải tiến bằng script và test.</p>
+    <p><b>Cập nhật 04/11/2026:</b> bạn chọn B; cả sáu cải tiến đã làm, có test; bạn chốt cho model khác review lại, có ghi số liệu. Điểm cuối ở câu 4 bạn cũng đã chốt: giữ. Phần "kế hoạch ban đầu", "khuyến nghị cũ" giữ để đối chiếu.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+
+    <h3>Pipeline của bạn</h3>
+    <ol>
+      <li>Con người đưa ý tưởng ban đầu, giới hạn, luật, khuôn khổ và hướng đi cho phép.</li>
+      <li>Agent trau chuốt, sửa đổi, làm rõ, cải tiến ý tưởng.</li>
+      <li>Agent lên kế hoạch thực hiện.</li>
+      <li>Trong lúc agent làm, con người giám sát và duyệt các quyết định quan trọng.</li>
+      <li>Review, test và kiểm chứng được lặp lại, dựa trên công cụ cụ thể, để chặn chuyện AI bịa và giữ chất lượng như hàng thật chạy cho người dùng.</li>
+    </ol>
+
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack là bộ công cụ cá nhân gắn vào Claude Code: luật chung nạp vào mọi phiên, các skill (gói chỉ dẫn agent tự gọi theo việc), các <dfn>hook</dfn> (script Claude Code tự chạy ở mốc cố định như trước khi chạy lệnh hay cuối mỗi lượt, có thể chặn hay hỏi bạn), và các subagent (agent phụ chạy ở bối cảnh riêng). Sơ đồ dưới đặt năm khâu của bạn cạnh phần agent-stack đang làm ở từng khâu.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  K1["1 · Bạn đặt khung<br/>CLAUDE.md, luật chung,<br/>vetted.lock"] --> K2["2 · Làm rõ<br/>reuse-best, threat-model"]
+  K2 --> K3["3 · Kế hoạch<br/>Plan, trang phương án"]
+  K3 --> K4["4 · Làm, bạn duyệt<br/>hook trước lệnh: hỏi hay chặn"]
+  K4 --> K5["5 · Kiểm<br/>done-gate: rủi ro, biên nhận,<br/>tái hiện, reviewer"]
+  K5 -- "còn lỗi" --> K4
+  K5 -- "hook cuối lượt" --> X["Báo xong"]
+    </pre></div>
+
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Diff, test, lint</b>: <dfn>diff</dfn> là danh sách dòng thêm và bớt của một thay đổi. Test chạy code và so kết quả với mong đợi; <dfn>lint</dfn> đọc code mà không chạy, tìm lỗi dạng mẫu. Ví dụ: <code>python3 -m unittest discover -s tests -t .</code> là bộ test của repo này. Cần cho mọi phần sau.</li>
+      <li><b>Tiêu chí xong</b> (còn gọi là tiêu chí nghiệm thu): vài câu kiểm được nói khi nào việc xong, như "lệnh X thoát 0" hay "đầu vào Y cho ra Z". Ví dụ: "đổi tên skill sang tiếng Anh, không đổi tên file dữ liệu". Cần cho ví dụ 5 và cải tiến 3.</li>
+      <li><b>Biên nhận kiểm chứng</b>: bản ghi một lần chạy test, lint hay build, kèm mã thoát và <dfn>dấu vân tay</dfn>, tức mã băm nội dung mọi file git đang theo dõi cộng file mới chưa đưa vào git. Ví dụ: <code>receipt.py run -- python3 -m unittest discover -s tests -t .</code> ghi "đạt" cùng dấu vân tay; sửa một dòng code thì <code>receipt.py show</code> báo biên nhận đó đã cũ. <dfn>Mốc kiểm tra</dfn> là các lệnh kiểm tra mà <code>CLAUDE.md</code> của project bắt phải đạt; ở repo này là bộ test trên, <code>plugin validate</code> và <code>plugin test</code>. Cần cho ví dụ 1 và cải tiến 1.</li>
+      <li><b>Chốt việc</b> (skill <code>done-gate</code>): quy trình tám bước agent chạy trước khi báo xong. Bước 3 chạy script chấm rủi ro <code>risk.py</code>, bước 4 chạy mốc kiểm tra có biên nhận, bước 5 giao một agent khác review. Cần để hiểu chỗ hở ở ví dụ 1.</li>
+      <li><b>Mức rủi ro</b>: <code>risk.py</code> cộng điểm theo diff. Ví dụ: hơn 150 dòng code được 1 điểm, hơn 400 dòng được 2; hơn 15 file được 1; đổi hơn 20 dòng code mà không đổi test được 1; xóa test được 2; nội dung khớp mẫu nguy hiểm (chạy lệnh, secret) được thêm điểm. Từ 4 điểm là cao, từ 2 là vừa, còn lại là thấp. Đụng <dfn>ranh giới tin cậy</dfn> (chỗ dữ liệu từ ngoài đi vào: input người dùng, gọi dịch vụ ngoài, xác thực, chạy lệnh) thì ít nhất là vừa. Cần cho cải tiến 1 và câu 3.</li>
+      <li><b>Hook cuối lượt</b> (hook Stop): chạy khi agent sắp kết thúc lượt. Lượt đổi code rủi ro từ vừa trở lên mà chưa chốt việc thì hook chặn một lần, bắt agent chạy chốt việc. Cách hook biết "đã chốt": <code>risk.py</code> ghi một dấu thời gian khi chạy. Số liệu thật từ nhật ký hook (<code>state/events.jsonl</code>), 09/10 tới 03/11/2026: 3.867 lượt kết thúc, hook chặn 482 lần, phần lớn vì chưa cập nhật file kế hoạch; 17 lần vì chưa chốt việc (16 lần mức vừa, 1 lần mức cao). Giới hạn thời gian của hook là 5 giây, đặt trong <code>plugin/hooks/hooks.json</code>. Cần cho cải tiến 1.</li>
+      <li><b>Test bắt được lỗi</b>: test viết cho một bản sửa lỗi phải trượt trên code trước khi sửa và đạt sau khi sửa. Test đạt ở cả hai phía không chứng minh gì. Cần cho ví dụ 2 và cải tiến 4.</li>
+    </ol>
+
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>§0</dt><dd>Mục đầu của <code>PLAN.md</code>, "Đang ở đâu, việc tiếp theo"; phiên nào cũng đọc nó trước.</dd>
+        <dt>reviewer</dt><dd>Agent phụ chỉ đọc, review diff ở bối cảnh riêng, không thấy hội thoại; mặc định chạy model Opus.</dd>
+        <dt>assert</dt><dd>Câu so sánh trong test, như <code>assertEqual(a, b)</code>; nới assert là đổi nó thành điều kiện dễ đạt hơn.</dd>
+        <dt>worktree</dt><dd>Một bản checkout thứ hai của cùng repo trong thư mục khác, để chạy code cũ mà không đụng thư mục đang sửa.</dd>
+        <dt>tag phát hành</dt><dd>Nhãn git đánh dấu một phiên bản sắp phát hành, như <code>v0.20.0</code>.</dd>
+        <dt>schema</dt><dd>Cấu trúc của dữ liệu lưu trữ (bảng, cột, trường); đổi schema của dữ liệu thật thường không đảo ngược được.</dd>
+        <dt>vetted.lock</dt><dd>File ghi các skill, plugin và máy chủ công cụ bên thứ ba đã qua kiểm duyệt và được bạn duyệt.</dd>
+      </dl>
+    </div>
+
+    <h3>Pipeline của bạn so với agent-stack hôm nay</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Khâu</th><th>agent-stack đang có</th><th>Còn hở</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Bạn đặt khung</th>
+            <td>Luật cứng về phạm vi trong <code>CLAUDE.md</code>; luật chung cho mọi project; <code>vetted.lock</code> liệt kê đồ bên thứ ba bạn đã duyệt; threat model ghi các chốt chặn bảo mật phải có.</td>
+            <td class="gap">Chưa có chỗ ghi "thế nào là xong" cho từng việc ngay từ đầu. Skill chốt việc tự viết lại ý định ở cuối, từ hội thoại.</td></tr>
+          <tr><th>2 · Agent làm rõ</th>
+            <td>Skill <code>reuse-best</code> tìm thứ có sẵn trước khi tự viết; skill <code>threat-model</code> trước khi code chức năng đụng ranh giới tin cậy; luật "không rõ thì hỏi".</td>
+            <td>Đủ cho việc nhỏ. Việc vừa trở lên chưa có bước buộc nêu giả định ra cho bạn xem.</td></tr>
+          <tr><th>3 · Kế hoạch</th>
+            <td>Subagent Plan, skill <code>html-plan</code>, trang so sánh phương án khi có từ hai hướng, <code>PLAN.md</code> với nhãn <code>@ban</code> cho việc cần bạn.</td>
+            <td>Không thấy chỗ hở đáng kể.</td></tr>
+          <tr><th>4 · Bạn giám sát và duyệt</th>
+            <td>Hook trước lệnh chặn cài đồ chưa duyệt, hỏi bạn khi thêm nguồn plugin lạ, khi <code>git checkout</code> lúc còn thay đổi chưa commit, và trước khi tạo tag phát hành. Mục "cần bạn quyết" trong báo cáo chốt việc. Pane Kế hoạch và bản ghi lượt cuối để theo dõi.</td>
+            <td class="gap">"Quan trọng" mới là năm trường hợp cố định. <code>git push</code>, xóa hàng loạt, <code>git reset --hard</code> chỉ có luật chữ.</td></tr>
+          <tr><th>5 · Review, test, kiểm chứng</th>
+            <td>Skill chốt việc: chấm rủi ro diff, chạy kiểm chứng có biên nhận gắn với nội dung code, tái hiện như người dùng, giao reviewer ở bối cảnh mới (tự phản biện từng phát hiện, bỏ phát hiện dưới ngưỡng tin cậy 80/100), sửa xong chấm lại riêng phần sửa. Hook cuối lượt buộc chạy chốt việc khi rủi ro từ vừa trở lên.</td>
+            <td class="gap">Hook coi "đã chốt" ngay khi script chấm rủi ro chạy. Vòng sửa không có trần. Chưa có bằng chứng test mới bắt được lỗi. Tài liệu chỉ được kiểm một phần.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Đánh giá chính pipeline</h3>
+    <p>Hai điểm mạnh: bạn đặt người ở hai đầu việc (đặt khung, duyệt) và đòi kiểm bằng công cụ chứ không bằng lời agent. Đó cũng là thiết kế của skill chốt việc: bạn bỏ công ở đầu và cuối, phần giữa agent tự kiểm có bằng chứng.</p>
+    <p>Bốn chỗ nên thêm vào pipeline, áp dụng cho mọi project chứ không riêng agent-stack:</p>
+    <ul>
+      <li><b>Khâu 1 cần tiêu chí xong.</b> Giới hạn và luật nói agent không được làm gì; chúng không nói khi nào xong. Thiếu tiêu chí do bạn giữ, agent vừa ra đề vừa chấm bài, và bước kiểm ở khâu 5 chỉ xác nhận cái agent đã làm.</li>
+      <li><b>"Quyết định quan trọng" phải là danh sách.</b> Gợi ý năm loại: không đảo ngược được (xóa dữ liệu, đổi lịch sử git, đổi schema dữ liệu thật), ra khỏi máy (push, gửi tin, đăng), đụng ranh giới tin cậy, đổi phạm vi hay ý định, tốn tiền. Hỏi mọi thứ thì bạn sẽ duyệt cho xong và cổng mất tác dụng.</li>
+      <li><b>"Lặp lại" cần điều kiện dừng.</b> Một vòng sửa không có trần có thể chạy mãi, hoặc tệ hơn, agent nới test cho đạt. Cần trần số vòng, hết trần thì hỏi bạn, và coi mọi lần nới test là việc phải báo.</li>
+      <li><b>Tách hai lớp kiểm.</b> Lớp xác định (test, lint, build, tái hiện, so đầu ra) quyết đạt hay trượt. Review bằng AI là lớp thứ hai, để tìm chỗ test chưa phủ; nó không phải "công cụ xác định", vì cùng một đầu vào có thể ra kết luận khác.</li>
+    </ul>
+    <p>Thêm một khâu cuối: lỗi lặp lại thì thành luật hay test. agent-stack đã có luật này (ghi bài học vào <code>CLAUDE.md</code> của project). Mục tiêu "không còn AI bịa" thì không đạt tuyệt đối được; mục tiêu đo được là mọi câu "đạt" có biên nhận khớp code hiện tại, và chỗ nào chưa kiểm được thì nói rõ.</p>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <p class="note">Ví dụ 1, 2, 3 và 5 là tình huống dựng trên code thật hôm nay. Chỗ hở trong code đã được kiểm bằng cách đọc code (nguồn ở cuối trang); việc nó đã từng làm lọt lỗi thật hay chưa thì chưa biết, vì nhật ký hook không ghi agent đã chạy những bước nào sau bước chấm rủi ro. Ví dụ 4 là dữ kiện thật về độ phủ của test hiện có.</p>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: báo "828 test đạt" bằng biên nhận cũ</h3>
+        <p>Tình huống: một lượt sửa <code>risk.py</code>. Agent chạy bước 3 của chốt việc:</p>
+        <pre><code>python3 plugin/skills/done-gate/scripts/risk.py
+# risk.py:396 mark_ran() ghi dấu "đã chốt việc" ngay lúc này</code></pre>
+        <p>Rồi hội thoại bị nén, agent quên bước 4 và báo "828 test đạt" (828 là số test của repo ngày 02/11) theo biên nhận chạy trước khi sửa.</p>
+        <p>Hôm nay: hook cuối lượt chỉ hỏi "dấu chốt việc có mới hơn đầu lượt không" (<code>agentstack.py:1103</code>), thấy có, nên cho qua. <code>receipt.py show</code> sẽ báo biên nhận đã cũ, nhưng không ai chạy nó. Vì sao quan trọng: kịch bản cần agent quên một bước, điều chưa biết hay xảy ra tới đâu; nhưng khi xảy ra thì không lớp nào bắt, và đó đúng là "báo xong mà chưa kiểm", điều luật chung cấm.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: test mới đạt cả khi chưa sửa</h3>
+        <p>Tình huống giả định: sửa lỗi <code>risk.py</code> chấm nhầm file <code>.htm</code> là code. Test mới viết <code>change_kind({"path": "docs/a.html"})</code> phải ra <code>"doc"</code>, nhưng file <code>.html</code> trong <code>docs/</code> đã được chấm đúng từ trước. Test đạt, biên nhận xanh, mà phần <code>.htm</code> chưa được kiểm.</p>
+        <p>Hôm nay: <code>PLAN.md</code> có ghi "test mới trượt khi bỏ bản sửa" ở vài việc, nghĩa là agent đã tự gỡ bản sửa ra để thử. Đó là bước tay, chỉ xảy ra khi agent nhớ. Vì sao quan trọng: biên nhận xanh cho một test không chạm lỗi là bằng chứng giả trông như thật.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: vòng sửa nới test cho đạt</h3>
+        <p>Tình huống giả định: reviewer báo lỗi, agent sửa, một test trượt. Agent đổi một dòng:</p>
+        <pre><code>- self.assertEqual(r["level"], "cao")
++ self.assertIn(r["level"], ("vừa", "cao"))</code></pre>
+        <p>Hôm nay: luật "bớt test" của <code>risk.py:193</code> chỉ báo khi số dòng test xóa nhiều hơn số dòng thêm và từ 10 dòng trở lên. Ở đây +1/−1 nên không báo. Vòng sửa của chốt việc lặp "tới khi reviewer không còn lỗi", không có trần. Vì sao quan trọng: test vẫn xanh, nhưng nó đã thôi bảo vệ hành vi cũ.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Tài liệu nhắc lệnh không có thật</h3>
+        <p>Tình huống: hướng dẫn ghi <code>receipt.py verify</code>, trong khi <code>receipt.py</code> chỉ có 4 lệnh con: <code>run</code>, <code>show</code>, <code>forget</code>, <code>prune</code>.</p>
+        <p>Hôm nay: test <code>tests/test_skill_meta.py:33</code> chỉ kiểm đường dẫn dạng <code>${CLAUDE_SKILL_DIR}/…</code> trong file skill. Lần soát cấu hình ngày 03/11 kiểm "mọi đường dẫn và cờ đều khớp code" bằng tay. Vì sao quan trọng: agent đọc tài liệu này ở phiên sau và chạy theo; lệnh bịa trong tài liệu sinh ra lệnh bịa trong việc thật.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 5 · Ý định trôi sau khi nén hội thoại</h3>
+        <p>Tình huống giả định, dựa trên việc đổi tên sang tiếng Anh ngày 03/11: bạn chọn "mọi tên nhưng không cần tên file". Việc dài, hội thoại bị nén hai lần. Tới bước 1 của chốt việc, agent viết lại ý định từ phần còn lại của hội thoại và từ chính diff, thành "đổi mọi tên, kể cả tên file".</p>
+        <p>Hôm nay: ý định và tiêu chí xong chỉ được viết ở cuối việc, nên chúng có thể khớp với cái đã làm thay vì cái bạn muốn. Reviewer nhận ý định đó làm chuẩn. Vì sao quan trọng: cả cổng kiểm đạt, mà việc làm lệch yêu cầu.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="B" data-khuyen>
+        <h3>B · Cổng kiểm bằng công cụ <span class="chip">khuyên, bạn đã chọn, đã làm</span></h3>
+        <p>Sáu cải tiến ở mục dưới, mỗi cái thực thi bằng hook, script hay test có kèm test của chính nó; chữ trong skill chỉ để giải thích.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Sửa hook cuối lượt, hook trước lệnh, <code>risk.py</code>, <code>receipt.py</code>, thêm một test tài liệu; sửa skill chốt việc cho khớp.</dd>
+          <dt>Được</dt><dd>Không còn phụ thuộc agent nhớ bước nào. Bước bị bỏ thì hook chặn, có lý do cụ thể.</dd>
+          <dt>Mất</dt><dd>Thêm lượt bị chặn (mỗi lần tốn một lượt model). Hook cuối lượt phải tính dấu vân tay code, cần đo để giữ dưới giới hạn 5 giây. Cải tiến 3 cần chạy code cũ trong worktree tạm, phức tạp nhất.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Thêm khoảng 300–500 dòng Python và test (ước lượng, chưa viết). Luật chặn sai thì phải chỉnh ngưỡng.</dd>
+          <dt>Đảo ngược</dt><dd>Được: mỗi cải tiến là một commit riêng, gỡ độc lập.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="A">
+        <h3>A · Siết chữ trong skill và luật</h3>
+        <p>Thêm các điều trên vào skill chốt việc và luật chung bằng lời: phải chạy biên nhận, tối đa 3 vòng sửa, ghi tiêu chí xong từ đầu, kiểm test trượt trên code cũ.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Sửa <code>SKILL.md</code> của chốt việc và <code>SHARED.global.md</code>; không đổi code.</dd>
+          <dt>Được</dt><dd>Rẻ, xong trong một lượt, không thêm lượt bị chặn, không thêm thời gian hook.</dd>
+          <dt>Mất</dt><dd>Vẫn dựa vào trí nhớ của model. Sau khi nén hội thoại hay khi model vội, bước bị bỏ mà không ai biết. Mục 6.19 của <code>KE-HOACH.md</code> đã rời hướng này vì đúng lý do đó. File luật nạp vào mọi phiên dài thêm.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Thấp về code, cao về độ tin: không đo được agent có làm theo không.</dd>
+          <dt>Đảo ngược</dt><dd>Được, sửa chữ.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hướng B gồm những gì</h2>
+    <p class="note">Xếp theo thứ tự khuyên làm. Mỗi cải tiến ghi: làm gì, chạm file nào, kiểm bằng gì.</p>
+    <div class="changes">
+      <article class="change">
+        <h3>1 · Cổng cuối lượt kiểm bằng chứng thật</h3>
+        <p>Hook cuối lượt chỉ coi là đã chốt khi: có biên nhận đạt cho mốc kiểm tra của project và biên nhận khớp dấu vân tay code hiện tại; mức rủi ro vừa hay cao thì có thêm một lần chạy reviewer trong lượt. Hook trước subagent đã ghi loại subagent vào nhật ký sự kiện (<code>subagent_start.py:134</code>), nên kiểm được mà không thêm hook mới.</p>
+        <p>Chạm: <code>plugin/hooks/stop.py</code>, <code>plugin/lib/agentstack.py</code>, dùng lại hàm dấu vân tay của <code>receipt.py</code>. Kiểm: test cho ba ca chặn (biên nhận cũ, biên nhận đỏ, thiếu reviewer) và ca cho qua; đo thời gian hook trên repo này.</p>
+      </article>
+      <article class="change">
+        <h3>2 · Trần vòng sửa và báo nới test</h3>
+        <p>Vòng sửa và review tối đa 3 lần, hết trần thì đưa vào "cần bạn quyết". <code>risk.py</code> báo thêm khi diff của file test xóa assert, đổi <code>assertEqual</code> sang dạng lỏng hơn, hay thêm <code>skip</code>, kể cả khi số dòng không đổi.</p>
+        <p>Chạm: <code>plugin/skills/done-gate/SKILL.md</code>, <code>risk.py</code>. Kiểm: test với diff ở ví dụ 3 phải ra lý do "nới test".</p>
+      </article>
+      <article class="change">
+        <h3>3 · Tiêu chí xong ghi từ đầu việc</h3>
+        <p>Trước khi code, agent ghi 2–4 tiêu chí xong, mỗi tiêu chí là một lệnh hay một cặp đầu vào và đầu ra mong đợi. Bước 1 của chốt việc đọc lại tiêu chí đó thay vì tự viết ở cuối. Đổi tiêu chí giữa chừng thì hỏi bạn. Ghi ở đâu, và việc nào agent phải hỏi bạn xác nhận tiêu chí trước khi làm: câu 3 cuối trang.</p>
+        <p>Chạm: skill chốt việc, skill <code>session-keeper</code>, luật chung. Kiểm: hook cuối lượt nhắc khi lượt có code mức vừa trở lên mà không tìm thấy tiêu chí xong.</p>
+      </article>
+      <article class="change">
+        <h3>4 · Bằng chứng test bắt được lỗi <span class="chip">đã làm 04/11/2026</span></h3>
+        <p class="note">Đã làm thành <code>receipt.py fails-before</code>, dựng code trong thư mục tạm của hệ điều hành (bạn chọn) thay vì <code>.tmp/</code>, và thêm kết luận thứ ba "không kết luận được" (bạn duyệt). Lỗi venv trong repo nối bằng <code>--link .venv</code> (test yếu ra "không kết luận được" thay vì "không bắt được lỗi") đã sửa ở vòng thứ 4 theo lời bạn.</p>
+        <p>Lệnh mới cho <code>receipt.py</code>: dựng worktree tạm của commit trước bản sửa trong <code>.tmp/</code>, chép file test mới vào, chạy, và ghi biên nhận "trượt như mong đợi". Test đạt cả trên code cũ thì báo như ví dụ 2. Không bao giờ checkout trên thư mục đang sửa.</p>
+        <p>Chạm: <code>receipt.py</code>, bước 4 của chốt việc cho việc sửa lỗi. Kiểm: test với một bản sửa giả và một test giả đạt cả hai phía.</p>
+      </article>
+      <article class="change">
+        <h3>5 · Tài liệu khớp code <span class="chip">đã làm 04/11/2026</span></h3>
+        <p class="note"><b>Đã làm thế nào, nói gọn:</b> một test mới (<code>tests/test_docs_match.py</code>) đọc mọi tài liệu mà agent và bạn hay đọc (README, hướng dẫn, <code>CLAUDE.md</code>, luật chung, file skill, file subagent). Trong mỗi đoạn lệnh, nó lấy tên script, lệnh con và cờ, rồi chạy chính script đó với <code>--help</code> để xem lệnh con và cờ có thật không. Nó cũng xem mỗi đường dẫn kiểu <code>plugin/…</code>, <code>tools/…</code> có file thật không.</p>
+        <p class="note"><b>Ví dụ:</b> nếu ai đó viết vào hướng dẫn <code>receipt.py verify</code>, bộ test trượt với dòng: <code>receipt.py: lệnh con `verify` không có (có: fails-before, forget, prune, run, show)</code>. Chỗ viết mẫu như <code>&lt;lệnh test&gt;</code> hay dấu ba chấm thì bỏ qua, để không báo nhầm.</p>
+        <p class="note"><b>Lần chạy đầu:</b> soát 20 tài liệu, 186 lần gọi script, 202 đường dẫn, mất khoảng 2,5 giây. Tìm ra một chỗ lệch thật: README và hướng dẫn ghi <code>tools/port_agents.py</code> như thể nó nằm trong repo này, nhưng đó là file của pi-agent; đã sửa thành <code>pi-agent/tools/port_agents.py</code>.</p>
+        <p>Kế hoạch ban đầu: mở rộng test có sẵn ở <code>tests/test_skill_meta.py:33</code>: tìm mọi chỗ <code>&lt;script&gt;.py &lt;lệnh con&gt; --cờ</code> và đường dẫn trong file hướng dẫn, <code>CLAUDE.md</code>, file skill; so với <code>--help</code> của script và với file thật.</p>
+        <p>Chạm: một file test. Kiểm: chính test đó trượt với câu ở ví dụ 4.</p>
+      </article>
+      <article class="change">
+        <h3>6 · Danh sách quyết định phải hỏi <span class="chip">đã làm phần lệnh, 04/11/2026</span></h3>
+        <p class="note"><b>Đã làm thế nào, nói gọn:</b> trước mỗi lệnh Claude chạy, hook xem lệnh có xóa hay đẩy thứ gì không lấy lại được không. Nếu có, lần đầu hook chặn và bảo Claude hỏi bạn. Bạn nhắn lại đồng ý thì Claude chạy lại đúng lệnh đó và hook cho qua, một lần; lần sau chạy lại thì hỏi lại. Không dùng hộp hỏi bấm nút, vì ở auto mode hộp đó từng được duyệt mà bạn không thấy.</p>
+        <p class="note"><b>Ví dụ một lượt:</b> Claude chạy <code>git push origin main</code> → hook chặn → Claude hỏi "Đẩy 2 commit lên origin/main nhé?" → bạn nhắn "ừ" → Claude chạy lại, lệnh qua. Nếu Claude đổi lệnh thành <code>git push --force origin main</code> thì hook hỏi lại, vì đó là lệnh khác.</p>
+        <p class="note"><b>Bị hỏi:</b> <code>git push</code> mọi dạng (trừ <code>--dry-run</code>, chỉ thử); <code>git reset --hard</code>; <code>git clean -f</code>; <code>rm -r</code> hay <code>rm -rf</code> với thư mục ngoài thư mục tạm thật (bạn chọn: <code>rm -rf backups</code> hay <code>rm -rf state</code> có hỏi, dù git bỏ qua chúng); <code>git commit --amend</code> và <code>git rebase</code> khi viết lại commit đã đẩy lên remote. <b>Không bị hỏi:</b> thông điệp commit có chữ "git push"; lệnh nằm trong <code>if</code> hay vòng <code>for</code> thì vẫn bị nhận ra; <code>rm -rf .tmp/x</code>, <code>rm -rf build</code>, thư mục vừa tạo bằng <code>mktemp</code>; amend một commit chưa đẩy. Hook không thấy lệnh đi vòng như <code>xargs rm</code> hay script trung gian: nó là lớp nhắc, không phải tường chắn.</p>
+        <p class="note"><b>Chưa làm:</b> phần ghi năm loại quyết định vào luật chung. Loại không nhận ra được từ lệnh (đổi phạm vi, đánh đổi thiết kế) vẫn đi qua mục "cần bạn quyết" của chốt việc.</p>
+        <p>Kế hoạch ban đầu: ghi năm loại quyết định quan trọng vào luật chung. Loại nhận ra được từ lệnh (<code>git push</code>, <code>git reset --hard</code>, <code>rm -rf</code> ngoài thư mục tạm, đổi lịch sử git) thì hook trước lệnh trả "hỏi bạn", như đang làm với <code>git checkout</code>. Loại không nhận ra được từ lệnh (đổi phạm vi, đánh đổi thiết kế) giữ ở mục "cần bạn quyết".</p>
+        <p>Chạm: <code>pretool_guard.py</code>, <code>SHARED.global.md</code>. Kiểm: test cho từng mẫu lệnh, và test rằng chữ "git push" nằm trong thông điệp commit hay đoạn văn dán vào lệnh không bị hỏi nhầm.</p>
+      </article>
+      <article class="change">
+        <h3>Reviewer khác model với người viết <span class="chip">đã làm 04/11/2026, xem câu 4</span></h3>
+        <p class="note">Bạn chốt làm ngay và đo song song, thay vì đo trước rồi mới làm. Cách review mới ở câu 4.</p>
+        <p>Ghi chú cũ: phiên chạy Sonnet mà chốt việc mức vừa giao reviewer Sonnet thì người viết và người review cùng một model, dễ cùng điểm mù. Đây mới là giả thuyết; luật chung đòi số liệu trước khi đổi cách làm lâu dài. Chỉ làm sau khi có bộ lỗi mẫu để đo.</p>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>B · Cổng bằng công cụ</th><th>A · Siết chữ</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Biên nhận cũ</th>
+            <td data-cho="B">Hook cuối lượt thấy biên nhận unittest lệch dấu vân tay, chặn một lần: "chạy lại mốc kiểm tra trước khi báo xong".</td>
+            <td data-cho="A">Skill ghi "phải chạy biên nhận"; agent đã quên bước 4 sau khi nén thì cũng không đọc lại câu đó. Lọt.</td></tr>
+          <tr><th>2 · Test đạt cả khi chưa sửa</th>
+            <td data-cho="B">Biên nhận "trượt như mong đợi" không có; chạy trên worktree cũ thì test đạt, báo "test không bắt được lỗi".</td>
+            <td data-cho="A">Lọt nếu agent không tự gỡ bản sửa ra thử.</td></tr>
+          <tr><th>3 · Nới assert</th>
+            <td data-cho="B"><code>risk.py</code> báo "nới test: assertEqual thành assertIn", đưa dòng đó vào mục "nên đọc"; vòng thứ 4 thì dừng và hỏi bạn.</td>
+            <td data-cho="A">Luật chữ "không nới test" có, nhưng diff +1/−1 không bị máy nào soát; reviewer có thể thấy hoặc không.</td></tr>
+          <tr><th>4 · Lệnh bịa trong tài liệu</th>
+            <td data-cho="B">Bộ test trượt: <code>receipt.py verify</code> không có trong <code>--help</code>.</td>
+            <td data-cho="A">Chỉ bắt được khi có lần soát tay như ngày 03/11.</td></tr>
+          <tr><th>5 · Ý định trôi</th>
+            <td data-cho="B">Tiêu chí "không đổi tên file" đã nằm trong §0 từ đầu, bạn đã xác nhận; chốt việc so diff với nó và báo lệch.</td>
+            <td data-cho="A">Luật chung có câu "ghi tiêu chí xong từ đầu", nhưng không có gì kiểm agent đã ghi. Lượt nào agent bỏ qua câu đó thì tiêu chí lại được viết ở cuối, như hôm nay.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của repo, <code>global/SHARED.global.md</code>, threat model trong <code>.agent/threat-model.md</code> và giới hạn đã chấp nhận trong <code>KE-HOACH.md</code>. Bảng viết ngày 03/11, trước khi code: ô "Đạt" là đối chiếu thiết kế với luật. Hai ô đã đổi khi làm thật, ghi ngay trong ô.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>B</th><th>A</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15">
+            <th>Python chỉ dùng thư viện chuẩn <span class="src">CLAUDE.md:15</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: chỉ cần <code>subprocess</code>, <code>json</code>, <code>re</code>, git có sẵn.</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không viết code.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:18">
+            <th>Hook phải nhanh, không làm kẹt phiên <span class="src">CLAUDE.md:18</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt nếu chỉ tính dấu vân tay khi lượt đổi code mức vừa trở lên và bọc mọi lỗi; phải đo trước khi bật.</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không đổi hook.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:17">
+            <th>Đổi hook, skill thì ghi hợp đồng với pi <span class="src">CLAUDE.md:17</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: không thêm hook mới; đổi hành vi hook cuối lượt thì cập nhật <code>plugin/hosts/pi.json</code> nếu pi dùng nó.</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không đổi hook.</td></tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:15">
+            <th>Chưa kiểm chứng thì không nói xong; đạt cũ không chứng minh cho code mới <span class="src">global/SHARED.global.md:15</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt, và hook buộc luật này (cải tiến 1).</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt trên giấy: chỉ nhắc lại, không buộc.</td></tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:19">
+            <th>Sửa lỗi: tái hiện trước, chạy lại đúng bước đó <span class="src">global/SHARED.global.md:19</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: cải tiến 4 thêm bằng chứng máy cho phía "trước khi sửa".</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt, không đổi gì.</td></tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:20">
+            <th>Chọn theo chất lượng, độ bền, không theo công làm <span class="src">global/SHARED.global.md:20</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: tốn công hơn nhưng bền hơn.</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt về luật, nhưng lý do chọn A chủ yếu là ít công.</td></tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:66">
+            <th>Đổi cách làm của agent cần số liệu trước khi bật lâu dài <span class="src">global/SHARED.global.md:66</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: phần chưa có số liệu (reviewer khác model) tách ra. Khi làm thật: bạn chốt làm ngay và đo song song bằng nhật ký review (câu 4).</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không đổi cách chọn model.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:19">
+            <th>File tạm nằm trong <code>.tmp/</code> <span class="src">CLAUDE.md:19</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt. Khi làm thật: bạn chọn dựng code cũ trong thư mục tạm của hệ điều hành thay vì <code>.tmp/</code>; <code>CLAUDE.md</code> ghi ngoại lệ đó.</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không tạo file tạm.</td></tr>
+          <tr data-rang-buoc data-nguon=".agent/threat-model.md:12">
+            <th>Không checkout trên cây đang sửa dở (mối đe dọa đã ghi) <span class="src">.agent/threat-model.md:12</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: dùng <code>git worktree add</code> vào thư mục khác, không đụng thư mục làm việc.</td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Không chạy git.</td></tr>
+          <tr data-rang-buoc data-nguon="KE-HOACH.md:527">
+            <th>Giới hạn đã chấp nhận: mỗi lần hook cuối lượt chặn tốn thêm một lượt model <span class="src">KE-HOACH.md:527</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt có điều kiện: chỉ chặn khi biên nhận đỏ, cũ hay thiếu reviewer, một lần mỗi lượt như hiện nay.</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt: không thêm lượt chặn.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:38">
+            <th>Không push <span class="src">CLAUDE.md:38</span></th>
+            <td data-cho="B" data-ket-qua="dat">Đạt: cải tiến 6 hỏi bạn trước <code>git push</code>.</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt: luật chữ giữ nguyên.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> cách hook hiện nay hiểu "đã chốt" (script chấm rủi ro đã chạy) là tiền lệ; trang này không nhân rộng nó mà đề xuất sửa (cải tiến 1).</li>
+      <li><b>Chiều theo người dùng:</b> có hai chỗ trang không theo nguyên văn pipeline của bạn. "Duyệt các quyết định quan trọng" cần danh sách, không phải duyệt mọi bước. "Lặp lại" cần trần vòng. Thêm nữa, review bằng AI không tính là công cụ xác định.</li>
+      <li><b>Chọn vì ít công:</b> A ít công hơn nhiều; không khuyên vì nó dựa vào trí nhớ model, đúng chỗ đang hở.</li>
+      <li><b>Phương án bù nhìn:</b> A là lựa chọn thật: giữ hook đơn giản, không thêm lượt chặn, không thêm thời gian hook. Người coi trọng chi phí có thể chọn nó.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> các cái giá của B (lượt chặn, thời gian hook, độ phức tạp của cải tiến 4) ghi trên thẻ. Phần reviewer khác model lúc viết trang ghi rõ là để sau, không bỏ lặng lẽ; sau đó bạn chốt làm luôn (câu 4).</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. Không phương án nào bỏ test hay cài thêm đồ bên thứ ba.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần bạn chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Đi hướng B (cổng bằng công cụ) hay A (siết chữ)? <span class="chip">đã chốt: B</span></h3>
+      <p>Bạn chọn B ngày 03/11/2026 ("Làm 1 và 2"), đúng khuyến nghị: chỗ hở ở ví dụ 1 sinh ra từ việc dựa vào trí nhớ model.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: Làm cải tiến nào trước? <span class="chip">đã chốt: 1 và 2, đã làm</span></h3>
+      <p>Bạn chọn làm 1 và 2 trước (03/11/2026); cả hai đã làm cùng ngày, có test. Một chỗ lệch so với mô tả ở trên: hook chỉ đòi biên nhận từ mức rủi ro vừa, vì mức thấp không bị bắt chạy chốt việc, đòi bằng chứng ở đó thì phạt việc tự chạy chốt việc. Sau đó 3, 4 (04/11/2026), rồi 5, 6 (04/11/2026) cũng đã làm. Khuyến nghị cũ, giữ để đối chiếu:</p>
+      <p>Khuyên theo thứ tự trên trang: 1 (cổng cuối lượt) và 2 (trần vòng, báo nới test) trước vì vá chỗ hở đã thấy và ít code; rồi 3 (tiêu chí từ đầu) vì đổi cách bạn làm việc với agent; 4, 5, 6 sau. Muốn ít việc hơn thì dừng sau 1 và 2: chúng vá khâu kiểm, khâu bạn nhấn mạnh nhất. Cải tiến 6 độc lập với 1–5, làm lúc nào cũng được; nó chỉ đứng sau vì §0 của <code>PLAN.md</code> không ghi sự cố nào do lệnh push hay xóa chạy ngoài ý bạn.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Tiêu chí xong ghi ở đâu, và khi nào agent phải hỏi bạn xác nhận? <span class="chip">đã làm theo khuyến nghị</span></h3>
+      <p>Bạn bảo "Làm cải tiến 3" (04/11/2026) mà chưa trả lời câu này, nên làm theo khuyến nghị bên dưới: dòng <b>Tiêu chí xong</b> trong §0, hỏi bạn xác nhận chỉ khi việc từ mức vừa mà tiêu chí do agent tự suy. Đổi được nếu bạn muốn khác. Một chỗ lệch so với mô tả cải tiến 3: lời nhắc nằm ở hook trước khi sửa file mã nguồn, không ở cuối lượt, vì nhắc ở cuối lượt thì tiêu chí lại được viết sau khi code. Router chỉ nhận ra một phần việc (tính năng, refactor, kiến trúc, lỗi có dấu hiệu rõ), phần còn lại dựa vào luật chung và báo cáo của chốt việc. Khuyến nghị cũ, giữ để đối chiếu:</p>
+      <p>Lựa chọn: một dòng trong §0 mục "Đang dở", hay file riêng <code>.agent/TIEU-CHI.md</code>. Khuyên §0: phiên nào cũng đọc sẵn, không thêm file. Hỏi xác nhận chỉ với việc mức vừa trở lên; việc nhỏ agent tự ghi, không hỏi, để bạn không phải duyệt cho xong.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 4: Reviewer khác model với người viết: đo trước hay bỏ? <span class="chip">đã chốt: làm, vừa làm vừa đo; mã hóa sửa nhỏ: giữ</span></h3>
+      <p><b>Câu này hỏi gì, nói gọn:</b> khi Claude viết xong code, một Claude khác (chạy ở context mới, gọi là reviewer) đọc lại để tìm lỗi. Nếu người viết và người review cùng là một model, ví dụ cùng Opus, thì chỗ Opus hay nghĩ sai lúc viết cũng dễ là chỗ Opus nghĩ sai lúc review. Câu 4 hỏi: có nên cho model khác review không, và có cần đo trước khi đổi không.</p>
+      <p><b>Bạn chốt (04/11/2026):</b> đổi luôn, và ghi số liệu trong lúc dùng để vài tuần sau biết model khác có thật sự bắt thêm lỗi không. Cách review bây giờ (Opus là model mạnh và tốn hạn mức hơn, Sonnet rẻ hơn):</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Mức rủi ro của thay đổi</th><th>Opus viết</th><th>Sonnet viết</th></tr></thead>
+          <tbody>
+            <tr><th>thấp</th><td>Claude tự đọc lại diff, không gọi reviewer</td><td>như bên trái</td></tr>
+            <tr><th>vừa</th><td>một reviewer Sonnet</td><td>một reviewer Opus</td></tr>
+            <tr><th>cao</th><td>hai reviewer chạy cùng lúc: Opus và Sonnet</td><td>một reviewer Opus</td></tr>
+            <tr><th>cao, đụng bảo mật</th><td>Opus và Sonnet</td><td>Opus và Sonnet</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Thêm bốn chỗ tiết kiệm bạn đã nhận: sửa xong lỗi thì chỉ một Sonnet xem lại phần sửa; trước khi gọi Opus hay hai reviewer, nếu hạn mức tuần đã dùng từ 80% (hay 5 giờ từ 90%, hay diff mức cao quá 800 dòng code) thì Claude hỏi bạn trước; khi có hai reviewer, mỗi lỗi được ghi là Opus tìm, Sonnet tìm hay cả hai cùng tìm.</p>
+      <p><b>Ví dụ thật, lần review kép đầu tiên (việc 1 hôm nay, Opus viết):</b> 9 lỗi. Chỉ Sonnet tìm ra 5 (ví dụ: lệnh chính của script không có test nào, nên đổi sai cũng không ai biết). Chỉ Opus tìm ra 3 (ví dụ: file tên <code>signing.py</code> là phần mã hóa mà không được tính là đụng bảo mật). Cả hai cùng tìm 1. Tức là ở lần này, reviewer khác model (Sonnet) bắt được nhiều lỗi mà reviewer cùng model bỏ sót, nhưng reviewer cùng model cũng bắt được 3 lỗi Sonnet bỏ sót. <b>Lần thứ hai (việc 3, hook hỏi trước lệnh không đảo ngược, Opus viết):</b> 10 lỗi. Cả hai cùng tìm 3, trong đó hai lỗi nặng nhất: lệnh nằm trong <code>if … then</code> hay vòng <code>for</code> lọt qua hook, và một lần bạn đồng ý thì cùng lệnh đó qua mãi cả phiên. Chỉ Sonnet tìm 5 (ví dụ: <code>rm -rf $TMPDIR</code> xóa cả thư mục tạm mà không hỏi). Chỉ Opus tìm 2 (ví dụ: <code>rm -rf backups</code> không hỏi vì git bỏ qua thư mục đó; bạn chọn "chỉ thư mục tạm thật" nên nay có hỏi). Cộng hai lần: chỉ Sonnet 10, chỉ Opus 5, cả hai 4. Một hai lần chưa đủ để kết luận; lệnh <code>review_log.py summary</code> cộng dồn các lần sau.</p>
+      <p><b>Đã chốt (04/11/2026): giữ.</b> Điểm này từng treo: "effort" là mức model được nghĩ lâu; xhigh là mức cao, tốn hạn mức nhất. Cấu hình bạn chốt có câu "mã hóa, token, thanh toán, sandbox thì Opus effort xhigh", đặt trong dòng mức cao. Vì vậy một thay đổi nhỏ ở các file đó (ví dụ 10 dòng trong <code>payments/charge.py</code>, thường chấm mức vừa) khi Opus viết chỉ có một Sonnet review.</p>
+      <ul>
+        <li><b>Giữ</b> (bạn chọn): rẻ; có thể sót lỗi tinh vi về mã hóa ở thay đổi nhỏ. Repo này hiếm khi đụng các file đó.</li>
+        <li><b>Nâng</b>: mọi thay đổi ở các file đó luôn có thêm một Opus xhigh review, tốn thêm khoảng một lần Opus review mỗi lần đụng tới.</li>
+      </ul>
+    </div>
+    <p class="note">Không còn câu nào cần bạn trả lời. Phần còn lại của cải tiến 6 (ghi năm loại quyết định vào luật chung) chưa làm; muốn làm thì nói.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li><code>plugin/skills/done-gate/SKILL.md</code>: tám bước chốt việc; vòng sửa ở bước 5 (dòng 32).</li>
+      <li><code>plugin/skills/done-gate/scripts/risk.py:396</code>: <code>mark_ran</code> ghi dấu "đã chốt"; dòng 193: luật "bớt test".</li>
+      <li><code>plugin/lib/agentstack.py:1103</code>: <code>done_gate_ran_since</code> chỉ so thời điểm.</li>
+      <li><code>plugin/hooks/stop.py</code>: hàm <code>done_gate_gate</code> (dòng 121), không đọc biên nhận.</li>
+      <li><code>plugin/hooks/subagent_start.py:134</code>: ghi loại subagent vào nhật ký sự kiện.</li>
+      <li><code>plugin/hooks/pretool_guard.py:2-19</code>: các trường hợp hook trước lệnh chặn hay hỏi.</li>
+      <li><code>plugin/agents/reviewer.md</code>: bước phản biện và ngưỡng tin cậy 80.</li>
+      <li><code>plugin/skills/session-keeper/scripts/receipt.py</code>: biên nhận gắn dấu vân tay nội dung; lệnh con <code>run</code>, <code>show</code>, <code>forget</code>, <code>prune</code>.</li>
+      <li><code>tests/test_skill_meta.py:33</code>: test đường dẫn trong file skill.</li>
+      <li><code>KE-HOACH.md</code> mục 6.14 (ý từ <code>no-mistakes</code> của Kun Chen) và 6.19 (vì sao chuyển từ luật chữ sang hook).</li>
+      <li><code>PLAN.md</code> §0, cập nhật 02–04/11/2026.</li>
+      <li>Commit 04/11/2026: <code>d002293</code> (reviewer khác model, <code>review_log.py</code>), <code>0801c53</code> (test tài liệu khớp code), <code>25dfe13</code> (hỏi trước lệnh không đảo ngược). Nhật ký review: <code>state/review-log.jsonl</code>.</li>
+    </ul>
+  </footer>
+</main>
