@@ -224,6 +224,7 @@ class HookPayloadTests(TempDirTestCase):
         payload.update(extra)
         env = dict(os.environ, AGENT_STACK_STATE=str(self.tmp / "state"),
                    AGENT_STACK_PLUGINS_DIR=str(self.tmp / "no-plugins"), **CONTRACT["env"])
+        env.pop("CLAUDE_CODE_ENTRYPOINT", None)
         out = subprocess.run(["python3", str(PLUGIN / "hooks" / entry["script"])], input=json.dumps(payload),
                              capture_output=True, text=True, env=env, timeout=30, cwd=self.project)
         self.assertEqual(out.returncode, 0, out.stderr)
@@ -235,7 +236,7 @@ class HookPayloadTests(TempDirTestCase):
 
     def test_every_used_hook_runs_with_pi_payload(self):
         samples = {
-            "SessionStart": {"source": "startup"},
+            "SessionStart": {"source": "startup", "interactive": True},
             "UserPromptSubmit": {"prompt": "sửa lỗi trong hàm parse và chạy test"},
             "PreToolUse": {"tool_name": "Bash", "tool_input": {"command": "ls"}},
             "Stop": {"stop_hook_active": False, "last_assistant_message": "Đã xong."},
@@ -249,7 +250,7 @@ class HookPayloadTests(TempDirTestCase):
                 self.run_hook(event, extra)
 
     def test_session_start_gives_plan_context(self):
-        out = self.run_hook("SessionStart", {"source": "startup"})
+        out = self.run_hook("SessionStart", {"source": "startup", "interactive": True})
         self.assertIn("Viết test cho bước cài", out["hookSpecificOutput"]["additionalContext"])
 
     def test_guard_blocks_unvetted_install_for_pi(self):
@@ -259,11 +260,11 @@ class HookPayloadTests(TempDirTestCase):
 
     def test_session_start_in_pi_syncs_agents(self):
         agents = self.tmp / "state" / "pi" / "agents"
-        self.run_hook("SessionStart", {"source": "startup"})
+        self.run_hook("SessionStart", {"source": "startup", "interactive": True})
         self.assertEqual(sorted(p.stem for p in agents.glob("*.md")), sorted(CONTRACT["agents"]["use"]))
         # lần mở sau không ghi lại file không đổi
         before = (agents / "reviewer.md").stat().st_mtime_ns
-        self.run_hook("SessionStart", {"source": "resume"})
+        self.run_hook("SessionStart", {"source": "resume", "interactive": True})
         self.assertEqual((agents / "reviewer.md").stat().st_mtime_ns, before)
 
     def test_session_start_outside_pi_does_not_touch_pi_state(self):

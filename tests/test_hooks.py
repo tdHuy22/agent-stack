@@ -39,6 +39,7 @@ class HookTests(TempDirTestCase):
         # Thư mục plugin giả (không tồn tại) để test không phụ thuộc plugin đang cài trên máy.
         env = dict(os.environ, AGENT_STACK_STATE=str(self.state),
                    AGENT_STACK_PLUGINS_DIR=str(self.tmp / "no-plugins"))
+        env.pop("CLAUDE_CODE_ENTRYPOINT", None)  # chạy test từ `claude -p` không được đổi kết quả
         env.update(env_extra or {})
         start = time.time()
         out = subprocess.run([python, str(HOOKS / name)], input=json.dumps(payload), capture_output=True,
@@ -658,6 +659,35 @@ class HookTests(TempDirTestCase):
         self.assertNotIn("Lượt cuối", json.dumps(same, ensure_ascii=False))  # phiên đó còn nguyên hội thoại
         other = self.run_hook("session_start.py", {"session_id": "z", "source": "resume", "cwd": str(self.project)})
         self.assertIn("Lượt cuối", other["hookSpecificOutput"]["additionalContext"])
+
+    def test_session_start_skips_the_last_turn_when_nobody_is_watching(self):
+        # Ca 04/11/2026: lượt trước trả "Có", rồi `pi -p "Trả lời đúng một từ: ok"` chép lại "Có" từ ghi chú.
+        self.with_plan()
+        self.submit("old", "trả lời đúng một từ: có hay không")
+        self.stop("old", "Có")
+        start = {"session_id": "p1", "source": "startup", "cwd": str(self.project)}
+        for py in PYTHONS:
+            for label, payload, env in (
+                    ("claude -p", start, {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}),
+                    ("pi -p", dict(start, interactive=False), {"AGENT_STACK_HOST": "pi"})):
+                with self.subTest(py=py, mode=label):
+                    payload = dict(payload, session_id=f"{py}-{label}")  # cùng phiên trong 15 giây thì hook bỏ qua
+                    out = self.run_hook("session_start.py", payload, python=py, env_extra=env)
+                    text = json.dumps(out, ensure_ascii=False)
+                    self.assertNotIn("Lượt cuối", text)
+                    self.assertNotIn("Câu trả lời cuối", text)
+                    self.assertIn("Viết tài liệu thiết kế", out["hookSpecificOutput"]["additionalContext"])  # §0 vẫn nạp
+                    after = self.run_hook("session_start.py", dict(payload, source="compact"), python=py, env_extra=env)
+                    self.assertIn("Lượt cuối", after["hookSpecificOutput"]["additionalContext"])  # lệnh đang chạy dở
+            for label, payload, env in (
+                    ("terminal", start, {"CLAUDE_CODE_ENTRYPOINT": "cli"}),
+                    ("app", start, {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop"}),
+                    ("pi có giao diện", dict(start, interactive=True), {"AGENT_STACK_HOST": "pi"}),
+                    ("không rõ", start, {})):
+                with self.subTest(py=py, mode=label):
+                    payload = dict(payload, session_id=f"{py}-{label}")  # cùng phiên trong 15 giây thì hook bỏ qua
+                    out = self.run_hook("session_start.py", payload, python=py, env_extra=env)
+                    self.assertIn("Câu trả lời cuối (rút gọn): Có", out["hookSpecificOutput"]["additionalContext"])
 
     def test_session_start_loads_the_last_turn_even_without_a_plan(self):
         git(self.project, "init", "-q")

@@ -83,6 +83,15 @@ def read_hook_input() -> dict:
         return {}
 
 
+def non_interactive(data: dict) -> bool:
+    """Phiên không có người ngồi trước màn hình: `claude -p` (Claude Code đặt CLAUDE_CODE_ENTRYPOINT=sdk-cli; app
+    desktop là claude-desktop, terminal là cli) hay cầu nối báo `interactive: false` (pi `-p`, theo payload
+    SessionStart trong plugin/hosts/pi.json). Không rõ thì coi là tương tác."""
+    if data.get("interactive") is False:
+        return True
+    return os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-cli"
+
+
 def emit(event: str, context: str = "", system: str = "") -> None:
     """In JSON đầu ra của hook. Không có gì để báo thì không in gì."""
     out = {}

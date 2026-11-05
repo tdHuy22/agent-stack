@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hook SessionStart: nạp lại trạng thái project từ đĩa khi mở, resume, clear hoặc sau compact,
 kèm gợi ý skill hợp với project và cách làm việc tiếp theo trong §0 (router), và lượt cuối do hook Stop ghi ở
-.agent/LAST-TURN.md (trừ khi resume lại đúng phiên đã ghi lượt đó).
+.agent/LAST-TURN.md (trừ khi resume lại đúng phiên đã ghi lượt đó, hay phiên không tương tác như `claude -p`, `pi -p`).
 
 Thư mục không phải git repo và không có file kế hoạch (PLAN.md §0, .agent/HANDOFF.md...) thì hook im lặng.
 """
@@ -58,7 +58,11 @@ def main():
     notes = [pi_sync() if A.host() == "pi" else ("", ""), plugin_drift() if source == "startup" else ("", "")]
     drift_note = "\n".join(n for n, _ in notes if n)
     drift_user = " · ".join(u for _, u in notes if u)
-    last = A.last_turn_context(root, sid, source)
+    # Lệnh không tương tác (`claude -p`, `pi -p`) là một câu hỏi độc lập: ghi chú lượt cuối làm model chép lại
+    # câu trả lời cũ (ca 04/11/2026: "Trả lời đúng một từ: ok" ra "Có"), nên bỏ; toàn văn vẫn ở LAST-TURN. Sau compact
+    # thì giữ: lệnh đó đang chạy dở, ghi chú là yêu cầu của chính nó.
+    skip = A.non_interactive(data) and source != "compact"
+    last = None if skip else A.last_turn_context(root, sid, source)
     if not info and not hint and not drift_note and not last:
         return
     if not info and not hint and not last:

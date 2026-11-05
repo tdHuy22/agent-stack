@@ -651,6 +651,13 @@ Review cùng model vẫn bắt được lỗi nhưng có điểm mù chung (câu
 - **Review** (kép, opus·high và sonnet·high): cả hai thấy lệnh trong `if`, `for` lọt và lời đồng ý kéo dài cả phiên (cao); Opus riêng 2 thấp (thư mục git bỏ qua là chỗ tạm, hỏi nhầm biến `mktemp`), Sonnet riêng 5 thấp (chính thư mục tạm, đích chưa có, lệnh bọc có cờ, test yếu, tài liệu); đã sửa hết kèm test.
 - **Luật chung** (05/11/2026, phần còn lại của cải tiến 6): mục "Quyết định phải hỏi người dùng" trong `global/SHARED.global.md` kê năm loại phải hỏi (không đảo ngược được, ra khỏi máy, đụng ranh giới tin cậy theo cách chưa được yêu cầu, đổi phạm vi hay ý định, tốn tiền); ngoài năm loại thì tự quyết và ghi lý do. Loại hook nhận ra thì hook chặn lần đầu, cả khi yêu cầu đã cho phép; không lách bằng lệnh đi vòng; loại còn lại hỏi trước khi làm hay vào "Cần bạn quyết" của done-gate. `tests/test_guard.py` (`test_shared_rule_lists_five_kinds_and_the_hook_stops_every_command_it_names`) khóa năm loại và kiểm mỗi lệnh luật nói hook chặn thì hook chặn thật.
 
+### 6.29 Bỏ ghi chú lượt cuối ở lệnh không tương tác (05/11/2026)
+
+- **Vấn đề:** ca 04/11/2026, lượt trước trong thư mục hỏi "trả lời đúng một từ: có hay không" và trả "Có"; `pi -p --no-session "Trả lời đúng một từ: ok"` sau đó trả "Có", vì ghi chú SessionStart có dòng "Yêu cầu" và "Câu trả lời cuối (rút gọn): Có". Tái hiện (khôi phục ghi chú "Có" trước mỗi lần): 1/8 ra `ok`; có một lần model trả lời luôn câu hỏi có hay không của lượt trước, nên bỏ riêng dòng câu trả lời là chưa đủ.
+- **Cách làm:** `A.non_interactive(data)`: `claude -p` (Claude Code đặt `CLAUDE_CODE_ENTRYPOINT=sdk-cli`, kiểm bằng hook thật; app desktop là `claude-desktop`, terminal là `cli`) hay payload `interactive: false` (pi, `ctx.hasUI`; hợp đồng `plugin/hosts/pi.json`). Khi đúng, SessionStart không nạp lượt cuối (cả dòng 🕘), trừ sau compact (lệnh đang chạy dở, ghi chú là yêu cầu của chính nó); §0 và router vẫn nạp; Stop vẫn ghi lượt. Cầu nối pi (`pi-agent/extensions/agent-stack-bridge.ts`) cần thêm `interactive: Boolean(ctx.hasUI)` vào payload SessionStart; chưa có thì pi giữ hành vi cũ. Không rõ thì coi là tương tác, nên phiên tương tác giữ nguyên ghi chú.
+- **Giữ, bỏ:** `claude -p "làm tiếp"` không còn thấy ghi chú, chỉ thấy §0 (toàn văn vẫn ở LAST-TURN). `claude -p` chạy từ trong phiên app thừa hưởng `claude-desktop` nên vẫn nạp ghi chú. SDK (`sdk-ts`, `sdk-py`) coi là tương tác.
+- **Bằng chứng:** `tests/test_hooks.py::test_session_start_skips_the_last_turn_when_nobody_is_watching`, `receipt.py fails-before` bắt được lỗi. pi thật với cầu nối gửi `interactive` (bản chép, qua `PI_CODING_AGENT_DIR`): 5/5 `ok`; cùng cách với cầu nối gốc: 1/4.
+
 ## 7. Thiết kế chi tiết
 
 ### 7.1 Cấu trúc repo `agent-stack`

@@ -18,7 +18,8 @@
       "script": "session_start.py",
       "pi_event": "session_start",
       "source_map": {"startup": "startup", "reload": "startup", "new": "clear", "resume": "resume", "fork": "resume"},
-      "payload": ["source"]
+      "payload": ["source", "interactive"],
+      "payload_about": {"interactive": "ctx.hasUI của pi: false khi chạy `pi -p` (không có người xem), hook bỏ ghi chú lượt cuối để model không chép lại câu trả lời cũ"}
     },
     "UserPromptSubmit": {
       "script": "prompt_submit.py",
