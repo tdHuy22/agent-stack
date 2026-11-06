@@ -354,6 +354,29 @@ class VetTests(Base):
         self.assertIn("tests-link2", text)
         self.assertNotIn("ok-link", text)
 
+    def test_compose_disguised_behind_a_symlink_inside_the_task_is_refused(self):
+        """Review vòng 1 (06/11/2026): docker-compose.yaml là symlink tới file trong việc, tên và đuôi không phải yaml."""
+        bad = "services:\n  main:\n    env_file: ../../../../.env\n    volumes: [\"/:/host\"]\n"
+        d = self.task("sym1")
+        self.write("ds/sym1/environment/notes.txt", bad)
+        os.symlink("notes.txt", d / "environment" / "docker-compose.yaml")
+        d2 = self.task("sym2")
+        self.write("ds/sym2/tests/data.cfg", bad)
+        os.symlink("../tests/data.cfg", d2 / "environment" / "docker-compose.yaml")
+        d3 = self.task("sym3")
+        os.symlink("Dockerfile", d3 / "environment" / "Containerfile")
+        for t in (d, d2, d3):
+            text = "\n".join(B.vet_task(t, {}))
+            self.assertIn("symlink trong environment/", text, t.name)
+        self.assertEqual(B.vet_names(self.tmp / "ds", None, {}).keys() & {"sym1", "sym2", "sym3"},
+                         {"sym1", "sym2", "sym3"})
+        # environment/ là symlink tới thư mục khác trong việc
+        d4 = self.tmp / "ds" / "sym4"
+        self.write("ds/sym4/task.toml", "[task]\nname = \"x\"\n")
+        self.write("ds/sym4/real/Dockerfile", "FROM python:3.12\n")
+        os.symlink("real", d4 / "environment")
+        self.assertIn("environment: là symlink", "\n".join(B.vet_task(d4, {})))
+
     def test_cli_vet_reports_and_drop_removes_the_bad_ones(self):
         self.task("good")
         self.task("bad", compose="services:\n  main:\n    privileged: true\n")
@@ -1249,6 +1272,22 @@ class TufBehaviourTests(TempDirTestCase):
         (self.rd / ".env.local").write_text("X=1\n")
         r = self.tuf("pilot", "--yes", "--force")
         self.assertEqual(r.returncode, 1)
+        self.assertIn(".env.local", r.stderr)
+        self.assertFalse(self.args_file().exists())
+
+    def test_env_with_a_lone_carriage_return_hiding_a_second_key_is_refused(self):
+        """Review vòng 1: python-dotenv tách dòng ở \\r đơn, grep thì không."""
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\rOTHER_SECRET=xyzvalue\n")
+        r = self.tuf("pilot", "--yes", "--force")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("ký tự CR", r.stderr)
+        self.assertNotIn("xyzvalue", r.stdout + r.stderr)
+        self.assertFalse(self.args_file().exists())
+
+    def test_oracle_refuses_env_local_too(self):
+        (self.rd / ".env.local").write_text("X=1\n")
+        r = self.tuf("oracle", "--yes", "--force")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn(".env.local", r.stderr)
         self.assertFalse(self.args_file().exists())
 

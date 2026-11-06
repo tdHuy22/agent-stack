@@ -316,6 +316,14 @@ def vet_task(task_dir: Path, allow: dict = None) -> list:
                     problems.append(f"{f.relative_to(task_dir)}: nhắc socket của Docker")
                 if f.name.lower().startswith("dockerfile") and INSECURE_BUILD_RE.search(text):
                     problems.append(f"{f.relative_to(task_dir)}: build không an toàn (--security=insecure hay --network=host)")
+    # Harbor nạp environment/docker-compose.yaml qua .exists() (theo symlink): symlink trong environment/ có thể trỏ tới
+    # một compose trá hình nằm trong việc (tên, đuôi bất kỳ) mà vòng băm ở trên bỏ qua. Từ chối mọi symlink ở đó.
+    if env_dir.is_symlink():
+        problems.append("environment: là symlink")
+    elif env_dir.is_dir():
+        for p in sorted(env_dir.rglob("*")):
+            if p.is_symlink():
+                problems.append(f"{p.relative_to(task_dir)}: symlink trong environment/ ({os.readlink(p)})")
     for p in sorted(task_dir.rglob("*")):
         if p.is_symlink():
             target = os.readlink(p)

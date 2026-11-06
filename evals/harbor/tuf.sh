@@ -92,6 +92,8 @@ env_problems() {
   ssh "$HOST" "cd \"\$HOME/$REMOTE\" && sh -s" <<'EOF'
 [ -e .env.local ] && echo "có file .env.local (Harbor tự nạp): xóa nó"
 [ -f .env ] || exit 0
+# python-dotenv coi \r đơn là hết dòng còn grep thì không: một dòng có \r có thể giấu khóa thứ hai
+if grep -q "$(printf '\r')" .env; then echo ".env có ký tự CR (xuống dòng kiểu Windows hay Mac cũ): lưu lại chỉ với LF"; fi
 other=$(grep -vE '^[[:space:]]*(#|$)' .env | grep -v '^CLAUDE_CODE_OAUTH_TOKEN=' | wc -l | tr -d ' ')
 if [ "$other" -gt 0 ]; then
   names=$(grep -vE '^[[:space:]]*(#|$)' .env | grep -v '^CLAUDE_CODE_OAUTH_TOKEN=' | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')
@@ -114,6 +116,8 @@ require_token() {
 # Tạo cấu hình, kiểm an toàn từng việc (TM-74) và in số lượt, trần chi phí (TM-77). $1: pilot|main|oracle, $2: tên job.
 prepare_job() {
   kind=$1; job=$2
+  # Harbor tự nạp .env.local ở mọi job, kể cả oracle (không qua require_token)
+  if remote "test -e .env.local"; then echo "Có ~/$REMOTE/.env.local (Harbor tự nạp vào mọi job): xóa nó." >&2; exit 1; fi
   remote "test -f agent-stack/payload/full/.agent-stack-root" || { echo "Chưa sync: chạy tuf.sh sync" >&2; exit 1; }
   remote "test -d datasets/tblite && test -d datasets/swerebench" || { echo "Chưa có bộ việc: chạy tuf.sh data" >&2; exit 1; }
   if remote "test -e jobs/$job"; then
