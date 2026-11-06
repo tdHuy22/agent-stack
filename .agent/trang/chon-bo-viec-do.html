@@ -1,0 +1,314 @@
+<title>Chọn bộ việc đo agent-stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 06/11/2026 · đã chốt, chưa chạy</div>
+    <h1>Đo agent-stack bằng bộ việc nào cho đủ khó mà không quá tốn?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code">
+    <h2>Tóm tắt</h2>
+    <p>Bạn đã chọn đo cả bản đầy đủ của agent-stack lẫn bản tắt từng phần, và muốn dùng bộ việc đo công khai vì bộ tự viết quá dễ. Tôi đã so khoảng 12 bộ công khai. Khuyên dùng hai bộ cùng lúc: TBLite (100 việc dòng lệnh, đã có code chạy sẵn từ 30/10) làm bộ chính, và khoảng 25 lỗi thật trong repo Python của SWE-rebench. Bộ thứ hai là nơi duy nhất bước tự kiểm trước khi báo xong của agent-stack thật sự bật. Bộ 24 việc tự viết trong repo giữ lại để đo phần không bộ nào đo, như chặn lộ khóa. Bạn đã chốt theo khuyến nghị cả 3 câu (06/11/2026). Chưa chạy gì; bước tiếp theo là threat model và dựng lại hạ tầng.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>agent-stack gồm những gì</h3>
+    <p><b>Luật chung</b> là file chỉ dẫn Claude đọc đầu mọi phiên. <b>Hook</b> là script app tự chạy ở vài thời điểm; <b>hook lúc dừng</b> chạy khi Claude định báo xong. Nếu thay đổi có rủi ro từ mức vừa, hook này chặn lại và bắt Claude chạy <b>cổng tự kiểm</b>: chạy test có biên nhận, review lại thay đổi, rồi mới báo xong. <b>Trợ lý phụ</b> (subagent) là phiên Claude con chạy model rẻ, ví dụ tìm file bằng Haiku. Tất cả đóng gói thành một <b>plugin</b>. Trong 59 phiên thật từ 16/10 đến 30/10, hook lúc dừng chặn 86 lần, 25 lần trong số đó là bắt chạy cổng tự kiểm, nên đây là phần tốn và đáng đo nhất của hook.</p>
+    <h3>Đã chốt ở trang trước</h3>
+    <p>Trang <a href="https://claude.ai/artifact/C15NQkBv8hU5pzs7QU623K">kế hoạch đo agent-stack</a> đã chốt: so bốn cấu hình trên cùng bộ việc, cùng model Sonnet 5.5 ở mức suy nghĩ "medium". Bốn cấu hình là Claude Code trơn (không luật chung, không plugin); Claude Code có luật chung và plugin agent-stack; bản đó bỏ hook; và bản đó bỏ trợ lý phụ. Cả bốn đều được gọi trợ lý phụ, trừ bản bỏ trợ lý phụ. Không đặt trần tiền cụ thể vì bạn dùng gói Claude Max, nhưng không được chạy quá nhiều.</p>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Bộ việc đo phải có ba tính chất cùng lúc. Thứ nhất, đủ khó để Claude Code trơn còn trượt một phần; nếu nó đạt hết thì không thấy bộ công cụ giúp gì. Thứ hai, không khó tới mức cả bốn cấu hình đều trượt, vì khi đó cũng không thấy khác biệt. Thứ ba, chi phí mỗi lượt đủ thấp để chạy vài trăm lượt mà không đốt hết hạn mức tuần.</p>
+    <p>Có thêm một ràng buộc riêng của agent-stack. Cổng tự kiểm ở hook lúc dừng chỉ bật khi thư mục làm việc là git repo có thay đổi. Bản dựng ngày 30/10 đã ghi rằng phần lớn việc của TBLite không có git repo, nên cổng này hầu như không bật ở đó. Con số chính xác chưa đếm; bước chạy thử sẽ đếm.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Bộ việc đo công khai</b> (benchmark): tập việc có script chấm tự động mà nhiều nhóm cùng chạy, nên có điểm để so. Ví dụ: Terminal-Bench, SWE-bench. Cần để đọc bảng ứng viên.</li>
+      <li><b>Bão hòa</b>: model mới đã đạt gần hết điểm, nên bộ đó không còn phân biệt được. Ví dụ: SWE-bench Verified, các model mới đạt 95–97%. Cần để hiểu vì sao loại nhiều bộ.</li>
+      <li><b>Việc phân biệt</b>: việc mà Claude Code trơn lúc đạt lúc trượt. Ví dụ: một việc đạt 1 trong 2 lần chạy thử. Chỉ những việc này mới cho thấy khác biệt giữa các cấu hình, nên kế hoạch chạy thử trước để lọc ra chúng.</li>
+      <li><b>Lượt lật</b>: cùng một việc, cùng cấu hình, lần này đạt lần sau trượt. Lượt lật càng nhiều thì càng phải chạy lặp nhiều lần mới tin được chênh lệch. Ví dụ: bảng của Terminal-Bench 2 ghi sai số khoảng 2–3 điểm dù mỗi việc đã chạy 5 lần; bảng của Terminal-Bench 3.0 ghi khoảng ±1,5 điểm.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>Harbor</dt><dd>Khung chạy bộ việc đo của nhóm làm Terminal-Bench. Nó dựng mỗi việc trong một container Docker, chạy agent (ở đây là Claude Code), rồi chấm. Có sẵn agent <code>claude-code</code>.</dd>
+        <dt>Docker</dt><dd>Công cụ chạy chương trình trong hộp cách ly (container), để việc đo không đụng vào máy thật. Image là bản đóng gói sẵn môi trường của một việc, tải về rồi dựng container từ đó.</dd>
+        <dt>Bộ tự viết</dt><dd>24 việc nhỏ trong thư mục <code>evals/</code> của repo. Claude Code trơn đạt 20/20 lượt ở 10 việc khó nhất ngày 10/10/2026.</dd>
+        <dt>Token</dt><dd>Đơn vị đếm chữ mà model đọc và viết, dùng để tính giá. Trang này gọi thứ dùng để đăng nhập là "khóa đăng nhập", không gọi là token.</dd>
+        <dt>Threat model</dt><dd>Bản ghi ngắn các cách việc có thể bị lợi dụng hay làm lộ dữ liệu, kèm cách chặn, viết trước khi code.</dd>
+        <dt>Máy Linux ở nhà</dt><dd>Máy của bạn có 15 GB RAM và Docker, chỉ vào được khi ở mạng nhà. Bản dựng ngày 30/10 chạy trên máy này.</dd>
+        <dt>TBLite</dt><dd>OpenThoughts-TBLite: 100 việc lấy từ Terminal-Bench 2, chia độ khó theo Haiku 4.5 (40 dễ, 26 vừa, 26 khó, 8 rất khó), chạy nhanh hơn Terminal-Bench 2 khoảng 8 lần. Điểm các model trên TBLite tương quan 0,91 với điểm của chúng trên Terminal-Bench 2.</dd>
+        <dt>SWE-rebench</dt><dd>Bộ lỗi thật trong repo Python trên GitHub, mỗi tháng lấy thêm lỗi mới, nên model khó đã học thuộc lời giải.</dd>
+        <dt>USD</dt><dd>Đô la Mỹ theo giá niêm yết. Với gói Max, đây là thước đo hạn mức bị trừ, không phải tiền bạn trả thêm.</dd>
+        <dt>Lời giải mẫu</dt><dd>Bản giải do người làm bộ việc viết, dùng để kiểm script chấm có chấm đạt bản đúng không (Harbor gọi bước này là oracle).</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: bộ đã bão hòa</h3>
+        <p>Tình huống: SWE-bench Verified có 500 lỗi Python. Các model mới đạt 95–97%, và OpenAI đã thôi báo điểm trên bộ này vì test sai và đề bị lộ vào dữ liệu huấn luyện.</p>
+        <pre><code>Minh họa, chưa đo: Claude Code trơn ~96%, bật agent-stack ~96% → không thấy gì</code></pre>
+        <p>Vì sao quan trọng: đây chính là lỗi của bộ tự viết hiện tại (20/20 lượt). Đổi sang bộ công khai mà đã bão hòa thì không giải quyết được gì.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: bộ quá khó</h3>
+        <p>Tình huống: Terminal-Bench 3.0 (74 việc, ra 07/2026). Bảng của Snorkel ghi Sonnet 5 chạy trong Claude Code ở mức suy nghĩ max đạt 14,6% ±1,5, tốn 17,9 tỉ token, tương đương khoảng 6.900 USD cho cả lần đo.</p>
+        <pre><code>6.900 USD ÷ 74 việc ≈ 93 USD mỗi việc cho cả lần đo
+Nếu mỗi việc chạy 5 lần như Terminal-Bench 2: ≈ 19 USD mỗi lượt (số lần chưa kiểm)
+Nếu Sonnet 5.5 đạt ~15–20%: khoảng 60 trên 74 việc trượt ở cả bốn cấu hình</code></pre>
+        <p>Vì sao quan trọng: phần lớn việc không phân biệt được cấu hình nào, mà mỗi lượt lại rất đắt. Đây là ca vượt quá "không quá nhiều".</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: cổng tự kiểm không bật</h3>
+        <p>Tình huống: việc <code>jsonl-aggregator</code> của TBLite, một trong 20 việc của bộ thử ngày 30/10, bắt viết script gộp số liệu từ một file nhiều dòng, mỗi dòng một bản ghi JSON. Agent viết script trong một thư mục không phải git repo.</p>
+        <pre><code>hook lúc dừng: không có git diff → không chấm rủi ro → không bắt tự kiểm</code></pre>
+        <p>Vì sao quan trọng: nếu chỉ đo trên TBLite, kết luận "bộ công cụ không giúp gì" có thể chỉ vì phần quan trọng nhất của nó không chạy. Lỗi của SWE-rebench nằm trong git repo thật, nên ở đó cổng này bật như khi bạn làm việc.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Ca không bộ công khai nào đo: lộ khóa</h3>
+        <p>Tình huống: các bộ về code an toàn như LSCBench (450 việc) chỉ chấm code sinh ra có lỗ hổng không. Không bộ nào tôi tìm thấy chấm việc agent có in khóa bí mật ra log, hay có chạy lệnh nguy hiểm không.</p>
+        <p>Vì sao quan trọng: agent-stack có hook chặn lệnh không đảo ngược và luật che khóa. Muốn đo phần này phải tự viết việc, như việc bẫy khóa ở trang kế hoạch trước.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bảng ứng viên đã so</h2>
+    <p class="note">Bảng gộp những bộ có cùng kết luận vào một dòng. Tôi đã tự đọc lại số của Terminal-Bench 3.0, SWE-rebench và TBLite trên trang gốc ngày 06/11/2026. Các số còn lại lấy từ báo cáo của trợ lý nghiên cứu, chưa đọc lại từng trang. Chưa có số công bố của Sonnet 5.5 trên các bộ dòng lệnh, nên dùng Sonnet 5 làm mốc.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Bộ</th><th>Gồm gì</th><th>Điểm của Claude gần nhất</th><th>Chạy được qua Harbor</th><th>Kết luận</th></tr></thead>
+        <tbody>
+          <tr><th>TBLite</th><td>100 việc dòng lệnh, 9 nhóm</td><td>Haiku 4.5: 64,4% (02/2026). Chưa có số Sonnet. Suy đoán: TBLite nhiều việc dễ hơn Terminal-Bench 2.1, mà Sonnet 5 đã đạt 74,6% trên bộ khó hơn đó, nên Sonnet 5.5 có thể quá 85% trên TBLite</td><td>Có, đã dựng ngày 30/10</td><td>Bộ chính. Phải chạy thử để biết có bão hòa không</td></tr>
+          <tr><th>SWE-rebench</th><td>Lỗi thật trong repo Python, thêm mỗi tháng</td><td>Claude Code: 60,4%; Sonnet 5 trong khung tối giản: 56,8%. Chi phí 1,4–3,4 USD mỗi việc</td><td>Có, trên kho bộ việc của Harbor</td><td>Bộ phụ, ~25 việc. Nơi cổng tự kiểm bật</td></tr>
+          <tr><th>Terminal-Bench 2.1</th><td>89 việc</td><td>Sonnet 5 + Claude Code: 74,6%</td><td>Có</td><td>TBLite đã là bản rút gọn của nó và cho điểm gần tương tự</td></tr>
+          <tr><th>Terminal-Bench 3.0</th><td>74 việc, có việc cần GPU và nhiều container</td><td>Sonnet 5 + Claude Code: 14,6%</td><td>Có</td><td>Quá khó và quá đắt (ví dụ 2)</td></tr>
+          <tr><th>SkillsBench</th><td>87 việc, mỗi việc chạy có và không có skill do bộ đo soạn</td><td>Trung bình 33,9% không skill, 50,5% có skill</td><td>Có</td><td>Đo skill do họ soạn, không đo hook, luật hay skill của bạn</td></tr>
+          <tr><th>SWE-bench Verified, Multilingual, Pro bản công khai</th><td>500, 300, 731 việc</td><td>Từ 81% đến 97%</td><td>Có</td><td>Bão hòa hay bị lộ vào dữ liệu huấn luyện</td></tr>
+          <tr><th>Aider Polyglot</th><td>225 bài tập lập trình</td><td>Bảng không cập nhật từ 08/2025</td><td>Không, chạy qua công cụ khác</td><td>Cũ, đề công khai nhiều năm</td></tr>
+          <tr><th>Bộ code an toàn (LSCBench, BaxBench)</th><td>392–450 việc</td><td>Tốt nhất 25,1% vừa đúng vừa an toàn</td><td>Chưa thấy</td><td>Không đo lộ khóa hay lệnh nguy hiểm (ví dụ 4)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <p class="note">Cả ba đi qua cùng các bước: dựng lại hạ tầng Harbor từ bản ngày 30/10 và viết threat model; chạy lời giải mẫu (không gọi model); chạy thử Claude Code trơn một lần trên mọi việc để đo chi phí mỗi lượt và lọc việc phân biệt; dừng lại báo bạn; rồi mới chạy bốn cấu hình, mỗi việc 3 lần. Số lượt dưới đây chỉ để ước cỡ, với hai giả định: TBLite còn khoảng 40 việc phân biệt, và mỗi việc chạy 3 lần. Số lần thật quyết ở câu 3, sau khi chạy thử.</p>
+    <div class="options">
+      <article class="option" data-phuong-an="1">
+        <h3>1 · Chỉ TBLite, cộng bộ tự viết</h3>
+        <p>Dựng lại đúng bản ngày 30/10, chạy trên 100 việc TBLite.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Chạy thử 100 lượt; bước cuối khoảng 40 việc × 4 cấu hình × 3 lần = 480 lượt.</dd>
+          <dt>Được</dt><dd>Ít việc dựng nhất. Hạ tầng đã có code, test và cách che token.</dd>
+          <dt>Mất</dt><dd>Cổng tự kiểm hầu như không bật (ví dụ 3), nên bản đầy đủ và bản bỏ hook có thể ra gần như nhau vì lý do sai. Nếu Sonnet 5.5 quá 85% trên TBLite thì chỉ còn ít việc phân biệt.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Một bộ ngoài để theo dõi phiên bản.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+      <article class="option rec" data-phuong-an="2" data-khuyen>
+        <h3>2 · TBLite và khoảng 25 việc SWE-rebench <span class="chip">khuyên</span></h3>
+        <p>Như phương án 1, cộng khoảng 25 lỗi thật trong repo Python lấy từ tháng gần nhất của SWE-rebench.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Chạy thử thêm 25 việc SWE-rebench. Giữ lại 15–25 việc tùy số việc phân biệt. Bước cuối: (40 việc TBLite + 15–25 việc SWE-rebench) × 4 cấu hình × 3 lần = 660–780 lượt.</dd>
+          <dt>Được</dt><dd>Đo được cổng tự kiểm trong git repo thật, đúng cách bạn làm việc. Lỗi mới theo tháng nên khó bị lộ vào dữ liệu huấn luyện. Điểm của Claude Code còn ở mức 60%, chưa bão hòa.</dd>
+          <dt>Mất</dt><dd>Mỗi việc SWE-rebench đắt: bảng công khai ghi 1,4–3,4 USD mỗi việc. Phần SWE-rebench ở bước cuối là 15–25 việc × 4 × 3 = 180–300 lượt, tức khoảng 250–1.000 USD theo giá niêm yết. 25 việc × 3 lần chỉ đủ thấy chênh lớn, cỡ 15 điểm; mục đích chính là xem cổng tự kiểm có đổi kết quả hay chi phí không. Tôi chưa biết mức này chiếm bao nhiêu phần hạn mức tuần của gói Max; chạy thử sẽ cho số thật trước khi bạn duyệt bước cuối. Image Docker của SWE-rebench nặng; chưa biết máy Linux 15 GB RAM chạy song song được mấy việc.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Hai bộ ngoài; SWE-rebench cần chọn lại tháng khi đo lần sau.</dd>
+          <dt>Đảo ngược</dt><dd>Được. Có thể bỏ phần SWE-rebench sau bước chạy thử nếu quá đắt.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="3">
+        <h3>3 · Tập con Terminal-Bench 3.0, cộng bộ tự viết</h3>
+        <p>Chọn 25–30 việc không cần GPU của Terminal-Bench 3.0, bộ khó nhất hiện nay.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Chạy thử 25–30 lượt; bước cuối chỉ giữ việc phân biệt, có thể dưới 10 việc.</dd>
+          <dt>Được</dt><dd>Không lo bão hòa. Bộ mới, ít bị lộ vào dữ liệu huấn luyện.</dd>
+          <dt>Mất</dt><dd>Ở mức đạt khoảng 15%, rất ít việc phân biệt, nên kết luận yếu. Mỗi lượt rất đắt (ví dụ 2). Nhiều việc cần nhiều container, không hợp máy 15 GB RAM.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Bộ còn đang thêm việc, điểm khó so giữa các lần.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>1 · Chỉ TBLite</th><th>2 · TBLite và SWE-rebench</th><th>3 · Terminal-Bench 3.0</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Bộ bão hòa</th><td data-cho="1">Có thể gặp lại nếu Sonnet 5.5 quá 85% trên TBLite; chạy thử sẽ cho biết.</td><td data-cho="2">Nếu TBLite bão hòa, phần SWE-rebench ở mức khoảng 60% vẫn còn chỗ phân biệt.</td><td data-cho="3">Không gặp.</td></tr>
+          <tr><th>2 · Bộ quá khó</th><td data-cho="1">Không gặp; 8 việc rất khó của TBLite chiếm phần nhỏ.</td><td data-cho="2">Không gặp.</td><td data-cho="3">Gặp đúng ca này: phần lớn việc trượt ở cả bốn cấu hình.</td></tr>
+          <tr><th>3 · Cổng tự kiểm không bật</th><td data-cho="1">Gặp ở hầu hết việc; bản bỏ hook trông như bản đầy đủ.</td><td data-cho="2">Phần SWE-rebench bật cổng, nên so được bản đầy đủ với bản bỏ hook.</td><td data-cho="3">Chưa biết; việc có git repo hay không tùy từng việc.</td></tr>
+          <tr><th>4 · Lộ khóa</th><td data-cho="1">Bộ tự viết đo.</td><td data-cho="2">Bộ tự viết đo.</td><td data-cho="3">Bộ tự viết đo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của repo, luật chung <code>global/SHARED.global.md</code> và nhật ký quyết định <code>.agent/NHAT-KY.md</code>.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>1</th><th>2</th><th>3</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:31">
+            <th>Eval thật tốn hạn mức nên phải hỏi trước <span class="src">global/SHARED.global.md:31</span></th>
+            <td data-cho="1" data-ket-qua="can-duyet">Cần duyệt hai lần: chạy thử, rồi bước cuối khi đã có chi phí thật.</td>
+            <td data-cho="2" data-ket-qua="can-duyet">Như 1. Phần SWE-rebench đắt nhất nên duyệt riêng.</td>
+            <td data-cho="3" data-ket-qua="can-duyet">Như 1, mỗi lượt đắt hơn nhiều.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:29">
+            <th>Thêm dependency hay dịch vụ ngoài thì hỏi trước <span class="src">global/SHARED.global.md:29</span></th>
+            <td data-cho="1" data-ket-qua="can-duyet">Cần duyệt: Harbor, TBLite và Claude Code chạy trong Docker trên máy Linux ở nhà (giả định bạn chọn máy này ở câu 2).</td>
+            <td data-cho="2" data-ket-qua="can-duyet">Như 1, thêm image của SWE-rebench.</td>
+            <td data-cho="3" data-ket-qua="can-duyet">Như 1, thêm image của Terminal-Bench 3.0 (gói việc 432 MB).</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:7">
+            <th>Chỉ tạo hay sửa file trong thư mục agent-stack <span class="src">CLAUDE.md:7</span></th>
+            <td data-cho="1" data-ket-qua="can-duyet">Cần duyệt: Harbor và kết quả nằm ở <code>~/harbor-eval</code> trên máy Linux, ngoài repo. Bản ngày 30/10 đã làm vậy, nhưng tiền lệ không thay được lời duyệt lần này.</td>
+            <td data-cho="2" data-ket-qua="can-duyet">Cần duyệt: cùng thư mục ngoài repo như 1, thêm image Docker của SWE-rebench.</td>
+            <td data-cho="3" data-ket-qua="can-duyet">Cần duyệt: cùng thư mục ngoài repo như 1, thêm image của Terminal-Bench 3.0.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:18">
+            <th>Threat model trước khi code phần đụng ranh giới tin cậy <span class="src">global/SHARED.global.md:18</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt nếu làm trước khi dựng: khóa đăng nhập của gói Max nằm trong container, code của việc đo do người khác viết, và trang Hugging Face báo một file trong TBLite bị quét là không an toàn.</td>
+            <td data-cho="2" data-ket-qua="dat">Như 1.</td>
+            <td data-cho="3" data-ket-qua="dat">Như 1.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon=".agent/NHAT-KY.md:85">
+            <th>Bench phải nạp cả luật chung <code>~/.claude/CLAUDE.md</code>, không chỉ plugin <span class="src">.agent/NHAT-KY.md:85</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt: bản ngày 30/10 đã nạp luật chung cho bản có agent-stack.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt, cùng cách nạp.</td>
+            <td data-cho="3" data-ket-qua="dat">Đạt, cùng cách nạp.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon=".agent/NHAT-KY.md:70">
+            <th>Quyết định cũ: bỏ bench Harbor ngày 02/11/2026 vì lúc đó bạn thấy không cần đo <span class="src">.agent/NHAT-KY.md:70</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt: hôm nay bạn đổi ý, yêu cầu đo và tìm bộ công khai. Nhật ký giữ nguyên dòng cũ; khi bắt đầu dựng lại, tôi thêm dòng mới ghi quyết định hôm nay.</td>
+            <td data-cho="2" data-ket-qua="dat">Như 1.</td>
+            <td data-cho="3" data-ket-qua="dat">Như 1.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> có nguy cơ. Dựng lại bản ngày 30/10 là dùng lại code tốt, nhưng bản đó tự ghi rằng cổng tự kiểm hầu như không bật trên TBLite. Vì vậy không khuyên phương án chỉ có TBLite.</li>
+      <li><b>Chiều theo người dùng:</b> bạn muốn bộ công khai. Bộ công khai không đo được mọi thứ (ví dụ 4), nên bộ tự viết vẫn giữ lại, không bỏ.</li>
+      <li><b>Chọn vì ít công:</b> phương án 1 ít công nhất; không khuyên vì lý do ở trên.</li>
+      <li><b>Phương án bù nhìn:</b> phương án 3 là lựa chọn thật cho người muốn chắc không bão hòa và chấp nhận chi phí cao. Phương án 1 hợp nếu bạn không muốn tốn cho SWE-rebench.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> chi phí của SWE-rebench còn là ước tính từ bảng công khai, và chưa biết Sonnet 5.5 có bão hòa TBLite không. Cả hai sẽ có số thật ở bước chạy thử, trước khi bạn duyệt bước cuối.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. Khóa đăng nhập của gói Max do bạn tự tạo và đặt vào máy Linux; tôi không nhập hay đọc token. Lời giải mẫu chạy trước để loại việc có script chấm hỏng.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Các câu đã chốt (06/11/2026)</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Dùng bộ việc nào?</h3>
+      <p><b>Đã chốt: phương án 2</b>, theo khuyến nghị. Lựa chọn: 1, 2 hay 3. Khuyên: 2, vì đây là phương án duy nhất đo được cổng tự kiểm trong git repo thật mà vẫn có bộ chính rẻ. Nếu chọn 1: rẻ hơn, nhưng kết quả cho hook có thể sai lệch. Nếu chọn 3: chắc không bão hòa, nhưng ít việc phân biệt và rất đắt.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: Dựng lại hạ tầng trên máy Linux ở nhà không?</h3>
+      <p><b>Đã chốt: có</b>, theo khuyến nghị. Lựa chọn: có, hay chạy trên Mac này. Khuyên: có, trên máy Linux. Code ngày 30/10 viết cho máy đó, máy có Docker và chạy được qua đêm. Việc này tạo file ngoài repo (<code>~/harbor-eval</code>) và cài Harbor ở đó, nên cần bạn duyệt. Bạn cũng tự tạo khóa đăng nhập bằng <code>claude setup-token</code> rồi đặt vào máy đó, như hướng dẫn cũ. Máy chỉ vào được khi ở mạng nhà. Chưa biết máy chạy song song được mấy việc SWE-rebench; nếu chỉ được một việc mỗi lúc, phần này chạy chậm nhưng vẫn chạy được, và bước chạy thử sẽ cho biết. Nếu chạy trên Mac: phải cài Docker trên Mac, và máy bận trong lúc đo.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Mỗi việc chạy lặp mấy lần ở bước cuối?</h3>
+      <p><b>Đã chốt: quyết sau bước chạy thử</b>, theo khuyến nghị. Lựa chọn: quyết sau bước chạy thử, hay chốt ngay 3 lần. Khuyên: quyết sau bước chạy thử. Khi đó đã biết chi phí thật mỗi lượt và có bao nhiêu việc phân biệt. Ước của trợ lý nghiên cứu, chưa kiểm trên dữ liệu thật: nếu khoảng 20% số việc lật giữa hai lần chạy, thì 40–60 việc × 3 lần chỉ thấy được chênh từ 8–10 điểm, còn chênh 5 điểm cần cỡ 100 việc × 5 lần. Con số 3 lần trong các phương án ở trên chỉ để ước cỡ, không phải đã chốt.</p>
+    </div>
+    <p class="note">Bước chạy thử và bước cuối vẫn cần bạn duyệt riêng trước khi chạy.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Terminal-Bench 3.0, bảng của Snorkel: <a href="https://snorkel.ai/leaderboard/terminal-bench-3-0/">snorkel.ai/leaderboard/terminal-bench-3-0</a> (đọc 06/11/2026).</li>
+      <li>SWE-rebench: <a href="https://swe-rebench.com/">swe-rebench.com</a> (đọc 06/11/2026).</li>
+      <li>TBLite: <a href="https://huggingface.co/datasets/open-thoughts/OpenThoughts-TBLite">huggingface.co/datasets/open-thoughts/OpenThoughts-TBLite</a>.</li>
+      <li>Agent Claude Code của Harbor: <a href="https://github.com/laude-institute/harbor/blob/main/src/harbor/agents/installed/claude_code.py">claude_code.py</a> có tùy chọn effort, trần chi phí, nạp skill, cài đặt và thư mục nhớ.</li>
+      <li>SkillsBench: <a href="https://arxiv.org/abs/2602.12670">arXiv 2602.12670</a>. SWE-bench Verified: <a href="https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/">bài của OpenAI</a>. Các số còn lại theo báo cáo của trợ lý nghiên cứu ngày 06/11/2026, tôi chưa tự đọc lại từng trang.</li>
+      <li>Bản dựng ngày 30/10: commit <code>551f3ec</code> (<code>evals/harbor/README.md</code>, <code>tasks-pilot.txt</code>); bỏ ở <code>cc61a7b</code>.</li>
+    </ul>
+  </footer>
+</main>

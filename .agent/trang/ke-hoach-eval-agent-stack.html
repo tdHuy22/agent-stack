@@ -1,0 +1,319 @@
+<title>Kế hoạch đo agent-stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 06/11/2026 · đã chốt hướng, chưa chạy</div>
+    <h1>Bật agent-stack có làm Claude Code tốt hơn, hay chỉ đắt hơn?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code">
+    <h2>Tóm tắt</h2>
+    <p>agent-stack là bộ luật và công cụ bạn gắn thêm vào Claude Code. Tới nay chưa ai so Claude Code có nó với Claude Code để trơn trên cùng một bộ việc, nên chưa biết nó có đáng tiền không. Bộ việc dùng để đo hiện quá dễ: Claude Code trơn đã làm đạt hết. Cách đo hiện tại cũng không cho Claude giao việc cho phiên con, mà ngoài đời phần đó tốn nhiều tiền nhất. Bạn đã chốt (06/11/2026): làm phương án 3, tức đo cả bản đầy đủ lẫn bản tắt từng phần, và tìm bộ việc đo công khai thay vì chỉ dựa vào bộ tự viết. Bước tiếp theo là chọn bộ việc đo; chưa chạy lượt nào.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack có bốn phần. <b>Luật chung</b> là file chỉ dẫn mà Claude đọc ở đầu mọi phiên, ví dụ "chưa chạy test thì không nói xong". <b>Hook</b> là script mà app tự chạy ở vài thời điểm: lúc mở phiên, trước mỗi lệnh, lúc Claude định dừng. Hook lúc dừng có thể chặn lại và bắt Claude tự kiểm thay đổi trước khi báo xong. Nó chỉ làm vậy khi một script chấm thay đổi ở mức rủi ro từ vừa trở lên, dựa trên file nào bị sửa và sửa bao nhiêu. <b>Skill</b> là một tập hướng dẫn Claude tự mở khi gặp đúng loại việc. Tất cả những phần này được đóng gói thành một <b>plugin</b>, tức một thư mục mà Claude Code nạp lúc khởi động. <b>Router</b> gợi ý model và mức suy nghĩ hợp với từng việc. <b>Trợ lý phụ</b> là các phiên Claude con chạy model rẻ, ví dụ một trợ lý chạy Haiku chuyên tìm file, để phiên chính khỏi phải đọc nhiều.</p>
+    <p>Bộ đo nằm trong thư mục <code>evals/</code>. Script <code>run_eval.py</code> chép từng việc vào một thư mục tạm của hệ điều hành, gọi Claude Code không tương tác (<code>claude -p</code>), rồi chấm bằng script chấm riêng của việc đó, thường là test ẩn mà Claude không thấy. Mỗi lượt ghi lại đạt hay trượt, số USD và số giây.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  T[Việc: đặc tả và code mẫu] --> W[Thư mục tạm]
+  W --> M["claude -p, cấu hình mặc định"]
+  W --> E["claude -p, bật agent-stack"]
+  M --> G[Script chấm: test ẩn]
+  E --> G
+  G --> R["Kết quả: đạt, USD, giây"]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Ngày 10/10/2026, cấu hình mặc định (Sonnet, mức suy nghĩ "medium") đạt 20 trên 20 lượt ở 10 việc khó nhất, trung bình 0,104 USD mỗi lượt. Khi mặc định đã đạt hết thì bộ công cụ không thể cho thấy nó làm tốt hơn; nó chỉ có thể cho thấy nó đắt hơn. Lần thử superpowers, một plugin công khai cùng loại với agent-stack, trên cùng bộ việc đúng là như vậy: không đạt thêm việc nào và tốn thêm 14%.</p>
+    <p>Đọc code của <code>run_eval.py</code>, tôi thấy thêm ba chỗ làm phép đo hiện tại không phản ánh cách bạn dùng thật:</p>
+    <ul>
+      <li>Hôm nay <b>cả hai</b> cấu hình đều không có quyền gọi trợ lý phụ. Danh sách quyền gốc chỉ có đọc, ghi, sửa file và vài lệnh; cấu hình bật bộ công cụ chỉ được thêm quyền mở skill. Vậy các lần đo cũ vẫn công bằng, nhưng không lần nào đo trợ lý phụ. Trong khi đó, bảng chi phí 7 ngày dùng thật của bạn (<code>BASELINE.md</code>, tổng ước 547 USD) cho thấy 70% số tiền đến từ trợ lý phụ và workflow (chuỗi trợ lý phụ chạy theo kịch bản) gộp lại.</li>
+      <li>Khi chạy không tương tác, hook mở phiên bỏ phần nhắc "lượt trước dừng ở đâu", vốn giúp bạn nối tiếp giữa các phiên. Hook lúc dừng vẫn chạy như thường.</li>
+      <li>Chưa biết luật chung có được nạp không. Luật chung là file <code>~/.claude/CLAUDE.md</code> trong thư mục nhà của bạn, khác với <code>CLAUDE.md</code> của từng project. Script đo chạy Claude với cờ <code>--setting-sources project</code>, nghĩa là chỉ đọc cài đặt của project. Cờ đó có chặn luôn luật chung không thì chưa kiểm. Nếu không chặn, thì "mặc định" trong mọi lần đo trước thật ra đã có luật chung.</li>
+    </ul>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Cấu hình</b>: một bộ model, mức suy nghĩ và những thứ được nạp kèm. Ví dụ: cấu hình mặc định là Sonnet ở mức vừa, không plugin. Cần để đọc các phương án.</li>
+      <li><b>Lượt</b>: một lần chạy một việc với một cấu hình. Ví dụ: 10 việc, mỗi việc 2 lần, 2 cấu hình là 40 lượt. Cần để đọc phần chi phí.</li>
+      <li><b>Hiệu ứng trần</b>: khi cấu hình rẻ nhất đã đạt mọi việc, bộ đo không phân biệt được cấu hình tốt hơn. Ví dụ: 20/20 lượt của mặc định ngày 10/10. Đây là lý do phải thêm việc khó.</li>
+      <li><b>Tắt từng phần</b>: chạy thêm bản bộ công cụ bỏ đi một phần (bỏ hook, hay bỏ trợ lý phụ) để biết phần nào tạo ra khác biệt. Cần để hiểu phương án 3.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>USD</dt><dd>Đô la Mỹ, tính theo giá niêm yết của Anthropic. Gói thuê bao của bạn không trả theo số này, nhưng nó trừ vào hạn mức tuần theo tỉ lệ tương ứng.</dd>
+        <dt>Haiku, Sonnet</dt><dd>Hai model của Anthropic. Haiku rẻ nhất, Sonnet ở giữa.</dd>
+        <dt>low, medium</dt><dd>Mức suy nghĩ (effort) đặt cho model: cao hơn thì nghĩ lâu hơn, tốn hơn.</dd>
+        <dt>Test ẩn</dt><dd>Test nằm trong script chấm, Claude không thấy khi làm. Đạt test ẩn nghĩa là làm đúng đặc tả, không chỉ đúng test có sẵn.</dd>
+        <dt><code>--self-test</code></dt><dd>Lệnh miễn phí của script đo: kiểm script chấm của từng việc chấm trượt bản chưa sửa và chấm đạt lời giải mẫu.</dd>
+        <dt><code>reuse-best</code></dt><dd>Một skill của agent-stack (tìm thứ có sẵn trước khi tự viết), có bộ đo riêng 4 việc.</dd>
+        <dt><code>claude -p</code></dt><dd>Chạy Claude Code một lượt, không có người ngồi trước màn hình.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: sửa lỗi ở 4 file</h3>
+        <p>Tình huống: việc <code>debug-multifile</code> có 4 lỗi nằm ở 4 file, test có sẵn chỉ lộ 1 lỗi.</p>
+        <pre><code>03/10/2026, mặc định: đạt 2/2 lượt, khoảng 0,085 USD mỗi lượt</code></pre>
+        <p>Hôm nay: chưa có lượt nào với bộ công cụ bật. Vì sao quan trọng: đây là loại việc bạn làm nhiều nhất. Nếu bộ công cụ đạt như nhau mà đắt gấp đôi vì phải tự kiểm, bạn cần biết con số đó.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: việc khó mà model rẻ vẫn làm được</h3>
+        <p>Tình huống: <code>code-unified-diff</code> bắt viết bộ so hai file và in chỗ khác nhau, ra đúng như lệnh <code>diff -u</code> của hệ thống ở 13 cặp file mẫu.</p>
+        <pre><code>Sonnet mức vừa:  0,177 USD mỗi lượt (03/10/2026)
+Haiku 5.5 mức low, tự làm cả việc: 0,009 USD mỗi lượt, vẫn đạt (08/10/2026)</code></pre>
+        <p>Hôm nay: bộ công cụ có trợ lý phụ chạy Haiku, nhưng lúc đo không được gọi. Vì sao quan trọng: đây là chỗ bộ công cụ có thể làm rẻ hơn thật, nếu phiên chính giao phần đọc cho trợ lý rẻ.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Phản ví dụ: số đo có mà không so được</h3>
+        <p>Tình huống: ngày 07/10/2026, cấu hình bật bộ công cụ đã chạy 12 lượt trên 4 việc của bộ <code>reuse-best</code> (tìm thứ có sẵn trước khi tự viết).</p>
+        <pre><code>evals/results/20261007-164708.jsonl: 12/12 đạt, 0,218 USD mỗi lượt
+Mặc định trên cùng 4 việc: chưa từng chạy</code></pre>
+        <p>Hôm nay: không biết 0,218 USD là đắt hay rẻ. Vì sao quan trọng: đo một bên thì không kết luận được. Mọi phương án dưới đây đều chạy cả hai cấu hình trên cùng việc, cùng ngày.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Ca bộ đo chưa có: khóa bí mật trong file cấu hình</h3>
+        <p>Tình huống giả định: đặc tả bảo thêm log gỡ lỗi in toàn bộ cấu hình, mà file cấu hình có một khóa API giả dạng <code>sk-test-…</code>.</p>
+        <p>Hôm nay: không việc nào trong 24 việc đo điều này, dù agent-stack có luật và hook che khóa. Vì sao quan trọng: đây là loại lợi ích không hiện ra ở tỉ lệ đạt test, chỉ hiện ra khi script chấm kiểm cả việc khóa có bị in ra không.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <p class="note">Cả ba phương án đều thêm quyền gọi trợ lý phụ cho cả hai cấu hình (câu 3). Khi đó mặc định gọi được các trợ lý có sẵn của Claude Code, như trợ lý tìm file chạy cùng model với phiên chính. Bộ công cụ gọi được thêm trợ lý của agent-stack, như trợ lý tìm file chạy Haiku và trợ lý chạy test chỉ trả về phần lỗi.</p>
+    <p class="note">Cách ước chi phí, chưa phải số đo: mặc định khoảng 0,10 USD mỗi lượt ở việc cũ (số ngày 10/10). Bộ công cụ khoảng 0,15–0,25 USD mỗi lượt: superpowers đắt hơn 14%, và bộ công cụ đo trên <code>reuse-best</code> tốn 0,218 USD. Việc mới khó hơn, ước gấp đôi: 0,2 USD với mặc định, 0,3–0,5 USD với bộ công cụ.</p>
+    <div class="options">
+      <article class="option" data-phuong-an="1">
+        <h3>1 · Chạy ngay trên bộ việc cũ</h3>
+        <p>Sửa quyền gọi trợ lý phụ, rồi chạy mặc định và bộ công cụ trên 10 việc khó đã có.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>10 việc × 2 lần × 2 cấu hình = 40 lượt. Lệnh: <code>run_eval.py --configs A,E --repeats 2 --yes</code>.</dd>
+          <dt>Được</dt><dd>Biết bộ công cụ tốn thêm bao nhiêu tiền và thời gian trên việc giống việc thật.</dd>
+          <dt>Mất</dt><dd>Không đo được chất lượng, vì mặc định đã đạt hết. Nhiều khả năng ra "đạt như nhau, đắt hơn bao nhiêu đó phần trăm", vì mặc định đạt 20/20 lượt gần nhất. Hai lần lặp mỗi việc thì vẫn có thể dao động một hai lượt. Không nói được phần nào đáng giữ.</dd>
+          <dt>Chi phí</dt><dd>20 lượt × 0,10 + 20 lượt × 0,15–0,25 = khoảng 5–7 USD. Công sửa script: nhỏ.</dd>
+          <dt>Đảo ngược</dt><dd>Được. Chỉ thêm file kết quả.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="2">
+        <h3>2 · Sửa cách chạy, thêm 4 việc khó</h3>
+        <p>Làm như phương án 1, cộng thêm một bước thử rẻ và 4 việc mới được thiết kế để bộ công cụ có cơ hội tạo ra khác biệt.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Bước 0, thử rẻ: mỗi cấu hình 1 lượt với câu hỏi kiểm, dưới 0,1 USD. Kiểm 3 điều: mặc định có nạp luật chung không, hook có chạy không, trợ lý phụ có gọi được không. Bước 1: viết 4 việc mới, mỗi việc có lời giải mẫu và phải qua <code>--self-test</code> (miễn phí). Bước 2: 14 việc × 2 lần × 2 cấu hình = 56 lượt.</dd>
+          <dt>4 việc mới</dt><dd>(a) Sửa một hàm làm hỏng một chỗ gọi khác mà test có sẵn không phủ; chấm bằng test ẩn. (b) Repo khoảng 150–200 file, phải tìm đúng 2 chỗ cần sửa; đo tiền đọc file. (c) Bẫy khóa như ví dụ 4; chấm cả tính năng lẫn việc khóa không bị in ra. (d) Việc nhiều bước, ước 15–30 phút, để thoát hiệu ứng trần.</dd>
+          <dt>Được</dt><dd>Đo được cả chi phí lẫn chất lượng, ở đúng những chỗ agent-stack hứa giúp.</dd>
+          <dt>Mất</dt><dd>Công viết 4 việc và script chấm. Kết quả vẫn chưa nói phần nào của bộ công cụ tạo ra khác biệt. Việc do tôi thiết kế có thể vô tình hợp với bộ công cụ, nên mỗi việc phải viết đặc tả và script chấm trước, không nhìn vào agent-stack. Chưa biết 4 việc mới có thật sự làm mặc định trượt không. Nếu mặc định vẫn đạt hết, trang kết quả sẽ nói rõ là bộ đo vẫn chạm trần.</dd>
+          <dt>Chi phí</dt><dd>Việc cũ như phương án 1 (5–7 USD), cộng 4 việc mới × 2 lần × 2 cấu hình = 16 lượt × 0,2–0,5 (khoảng 3–6 USD). Tổng khoảng 8–13 USD, chi tối đa 15 USD. Bảo trì: thêm 4 việc vào bộ đo.</dd>
+          <dt>Đảo ngược</dt><dd>Được. Việc mới có thể bỏ khỏi bộ đo.</dd>
+        </dl>
+      </article>
+      <article class="option rec" data-phuong-an="3" data-khuyen>
+        <h3>3 · Như 2, thêm bản tắt từng phần <span class="chip">bạn chọn</span></h3>
+        <p>Chạy thêm hai cấu hình: bộ công cụ không có hook, và bộ công cụ không có trợ lý phụ.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Như phương án 2, cộng 2 cấu hình nạp bản chép của plugin đã bỏ phần tương ứng (<code>--plugin-root</code> kèm <code>--tag</code>, script đã hỗ trợ). 14 việc × 2 lần × 4 cấu hình = 112 lượt.</dd>
+          <dt>Được</dt><dd>Biết phần nào đáng giữ, phần nào nên tắt.</dd>
+          <dt>Mất</dt><dd>Gấp đôi chi phí. Nếu phương án 2 cho thấy hai cấu hình chính ngang nhau, thì nửa sau này là tiền bỏ đi.</dd>
+          <dt>Chi phí</dt><dd>Phương án 2 (8–13 USD) cộng hai cấu hình bộ công cụ nữa (mỗi cái 5–9 USD). Tổng khoảng 18–30 USD.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>1 · bộ việc cũ</th><th>2 · thêm việc khó</th><th>3 · thêm bản tắt từng phần</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Sửa lỗi ở 4 file</th><td data-cho="1">Biết bộ công cụ tốn thêm bao nhiêu USD mỗi lượt. Tỉ lệ đạt gần như chắc là 2/2 ở cả hai.</td><td data-cho="2">Như cột 1, cộng việc (a) cùng loại nhưng khó hơn, nơi tự kiểm có thể bắt chỗ sót.</td><td data-cho="3">Như cột 2, và biết phần tốn thêm đến từ hook tự kiểm hay từ trợ lý phụ.</td></tr>
+          <tr><th>2 · Việc khó, model rẻ làm được</th><td data-cho="1">Biết phiên chính có giao việc cho trợ lý Haiku không, và rẻ đi bao nhiêu. Không biết chất lượng có giữ được ở repo lớn.</td><td data-cho="2">Việc (b) với repo 150–200 file đo đúng chỗ này: tiền đọc file của mỗi cấu hình.</td><td data-cho="3">Bản không có trợ lý phụ cho biết phần rẻ đi có đúng là nhờ trợ lý không.</td></tr>
+          <tr><th>3 · Đo một bên, không so được</th><td data-cho="1">Không giải quyết: bộ 4 việc <code>reuse-best</code> không nằm trong 10 việc chạy.</td><td data-cho="2">Không giải quyết, trừ khi chạy thêm cả hai cấu hình trên bộ <code>reuse-best</code>: 4 việc × 2 lần × 2 cấu hình = 16 lượt, khoảng 2–3 USD. Hỏi ở câu 5.</td><td data-cho="3">Như cột 2.</td></tr>
+          <tr><th>4 · Khóa trong file cấu hình</th><td data-cho="1">Không đo.</td><td data-cho="2">Việc (c) đo trực tiếp: khóa có bị in ra log hay câu trả lời không.</td><td data-cho="3">Như cột 2, và biết hook hay luật chung chặn được.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của repo, luật chung <code>global/SHARED.global.md</code> và <code>evals/README.md</code>.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>1</th><th>2</th><th>3</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:31">
+            <th>Chạy eval thật tốn hạn mức nên phải hỏi bạn trước <span class="src">global/SHARED.global.md:31</span></th>
+            <td data-cho="1" data-ket-qua="can-duyet">Cần duyệt: khoảng 5–7 USD.</td>
+            <td data-cho="2" data-ket-qua="can-duyet">Cần duyệt: bước 0 dưới 0,1 USD, bước 2 khoảng 8–13 USD. Hỏi riêng từng bước.</td>
+            <td data-cho="3" data-ket-qua="can-duyet">Cần duyệt: khoảng 18–30 USD.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:78">
+            <th>Thứ hứa làm agent giỏi hơn cần số liệu eval trước khi bật lâu dài <span class="src">global/SHARED.global.md:78</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt về luật, vì có số đo. Nhưng chỉ có số chi phí, không có số chất lượng.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt: có cả hai.</td>
+            <td data-cho="3" data-ket-qua="dat">Đạt, và có số cho từng phần.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:21">
+            <th>Chọn theo chất lượng, không theo công làm <span class="src">global/SHARED.global.md:21</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt về luật: luật không cấm đo ít. Nhưng đây là phương án ít công nhất và chỉ trả lời nửa câu hỏi, nên không khuyên.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="3" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:21">
+            <th>Eval thật chạy trong thư mục tạm của hệ điều hành, để model không đọc được script chấm hay lời giải <span class="src">CLAUDE.md:21</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt: <code>run_eval.py</code> đã làm vậy.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt: việc mới đi cùng đường đó.</td>
+            <td data-cho="3" data-ket-qua="dat">Đạt. Bản chép plugin đặt trong <code>.tmp/</code>.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="evals/README.md:17">
+            <th>Mỗi việc có lời giải mẫu; script chấm phải chấm trượt bản chưa sửa và chấm đạt lời giải <span class="src">evals/README.md:17</span></th>
+            <td data-cho="1" data-ket-qua="khong-lien-quan">Không thêm việc.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt: 4 việc mới phải qua <code>--self-test</code> trước khi chạy thật.</td>
+            <td data-cho="3" data-ket-qua="dat">Như 2.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15">
+            <th>Python chỉ dùng thư viện chuẩn <span class="src">CLAUDE.md:15</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt: chỉ sửa danh sách quyền trong script.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt: script chấm mới chỉ dùng thư viện chuẩn.</td>
+            <td data-cho="3" data-ket-qua="dat">Như 2.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:9">
+            <th>Không sửa <code>~/.claude/</code> hay cài gì toàn cục <span class="src">CLAUDE.md:9</span></th>
+            <td data-cho="1" data-ket-qua="dat">Đạt: plugin nạp bằng <code>--plugin-dir</code>, không cài.</td>
+            <td data-cho="2" data-ket-qua="dat">Đạt. Nếu cần tắt luật chung cho cấu hình mặc định thì làm bằng cờ dòng lệnh, không sửa file trong <code>~/.claude/</code>.</td>
+            <td data-cho="3" data-ket-qua="dat">Như 2.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> có. Cấu hình bật bộ công cụ hiện chỉ thêm quyền gọi skill. Cả ba phương án đều sửa chỗ này, không chạy lại y như cũ.</li>
+      <li><b>Chiều theo người dùng:</b> bạn là người làm agent-stack, nên dễ mong nó thắng. Kế hoạch cam kết báo cả kết quả xấu, như đã làm với superpowers: nếu bộ công cụ chỉ đắt hơn, trang kết quả sẽ nói vậy và đề xuất tắt phần không giúp.</li>
+      <li><b>Chọn vì ít công:</b> phương án 1 ít công nhất nhưng không trả lời được câu về chất lượng, nên không khuyên.</li>
+      <li><b>Phương án bù nhìn:</b> không thấy. Phương án 1 hợp nếu bạn chỉ cần con số chi phí. Phương án 3 hợp nếu bạn sẵn sàng chi gấp đôi để biết ngay phần nào đáng giữ.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> có hai giới hạn, nói rõ ở đây. Một, chạy <code>claude -p</code> không giống phiên thật: không có người để hỏi lại, hook mở phiên bỏ ghi chú lượt cuối, và giá trị của việc lưu tiến độ qua nhiều phiên không đo được. Hai, hook của bộ công cụ sẽ ghi thêm dòng vào nhật ký sự kiện của agent-stack (<code>state/events.jsonl</code>) trong lúc đo; không hại, và còn dùng được làm bằng chứng hook đã chạy.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. Việc mới phải qua <code>--self-test</code>, và lượt chạy thật chỉ bắt đầu khi bạn duyệt.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Các câu đã chốt (06/11/2026)</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Chọn phương án nào?</h3>
+      <p><b>Đã chốt: phương án 3</b>, khác khuyến nghị ban đầu (phương án 2). Bạn thêm một yêu cầu: tìm các bộ việc đo công khai (benchmark), vì bộ tự viết có thể vẫn quá đơn giản. Vì vậy 4 việc mới ở phương án 2 có thể được thay hay bổ sung bằng một tập con của bộ công khai. Đang nghiên cứu. Lưu ý: ngày 30/10/2026 đã dựng sẵn một bộ đo trên Harbor với bộ việc TBLite (100 việc kiểu Terminal-Bench, chạy trong Docker trên máy Linux ở nhà của bạn), rồi bỏ ngày 02/11/2026 vì lúc đó bạn thấy không cần đo. Code vẫn còn ở commit <code>551f3ec</code> và là ứng viên đầu tiên.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: "Mặc định" có được đọc luật chung của bạn không?</h3>
+      <p><b>Đã chốt: (a)</b>, theo khuyến nghị. Lựa chọn: (a) mặc định là Claude Code trơn, không luật chung; bộ công cụ có luật chung và plugin, đúng như bạn dùng. (b) Cả hai đều có luật chung, chỉ khác plugin. Khuyên: (a), vì câu bạn hỏi là "cả bộ có đáng không", và luật chung là một phần của bộ. Nếu chọn (b): đo được riêng phần plugin, nhưng không biết luật chung giúp gì. Câu này chốt bạn muốn đo cái gì. Bước 0 chỉ cho biết cần sửa script đến đâu để làm được điều bạn chọn. Nếu cách đó cần đụng vào thư mục <code>~/.claude/</code>, tôi sẽ hỏi lại trước.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Cho cả hai cấu hình gọi trợ lý phụ không?</h3>
+      <p><b>Đã chốt: cho cả hai</b>, theo khuyến nghị. Lựa chọn: cho cả hai, chỉ cho bộ công cụ, hay không cho ai. Khuyên: cho cả hai, vì đó là cách bạn dùng Claude Code thật, và chỉ cho một bên thì phần chênh lệch lẫn cả quyền lẫn chất lượng của bộ công cụ. Nếu không cho ai: rẻ hơn, nhưng không đo được phần chiếm 70% chi phí.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 4: Trần chi phí bao nhiêu?</h3>
+      <p><b>Đã chốt: không đặt mức cụ thể, chỉ cần không quá nhiều.</b> Bạn dùng gói Claude Max, nên số USD ở trang này chỉ dùng để so hai cấu hình; thứ bị trừ thật là hạn mức tuần. Mỗi lượt vẫn dừng ở 1 USD theo giá niêm yết để chặn lượt chạy mất kiểm soát, và hai cấu hình vẫn chạy cùng ngày, cùng phiên bản Claude Code.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 5: Có chạy thêm cả hai cấu hình trên bộ <code>reuse-best</code> không?</h3>
+      <p><b>Đã chốt: không</b>, theo khuyến nghị. Lựa chọn: có (16 lượt, khoảng 2–3 USD) hay không. Khuyên: không. Bộ đó đo một skill, không đo cả bộ công cụ, và số lần đo cũ trên nó đã đủ để quyết về skill đó. Nếu chọn có: ví dụ 3 có câu trả lời, và mức chi tối đa nên nâng lên 18 USD.</p>
+    </div>
+    <p class="note">Câu còn mở: chọn bộ việc đo nào. Sẽ thêm vào trang khi có kết quả nghiên cứu.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li><code>evals/run_eval.py:55</code> danh sách quyền gốc; <code>:247–250</code> cấu hình có plugin chỉ thêm <code>Skill</code>; <code>:308–318</code> lệnh <code>claude -p</code> với <code>--setting-sources project</code>.</li>
+      <li><code>plugin/hooks/session_start.py:64</code> bỏ ghi chú lượt cuối khi không tương tác; <code>plugin/hooks/stop.py:278–296</code> hook lúc dừng vẫn chấm rủi ro khi lượt đổi file.</li>
+      <li><code>evals/results/20261010-074444.jsonl</code> mặc định 20/20, 0,104 USD; superpowers 20/20, 0,119 USD. <code>evals/results/20261007-164708.jsonl</code> bộ công cụ trên <code>reuse-best</code>. <code>evals/results/20261003-231407.jsonl</code>, <code>20261003-232353.jsonl</code>, <code>20261008-093626.jsonl</code> số của ví dụ 1 và 2.</li>
+      <li><code>routing-table.md:183–188</code> các câu chưa quyết bằng số liệu; <code>BASELINE.md:31</code> 70% chi phí từ trợ lý phụ và workflow.</li>
+      <li><code>evals/configs.json:23</code> định nghĩa cấu hình bật bộ công cụ.</li>
+    </ul>
+  </footer>
+</main>
