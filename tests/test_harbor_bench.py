@@ -1232,6 +1232,20 @@ class TufBehaviourTests(TempDirTestCase):
     def args_file(self):
         return self.home / "harbor-args.txt"
 
+    def test_run_uses_its_own_task_list_when_present(self):
+        """run probe dùng tasks-probe.txt (lượt thử nhỏ), run main dùng tasks-main.txt."""
+        (self.rd / "agent-stack" / "tasks-probe.txt").write_text("# thử\ntblite:t2\n")
+        r = self.tuf("run", "probe", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        cfg = json.loads((self.rd / "configs" / "probe.json").read_text())
+        names = sorted(n for d in cfg["datasets"] for n in d.get("task_names", []))
+        self.assertEqual(names, ["t2"])
+        self.assertEqual(len(cfg["agents"]), 4)
+        r = self.tuf("run", "main")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        cfg = json.loads((self.rd / "configs" / "main.json").read_text())
+        self.assertEqual(sorted(n for d in cfg["datasets"] for n in d.get("task_names", [])), ["swe-a", "t1"])
+
     def test_oracle_never_loads_env_and_pilot_does(self):
         self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\nOTHER_KEY=hunter2value\n")      # oracle không đọc .env nên không bị chặn
         r = self.tuf("oracle", "--yes", "--force")

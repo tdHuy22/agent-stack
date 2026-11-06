@@ -124,8 +124,11 @@ prepare_job() {
     echo "jobs/$job đã có trên TUF. Xoá nó (cùng jobs/$job.payload, .meta.json, .log, .pid), hay đổi TÊN." >&2; exit 1
   fi
   case "$kind" in
-    main) tasks_arg="--tasks agent-stack/tasks-main.txt"
-      remote "grep -q . agent-stack/tasks-main.txt" 2>/dev/null || { echo "Chưa có tasks-main.txt: chạy tuf.sh select rồi sync." >&2; exit 1; } ;;
+    # run <TÊN> dùng tasks-<TÊN>.txt nếu có (ví dụ tasks-probe.txt cho lượt thử nhỏ), không thì tasks-main.txt
+    main) list="agent-stack/tasks-$job.txt"
+      remote "test -f $list" 2>/dev/null || list="agent-stack/tasks-main.txt"
+      tasks_arg="--tasks $list"
+      remote "grep -qv '^#' $list" 2>/dev/null || { echo "Chưa có $(basename "$list"): chạy tuf.sh select rồi sync." >&2; exit 1; } ;;
     *) tasks_arg=""
       remote "grep -qv '^#' agent-stack/tasks-swerebench.txt" 2>/dev/null || { echo "Chưa có tasks-swerebench.txt: chạy tuf.sh pick." >&2; exit 1; } ;;
   esac
