@@ -19,7 +19,7 @@
   (Câu 4: cấu hình review mới đã làm; `review_log.py summary` gom số liệu, sau 2 lần review kép: chỉ Opus 5, chỉ Sonnet 10, cả hai 4; cần khoảng 5 lần mới kết luận. Mã hóa, token, thanh toán sửa nhỏ ở mức vừa: giữ ô của bảng, không nâng Opus xhigh (bạn chốt 04/11/2026).)
   1. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
   2. @ban Push 4 commit của 06/11 (`a88dad8`, `71bf678`, `dd6c3da`, `903a3b9`).
-  3. @ban Tùy chọn: xem 30 phát hiện SkillSpector của `kaggle-cli` (REVIEW, đều là tài liệu lệnh); muốn bỏ duyệt thì `vet.py revoke`. Job private `huytoi/hello-gpu` còn trên Kaggle, xóa trên web nếu muốn.
+  3. @ban Tùy chọn: xem 30 phát hiện SkillSpector của `kaggle-cli` (REVIEW, đều là tài liệu lệnh); muốn bỏ duyệt thì `vet.py revoke`. Job `huytoi/hello-gpu` bạn đã xóa (06/11).
 - **Ghi nhớ (đã xong, không phải việc):**
   - Bỏ bench agent-stack và pi-agent trên Harbor/TBLite (02/11/2026, lời bạn); chi tiết ở `.agent/NHAT-KY.md`.
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
