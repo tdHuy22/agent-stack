@@ -3,8 +3,8 @@
     "Kaggle/kaggle-cli:skills": {
       "archived": false,
       "human_review": {
-        "at": "2026-11-06T08:34:01Z",
-        "note": "Chỉ có tài liệu .md, không hook, MCP hay script; đã đọc tay",
+        "at": "2026-11-06T09:48:19Z",
+        "note": "REVIEW 06/11: 30 phát hiện SkillSpector đều là tài liệu lệnh (PE3 token, .env; EA5 b t run; EA2 cờ -y); in token và xóa đã bị luật kaggle-gpu cấm; giữ duyệt",
         "status": "approved"
       },
       "license": "Apache-2.0",
