@@ -295,6 +295,33 @@ class LastRequest(TempDirTestCase):
             with self.subTest(ordinary=ordinary):
                 self.assertEqual(A.redact_secrets(ordinary), ordinary)
 
+    def test_keys_inside_long_urls_are_masked_and_the_rest_of_the_path_kept(self):
+        # review 06/11/2026: chuỗi có từ 3 dấu '/' bị coi là đường dẫn nên khóa ở cuối URL webhook lọt nguyên văn
+        cases = {
+            "slack": ("https://hooks.slack.com/services/T0ABCDEF1/B0GHIJKL2/" + "Xk9pQ2mL7vR4" + "tN8sW3bZ6yH1", "tN8sW3bZ6yH1"),
+            "discord": ("https://discord.com/api/webhooks/123456789012345678/" + "abcDEF123_ghiJKL456-mnoPQR789stuVWX0yz12",
+                        "mnoPQR789"),
+            "telegram": ("https://api.telegram.org/bot1234567890:" + "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage",
+                         "SeofSAs0K5"),
+            "đường dẫn API": ("https://api.example.com/v1/users/" + "Zk3pQ8mL2vR7" + "tN4sW9bX6yH1cD5e/profile", "tN4sW9bX6yH1"),
+            "query ?key=": ("https://maps.googleapis.com/maps/api/geocode/json?address=x&key=" + "Xk9pQ2mL7vR4" + "tN8sW3bZ6yH1",
+                            "tN8sW3bZ6yH1"),
+            "query ?sig=": ("https://cdn.example.com/a/b/c?sig=" + "Ab12Cd34Ef56" + "Gh78Ij90&x=1", "Gh78Ij90"),
+        }
+        for name, (url, piece) in cases.items():
+            with self.subTest(name=name):
+                masked = A.redact_secrets(f"gửi qua {url} nhé")
+                self.assertNotIn(piece, masked)
+                self.assertIn(A.REDACTED, masked)
+                self.assertTrue(masked.startswith("gửi qua https://") and masked.endswith(" nhé"))
+        self.assertIn("/v1/users/", A.redact_secrets(cases["đường dẫn API"][0]))  # phần thường của đường dẫn còn nguyên
+        for ordinary in ("/kaggle/input/llama/transformers/Meta-Llama-3-8B-Instruct-bnb-4bit/1",
+                         "data/MyDataset2024ForTrainingModels/train/part-00001",
+                         "runs/kaggle/hello-gpu/20261106-153357/gpu.txt", "https://x.example/a/b/c?key=train_image_0001",
+                         "/Users/macos/Library/Application Support/Claude/claude-code/2.1.317/91184d3d9ba"):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(A.redact_secrets(ordinary), ordinary)
+
     def test_new_request_replaces_only_the_same_sessions_old_one(self):
         A.save_last_request("a", "/x", "việc một")
         A.save_last_request("b", "/x", "việc của phiên khác")

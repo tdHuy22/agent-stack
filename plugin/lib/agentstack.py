@@ -804,6 +804,14 @@ SECRET_PATTERNS = (
     r"(?<![A-Za-z0-9])[0-9A-Fa-f]{32,}(?![A-Za-z0-9])",       # chuỗi hex liền từ 32 ký tự
     r"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{16,}",              # GitLab personal access token
     r"(?<=://)[^/\s:@]+:[^@\s/]+(?=@)",                       # user:mật-khẩu trong URL (postgres://u:p@host)
+    # URL webhook: cả đường dẫn sau tên miền là khóa (ai có URL là gửi được tin)
+    r"(?<=hooks\.slack\.com/)(?:services|workflows|triggers)/[A-Za-z0-9/_-]{20,}",
+    r"(?<=discord\.com/api/webhooks/)\d+/[A-Za-z0-9_-]{30,}",
+    r"(?<=discordapp\.com/api/webhooks/)\d+/[A-Za-z0-9_-]{30,}",
+    r"(?:(?<=/bot)|(?<![A-Za-z0-9]))\d{8,10}:AA[A-Za-z0-9_-]{30,}",  # token bot Telegram (api.telegram.org/bot<token>)
+    # khóa trong query string (?key=…, &sig=…): giá trị từ 16 ký tự có hoa, thường, số, để ?key=train_image_0001 không bị che
+    r"(?i)(?<=[?&])(?:key|api[_-]?key|sig|signature|auth|secret|access[_-]?key)="
+    r"(?-i:(?=[^&\s#\"']{0,200}[A-Z])(?=[^&\s#\"']{0,200}[a-z])(?=[^&\s#\"']{0,200}\d))[^&\s#\"']{16,}",
     # cả khối khóa riêng PEM; chỉ khi sau dòng BEGIN có thân base64 (từ 40 ký tự), để câu nhắc tới dòng header không bị nuốt
     r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----[ \t]*\r?\n[A-Za-z0-9+/=\s]{40,}?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
     # gán giá trị cho tên trông như bí mật: password=..., api_key: ..., secret_access_key = ...
@@ -838,7 +846,27 @@ def _mask_long_run(match) -> str:
     random_like = (any(c.isupper() for c in run) and any(c.islower() for c in run)
                    and (any(c.isdigit() for c in run) or run.endswith("=")))
     # Khóa bí mật AWS dài 40 ký tự base64 và hay chứa vài dấu '/', nên được nới số dấu '/' cho độ dài gần đó.
-    return REDACTED if random_like and run.count("/") <= (3 if 40 <= len(run) <= 44 else 2) else run
+    if random_like and run.count("/") <= (3 if 40 <= len(run) <= 44 else 2):
+        return REDACTED
+    if "/" not in run:
+        return run
+    # Giống đường dẫn hay URL: chỉ che đoạn giữa hai dấu '/' trông ngẫu nhiên (khóa ở cuối URL webhook, token trong
+    # đường dẫn API), giữ các đoạn khác để đường dẫn vẫn đọc được.
+    return "/".join(REDACTED if random_piece(seg) else seg for seg in run.split("/"))
+
+
+_CHUNK_RE = re.compile(r"[A-Z]{0,4}[a-z]+|[A-Z]{1,5}|\d+")
+
+
+def random_piece(segment: str) -> bool:
+    """Một đoạn đường dẫn trông như khóa ngẫu nhiên: có một khúc (tách theo '-' '_') dài từ 16 ký tự, có hoa, thường
+    và số, mà không ghép từ các từ (khúc từ trung bình ngắn hơn 3 ký tự, như chuỗi ngẫu nhiên đổi kiểu chữ liên tục).
+    Tên như `Meta-Llama-3-8B-Instruct-bnb-4bit`, `MyDataset2024ForTraining` không tính."""
+    for piece in re.split(r"[-_]", segment):
+        if (len(piece) >= 16 and any(c.isupper() for c in piece) and any(c.islower() for c in piece)
+                and any(c.isdigit() for c in piece) and 3 * len(_CHUNK_RE.findall(piece)) > len(piece) + 1):
+            return True
+    return False
 
 
 def redact_secrets(text: str) -> str:

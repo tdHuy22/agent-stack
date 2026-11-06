@@ -668,7 +668,7 @@ class ScannerRound4(Base):
         tested = missed = 0
         for run in self.random_runs(seed, count):
             line = template.format(run)
-            if not any(K.A._mask_long_run(m) == K.A.REDACTED for m in K.A.LONG_RUN_RE.finditer(line)):
+            if not any(K.A.REDACTED in K.A._mask_long_run(m) for m in K.A.LONG_RUN_RE.finditer(line)):
                 continue  # redact_secrets cũng không che chuỗi này (thiếu hoa, thường, số hay giống đường dẫn): ngoài phạm vi
             tested += 1
             missed += not K.line_has_secret(line, [], code=True, allow_mark=False)
@@ -715,3 +715,34 @@ class ScannerRound4(Base):
                      "Bearer 1.2.3.4.5.6.7.8.9.0.A.b.c.d.e.f"):
             with self.subTest(line=line):
                 self.assertFalse(K.line_has_secret(line, [], code=False, allow_mark=False))
+
+
+class ScannerUrlKeys(Base):
+    """Khóa trong URL nhiều dấu '/' (06/11/2026): webhook Slack, Discord, token bot Telegram, khóa ở cuối đường dẫn API."""
+
+    SLACK = "https://hooks.slack.com/services/T0ABCDEF1/B0GHIJKL2/" + "Xk9pQ2mL7vR4" + "tN8sW3bZ6yH1"
+    DISCORD = "https://discord.com/api/webhooks/123456789012345678/" + "abcDEF123_ghiJKL456-mnoPQR789stuVWX0yz12"
+    TELEGRAM = "https://api.telegram.org/bot1234567890:" + "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" + "/sendMessage"
+
+    def test_webhook_urls_are_caught_in_code_and_data(self):
+        for url in (self.SLACK, self.DISCORD, self.TELEGRAM):
+            for line in (f'WEBHOOK = "{url}"', f"requests.post('{url}', json=msg)", f"notify: {url}"):
+                with self.subTest(line=line):
+                    self.assertTrue(K.line_has_secret(line, [], code=True, allow_mark=False))
+                    self.assertTrue(K.line_has_secret(line, [], code=False, allow_mark=False))
+        folder = self.dataset({"alerts.yaml": f"slack_url: {self.SLACK}\n"})
+        self.assertEqual(self.run_main("dataset", str(folder))[0], 2)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.run_main("lint", str(self.job(code=f'import requests\nrequests.post("{self.SLACK}")\n')))[0], 2)
+
+    def test_random_key_at_end_of_long_url_is_caught_in_code(self):
+        line = 'u = "https://api.example.com/v1/users/' + "Zk3pQ8mL2vR7" + 'tN4sW9bX6yH1cD5e/profile"'
+        self.assertTrue(K.line_has_secret(line, [], code=True, allow_mark=False))
+
+    def test_ordinary_long_paths_are_not_flagged(self):
+        for line in ('MODEL = "/kaggle/input/llama/transformers/Meta-Llama-3-8B-Instruct-bnb-4bit/1"',
+                     'path = "data/MyDataset2024ForTrainingModels/train/part-00001"',
+                     '# xem https://github.com/anthropics/sandbox-runtime/issues/12',
+                     'out = "/kaggle/working/checkpoints/run-20261106-153357/step-0001000"'):
+            with self.subTest(line=line):
+                self.assertFalse(K.line_has_secret(line, [], code=True, allow_mark=False))

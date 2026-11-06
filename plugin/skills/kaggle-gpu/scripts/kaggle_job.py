@@ -319,7 +319,7 @@ def line_has_secret(line: str, tokens: list, code: bool, allow_mark: bool) -> bo
     # (MODEL_ID_RE) và hex trần (revision ghim theo SHA). Hex W&B gán cho tên hay sau lệnh login đã bị hai mẫu trên bắt.
     if not code:
         return False
-    runs = [m for m in A.LONG_RUN_RE.finditer(line) if A._mask_long_run(m) == A.REDACTED]
+    runs = [m for m in A.LONG_RUN_RE.finditer(line) if A.REDACTED in A._mask_long_run(m)]  # cả đoạn ngẫu nhiên trong URL
     if not runs:
         return False
     ids = [m.span() for m in MODEL_ID_RE.finditer(line) if model_id_like(m.group(0))]
