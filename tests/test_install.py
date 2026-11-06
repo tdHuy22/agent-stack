@@ -380,6 +380,41 @@ class InstallTests(TempDirTestCase):
         self.assertNotIn("cài lại", out)
         self.assertFalse(any("uninstall" in c for c in self.calls_made()[before:]), "bản đã khớp thì không cài lại")
 
+    def test_vendor_skill_plugin_missing_new_skill_is_reinstalled(self):
+        """Skill vendor mới duyệt phải vào bản cache của agent-stack-vendor đã cài từ trước (gặp 06/11/2026: kaggle-cli
+        được chép vào vendor/ nhưng `plugin install` báo đã có, nên Claude Code không thấy skill)."""
+        cache = self.stack / ".vet-cache" / "o__r@abcdefabcdef"
+        (cache / "skill").mkdir(parents=True)
+        (cache / "skill" / "SKILL.md").write_text("---\nname: demo\n---\n")
+        sha = vetted(cache)
+        self.lock["entries"] = {"o/r:skill": {"verdict": "PASS", "sha": sha, "subpath": "skill",
+                                              "report": "vet-reports/o__r@abcdefabcdef.md",
+                                              "human_review": {"status": "approved"}}}
+        self.catalog["items"] = [{"key": "o/r:skill", "kind": "vendor-skill", "scope": "user",
+                                  "install": {"name": "demo"}}]
+        self.save()
+        old = self.home / ".claude" / "plugins" / "cache" / "agent-stack-vendor-local" / "agent-stack-vendor" / "2026.11.02"
+        (old / ".claude-plugin").mkdir(parents=True)
+        (old / ".claude-plugin" / "plugin.json").write_text("{}")
+        (old / "skills" / "other").mkdir(parents=True)
+        (old / "skills" / "other" / "SKILL.md").write_text("---\nname: other\n---\n")
+        pid = "agent-stack-vendor@agent-stack-vendor-local"
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {pid: True}}))
+        (self.home / ".claude" / "plugins" / "installed_plugins.json").write_text(json.dumps(
+            {"version": 2, "plugins": {pid: [{"scope": "user", "installPath": str(old)}]}}))
+        self.assertNotIn("cài lại", self.run_install("--only", "catalog"))  # xem trước: vendor/ chưa chép, không so
+        out = self.run_install("--apply", "--only", "catalog")
+        self.assertIn(f"{pid}: bản đã cài khác bản đã duyệt, cài lại", out)
+        self.assertEqual([c for c in self.calls_made() if pid in c][-2:],
+                         [f"plugin uninstall {pid} --scope user", f"plugin install {pid} --scope user"])
+        # Cache đã khớp vendor/ (chỉ khác version ngày trong plugin.json): lần sau không cài lại.
+        shutil.rmtree(old)
+        shutil.copytree(self.stack / "vendor", old)
+        (old / ".claude-plugin" / "plugin.json").write_text('{"name": "agent-stack-vendor", "version": "2000.01.01"}\n')
+        before = len(self.calls_made())
+        self.assertNotIn("cài lại", self.run_install("--apply", "--only", "catalog"))
+        self.assertFalse(any("uninstall" in c for c in self.calls_made()[before:]))
+
     def approved_patch(self, body=None, rel="patches/dr/fix.patch", files=None):
         """Ghi một bản vá cho README.md của fixture vendor_plugin_fixture và duyệt nó trong lock."""
         import hashlib

@@ -646,9 +646,16 @@ class Installer:
             pid = f"{name}@{VENDOR_MARKETPLACE}"
             self.run([self.claude_bin, "plugin", "install", pid, "--scope", "user"],
                      undo=[self.claude_bin, "plugin", "uninstall", pid, "--scope", "user"], ok_if="already")
-            # Xem trước thì chưa có bản đã vá để so, nên plugin có bản vá chỉ được so khi chạy thật.
-            if name != VENDOR_PLUGIN and (self.apply or not patch_lists.get(name)) and self.stale_install(
-                    pid, vendor_root / "plugins" / name if self.apply else next(src for n, src, _ in plugins if n == name)):
+            # Xem trước thì chưa có bản đã vá để so, nên plugin có bản vá chỉ được so khi chạy thật. Plugin gom skill
+            # (VENDOR_PLUGIN, nguồn là cả vendor/) cũng chỉ so khi chạy thật, vì lúc xem trước vendor/ chưa chép lại:
+            # thiếu bước này thì skill vendor mới duyệt không bao giờ vào bản cache đã cài (gặp 06/11/2026, kaggle-cli).
+            if name == VENDOR_PLUGIN:
+                stale = self.apply and self.stale_install(pid, vendor_root,
+                                                          ignore={".claude-plugin/plugin.json"})  # version là ngày chép
+            else:
+                stale = (self.apply or not patch_lists.get(name)) and self.stale_install(
+                    pid, vendor_root / "plugins" / name if self.apply else next(src for n, src, _ in plugins if n == name))
+            if stale:
                 # `claude plugin update` báo "đã là bản mới nhất" khi version không đổi (đã thử 09/10/2026), nên sau
                 # khi vet lại ở commit mới phải gỡ rồi cài lại để bản trong cache khớp bản đã duyệt.
                 self.say(f"  ~ {pid}: bản đã cài khác bản đã duyệt, cài lại")
@@ -661,11 +668,15 @@ class Installer:
                 self.say(f"  · {scope}: {name} đã ghim trong vendor/; trong project cần dùng: "
                          f"claude plugin install {name}@{VENDOR_MARKETPLACE} --scope project")
 
-    def stale_install(self, pid: str, expected: Path) -> bool:
-        """Bản cài của pid (installPath trong installed_plugins.json) khác nội dung expected. Không đọc được thì False."""
+    def stale_install(self, pid: str, expected: Path, ignore: set = frozenset()) -> bool:
+        """Bản cài của pid (installPath trong installed_plugins.json) khác nội dung expected, không tính các đường dẫn
+        tương đối trong `ignore`. Không đọc được thì False."""
         entries = (read_json_file(self.claude_dir / "plugins" / "installed_plugins.json").get("plugins") or {}).get(pid) or []
         paths = [Path(e["installPath"]) for e in entries if isinstance(e, dict) and e.get("installPath")]
-        return any(path.is_dir() and expected.is_dir() and tree_digests(path) != tree_digests(expected) for path in paths)
+
+        def digests(root: Path) -> dict:
+            return {rel: h for rel, h in tree_digests(root).items() if rel not in ignore}
+        return any(path.is_dir() and expected.is_dir() and digests(path) != digests(expected) for path in paths)
 
     def step_tools(self) -> None:
         """Công cụ dòng lệnh cho các mục đã duyệt (khóa "brew" của mục trong catalog.json), kể cả mục scope project:
