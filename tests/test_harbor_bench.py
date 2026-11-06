@@ -198,8 +198,11 @@ class ConfigTests(Base):
         self.assertEqual(cfg["datasets"][1]["task_names"], ["viec-a", "viec-b"])
 
     def test_pilot_refuses_while_the_swerebench_list_is_still_empty(self):
+        # danh sách chỉ có phần đầu giải thích, như trước khi `tuf.sh pick` chạy (file thật của repo nay đã có 25 việc)
+        empty = self.tmp / "tasks-swerebench-empty.txt"
+        empty.write_text("# 25 việc SWE-rebench: chưa chọn, chạy tuf.sh pick\n", encoding="utf-8")
         r = run_script(SCRIPT, "make-configs", "--kind", "pilot", "--name", "pilot", "--swerebench",
-                       str(HARBOR / "tasks-swerebench.txt"), "--out", str(self.tmp / "p.json"))
+                       str(empty), "--out", str(self.tmp / "p.json"))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("không có tên việc nào", r.stderr)
 
