@@ -1,6 +1,29 @@
-# 25 việc SWE-rebench (swe-rebench/swe-rebench-leaderboard) cho pilot: CHƯA CHỌN.
-# Chọn trên TUF, vì tháng của từng việc nằm trong tests/config.json của chính việc đó (created_at) và bộ việc chưa tải về máy này:
-#   evals/harbor/tuf.sh setup && evals/harbor/tuf.sh sync && evals/harbor/tuf.sh data && evals/harbor/tuf.sh pick
-# `pick` (harbor_bench.py pick-swerebench) lấy tháng mới nhất có ít nhất 25 việc sạch theo created_at, bỏ việc vi phạm kiểm an
-# toàn, rồi rút bằng random.Random(20261106).sample(danh sách đã sắp, 25) và ghi đè file này kèm mã băm bộ việc và đếm theo tháng.
-# Commit file đã chọn rồi chạy `tuf.sh sync`. Mỗi dòng dưới đây là một tên việc (instance_id).
+# 25 việc SWE-rebench (swe-rebench/swe-rebench-leaderboard), chọn ngày 06/11/2026.
+# Cách chọn: tháng mới nhất có ít nhất 25 việc sạch theo created_at trong tests/config.json là 2026-04 (17 tháng có việc; 6 tháng gần nhất: 2025-12: 48, 2026-01: 48, 2026-02: 57, 2026-03: 46, 2026-04: 43, 2026-05: 21).
+# Việc vi phạm kiểm an toàn (vet) bị bỏ trước. Rút bằng random.Random(20261106).sample(danh sách đã sắp, 25), in theo thứ tự chữ cái.
+# Mã băm nội dung bộ việc: eef4d6b15b2ce3a42479635a3337d59c22b98d654f54012b7208676fa2b1f539
+agentscope-ai__qwenpaw-3278
+agronholm__anyio-1121
+apache__iceberg-python-3295
+astronomy-commons__lsdb-1349
+azure-samples__azure-search-openai-demo-3025
+beever-ai__beever-atlas-102
+celestoai__smolvm-172
+copier-org__copier-2646
+cpp-linter__cpp-linter-hooks-206_interface
+databricks__dbt-databricks-1428
+keras-team__keras-22642
+koxudaxi__datamodel-code-generator-3070
+koxudaxi__datamodel-code-generator-3071
+line__line-bot-sdk-python-981_interface
+meltano__meltano-9950
+mempalace__mempalace-1004
+microsoft__qcodes-8039
+pennylaneai__pennylane-9298
+pyinfra-dev__pyinfra-1679_interface
+pypsa__pypsa-1653
+reframe-hpc__reframe-3660_interface
+tobymao__sqlglot-7457
+ultraplot__ultraplot-696
+unit8co__darts-3065
+vprusso__toqito-1538
