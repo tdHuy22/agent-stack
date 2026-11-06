@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Chạy job GPU trên Kaggle từ máy, có chốt chặn trước khi gửi gì ra ngoài (threat model TM-65 đến TM-69).
 
-Bọc Kaggle CLI (`kaggle`, cài bằng `uv tool install 'kaggle==2.2.5' --with six`). Kaggle CLI in lỗi push mà vẫn thoát 0,
+Bọc Kaggle CLI (`kaggle`, cài bằng `install.sh --apply --only tools` của agent-stack: `uv tool install 'kaggle==2.2.5' --with six`). Kaggle CLI in lỗi push mà vẫn thoát 0,
 nên script đọc chữ nó in ra thay vì tin mã thoát.
 
 Lệnh:
@@ -144,7 +144,9 @@ class KaggleError(Exception):
 def kaggle_bin() -> str:
     found = os.environ.get("KAGGLE_BIN") or shutil.which("kaggle")
     if not found:
-        raise NotReady("chưa có Kaggle CLI. Cài: uv tool install 'kaggle==2.2.5' --with six")
+        raise NotReady("chưa có Kaggle CLI. Cài (cần người dùng duyệt, được ghi lại để gỡ): "
+                       "~/Documents/Claude/agent-stack/install.sh --apply --only tools; "
+                       "máy không có agent-stack thì: uv tool install 'kaggle==2.2.5' --with six")
     return found
 
 

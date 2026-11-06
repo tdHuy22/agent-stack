@@ -527,6 +527,52 @@ class InstallTests(TempDirTestCase):
         self.run_install("--rollback", "--apply", extra_env=env)
         self.assertEqual(brew_log.read_text().splitlines()[-1], "uninstall cong-cu-xyz-chua-co")
 
+    def test_tools_step_installs_pinned_uv_tools_and_rolls_back(self):
+        uv_log = self.tmp / "uv.log"
+        uv = self.tmp / "fake-uv"
+        listed = self.tmp / "uv-list.txt"  # `uv tool list` giả in nội dung file này
+        listed.write_text("")
+        uv.write_text(f"#!/bin/sh\nif [ \"$1 $2\" = \"tool list\" ]; then cat {listed}; exit 0; fi\n"
+                      f"echo \"$@\" >> {uv_log}\n")
+        uv.chmod(0o755)
+        self.lock["entries"] = {"a/b": {"verdict": "PASS", "sha": "1", "report": "vet-reports/a__b@1.md",
+                                        "human_review": {"status": "approved"}},
+                                "c/d": {"verdict": "PASS", "sha": "2", "report": "vet-reports/c__d@2.md",
+                                        "human_review": {"status": "pending"}}}
+        self.catalog["items"] = [
+            {"key": "a/b", "kind": "vendor-skill", "scope": "user", "install": {"name": "b"},
+             "uv_tool": [{"bin": "cong-cu-uv-xyz", "spec": "cong-cu-uv-xyz==1.2.3", "with": ["six"]},
+                         {"bin": "khong-ghim", "spec": "khong-ghim"},
+                         {"bin": "co-co", "spec": "--index-url=http://x==1"}]},
+            {"key": "c/d", "kind": "vendor-skill", "scope": "user", "install": {"name": "d"},
+             "uv_tool": [{"bin": "cong-cu-cho-duyet", "spec": "cong-cu-cho-duyet==1.0"}]}]
+        self.save()
+        env = {"AGENT_STACK_UV_BIN": str(uv), "AGENT_STACK_BREW_BIN": str(self.tmp / "khong-co-brew")}
+        out = self.run_install("--only", "tools", extra_env=env, expect=2)
+        self.assertIn(f"$ {uv} tool install cong-cu-uv-xyz==1.2.3 --with six", out)
+        self.assertIn("spec phải là tên==phiên-bản", out)  # không ghim, hay giả làm cờ: bỏ qua
+        self.assertFalse(uv_log.exists(), "xem trước không chạy gì")
+        self.run_install("--apply", "--only", "tools", extra_env=env, expect=2)
+        self.assertEqual(uv_log.read_text().splitlines(), ["tool install cong-cu-uv-xyz==1.2.3 --with six"],
+                         "chỉ mục đã duyệt, đúng dạng được cài")
+        manifest = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        self.assertIn("`fake-uv tool uninstall cong-cu-uv-xyz`", manifest)
+        self.run_install("--rollback", "--apply", extra_env=env)
+        self.assertEqual(uv_log.read_text().splitlines()[-1], "tool uninstall cong-cu-uv-xyz")
+        # Người dùng đã tự cài bằng uv (bin của uv ngoài PATH nên which không thấy): không cài đè, không ghi lệnh gỡ.
+        listed.write_text("cong-cu-uv-xyz v1.0.0\n- cong-cu-uv-xyz\nkhac v2\n")
+        before = uv_log.read_text().splitlines()
+        out = self.run_install("--apply", "--only", "tools", extra_env=env, expect=2)
+        self.assertIn("cong-cu-uv-xyz đã có (uv tool list có cong-cu-uv-xyz)", out)
+        self.assertEqual(uv_log.read_text().splitlines(), before)
+        listed.write_text("Cong_Cu.Uv-XYZ v1.0.0\n")  # tên chuẩn hóa khác cách viết vẫn là cùng gói
+        self.assertIn("đã có (uv tool list", self.run_install("--apply", "--only", "tools", extra_env=env, expect=2))
+        # uv tool list lỗi: không cài đè, báo bỏ qua
+        uv.write_text(f"#!/bin/sh\nif [ \"$1 $2\" = \"tool list\" ]; then exit 3; fi\necho \"$@\" >> {uv_log}\n")
+        out = self.run_install("--apply", "--only", "tools", extra_env=env, expect=2)
+        self.assertIn("không hỏi được `uv tool list`", out)
+        self.assertEqual(uv_log.read_text().splitlines(), before)
+
     def test_failed_command_is_reported_and_exits_1(self):
         out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})
         self.assertIn("0 mục bị bỏ qua, 3 lỗi", out)  # marketplace add, plugin install và plugin update đều lỗi

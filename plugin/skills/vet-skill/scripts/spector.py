@@ -63,6 +63,19 @@ def binary(home: Path) -> Path:
     return home / VENV / "bin" / "skillspector"
 
 
+def shebang(script: Path):
+    """Đường dẫn trình thông dịch ở dòng #! của script (đi theo symlink khi kiểm exists), hay None."""
+    try:
+        with open(script, "rb") as fh:
+            first = fh.readline(4096)
+    except OSError:
+        return None
+    if not first.startswith(b"#!"):
+        return None
+    parts = first[2:].decode("utf-8", "replace").split()
+    return Path(parts[0]) if parts else None
+
+
 def status(home: Path):
     """(sẵn sàng?, lý do). Chỉ chạy bản đã cài từ đúng commit đang được duyệt."""
     entry = lock_entry(home)
@@ -70,6 +83,12 @@ def status(home: Path):
         return False, "SkillSpector chưa được duyệt trong vetted.lock"
     if not binary(home).exists():
         return False, "chưa cài: chạy `vet.py spector --setup`"
+    # Script của venv chạy bằng trình thông dịch ghi ở dòng #!; Python do uv cài nằm trong .cache/ (bị dọn được), xóa
+    # đi thì mọi lần quét lỗi FileNotFoundError mà file skillspector vẫn còn (gặp 06/11/2026).
+    interpreter = shebang(binary(home))
+    if interpreter is not None and not interpreter.exists():
+        return False, ("venv hỏng: trình thông dịch của skillspector không còn (Python trong .cache/ bị xóa?): "
+                       "chạy lại `vet.py spector --setup`")
     try:
         installed = (home / VENV / ".vetted-sha").read_text(encoding="utf-8").strip()
     except OSError:

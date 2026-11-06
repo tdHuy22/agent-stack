@@ -16,7 +16,8 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh. MCP từ xa
               (kind mcp-remote): `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt và định
               nghĩa tool lấy lại ngay trước khi cài còn khớp hash đã duyệt
-  tools       công cụ dòng lệnh mà mục đã duyệt cần (khóa "brew" trong catalog.json), cài bằng Homebrew
+  tools       công cụ dòng lệnh mà mục đã duyệt cần: khóa "brew" trong catalog.json cài bằng Homebrew, khóa
+              "uv_tool" (công cụ Python, phiên bản ghim) cài bằng `uv tool install`, gỡ bằng `uv tool uninstall`
 
 Mã thoát: 0 = cài đủ; 1 = có bước lỗi; 2 = không lỗi nhưng có mục bị bỏ qua (cài chưa đủ).
 Cài một phần không phải là thành công: phần tổng kết cuối luôn liệt kê mục bị bỏ qua và mục lỗi.
@@ -123,6 +124,40 @@ def tree_digests(root: Path) -> dict:
         if path.is_file() and not any(part in DIGEST_IGNORED for part in rel.parts):
             out[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return out
+
+
+UV_SPEC_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,60}==[0-9][0-9A-Za-z.+!-]{0,30}")
+UV_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,60}")
+
+
+def uv_tool_problem(tool) -> str | None:
+    """Lý do một mục uv_tool của catalog.json sai dạng, hoặc None. Dạng đúng: {"bin": "kaggle", "spec":
+    "kaggle==2.2.5", "with": ["six"]}; phiên bản phải ghim bằng ==, tên không bắt đầu bằng '-' (không thành cờ)."""
+    if not isinstance(tool, dict):
+        return "không phải object"
+    if not (isinstance(tool.get("bin"), str) and UV_NAME_RE.fullmatch(tool["bin"])):
+        return "bin sai dạng"
+    if not (isinstance(tool.get("spec"), str) and UV_SPEC_RE.fullmatch(tool["spec"])):
+        return "spec phải là tên==phiên-bản"
+    deps = tool.get("with") or []
+    if not (isinstance(deps, list) and all(isinstance(d, str) and UV_NAME_RE.fullmatch(d) for d in deps)):
+        return "with phải là danh sách tên gói"
+    return None
+
+
+def uv_tool_installed(uv: str, package: str) -> bool | None:
+    """`uv tool list` có gói này không (dòng đầu mỗi mục: `<tên> v<bản>`, tên đã chuẩn hóa kiểu PEP 503). Không hỏi
+    được uv thì None: bên gọi bỏ qua thay vì cài đè rồi ghi lệnh gỡ."""
+    def norm(name: str) -> str:
+        return re.sub(r"[-_.]+", "-", name).lower()
+    try:
+        done = subprocess.run([uv, "tool", "list"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return any(norm(line.split()[0]) == norm(package) for line in done.stdout.splitlines()
+               if line.strip() and not line[0].isspace() and not line.startswith("-"))
 
 
 def patches_format_problem(patches) -> str | None:
@@ -684,15 +719,45 @@ class Installer:
         self.say("[tools] công cụ dòng lệnh cho các mục đã duyệt")
         catalog = json.loads((HOME_STACK / "catalog.json").read_text(encoding="utf-8"))
         approved = self.approved()
-        wanted = {}
+        wanted, uv_wanted = {}, {}
         for item in catalog["items"]:
             entry = approved.get(item["key"])
             if entry and entry.get("verdict") != "FAIL":
                 for name in item.get("brew") or []:
                     wanted.setdefault(name, item["key"])
-        if not wanted:
+                for tool in item.get("uv_tool") or []:
+                    problem = uv_tool_problem(tool)
+                    if problem:
+                        self.say(f"  ! bỏ qua uv_tool của {item['key']}: {problem}")
+                        self.skipped.append(f"uv_tool của {item['key']}: {problem}")
+                    else:
+                        uv_wanted.setdefault(tool["bin"], (tool, item["key"]))
+        if not wanted and not uv_wanted:
             self.say("  = không mục nào cần công cụ ngoài")
             return
+        # Công cụ Python (khóa "uv_tool"): `uv tool install` đúng phiên bản ghim, gỡ bằng `uv tool uninstall`.
+        uv = os.environ.get("AGENT_STACK_UV_BIN") or shutil.which("uv")
+        for name, (tool, key) in uv_wanted.items():
+            if shutil.which(name):
+                self.say(f"  = {name} đã có ({shutil.which(name)})")
+                continue
+            if not uv:
+                self.say(f"  ! không có uv nên không cài được {name} (cho {key})")
+                self.skipped.append(f"{name}: cần uv")
+                continue
+            package = tool["spec"].split("==")[0]
+            # Đã cài bằng uv mà thư mục bin của uv không nằm trong PATH: which không thấy, nhưng cài đè rồi ghi lệnh
+            # gỡ thì --rollback sẽ gỡ cả bản người dùng tự cài. Hỏi uv trước.
+            listed = uv_tool_installed(uv, package)
+            if listed is None:
+                self.say(f"  ! không hỏi được `uv tool list` nên không cài {name} (cho {key}): tránh cài đè bản đã có")
+                self.skipped.append(f"{name}: không hỏi được uv tool list")
+                continue
+            if listed:
+                self.say(f"  = {name} đã có (uv tool list có {package})")
+                continue
+            extra = [arg for dep in tool.get("with") or [] for arg in ("--with", dep)]
+            self.run([uv, "tool", "install", tool["spec"], *extra], undo=[uv, "tool", "uninstall", package])
         brew = os.environ.get("AGENT_STACK_BREW_BIN") or shutil.which("brew")
         for name, key in wanted.items():
             if shutil.which(name):

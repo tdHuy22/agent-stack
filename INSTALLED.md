@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 15:38 06/11/2026 từ commit `a88dad8` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 16:20 06/11/2026 từ commit `dd6c3da` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -598,6 +598,17 @@
 |---:|---|---|---|---|
 | 1 | lệnh claude | `claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user` |  | `claude plugin install agent-stack-vendor@agent-stack-vendor-local --scope user` |
 | 2 | lệnh claude | `claude plugin install agent-stack-vendor@agent-stack-vendor-local --scope user` |  | `claude plugin uninstall agent-stack-vendor@agent-stack-vendor-local --scope user` |
+
+## Lần cài 16:20 06/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261106-162006.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261106-162006`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: tools
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh uv | `uv tool install kaggle==2.2.5 --with six` |  | `uv tool uninstall kaggle` |
 
 ## Gỡ toàn bộ
 

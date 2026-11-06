@@ -69,6 +69,23 @@ class SpectorTests(TempDirTestCase):
         self.assertEqual(spector.run(self.home, self.skill_tree(), [], local=True)["status"],
                          "SkillSpector chưa được duyệt trong vetted.lock")
 
+    def test_venv_with_deleted_interpreter_is_not_ready(self):
+        """Python của venv do uv cài trong .cache/ bị xóa: file skillspector còn nhưng mọi lần quét lỗi
+        FileNotFoundError (gặp 06/11/2026). status phải báo hỏng và chỉ cách cài lại, run không gọi lệnh nào."""
+        self.install_fake()
+        exe = spector.binary(self.home)
+        python = self.home / spector.VENV / "bin" / "python"
+        python.symlink_to(self.tmp / "da-xoa" / "python3.12")  # symlink treo, như sau khi .cache/uv-python bị xóa
+        exe.write_text(f"#!{python}\nprint('không bao giờ chạy tới')\n")
+        ready, why = spector.status(self.home)
+        self.assertFalse(ready)
+        self.assertIn("venv hỏng", why)
+        self.assertIn("vet.py spector --setup", why)
+        calls = []
+        self.assertIn("venv hỏng", spector.run(self.home, self.skill_tree(), [], local=True,
+                                               runner=lambda *a, **k: calls.append(a))["status"])
+        self.assertEqual(calls, [])
+
     def test_scan_runs_without_llm_secrets_or_user_config_and_blocks_network_for_local_targets(self):
         self.install_fake()
         root = self.skill_tree()

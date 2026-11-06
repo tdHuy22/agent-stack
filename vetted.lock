@@ -13,7 +13,7 @@
       ],
       "pushed_at": "2026-11-04",
       "redflags": {},
-      "ref": "main",
+      "ref": "fdc788faffe3f29ae317480325c44080a00a5434",
       "report": "vet-reports/Kaggle__kaggle-cli__skills@fdc788faffe3.md",
       "reviews": [],
       "scanner": {
@@ -26,14 +26,18 @@
       "sha": "fdc788faffe3f29ae317480325c44080a00a5434",
       "source": "github:Kaggle/kaggle-cli",
       "spector": {
-        "score": null,
-        "status": "lỗi: skills: FileNotFoundError",
-        "version": null
+        "counts": {
+          "high": 20,
+          "medium": 10
+        },
+        "score": 91,
+        "status": "ok",
+        "version": "2.12.0"
       },
       "stars": 7645,
       "subpath": "skills",
       "tool": "vet.py/1",
-      "verdict": "PASS",
+      "verdict": "REVIEW",
       "vetted_at": "2026-11-06"
     },
     "NVIDIA/SkillSpector": {
