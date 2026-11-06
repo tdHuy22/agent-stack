@@ -2,6 +2,8 @@
 
 Mục đích: chọn cấu hình model và effort **rẻ nhất mà vẫn giữ chất lượng**, bằng số liệu trên việc giống việc thật của bạn, thay vì đoán.
 
+Muốn biết bật agent-stack có làm Claude Code tốt hơn hay chỉ đắt hơn (4 cấu hình: trơn, đủ agent-stack, bỏ hook, bỏ subagent; trên bộ việc TBLite và SWE-rebench chạy trong Docker ở máy Linux TUF), xem [`harbor/README.md`](harbor/README.md).
+
 | Nhóm | Việc | Cách chấm |
 |---|---|---|
 | Coding | `code-off-by-one`, `code-add-flag`, `code-refactor-dup`, `code-duration` (khó) | Chạy test, kể cả test ẩn; chặn việc sửa file test |

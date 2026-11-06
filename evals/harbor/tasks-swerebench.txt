@@ -1,0 +1,6 @@
+# 25 việc SWE-rebench (swe-rebench/swe-rebench-leaderboard) cho pilot: CHƯA CHỌN.
+# Chọn trên TUF, vì tháng của từng việc nằm trong tests/config.json của chính việc đó (created_at) và bộ việc chưa tải về máy này:
+#   evals/harbor/tuf.sh setup && evals/harbor/tuf.sh sync && evals/harbor/tuf.sh data && evals/harbor/tuf.sh pick
+# `pick` (harbor_bench.py pick-swerebench) lấy tháng mới nhất có ít nhất 25 việc sạch theo created_at, bỏ việc vi phạm kiểm an
+# toàn, rồi rút bằng random.Random(20261106).sample(danh sách đã sắp, 25) và ghi đè file này kèm mã băm bộ việc và đếm theo tháng.
+# Commit file đã chọn rồi chạy `tuf.sh sync`. Mỗi dòng dưới đây là một tên việc (instance_id).
