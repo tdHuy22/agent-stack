@@ -2,6 +2,15 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 06/11/2026 11:48
+
+### Từ §0 của `PLAN.md`: Xong
+
+1. Tin "Push" hay "Đồng ý, push", chưa từng bị chặn → `git push` qua ngay; lệnh push thứ hai trong cùng tin → chặn. Tương tự `reset`, `clean`, `amend`, `rebase`.
+2. "đừng push", "push chưa?", "có nên push không", chữ push chỉ nằm trong phần dán (pasted) hay khối code → vẫn chặn.
+3. `rm -r backups/old`: tin "xóa backups/old" → qua; "xóa đi" (không nêu đích) → chặn.
+4. Bộ test, `plugin validate`, `plugin test` đạt (biên nhận).
+
 ## Đợt 05/11/2026 11:46
 
 ### Từ §0 của `PLAN.md`: Xong

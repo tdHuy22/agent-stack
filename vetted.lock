@@ -1,5 +1,41 @@
 {
   "entries": {
+    "Kaggle/kaggle-cli:skills": {
+      "archived": false,
+      "human_review": {
+        "at": "2026-11-06T08:34:01Z",
+        "note": "Chỉ có tài liệu .md, không hook, MCP hay script; đã đọc tay",
+        "status": "approved"
+      },
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE.txt: Apache-2.0"
+      ],
+      "pushed_at": "2026-11-04",
+      "redflags": {},
+      "ref": "main",
+      "report": "vet-reports/Kaggle__kaggle-cli__skills@fdc788faffe3.md",
+      "reviews": [],
+      "scanner": {
+        "counts": {
+          "info": 1
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "fdc788faffe3f29ae317480325c44080a00a5434",
+      "source": "github:Kaggle/kaggle-cli",
+      "spector": {
+        "score": null,
+        "status": "lỗi: skills: FileNotFoundError",
+        "version": null
+      },
+      "stars": 7645,
+      "subpath": "skills",
+      "tool": "vet.py/1",
+      "verdict": "PASS",
+      "vetted_at": "2026-11-06"
+    },
     "NVIDIA/SkillSpector": {
       "archived": false,
       "human_review": {

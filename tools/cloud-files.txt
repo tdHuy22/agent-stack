@@ -59,6 +59,8 @@ plugin/lib/agentstack.py
 plugin/skills/done-gate/SKILL.md
 plugin/skills/done-gate/scripts/review_log.py
 plugin/skills/done-gate/scripts/risk.py
+plugin/skills/kaggle-gpu/SKILL.md
+plugin/skills/kaggle-gpu/scripts/kaggle_job.py
 plugin/skills/progress/SKILL.md
 plugin/skills/progress/scripts/collect.py
 plugin/skills/progress/scripts/plan_tree.py
