@@ -481,16 +481,22 @@ def dataset_entries(spec: dict) -> list:
     return out
 
 
+# Nới hạn giờ cài agent và dựng môi trường, như nhau cho mọi cấu hình; không đụng thời gian agent làm bài. Ca 06/11/2026
+# trên tuf: apt cài nodejs/npm vượt 360 giây ở 1/4 lượt thử, và 4/123 lượt oracle quá giờ dựng môi trường.
+SLOW_SETUP = {"agent_setup_timeout_multiplier": 3.0, "environment_build_timeout_multiplier": 2.0}
+
+
 def make_config(spec: dict, name: str, attempts: int, opts: dict, arms) -> dict:
     """Mọi cấu hình nằm chung một job để Harbor xen kẽ lượt chạy, tránh lệch theo giờ trong ngày."""
     return {"job_name": name, "jobs_dir": "jobs", "n_attempts": attempts, "n_concurrent_trials": opts["concurrent"],
-            "retry": {"max_retries": 0}, "environment": {"delete": True},
+            "retry": {"max_retries": 0}, "environment": {"delete": True}, **SLOW_SETUP,
             "datasets": dataset_entries(spec), "agents": [agent_config(a, opts) for a in arms]}
 
 
 def make_oracle_config(spec: dict, name: str, opts: dict) -> dict:
     return {"job_name": name, "jobs_dir": "jobs", "n_attempts": 1, "n_concurrent_trials": opts["concurrent"],
-            "environment": {"delete": True}, "datasets": dataset_entries(spec), "agents": [{"name": "oracle"}]}
+            "environment": {"delete": True}, **SLOW_SETUP,
+            "datasets": dataset_entries(spec), "agents": [{"name": "oracle"}]}
 
 
 def cmd_make_configs(args) -> int:

@@ -186,6 +186,10 @@ class ConfigTests(Base):
         self.assertNotIn("sk-ant", text)
         self.assertNotRegex(text, r"OAUTH_TOKEN")   # chỉ CLAUDE_FORCE_OAUTH, không có tên biến chứa khóa
         self.assertEqual(cfg["retry"]["max_retries"], 0)
+        # cài agent và dựng môi trường được nới hạn giờ, như nhau cho mọi cấu hình (ca 06/11/2026 trên tuf)
+        self.assertEqual(cfg["agent_setup_timeout_multiplier"], 3.0)
+        self.assertEqual(cfg["environment_build_timeout_multiplier"], 2.0)
+        self.assertNotIn("agent_timeout_multiplier", cfg)
 
     def test_pilot_runs_only_the_plain_arm_on_all_tblite_and_the_swerebench_list(self):
         cfg = self.make("pilot", swerebench=self.tasks_file())

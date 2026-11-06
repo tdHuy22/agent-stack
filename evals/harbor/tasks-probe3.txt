@@ -1,0 +1,2 @@
+# Lượt thử: 1 việc dễ của TBLite (có python3) × 4 cấu hình × 1 lần, để xác nhận mỗi cấu hình nạp đúng phần của nó.
+tblite:jsonl-aggregator

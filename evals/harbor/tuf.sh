@@ -157,8 +157,9 @@ rm -rf jobs/$job.payload && cp -R agent-stack/payload jobs/$job.payload
 $HB meta configs/$job.json --out jobs/$job.meta.json --payload jobs/$job.payload --root .
 rm -f jobs/$job.pid jobs/$job.watch.pid
 AGENT_STACK_PAYLOAD="\$PWD/jobs/$job.payload" PYTHONPATH="\$PWD/agent-stack" nohup setsid sh -c 'echo \$\$ > jobs/$job.pid; exec sh agent-stack/run_harbor.sh configs/$job.json $mode' > jobs/$job.log 2>&1 < /dev/null &
-sleep 2
-hpid=\$(cat jobs/$job.pid 2>/dev/null || true)
+# chờ file pid tới 20 giây (lần 06/11 chờ cứng 2 giây thì file chưa kịp có, job bị coi là chết và dừng oan)
+i=0; hpid=""
+while [ \$i -lt 20 ] && [ -z "\$hpid" ]; do sleep 1; i=\$((i+1)); hpid=\$(cat jobs/$job.pid 2>/dev/null || true); done
 nohup setsid $PY agent-stack/harbor_bench.py watch jobs/$job --pid "\$hpid" --interval $WATCH_INTERVAL > jobs/$job.watch.log 2>&1 < /dev/null &
 wpid=\$!
 echo "\$wpid" > jobs/$job.watch.pid
