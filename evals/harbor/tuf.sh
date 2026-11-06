@@ -124,9 +124,10 @@ prepare_job() {
     echo "jobs/$job đã có trên TUF. Xoá nó (cùng jobs/$job.payload, .meta.json, .log, .pid), hay đổi TÊN." >&2; exit 1
   fi
   case "$kind" in
-    # run <TÊN> dùng tasks-<TÊN>.txt nếu có (ví dụ tasks-probe.txt cho lượt thử nhỏ), không thì tasks-main.txt
+    # run <TÊN> dùng đúng tasks-<TÊN>.txt (run main: tasks-main.txt; run probe: tasks-probe.txt). Không rơi về
+    # tasks-main.txt khi thiếu file: lượt thử nhỏ mà lặng lẽ thành job lớn thì tốn hạn mức.
     main) list="agent-stack/tasks-$job.txt"
-      remote "test -f $list" 2>/dev/null || list="agent-stack/tasks-main.txt"
+      remote "test -f $list" 2>/dev/null || { echo "Chưa có $(basename "$list") trên TUF: tạo evals/harbor/$(basename "$list"), commit rồi tuf.sh sync." >&2; exit 1; }
       tasks_arg="--tasks $list"
       remote "grep -qv '^#' $list" 2>/dev/null || { echo "Chưa có $(basename "$list"): chạy tuf.sh select rồi sync." >&2; exit 1; } ;;
     *) tasks_arg=""

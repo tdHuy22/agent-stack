@@ -1249,6 +1249,14 @@ class TufBehaviourTests(TempDirTestCase):
         cfg = json.loads((self.rd / "configs" / "main.json").read_text())
         self.assertEqual(sorted(n for d in cfg["datasets"] for n in d.get("task_names", [])), ["swe-a", "t1"])
 
+    def test_run_with_a_missing_task_list_refuses_instead_of_falling_back_to_main(self):
+        """Ca 06/11/2026: sync bị từ chối nên tasks-probe.txt chưa lên TUF, run probe lặng lẽ thành 388 lượt của main."""
+        r = self.tuf("run", "probe", "--yes", "--force")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("Chưa có tasks-probe.txt", r.stderr)
+        self.assertFalse((self.rd / "configs" / "probe.json").exists())
+        self.assertFalse(self.args_file().exists())
+
     def test_oracle_never_loads_env_and_pilot_does(self):
         self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\nOTHER_KEY=hunter2value\n")      # oracle không đọc .env nên không bị chặn
         r = self.tuf("oracle", "--yes", "--force")
