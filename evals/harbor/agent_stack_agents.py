@@ -42,6 +42,15 @@ class _Probed(ClaudeCode):
 
     VARIANT = "plain"
 
+    async def install(self, environment) -> None:
+        # Ca 06/11/2026 trên tuf: apt trong container qua mạng bridge của Docker chỉ ~49 kB/s và báo "package cache
+        # file is corrupted, it has the wrong hash"; tắt HTTP pipelining thì 6,6 MB/s. Harbor cài Claude Code bằng
+        # apt-get, nên tắt pipelining trước, như nhau cho cả bốn cấu hình. Image không có apt thì bỏ qua.
+        await self.exec_as_root(environment, command=(
+            'if [ -d /etc/apt/apt.conf.d ]; then '
+            'printf \'Acquire::http::Pipeline-Depth "0";\\n\' > /etc/apt/apt.conf.d/99agent-stack-no-pipelining; fi'))
+        await super().install(environment)
+
     async def _write_env_file(self, environment) -> None:
         out = shlex.quote((self.environment_logs_dir / ENV_FILE).as_posix())
         root = f'"$HOME/{HOME_REL}"'

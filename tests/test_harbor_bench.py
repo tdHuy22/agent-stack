@@ -10,9 +10,11 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import unittest
 import unittest.mock
 import warnings
+from pathlib import Path
 
 from tests._util import PLUGIN, REPO, TempDirTestCase, run_script
 
@@ -1436,6 +1438,26 @@ class AgentFileTests(unittest.TestCase):
         self.assertIn("CLAUDE.global.md", stack)
         for sub in ("ClaudeCodeAgentStackNoHooks", "ClaudeCodeAgentStackNoAgents"):
             self.assertEqual(self.classes[sub].bases[0].id, "ClaudeCodeAgentStack")
+
+    def test_every_arm_turns_off_apt_pipelining_before_installing_claude_code(self):
+        """Ca 06/11/2026: apt trong container chậm 49 kB/s và hỏng hash khi pipelining; tắt nó cho cả bốn cấu hình."""
+        probed = self.classes["_Probed"]
+        install = next(n for n in probed.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "install")
+        calls = [n for n in ast.walk(install) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") in
+                 ("exec_as_root", "install")]
+        self.assertEqual([c.func.attr for c in calls], ["exec_as_root", "install"])   # tắt trước, rồi mới cài
+        cmd = ast.literal_eval(next(k.value for k in calls[0].keywords if k.arg == "command"))
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "apt.conf.d"
+            conf.mkdir()
+            r = subprocess.run(["sh", "-c", cmd.replace("/etc/apt/apt.conf.d", str(conf))], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((conf / "99agent-stack-no-pipelining").read_text(), 'Acquire::http::Pipeline-Depth "0";\n')
+            r = subprocess.run(["sh", "-c", cmd.replace("/etc/apt/apt.conf.d", str(Path(tmp) / "khong-co"))])
+            self.assertEqual(r.returncode, 0)                                          # image không có apt: bỏ qua
+        bases = {name: [b.id for b in c.bases] for name, c in self.classes.items()}
+        self.assertEqual(bases["ClaudeCodePlain"], ["_Probed"])
+        self.assertEqual(bases["ClaudeCodeAgentStack"], ["_Probed"])
 
     def test_uses_only_harbor_api_verified_at_v0_25_0(self):
         for needle in ("exec_as_agent", "exec_as_root", "environment_logs_dir", "upload_dir", "build_cli_flags",
