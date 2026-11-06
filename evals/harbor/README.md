@@ -26,24 +26,25 @@ Cùng model `anthropic/claude-sonnet-5-5`, effort `medium`, cùng phiên bản C
 
 | Khóa | Bộ trên Harbor Hub | Việc | Ghim |
 |---|---|---|---|
-| `tblite` | `openthoughts/openthoughts-tblite` | 100 | `latest` lúc `data` chạy; `data` ghi mã băm nội dung vào `datasets/tblite.lock.json`, lần sau tải khác thì dừng. Đặt `TBLITE_REF` để ghim digest |
-| `swerebench` | `swe-rebench/swe-rebench-leaderboard` (860 việc Python, image dựng sẵn) | 25 của tháng mới nhất | digest `sha256:ebe7444e…` (ghi trong `harbor_bench.py`, lấy từ trang registry của inspect_harbor) cộng mã băm nội dung |
+| `tblite` | `openthoughts/openthoughts-tblite` | 100 (60 nhãn medium/hard/extreme vào job lớn) | `latest` lúc `data` chạy; `data` ghi mã băm nội dung vào `datasets/tblite.lock.json`, lần sau tải khác thì dừng. Đặt `TBLITE_REF` để ghim digest |
+| `swerebench` | `swe-rebench/swe-rebench-leaderboard` (860 việc Python, image dựng sẵn) | 25 của tháng mới nhất, vào cả pilot lẫn job lớn | digest `sha256:ebe7444e…` (ghi trong `harbor_bench.py`, lấy từ trang registry của inspect_harbor) cộng mã băm nội dung |
 
 - `harbor_bench.py` gọi `harbor download "<bộ>@<ref>" --export`, gom thư mục việc thành `datasets/<khóa>/<tên việc>` (cấu trúc xuất khác nhau không sao: tìm mọi thư mục có `task.toml`), rồi chạy job trên thư mục cục bộ đó. Nhờ vậy mọi bước kiểm (an toàn, tháng của việc) đọc đúng file sẽ chạy.
 - SWE-rebench: ngày tạo của từng việc nằm trong `tests/config.json` (`created_at`) của việc. `tuf.sh pick` lấy tháng mới nhất có ít nhất 25 việc sạch rồi rút bằng `random.Random(20261106).sample` và ghi `tasks-swerebench.txt` kèm mã băm bộ việc, đếm theo tháng. **File này hiện chưa có tên việc**, vì phiên dựng không tải được bộ việc; làm bước `pick` ở dưới trước khi chạy pilot.
-- Lời giải mẫu: bước `oracle` chạy lời giải mẫu trên đúng bộ việc của pilot. Việc nào lời giải mẫu không đạt thì `compare` và `select` tự loại. Bản cũ ghi 27 việc TBLite chỉ in "no solution written"; chưa kiểm trên bản Hub hiện tại, `oracle` sẽ lộ ra.
+- Việc có file compose: Harbor chạy `docker compose` với `--project-directory <việc>/environment`, nên compose của việc đọc được file trên TUF qua đường dẫn tương đối cố định (`env_file: ../../../../.env` tới khóa trong `~/harbor-eval/.env`, `secrets`/`configs` với `file:` tới `~/.ssh/…`, `build.context`, `include`, `extends`, `volumes_from`, `driver_opts`…), và YAML có quá nhiều cách viết cho cùng một việc để lọc bằng mẫu chữ. Vì vậy **mọi việc có file compose bị loại**: tên chứa `compose` với đuôi `.yml`/`.yaml` ở bất kỳ đâu, hay bất kỳ `.yml`/`.yaml` nào trong `environment/`. `data` và `vet` in số việc bị loại và tên (kèm `datasets/<khóa>.rejected.txt` có sha256 của từng file) để bạn biết bộ việc bị bớt bao nhiêu. Việc nào bạn đã đọc tay và muốn giữ thì thêm dòng `<tên việc> <sha256 file compose>` vào `compose-allow.txt` (mỗi file compose một dòng; file đổi nội dung thì băm đổi và việc lại bị loại). Bản commit của danh sách đó trống. Dockerfile và `task.toml` vẫn qua các kiểm cũ (mục An toàn).
+- Lời giải mẫu: bước `oracle` chạy lời giải mẫu trên đúng bộ việc của pilot. Việc nào lời giải mẫu không đạt thì `compare` tự loại. Bản cũ ghi 27 việc TBLite chỉ in "no solution written"; chưa kiểm trên bản Hub hiện tại, `oracle` sẽ lộ ra.
+- Tên việc: Harbor đặt `task_name` trong `result.json` theo `[task] name` (dạng `org/tên` với gói Hub), còn thư mục xuất và `task_names` của job dùng tên ngắn. `load_trials` cắt phần `org/`, nên `compare`, `pilot-report` và lời giải mẫu dùng cùng một tên (có test với `org/abc`).
 
-## Chọn việc: pilot rồi select
+## Chọn việc: theo độ khó công bố, không theo kết quả của bản nào
 
-Chạy bốn cấu hình trên 125 việc là quá nhiều, và phần lớn việc cho cùng kết quả ở mọi cấu hình (ai cũng đạt, hay không ai đạt) nên không trả lời được câu hỏi. Vì vậy:
+Chọn việc theo kết quả của một bản (ví dụ pilot bản trơn) làm lệch phép so cỡ vài điểm: việc "plain đạt" bị loại là việc plain đã chắc đạt, nên chênh lệch còn lại nghiêng về một phía. Vì vậy job lớn lấy việc theo nhãn độ khó mà bộ đo công bố, không dựa vào lượt chạy nào:
 
-1. `pilot`: bản `plain` chạy một lần trên toàn bộ việc (TBLite 100 + SWE-rebench 25).
-2. `select` đọc kết quả pilot, ghi `tasks-main.txt` gồm "việc phân biệt". Tiêu chí tự đề xuất, bạn đọc và sửa được:
-   - Loại: lượt hỏng vì hạ tầng hay không có điểm; lời giải mẫu không đạt; container không có python3 từ 3.9 (hook không chạy được thì bản 2 và 4 không còn đúng định nghĩa).
-   - Một lượt mỗi việc, chi phí (Claude Code tự ước) làm thước đo công sức, so với trung vị của từng bộ: **đạt mà tốn ít công** là "chắc đạt", **trượt mà tốn nhiều công** là "chắc trượt"; cả hai bị loại. Giữ đạt mà tốn công, và trượt mà tốn ít công (agent bỏ sớm hay hiểu sai: dễ đổi kết quả giữa các lần chạy).
-   - Từ hai lượt mỗi việc trở lên: giữ việc có tỉ lệ đạt giữa 0 và 1 (không tính hai đầu).
-   - Điểm yếu: một lượt chỉ cho tín hiệu mỏng, và giữ lại việc "trượt rẻ" có thể giữ cả việc grader hỏng. Nên chạy `oracle` trước `select`; `--limit N` giới hạn số việc mỗi bộ (rút có hạt cố định) nếu job lớn quá đắt.
-3. Job lớn: 4 cấu hình × `tasks-main.txt` × N lần (`--attempts N`, mặc định 1). Số lượt = việc × 4 × N.
+- **TBLite:** mọi việc có nhãn `medium`, `hard` hay `extreme`. OpenThoughts gắn nhãn theo tỉ lệ đạt của Haiku 4.5 (easy ≥70%: 40 việc; medium 40–69%: 26; hard 10–39%: 26; extreme <10%: 8, theo README của bộ). Việc `easy` bị bỏ vì ở đó mọi cấu hình đạt gần hết nên không phân biệt được. Dự kiến 60 việc.
+- **SWE-rebench:** cả 25 việc đã chọn ở `tasks-swerebench.txt` (nhãn độ khó của adapter SWE-rebench không có nghĩa, nên không lọc).
+- `tuf.sh select` chạy trên TUF (nhãn nằm trong `task.toml` của việc đã tải) và ghi `tasks-main.txt` về Mac. `task_difficulty()` tìm khóa `difficulty` trong `task.toml` (bảng `[metadata]`, `[task]`, gốc, rồi tìm sâu), rồi nhãn nằm trong `tags`, rồi các file JSON nhỏ cạnh `task.toml`. **Chưa thấy file `task.toml` thật của TBLite**, nên đoạn đọc nhãn là phỏng đoán linh hoạt: nếu không đọc được nhãn nào, `select` dừng với lỗi và bảo xem một `task.toml` thật rồi sửa hàm; việc không có nhãn bị bỏ và được liệt kê.
+- Job lớn: 4 cấu hình × `tasks-main.txt` × N lần (`--attempts N`, mặc định 1). Số lượt = việc × 4 × N, dự kiến 85 việc nên 340 lượt mỗi lần.
+
+**Pilot giờ chỉ để đo chi phí mỗi lượt và độ bão hòa.** Bản `plain` chạy một lần trên toàn bộ việc (TBLite 100 + SWE-rebench 25). `tuf.sh pilot-report` (sau `fetch pilot`) in tỉ lệ đạt và chi phí trung vị theo nhãn độ khó, và ước chi phí job lớn. Nhóm nào bão hòa (từ 95% đạt, ít nhất 5 lượt) thì `pilot-report` chỉ **in gợi ý**; `tasks-main.txt` không đổi, bạn quyết định có bỏ nhóm đó không.
 
 ## Làm theo thứ tự này (từ Mac, ở gốc repo)
 
@@ -52,27 +53,34 @@ Chạy bốn cấu hình trên 125 việc là quá nhiều, và phần lớn vi�
 | 0. Cài Harbor đã ghim vào `~/harbor-eval/.venv`; tạo `.env` rỗng chmod 600 | `evals/harbor/tuf.sh setup` | không |
 | 1. Bạn đặt khóa vào `.env` (mục "Khóa đăng nhập" dưới) | tự làm | không |
 | 2. Đưa bản chép (3 biến thể), agent, script, danh sách việc lên TUF | `evals/harbor/tuf.sh sync` | không |
-| 3. Tải hai bộ việc, ghim mã băm, loại việc vi phạm kiểm an toàn | `evals/harbor/tuf.sh data` | mạng, ổ đĩa |
-| 4. Chọn 25 việc SWE-rebench, ghi `tasks-swerebench.txt` | `evals/harbor/tuf.sh pick`, commit, rồi `sync` lại | không |
-| 5. Kiểm sẵn sàng (phiên bản, quyền `.env`, ổ, cấu hình) | `evals/harbor/tuf.sh check` | không |
-| 6. Lời giải mẫu: kiểm grader và Docker | `evals/harbor/tuf.sh oracle --yes` | CPU, mạng của TUF; không gọi model |
-| 7. Pilot: in số lượt và trần chi phí (không `--yes` thì chỉ in) | `evals/harbor/tuf.sh pilot --yes` | hạn mức Claude: 125 lượt, trần 125 USD niêm yết |
-| 8. Theo dõi | `evals/harbor/tuf.sh status pilot` | không |
-| 9. Kéo về (cả `pilot` lẫn `pilot-oracle`), chọn việc | `tuf.sh fetch pilot`, `tuf.sh select`, commit, `tuf.sh sync` | không |
-| 10. Job lớn | `evals/harbor/tuf.sh run main --attempts 2 --yes` | hạn mức Claude: việc × 4 × N lượt |
-| 11. Kéo về, so | `tuf.sh fetch main`, `tuf.sh compare main` | không |
+| 3. Tải hai bộ việc, ghim mã băm, loại việc vi phạm (kể cả có file compose chưa duyệt) | `evals/harbor/tuf.sh data` | mạng, ổ đĩa |
+| 4. Chọn 25 việc SWE-rebench, ghi `tasks-swerebench.txt` | `evals/harbor/tuf.sh pick`, commit | không |
+| 5. Sinh `tasks-main.txt` từ nhãn độ khó | `evals/harbor/tuf.sh select`, đọc, commit, rồi `evals/harbor/tuf.sh sync` lại | không |
+| 6. Kiểm sẵn sàng (phiên bản, `.env`, ổ, cấu hình) | `evals/harbor/tuf.sh check` | không |
+| 7. Lời giải mẫu: kiểm grader và Docker (không nạp `.env`) | `evals/harbor/tuf.sh oracle --yes` | CPU, mạng của TUF; không gọi model |
+| 8. Pilot: in số lượt và trần chi phí (không `--yes` thì chỉ in) | `evals/harbor/tuf.sh pilot --yes` | hạn mức Claude: 125 lượt, trần 125 USD niêm yết |
+| 9. Theo dõi | `evals/harbor/tuf.sh status pilot` | không |
+| 10. Kéo về (cả `pilot` lẫn `pilot-oracle`), xem chi phí và độ bão hòa | `tuf.sh fetch pilot`, `tuf.sh pilot-report` | không |
+| 11. Job lớn | `evals/harbor/tuf.sh run main --attempts 2 --yes` | hạn mức Claude: việc × 4 × N lượt |
+| 12. Khi đã có vài lượt xong: kiểm luật thật sự được nạp ở 4 lượt của một việc (mục "Kiểm luật được nạp") | `tuf.sh fetch main`, đọc transcript | không |
+| 13. Khi job xong: kéo về, so | `tuf.sh fetch main`, `tuf.sh compare main` | không |
 
-- `oracle`, `pilot`, `run` chạy nền trên TUF, thoát ssh thì job vẫn chạy. Ba lệnh này từ chối khi TUF đang bận: còn container khác, một tiến trình khác dùng trên 1 nhân (như llama-server của bench pi-agent), GPU bận từ 20%, tải 1 phút quá 1/4 số nhân, hay RAM trống dưới 12 GB. Thêm `--force` để chạy bất chấp.
+- `oracle`, `pilot`, `run` chạy nền trên TUF, thoát ssh thì job vẫn chạy. Cùng với `data`, `sync` và `prune`, các lệnh này từ chối khi có job đang chạy (`jobs/*.pid` còn sống; không có `--force`), và từ chối khi TUF đang bận: còn container khác, một tiến trình khác dùng trên 1 nhân (như llama-server của bench pi-agent), GPU bận từ 20%, tải 1 phút quá 1/4 số nhân, hay RAM trống dưới 12 GB. Thêm `--force` để chạy bất chấp.
 - Mỗi lúc chạy 3 việc (TUF có 15 GB RAM). Việc SWE-rebench khai tới 8 GB mỗi việc; giới hạn đó là trần, không phải mức chiếm thường xuyên.
 - Job trùng tên đã có thì lệnh từ chối. Xóa `jobs/<tên>` cùng `.payload`, `.meta.json`, `.log`, `.pid`, hay đổi tên.
-- `run` chép bản chép sang `jobs/<tên>.payload` và job dùng bản đó, nên `sync` giữa lúc job đang chạy không đổi được job. `jobs/<tên>.meta.json` ghi phiên bản đã ghim (Harbor, Claude Code, commit bản chép, mã băm bộ việc).
+- `run` chép bản chép sang `jobs/<tên>.payload` và job dùng bản đó, nên `sync` giữa lúc job đang chạy không đổi được job. `jobs/<tên>.meta.json` ghi phiên bản đã ghim (Harbor, Claude Code, commit bản chép, mã băm bộ việc, nhãn độ khó từng việc, và `pip freeze` của venv Harbor). `compare` từ chối gộp khi khác phiên bản, nhưng chỉ **cảnh báo** khi `pip freeze` khác (phụ thuộc của Harbor chưa ghim băm).
 
 ## Khóa đăng nhập (bước của bạn)
 
 Claude Code trong container dùng gói Max của bạn qua một khóa dài hạn. Agent không được nhập hay đọc khóa, nên bước này bạn tự làm. Dùng khóa riêng cho đợt đo và thu hồi ngay khi đo xong (bạn đã chấp nhận rủi ro khóa nằm trong môi trường container lúc chạy; xem TM-73).
 
 1. Trên Mac, chạy `claude setup-token` và làm theo hướng dẫn để nhận khóa (dạng `sk-ant-oat01-…`).
-2. Trên TUF, mở `~/harbor-eval/.env`, thêm dòng `CLAUDE_CODE_OAUTH_TOKEN=<khóa>`. Rồi `chmod 600 ~/harbor-eval/.env`. `tuf.sh pilot` và `run` từ chối nếu quyền rộng hơn 600; `check` báo.
+2. Trên TUF, mở `~/harbor-eval/.env`, thêm đúng một dòng `CLAUDE_CODE_OAUTH_TOKEN=<khóa>`, rồi `chmod 600 ~/harbor-eval/.env`.
+
+Harbor nạp **cả** `.env` vào môi trường của nó (`load_dotenv(..., override=True)` trong `cli/jobs.py`), rồi môi trường đó đi vào lệnh `docker compose` (`environments/docker/docker.py`). Nên:
+- `.env` chỉ được có đúng khóa đó. `tuf.sh pilot`, `run` từ chối khi có dòng nào khác (in số dòng và tên biến, không in giá trị), khi quyền rộng hơn 600, hay khi có `.env.local` (Harbor tự nạp file đó ở thư mục hiện tại). `check` báo cùng các điều này.
+- `oracle` không nạp `.env` (không có `--env-file`): lời giải mẫu không cần khóa.
+- Harbor chạy qua `run_harbor.sh`, tức `env -i` với danh sách cho phép (`PATH`, `HOME`, `USER`, `LANG`, `TMPDIR`, `DOCKER_*`, `XDG_RUNTIME_DIR`, `*_PROXY`, `AGENT_STACK_PAYLOAD`, `PYTHONPATH`), để biến lạ của phiên ssh (khóa dịch vụ khác trong `.bashrc`…) không lọt vào lệnh compose. Danh sách này chưa thử với Harbor thật (chỉ với harbor giả trong test): nếu `harbor run` báo thiếu biến, thêm tên biến vào danh sách trong `run_harbor.sh`.
 
 Cấu hình job chỉ đặt `CLAUDE_FORCE_OAUTH=1`; Harbor đọc khóa từ `.env` qua `--env-file`. Script không bao giờ in giá trị khóa.
 
@@ -80,13 +88,13 @@ Cấu hình job chỉ đặt `CLAUDE_FORCE_OAUTH=1`; Harbor đọc khóa từ `.
 
 | Mã | Chốt chặn | Nơi kiểm |
 |---|---|---|
-| TM-73 khóa lộ | Khóa chỉ ở `.env` chmod 600 trên TUF. `export` che mọi chuỗi `sk-ant-…` (cả `sk-ant-oat01-…`) và giá trị của `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` trong **mọi** file xuất; không theo symlink (mã trong container có thể đặt symlink vào thư mục log); kiểm lại sau khi che và dừng nếu còn; `fetch` kiểm lần nữa trên Mac. Không chặn được việc đo gửi khóa ra mạng lúc chạy | `ExportTests` |
-| TM-74 việc đo vi phạm | `harbor_bench.py vet` từ chối: `privileged`, `network_mode`/`pid`/`ipc`/`uts: host`, `cap_add`, `devices`, `seccomp/apparmor=unconfined`, `docker.sock`, gắn đường dẫn tuyệt đối, `~`, `..` hay biến ngoài thư mục việc, `--security=insecure`, symlink trỏ ra ngoài, và `${…}` trong `env`/`headers` của `task.toml` (Harbor mở biến của máy chủ như khóa đăng nhập vào container). `data` loại việc vi phạm; `pilot`/`run` kiểm lại đúng các việc sẽ chạy và dừng nếu còn | `VetTests` |
-| TM-75 phiên bản | Harbor `0.25.0` cài từ wheel đã kiểm sha256; Claude Code `2.1.311` trong cấu hình job; bộ việc ghim mã băm. `compare` từ chối gộp lượt khác phiên bản Claude Code (đọc từ sự kiện init của chính lượt chạy), khác commit bản chép, hay khác nội dung bộ việc | `CompareTests`, `TufScriptTests` |
-| TM-76 bản chép | Chỉ `.agent-stack-root plugin global routing-table.md vetted.lock`; `build-payload` kiểm lại: không `.agent/`, `PLAN.md`, `state/`, `.env*`, `evals/` ở gốc, `.git`… | `PayloadTests` |
-| TM-77 hạn mức | `--max-budget-usd 1` mỗi lượt; `plan` in số lượt và trần chi phí, lệnh chỉ chạy khi có `--yes`; `watch` chạy nền cùng job, dừng cả nhóm tiến trình khi lượt lỗi hạn mức hay rate limit vượt 3; `compare` đếm các lượt này | `WatchTests`, `TufScriptTests` |
+| TM-73 khóa lộ | Khóa chỉ ở `.env` chmod 600 trên TUF, và `.env` không có khóa nào khác; `oracle` không nạp `.env`; Harbor chạy với môi trường lọc. `export` che mọi chuỗi `sk-ant-…` (cả `sk-ant-oat01-…`), giá trị của `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, **và giá trị khóa thật đọc từ `.env` cùng các dạng base64 của nó** (ở cả ba độ lệch), trong mọi file xuất; không theo symlink; quét lại sau khi che (mọi file, kể cả nhị phân) và dừng, xóa bản chép nếu còn. Mac quét lại bằng đúng mẫu đó (`harbor_bench.py residual`) cho cả job lẫn job oracle: chuỗi ngắn như `sk-ant-xxx` trong một repo không làm xóa bản kéo về. Đoạn log mà `status` in ra qua `scrub` (che khóa, bỏ ký tự điều khiển). Không chặn được việc đo gửi khóa ra mạng lúc chạy | `ExportTests`, `TufBehaviourTests` |
+| TM-74 việc đo vi phạm | **Mặc định từ chối mọi việc có file compose** (xem mục Bộ việc; danh sách duyệt tay `compose-allow.txt` theo tên việc và sha256). Dockerfile và `task.toml` vẫn kiểm: `docker.sock`, `--security=insecure`, `--network=host`, symlink trỏ ra ngoài, và `${…}` trong `env`/`headers` của `task.toml` (Harbor mở biến của máy chủ như khóa đăng nhập vào container). `data` loại việc vi phạm; `pilot`/`run` kiểm lại đúng các việc sẽ chạy và dừng nếu còn | `VetTests` |
+| TM-75 phiên bản | Harbor `0.25.0` cài từ wheel đã kiểm sha256; Claude Code `2.1.311` trong cấu hình job; bộ việc ghim mã băm. `compare` từ chối gộp lượt khác phiên bản Claude Code (đọc từ sự kiện init của chính lượt chạy), khác commit bản chép, hay khác nội dung bộ việc; cảnh báo khi `pip freeze` khác | `CompareTests`, `TufScriptTests` |
+| TM-76 bản chép | Chỉ `.agent-stack-root plugin global routing-table.md vetted.lock`; `build-payload` kiểm lại: không `.agent/`, `PLAN.md`, `state/`, `.env*`, `.git`, symlink… | `PayloadTests` |
+| TM-77 hạn mức | `--max-budget-usd 1` mỗi lượt; `plan` in số lượt và trần chi phí, lệnh chỉ chạy khi có `--yes`; `watch` chạy nền cùng job, dừng cả nhóm tiến trình khi lượt lỗi hạn mức hay rate limit vượt 3; sau khi khởi động, script kiểm cả harbor lẫn watcher còn sống, không thì dừng job; `compare` đếm các lượt này | `WatchTests`, `StatusTests`, `TufBehaviourTests` |
 
-**Dừng job:** `tuf.sh stop <tên>` gửi SIGTERM cho cả nhóm tiến trình, chờ 20 giây rồi liệt kê container còn chạy (script không tự dừng container, vì có thể của người khác; dừng bằng `docker stop <tên>`). `tuf.sh status` hiện số lượt lỗi hạn mức. `jobs/<tên>.stopped` xuất hiện khi `watch` đã tự dừng job.
+**Dừng job:** `tuf.sh stop <tên>` gửi SIGTERM cho cả nhóm tiến trình, chờ 20 giây rồi liệt kê container còn chạy (script không tự dừng container, vì có thể của người khác; dừng bằng `docker stop <tên>`). `tuf.sh status` hiện số lượt lỗi hạn mức, harbor và watcher còn sống không (cảnh báo khi watcher đã chết), và đoạn cuối log đã lọc. `jobs/<tên>.stopped` xuất hiện khi `watch` đã tự dừng job.
 
 ## Dung lượng
 
@@ -94,17 +102,16 @@ TUF còn khoảng 46 GB ổ trống. Image SWE-rebench nặng (mỗi việc mộ
 
 ## Đọc kết quả
 
-`compare` in cho từng bản: tỉ lệ đạt; token vào, cache, ra; chi phí và chi phí mỗi lượt đạt; thời gian; số lần gọi subagent (riêng subagent của agent-stack) và skill; lượt lỗi, lượt chạm trần ngân sách, lượt bỏ vì hạ tầng (kèm lỗi hạn mức/rate limit); lượt thiếu hook. Rồi năm phép so cặp trên tập việc chung của mọi bản, mỗi phép có số việc kém hơn, tốt hơn và p của McNemar chính xác:
+`compare` in cho từng bản: tỉ lệ đạt; token vào, cache, ra; chi phí và chi phí mỗi lượt đạt; thời gian; số lần gọi subagent (riêng subagent của agent-stack) và skill; lượt lỗi, lượt chạm trần ngân sách, lượt bỏ vì hạ tầng (kèm lỗi hạn mức/rate limit); lượt thiếu hook. Rồi năm phép so cặp trên tập việc chung của mọi bản, mỗi phép có số việc kém hơn, tốt hơn và p của kiểm dấu chính xác trên các việc lệch nhau. Với một lượt mỗi việc đó chính là McNemar chính xác (báo cáo ghi "McNemar chính xác"); với nhiều lượt mỗi việc, so tỉ lệ đạt từng việc rồi đếm việc hơn, kém, bỏ việc bằng nhau (báo cáo ghi "kiểm dấu chính xác theo tỉ lệ đạt từng việc"); cùng một hàm tính:
 
 - `stack`, `nohooks`, `noagents` so với `plain`: bật agent-stack có tốt hơn không, và bản bớt một phần có khác không.
 - `stack` so với `nohooks`, và `stack` so với `noagents`: hook, hay subagent, có đóng góp thêm không.
 - p chưa hiệu chỉnh; `compare` in luôn ngưỡng Bonferroni cho năm phép.
 
 Cách tính:
-- Việc có lượt không có điểm (môi trường hỏng) hay hỏng vì hạ tầng (hết hạn mức, rate limit, quá tải, xác thực, mạng, sai tên model, lỗi 5xx) bị loại cả việc ở mọi bản. Harbor vẫn chấm sau các lỗi này nên chúng có điểm 0; không loại thì việc ở ranh giới hết hạn mức nghiêng về một phía.
+- **Một** lượt không có điểm (môi trường hỏng) hay hỏng vì hạ tầng (hết hạn mức, rate limit, quá tải, xác thực, mạng, sai tên model, lỗi 5xx, lỗi API không phân loại được) ở bất kỳ bản nào loại cả việc khỏi mọi phép so, dù các lượt còn lại của việc đó chấm được (kể cả khi `--attempts` từ 2). Harbor vẫn chấm sau các lỗi này nên chúng có điểm 0; không loại thì việc ở ranh giới hết hạn mức nghiêng về một phía.
 - Việc có container thiếu python3 từ 3.9 bị loại khỏi tập chung (hook của bản 2 và 4 không chạy). Số lượt thiếu hook được in để biết đã loại bao nhiêu.
 - Lượt hết giờ hay chạm trần ngân sách mà grader vẫn chấm tính như kết quả thật, vì chậm hơn hay tốn hơn cũng là một cái giá.
-- Nhiều lượt mỗi việc (`--attempts`) thì so tỉ lệ đạt theo việc (hơn, kém, bằng).
 - Kiểm tính đúng định nghĩa của từng bản: sự kiện init của Claude Code (plugin nạp chưa, subagent của agent-stack có hiện không) và `agent-stack-env.txt` do agent ghi (có `hooks.json`, `agents/`, CLAUDE.md cấp người dùng không). Lệch thì `compare` in ⚠️; bản trơn thấy agent-stack thì kết quả không dùng được.
 - `bản bỏ hook` và `bản bỏ subagent` được xác nhận bằng cấu trúc thật trong container, không chỉ bằng tên.
 - Sức mạnh thống kê: 20 cặp chỉ thấy chênh lệch lớn; chênh 10 điểm cần khoảng 160–235 cặp. Chạy thêm lần (`--attempts`) để bớt nhiễu.
@@ -115,9 +122,16 @@ Cách tính:
 - **Chỉ đo được ở một phần:**
   - Cổng chốt việc ở hook Stop (đòi chạy `done-gate`, biên nhận, reviewer) chỉ bật khi thư mục làm việc của Claude Code là repo có thay đổi. SWE-rebench là repo (image đặt repo ở `/testbed`; thư mục làm việc mặc định của Harbor trong image đó chưa kiểm); TBLite phần lớn không phải repo. Nhắc nhở §0 cần `PLAN.md`, nên hầu như không bật ở cả hai.
   - Hook cần `python3` từ 3.9. Image SWE-rebench thường chỉ có Python trong môi trường conda; `compare` và `select` dùng `agent-stack-env.txt` (đo trong container, cùng shell mà Claude Code chạy hook) để biết việc nào hook không chạy.
-- **Không đo được:** lợi ích nối tiếp công việc giữa các phiên (§0, `LAST-TURN.md`, bàn giao) vì mỗi việc chỉ một phiên; lợi ích khi người dùng ở bên cạnh trả lời câu hỏi và duyệt (bench chạy không người, chế độ `bypassPermissions`); chi phí lập kế hoạch và tìm hiểu dự án của người dùng.
+- **Không đo được (làm số của bản có agent-stack thấp đi hay không liên quan):**
+  - Hook `pretool_guard` của agent-stack hỏi trước lệnh không đảo ngược được (`rm -r`, `git push`, `git reset --hard`…) rồi "chờ bạn đồng ý". Bench chạy không người, nên lệnh như vậy bị chặn và agent không có ai trả lời: số của ba bản có hook (stack, noagents) có thể thấp hơn vì chuyện này chứ không vì luật hay skill; bản nohooks không bị. Việc có `rm -r` trong lời giải là hiếm, nhưng đọc các việc "kém hơn" của hai bản có hook xem có dính cổng này không.
+  - Lợi ích nối tiếp công việc giữa các phiên (§0, `LAST-TURN.md`, bàn giao) vì mỗi việc chỉ một phiên; lợi ích khi người dùng ở bên cạnh trả lời câu hỏi và duyệt (bench chạy không người, chế độ `bypassPermissions`); chi phí lập kế hoạch và tìm hiểu dự án của người dùng.
+- Bản `noagents` bỏ đúng các subagent do agent-stack khai (`reviewer`, `researcher`, `test-runner`, `explore-lite`, `cold-reader`); subagent có sẵn của Claude Code vẫn dùng được, và luật chung vẫn nhắc tên subagent của agent-stack. Nên độ chênh giữa `stack` và `noagents` đo giá trị của các subagent đó cộng với tác động của việc luật nhắc tới thứ không có.
 - Chi phí USD là số Claude Code tự ước theo giá niêm yết. Chạy bằng gói thuê bao thì số đó dùng để so các bản, không phải tiền thật.
 - Bốn bản dùng cùng model nhưng không cùng prompt hệ thống: bản có agent-stack chạy thêm CLAUDE.md và mô tả skill, nên token vào luôn nhiều hơn. Đó chính là phần "đắt hơn" cần đối chiếu với "tốt hơn".
+
+## Kiểm luật được nạp (ở những lượt đầu của job lớn)
+
+Claude Code của Harbor đọc CLAUDE.md cấp người dùng ở `$CLAUDE_CONFIG_DIR` (Harbor đặt `<logs>/sessions`), không phải `~/.claude`. Agent chép luật vào cả hai nơi và ghi `config_claude_md` và `user_claude_md` vào `agent-stack-env.txt`; `compare` lệch thì báo. Để chứng minh luật thật sự vào prompt, ở 4 lượt của một việc (một lượt mỗi bản): mở transcript của lượt `agent-stack` (`jobs/<tên>/<lượt>/agent/sessions/projects/…/*.jsonl`, hay `claude-code.txt`) và tìm một câu của `SHARED.global.md` (ví dụ "Chất lượng trước chi phí"); lượt `plain` thì không được có câu đó. Sự kiện init trong `claude-code.txt` cũng phải liệt kê plugin `agent-stack` ở ba bản và không ở bản trơn.
 
 ## Đã kiểm và chưa kiểm
 
@@ -127,6 +141,7 @@ Cách tính:
 - `base.py`: `exec_as_agent`, `exec_as_root`; `agents/base.py`: `environment_logs_dir`; `environments/base.py`: `upload_dir`; `AgentConfig.kwargs` bị kiểm nghiêm (`extra="forbid"`) nên chỉ `version`, `reasoning_effort`, `max_budget_usd` được dùng; `AgentInfo.version` ghi phiên bản vào `result.json`.
 - `cli/jobs.py`: `harbor run` có `-c/--config`, `--env-file`, `-q`, `-y`, `--print-config`. Harbor cũng tự nạp `.env.local` ở thư mục hiện tại (không dùng ở đây, đừng tạo file đó).
 - `models/job/config.py`: `DatasetConfig` nhận `path` + `task_names`; `JobConfig` có `n_concurrent_trials`, `retry`, `environment`.
+- Theo hai reviewer (đối chiếu v0.25.0), `cli/jobs.py` nạp `.env` bằng `load_dotenv(override=True)` và `docker.py` đưa `os.environ` vào compose, với `--project-directory <việc>/environment`; `models/task/task.py` đặt `task_name = config.task.name`. Chính tôi đã thấy `load_dotenv` và `.env.local` trong `cli/jobs.py`; các chi tiết còn lại chưa tự đọc lại.
 - Hook của agent-stack: chạy thật cả 8 hook bằng `/usr/bin/python3` 3.9.6, kết quả giống hệt Python 3.11; test dùng `ast.parse(feature_version=(3, 9))` trên `plugin/hooks` và `plugin/lib` (không `match`, không `tomllib`). Python 3.8 chưa kiểm (máy không có), nên ngưỡng ghi là 3.9.
 - Registry: tên bộ việc `openthoughts/openthoughts-tblite` (100 việc) và `swe-rebench/swe-rebench-leaderboard` (860 việc), `harbor download` có `--export` và `--output-dir` (docs Harbor, trang registry).
 
@@ -136,6 +151,8 @@ Cách tính:
 - Claude Code `2.1.311` có tải được bằng bootstrap.sh, và các tên trường của log stream-json mà `compare` đọc (`claude_code_version`, `plugins`, `agents` trong sự kiện init; `Task`/`Agent`/`Skill` trong `tool_use`; `error_max_budget_usd` trong `result`). Thiếu trường thì thống kê tương ứng trống, không sai.
 - Tên lỗi `ApiRateLimitError`… là của `base.py` v0.25.0 (đã đọc). Việc sự cố hạn mức của gói Max sinh ra đúng các lỗi này chưa thấy.
 - Image SWE-rebench có `python3` trong PATH của shell agent hay không: chỉ lộ ra ở pilot.
+- Nhãn độ khó của TBLite nằm ở đâu trong `task.toml` (xem mục Chọn việc); và `env -i` với danh sách cho phép trong `run_harbor.sh` có đủ cho Harbor thật không.
+- `ssh` thật: test dùng `ssh` giả chạy cục bộ (có `cat |` để stdin là ống) và harbor giả; kiểm hành vi của script, không kiểm Docker hay Harbor.
 - 25 việc SWE-rebench: chưa chọn (xem trên).
 
 ## File
@@ -143,4 +160,5 @@ Cách tính:
 - `agent_stack_agents.py`: bốn lớp agent Harbor, kế thừa agent `claude-code` có sẵn. Chạy trong venv của Harbor trên TUF, nên là ngoại lệ của luật "chỉ thư viện chuẩn"; bộ test của repo không import nó.
 - `harbor_bench.py`: bản chép, cấu hình job, kiểm việc, chọn việc, `watch`, `export`, `select`, `compare`. Chỉ dùng thư viện chuẩn (cần Python 3.11 cho `tomllib`); test ở `tests/test_harbor_bench.py`.
 - `tuf.sh`: các bước ở bảng trên, chạy qua ssh (`HARBOR_HOST`, mặc định `tuf`; `HARBOR_DIR`, mặc định `harbor-eval`).
-- `tasks-swerebench.txt`: 25 việc SWE-rebench cho pilot (do `tuf.sh pick` ghi). `tasks-main.txt`: việc phân biệt cho job lớn (do `tuf.sh select` ghi).
+- `run_harbor.sh`: chạy `harbor run` với môi trường lọc; `compose-allow.txt`: việc có compose đã duyệt tay.
+- `tasks-swerebench.txt`: 25 việc SWE-rebench (do `tuf.sh pick` ghi). `tasks-main.txt`: việc cho job lớn từ nhãn độ khó (do `tuf.sh select` ghi).

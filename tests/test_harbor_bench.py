@@ -1,6 +1,8 @@
 """Test cho evals/harbor: harbor_bench.py (bản chép, cấu hình, kiểm việc, chọn việc, export, so sánh), tuf.sh (phần không cần
 ssh) và agent_stack_agents.py (chỉ đọc cú pháp: file này import harbor nên test không import nó)."""
+import argparse
 import ast
+import base64
 import importlib.util
 import json
 import os
@@ -9,6 +11,7 @@ import signal
 import subprocess
 import sys
 import unittest
+import unittest.mock
 import warnings
 
 from tests._util import PLUGIN, REPO, TempDirTestCase, run_script
@@ -32,19 +35,23 @@ def init_line(plugin=True, agents=False, version=VER):
 
 
 ARM_SETUP = {   # (plugin nạp, subagent agent-stack hiện, cấu trúc container)
-    B.PLAIN: (False, False, {"plugin_dir": "no", "user_claude_md": "no", "hooks_json": "no", "agents_dir": "no"}),
-    B.STACK: (True, True, {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "yes", "agents_dir": "yes"}),
-    B.NOHOOKS: (True, True, {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "no", "agents_dir": "yes"}),
-    B.NOAGENTS: (True, False, {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "yes", "agents_dir": "no"}),
+    B.PLAIN: (False, False, {"plugin_dir": "no", "user_claude_md": "no", "config_claude_md": "no", "hooks_json": "no",
+                             "agents_dir": "no"}),
+    B.STACK: (True, True, {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "yes",
+                           "agents_dir": "yes"}),
+    B.NOHOOKS: (True, True, {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "no",
+                             "agents_dir": "yes"}),
+    B.NOAGENTS: (True, False, {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "yes",
+                               "agents_dir": "no"}),
 }
 
 
 class Base(TempDirTestCase):
     def trial(self, job, agent, task, reward=1.0, exception=None, cost=0.1, n=0, python3="3.12.3", commit="abc1234",
-              version=VER, extra_stream=(), init=True, source=None):
+              version=VER, extra_stream=(), init=True, source=None, full=None):
         """Một lượt giả đúng cấu trúc result.json của Harbor 0.25 và log stream-json của Claude Code."""
         d = self.tmp / job / f"{task}__{SHORT(agent)}{n}"
-        res = {"task_name": task, "source": source, "agent_info": {"name": agent, "version": version},
+        res = {"task_name": full or task, "source": source, "agent_info": {"name": agent, "version": version},
                "verifier_result": None if reward is None else {"rewards": {"reward": reward}},
                "agent_result": {"n_input_tokens": 1000, "n_cache_tokens": 500, "n_output_tokens": 200, "cost_usd": cost},
                "exception_info": {"exception_type": exception} if exception else None,
@@ -115,6 +122,12 @@ class PayloadTests(Base):
         text = "\n".join(B.verify_payload(root))
         for needle in (".env.production", ".agent", "PLAN.md", "mục thừa ở gốc: PLAN.md"):
             self.assertIn(needle, text)
+
+    def test_symlinks_inside_allowed_dirs_are_refused(self):
+        src = self.fake_repo()
+        os.symlink("/etc/passwd", src / "plugin" / "link-to-host-file")
+        problems = B.build_payload(src, self.tmp / "payload", "abc1234")
+        self.assertTrue(any("symlink" in p and "link-to-host-file" in p for p in problems), problems)
 
     def test_cli_refuses_a_directory_that_is_not_a_repo_copy(self):
         (self.tmp / "x").mkdir()
@@ -227,6 +240,9 @@ class ConfigTests(Base):
         self.assertEqual((m["claude_code"], m["payload_commit"], m["harbor_pinned"]), (B.DEFAULTS["version"], "c0ffee1", "0.25.0"))
         self.assertEqual(m["datasets"]["tblite"]["sha256"], "ab" * 32)
         self.assertEqual(m["max_budget_usd"], "1")
+        self.assertIn("pip_freeze_sha256", m)      # None khi venv không có pip; có thì là mã băm 64 ký tự của danh sách gói
+        self.assertTrue(m["pip_freeze_sha256"] is None or len(m["pip_freeze_sha256"]) == 64)
+        self.assertIsInstance(m["difficulty"], dict)
 
 
 class VetTests(Base):
@@ -239,30 +255,84 @@ class VetTests(Base):
             self.write(f"ds/{name}/environment/docker-compose.yaml", compose)
         return self.tmp / "ds" / name
 
-    def test_clean_tasks_pass(self):
-        clean = "services:\n  main:\n    image: x\n    volumes:\n      - ./data:/data\n      - cache:/cache\n    environment:\n      A: b\nvolumes:\n  cache:\n"
+    def test_tasks_without_compose_pass(self):
         self.assertEqual(B.vet_task(self.task("a")), [])
-        self.assertEqual(B.vet_task(self.task("b", compose=clean)), [])
         self.assertEqual(B.vet_task(self.task("c", dockerfile="FROM swerebench/sweb.eval.x86_64.a:latest\nRUN mkdir -p /logs\n")), [])
 
-    def test_each_dangerous_compose_setting_is_refused(self):
-        cases = {
+    def test_every_compose_file_is_refused_by_default_whatever_it_says(self):
+        """Mỗi dạng lách mà regex bỏ sót (review 06/11/2026) đều bị từ chối vì có file compose, không cần hiểu nội dung."""
+        evasions = {
+            "flow style": "services:\n  main: {image: x, privileged: true}\n",
+            "quoted key": "services:\n  main:\n    \"privileged\": true\n",
+            "home variable bind": "services:\n  main:\n    volumes:\n      - $HOME:/h\n",
+            "named volume bind": "services:\n  main:\n    volumes:\n      - v:/h\nvolumes:\n  v:\n    driver_opts: {o: bind, device: /, type: none}\n",
+            "include": "include:\n  - ../../../../.ssh/other.yaml\n",
+            "extends": "services:\n  main:\n    extends:\n      file: ../../x.yaml\n      service: s\n",
+            "env_file to harbor .env": "services:\n  main:\n    env_file: ../../../../.env\n",
+            "secrets file": "secrets:\n  k:\n    file: ../../../../.ssh/id_ed25519\nservices:\n  main:\n    secrets: [k]\n",
+            "configs file": "configs:\n  c:\n    file: ../../../../.env\n",
+            "build context": "services:\n  main:\n    build:\n      context: ../../..\n",
+            "additional_contexts": "services:\n  main:\n    build:\n      context: .\n      additional_contexts:\n        h: ../../..\n",
+            "build network": "services:\n  main:\n    build:\n      network: host\n",
+            "volumes_from": "services:\n  main:\n    volumes_from: [other]\n",
+            "sysctls": "services:\n  main:\n    sysctls:\n      net.ipv4.ip_forward: 1\n",
+            "cgroup_parent": "services:\n  main:\n    cgroup_parent: /\n",
+            "quoted security_opt": "services:\n  main:\n    \"security_opt\": [\"seccomp=unconfined\"]\n",
+            "network_mode host": "services:\n  main:\n    network_mode: host\n",
             "privileged": "services:\n  main:\n    privileged: true\n",
-            "network_mode: host": "services:\n  main:\n    network_mode: host\n",
-            "pid": "services:\n  main:\n    pid: \"host\"\n",
-            "cap_add": "services:\n  main:\n    cap_add:\n      - SYS_ADMIN\n",
             "docker.sock": "services:\n  main:\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n",
             "absolute bind": "services:\n  main:\n    volumes:\n      - /home/tuf:/mnt\n",
-            "home bind": "services:\n  main:\n    volumes:\n      - ~/.ssh:/root/.ssh\n",
-            "parent bind": "services:\n  main:\n    volumes:\n      - ../..:/mnt\n",
-            "long form": "services:\n  main:\n    volumes:\n      - type: bind\n        source: /etc\n        target: /e\n",
-            "inline list": "services:\n  main:\n    volumes: [\"/etc:/e\"]\n",
-            "devices": "services:\n  main:\n    devices:\n      - /dev/sda\n",
-            "unconfined": "services:\n  main:\n    security_opt:\n      - seccomp=unconfined\n",
+            "harmless-looking": "services:\n  main:\n    image: x\n    volumes:\n      - ./data:/data\n",
+            "empty": "",
         }
-        for label, compose in cases.items():
+        for label, compose in evasions.items():
             with self.subTest(label):
-                self.assertTrue(B.vet_task(self.task("bad", compose=compose)), label)
+                probs = B.vet_task(self.task("bad", compose=compose))
+                self.assertTrue(any(p.startswith(B.COMPOSE_PROBLEM) for p in probs), probs)
+                self.assertTrue(any("sha256 " + B.hashlib.sha256(compose.encode()).hexdigest() in p for p in probs))
+
+    def test_compose_files_are_found_under_any_name_or_place(self):
+        for i, rel in enumerate(("docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml",
+                                 "docker-compose.override.yml", "docker-compose.prod.yaml", "environment/stack.yaml",
+                                 "environment/sub/anything.yml", "environment/docker-compose.yaml", "x/Compose.YML")):
+            with self.subTest(rel):
+                d = self.task(f"c{i}")
+                self.write(f"ds/c{i}/{rel}", "services: {}\n")
+                self.assertTrue(any(B.COMPOSE_PROBLEM in p for p in B.vet_task(d)), rel)
+        d = self.task("plain")
+        self.write("ds/plain/environment/notes.txt", "compose is mentioned here")
+        self.write("ds/plain/tests/test_outputs.py", "x = 1")
+        self.assertEqual(B.vet_task(d), [])
+
+    def test_hand_approved_compose_passes_only_with_the_exact_hash_for_that_task(self):
+        text = "services:\n  main:\n    image: x\n"
+        digest = B.hashlib.sha256(text.encode()).hexdigest()
+        d = self.task("ok", compose=text)
+        self.assertEqual(B.vet_task(d, {"ok": {digest}}), [])
+        self.assertTrue(B.vet_task(d, {"ok": {"0" * 64}}))                       # băm sai
+        self.assertTrue(B.vet_task(d, {"khac": {digest}}))                        # băm đúng nhưng cho việc khác
+        self.assertTrue(B.vet_task(d, {}))
+        self.write("ds/ok/environment/docker-compose.yaml", text + "    privileged: true\n")   # nội dung đổi sau khi duyệt
+        self.assertTrue(B.vet_task(d, {"ok": {digest}}))
+        # việc có hai file compose: duyệt một file thì file kia vẫn làm việc bị loại; các kiểm khác vẫn chạy với việc đã duyệt
+        d2 = self.task("two", compose=text)
+        self.write("two-extra", "")
+        self.write("ds/two/docker-compose.override.yml", "services: {}\n")
+        self.assertEqual(len(B.vet_task(d2, {"two": {digest}})), 1)
+        d3 = self.task("dock", compose=text, dockerfile="FROM x\nCOPY /var/run/docker.sock /s\n")
+        self.assertTrue(any("socket" in p for p in B.vet_task(d3, {"dock": {digest}})))
+
+    def test_allow_list_file_format_and_the_committed_list(self):
+        digest = "ab" * 32
+        f = self.write("allow.txt", f"# chú thích\nviec-a {digest}   # đã đọc\n\nviec-a {'cd' * 32}\nviec-b {digest}\n")
+        self.assertEqual(B.load_allow(f), {"viec-a": {digest, "cd" * 32}, "viec-b": {digest}})
+        for bad in ("viec-a\n", f"viec-a {digest} thừa\n", "viec-a xyz\n", f"../x {digest}\n", f"viec-a {digest.upper()}\n"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(SystemExit):
+                    B.load_allow(self.write("bad.txt", bad))
+        self.assertEqual(B.load_allow(self.tmp / "khong-co.txt"), {})
+        self.assertEqual(B.load_allow(HARBOR / "compose-allow.txt"), {})      # bản commit: chưa duyệt việc nào
+        self.assertIn("sha256", (HARBOR / "compose-allow.txt").read_text(encoding="utf-8"))
 
     def test_dockerfile_and_task_toml_findings(self):
         self.assertTrue(B.vet_task(self.task("a", dockerfile="FROM x\nRUN --security=insecure true\n")))
@@ -294,16 +364,35 @@ class VetTests(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(B.list_tasks(self.tmp / "ds"), ["good"])
         self.assertIn("bad", (self.tmp / "ds.rejected.txt").read_text())
+        # người dùng thấy bộ việc bị bớt bao nhiêu và việc nào
+        self.assertIn("1/2 việc bị loại vì có file compose chưa duyệt: bad", r.stderr)
+        self.assertIn("trong đó 1 vì compose", r.stdout)
+
+    def test_cli_vet_allow_file_keeps_the_approved_task(self):
+        text = "services:\n  main:\n    image: x\n"
+        self.task("approved", compose=text)
+        self.task("other", compose=text)
+        allow = self.write("allow.txt", f"approved {B.hashlib.sha256(text.encode()).hexdigest()}\n")
+        r = run_script(SCRIPT, "vet", str(self.tmp / "ds"), "--drop", "--allow", str(allow))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(B.list_tasks(self.tmp / "ds"), ["approved"])
 
     def test_vet_config_checks_exactly_the_tasks_the_job_will_run(self):
         self.task("good")
         self.task("bad", compose="services:\n  main:\n    network_mode: host\n")
+        text = "services:\n  main:\n    image: x\n"
+        self.task("approved", compose=text)
         cfg = self.write("c.json", json.dumps({"datasets": [{"path": "ds", "task_names": ["good"]}]}))
         self.assertEqual(run_script(SCRIPT, "vet-config", str(cfg), "--root", str(self.tmp)).returncode, 0)
         cfg = self.write("c2.json", json.dumps({"datasets": [{"path": "ds", "task_names": ["good", "bad"]}]}))
         self.assertEqual(run_script(SCRIPT, "vet-config", str(cfg), "--root", str(self.tmp)).returncode, 1)
         cfg = self.write("c3.json", json.dumps({"datasets": [{"path": "ds"}]}))
         self.assertEqual(run_script(SCRIPT, "vet-config", str(cfg), "--root", str(self.tmp)).returncode, 1)
+        cfg = self.write("c4.json", json.dumps({"datasets": [{"path": "ds", "task_names": ["good", "approved"]}]}))
+        self.assertEqual(run_script(SCRIPT, "vet-config", str(cfg), "--root", str(self.tmp)).returncode, 1)
+        allow = self.write("allow.txt", f"approved {B.hashlib.sha256(text.encode()).hexdigest()}\n")
+        r = run_script(SCRIPT, "vet-config", str(cfg), "--root", str(self.tmp), "--allow", str(allow))
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 class DatasetTests(Base):
@@ -425,6 +514,45 @@ class WatchTests(Base):
         self.assertFalse((self.tmp / "jobs" / "j.stopped").exists())
 
 
+class StatusTests(Base):
+    """Mục 8: status cho biết harbor và watcher còn sống không; log in ra được lọc."""
+
+    def test_status_shows_both_pids_and_warns_when_only_the_watcher_died(self):
+        job = self.tmp / "jobs" / "j"
+        self.trial("jobs/j", B.PLAIN, "t")
+        alive = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (alive.kill(), alive.wait()))
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        (self.tmp / "jobs" / "j.pid").write_text(f"{alive.pid}\n")
+        (self.tmp / "jobs" / "j.watch.pid").write_text(f"{dead.pid}\n")
+        r = run_script(SCRIPT, "status", str(job))
+        self.assertIn(f"harbor: PID {alive.pid} đang chạy", r.stdout)
+        self.assertIn(f"watcher: PID {dead.pid} ĐÃ DỪNG", r.stdout)
+        self.assertIn("⚠️ watcher đã dừng", r.stdout)
+        (self.tmp / "jobs" / "j.watch.pid").write_text(f"{alive.pid}\n")
+        r = run_script(SCRIPT, "status", str(job))
+        self.assertIn("watcher: PID", r.stdout)
+        self.assertNotIn("⚠️", r.stdout)
+        (self.tmp / "jobs" / "j.watch.pid").unlink()
+        self.assertIn("watcher: không thấy j.watch.pid", run_script(SCRIPT, "status", str(job)).stdout)
+
+    def test_scrub_masks_keys_and_drops_control_characters(self):
+        dirty = (f"tiến độ \x1b[31mđỏ\x1b[0m\r50%\x1b]0;tiêu đề giả\x07 khóa {FAKE_KEY} ok\x00\x08\x7f\x9b xong\tđây\n"
+                 "\x1b[2J\x1b[Hdòng hai CLAUDE_CODE_OAUTH_TOKEN=abcdefgh12345678\n").encode()
+        r = subprocess.run([sys.executable, str(SCRIPT), "scrub"], input=dirty, capture_output=True, timeout=30)
+        out = r.stdout.decode()
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("\x1b", out)
+        for c in "\x00\x08\x7f\x9b\x07":
+            self.assertNotIn(c, out)
+        self.assertNotIn("sk-ant-", out)
+        self.assertNotIn("abcdefgh12345678", out)
+        self.assertIn("tiến độ đỏ", out)
+        self.assertIn("xong\tđây", out)
+        self.assertIn("50%", out)
+
+
 class ExportTests(Base):
     """TM-73: che mọi chuỗi sk-ant-… trong MỌI file kéo về."""
 
@@ -465,6 +593,61 @@ class ExportTests(Base):
             masked = B.mask_secrets(text.encode()).decode()
             self.assertNotRegex(masked, r"sk-ant-|aaaaaaaabbbbbbbb|zzzzzzzzzzzz", text)
         self.assertEqual(B.mask_secrets(b"sk-ant is a prefix"), b"sk-ant is a prefix")
+
+    TOKEN = "Zq7-realtokenvalue_0123456789ABCDEFGHIJ"      # khóa giả không có tiền tố sk-ant-: chỉ khớp theo giá trị
+
+    def env_file(self, body=None):
+        return self.write("harbor.env", body or f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n")
+
+    def test_real_token_from_env_is_masked_in_raw_and_base64_forms_and_never_printed(self):
+        token = self.TOKEN.encode()
+        variants = B.secret_variants(token)
+        for off in range(3):
+            for enc in (base64.b64encode, base64.urlsafe_b64encode):
+                blob = enc(b"A" * off + b"xin chao " + token + b" tail")
+                self.assertTrue(any(v in blob for v in variants), (off, enc))
+        d = self.trial("pilot", B.PLAIN, "t")
+        self.write(f"pilot/{d.name}/agent/claude-code.txt", f"env: {self.TOKEN}\n")
+        for i in range(3):
+            blob = base64.b64encode(b"B" * i + b"cat .env " + token + b" end").decode()
+            self.write(f"pilot/{d.name}/agent/note{i}/reward.txt", f"b64: {blob}\n")
+        out = self.tmp / "out"
+        r = run_script(SCRIPT, "export", str(self.tmp / "pilot"), "--out", str(out), "--env-file", str(self.env_file()))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn(self.TOKEN, r.stdout + r.stderr)
+        for f in B._walk_files(out):
+            data = f.read_bytes()
+            self.assertNotIn(token, data, f)
+            self.assertFalse(any(v in data for v in variants), f)
+        # không có --env-file thì khóa không mang tiền tố sk-ant- lọt qua: đó là lý do cần giá trị thật
+        out2 = self.tmp / "out2"
+        self.assertEqual(run_script(SCRIPT, "export", str(self.tmp / "pilot"), "--out", str(out2)).returncode, 0)
+        self.assertIn(self.TOKEN, (out2 / "pilot" / d.name / "agent" / "claude-code.txt").read_text())
+        r = run_script(SCRIPT, "residual", str(out2), "--env-file", str(self.env_file()))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("giá trị khóa trong .env", r.stderr)
+        self.assertNotIn(self.TOKEN, r.stdout + r.stderr)
+        self.assertEqual(run_script(SCRIPT, "residual", str(out), "--env-file", str(self.env_file())).returncode, 0)
+
+    def test_residual_scans_every_file_including_binary_and_ignores_short_lookalikes(self):
+        self.write("d/a.txt", "sk-ant-xxx là chuỗi giả trong repo, và sk-ant là tiền tố\n")
+        self.assertEqual(run_script(SCRIPT, "residual", str(self.tmp / "d")).returncode, 0)
+        (self.tmp / "d" / "blob.bin").write_bytes(b"\x00\x01\xff" + FAKE_KEY.encode() + b"\x00")
+        self.write("d/sub/deep/log.txt", f"x {FAKE_KEY}")
+        r = run_script(SCRIPT, "residual", str(self.tmp / "d"), str(self.tmp / "khong-co"))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("blob.bin", r.stderr)
+        self.assertIn("log.txt", r.stderr)
+        self.assertNotIn(FAKE_KEY, r.stdout + r.stderr)
+
+    def test_export_stops_and_removes_the_copy_when_masking_leaves_a_key(self):
+        d = self.trial("pilot", B.PLAIN, "t")
+        self.write(f"pilot/{d.name}/agent/claude-code.txt", f"khóa {FAKE_KEY}\n")
+        out = self.tmp / "out"
+        args = argparse.Namespace(jobs=[str(self.tmp / "pilot")], out=str(out), env_file=None)
+        with unittest.mock.patch.object(B, "mask_secrets", lambda data, extra=(): data):
+            self.assertEqual(B.cmd_export(args), 1)
+        self.assertFalse(out.exists())
 
     def test_symlinks_in_the_log_dir_are_not_followed(self):
         d = self.trial("pilot", B.PLAIN, "t")
@@ -571,6 +754,92 @@ class CompareTests(Base):
         res = B.compare(B.load_trials([self.tmp / "job"]), arms=[P, H])
         self.assertEqual(sorted(r["task"] for r in res["rows"]), ["no-py", "ok", "py38"])
 
+    def test_task_names_with_an_org_prefix_are_cut_to_the_directory_name_everywhere(self):
+        """Harbor đặt task_name = config.task.name (org/tên); task_names của job và thư mục xuất dùng tên ngắn."""
+        self.assertEqual(B.task_key("org/abc"), "abc")
+        self.assertEqual(B.task_key("abc"), "abc")
+        self.assertEqual(B.task_key("a/b/c"), "c")
+        for arm in (B.PLAIN, B.STACK):
+            self.trial("job", arm, "abc", reward=1.0, full="org/abc")
+            self.trial("job", arm, "def", reward=0.0, full="org/def")
+        self.trial("oracle", "oracle", "abc", reward=1.0, full="org/abc")
+        self.trial("oracle", "oracle", "def", reward=0.0, full="org/def")      # lời giải mẫu không đạt: loại
+        trials = B.load_trials([self.tmp / "job"])
+        self.assertEqual({t["task"] for t in trials}, {"abc", "def"})
+        self.assertEqual({t["task_full"] for t in trials}, {"org/abc", "org/def"})
+        res = B.compare(trials, B.load_trials([self.tmp / "oracle"]), arms=[B.PLAIN, B.STACK])
+        self.assertEqual([r["task"] for r in res["rows"]], ["abc"])
+        self.assertEqual(dict(res["excluded"])["def"], "lời giải mẫu không đạt")
+        # tên đã cắt đi thẳng vào danh sách việc của job (NAME_RE không cho dấu '/')
+        f = self.write("main.txt", "".join(f"tblite:{t}\n" for t in sorted({t["task"] for t in trials})))
+        self.assertEqual(B.read_task_spec(f), {"tblite": ["abc", "def"]})
+
+    def test_one_infra_failed_attempt_drops_the_whole_task_even_when_others_were_graded(self):
+        P, S = B.PLAIN, B.STACK
+        for n in range(2):
+            self.trial("job", P, "mixed", reward=1.0, n=n)
+            self.trial("job", P, "clean", reward=1.0, n=n)
+            self.trial("job", S, "clean", reward=1.0, n=n)
+        self.trial("job", S, "mixed", reward=1.0, n=0)
+        self.trial("job", S, "mixed", reward=0.0, n=1, exception="ApiOverloadedError")
+        res = B.compare(B.load_trials([self.tmp / "job"]), arms=[P, S])
+        self.assertEqual([r["task"] for r in res["rows"]], ["clean"])
+        self.assertIn("ApiOverloadedError", dict(res["excluded"])["mixed"])
+        # hỏng ở bản kia (plain) cũng loại việc, và lượt không có điểm cũng vậy
+        self.trial("job", P, "other", reward=1.0, n=0)
+        self.trial("job", P, "other", reward=None, n=1)
+        for n in range(2):
+            self.trial("job", S, "other", reward=1.0, n=n)
+        res = B.compare(B.load_trials([self.tmp / "job"]), arms=[P, S])
+        self.assertIn("other", dict(res["excluded"]))
+
+    def test_unclassified_api_errors_are_infrastructure(self):
+        for exc in ("UnknownApiError", "ApiProviderResourceNotFoundError"):
+            self.assertIn(exc, B.INFRA_ERRORS)
+            self.trial("job", B.PLAIN, exc, reward=1.0)
+            self.trial("job", B.STACK, exc, reward=0.0, exception=exc)
+        self.assertEqual(B.compare(B.load_trials([self.tmp / "job"]), arms=[B.PLAIN, B.STACK])["rows"], [])
+        for exc in ("AgentTimeoutError", "ContextWindowExceededError", "NonZeroAgentExitCodeError", "OutputTokenExceededError"):
+            self.assertNotIn(exc, B.INFRA_ERRORS)
+
+    def test_pip_freeze_difference_is_a_warning_and_never_a_refusal(self):
+        self.trial("a", B.PLAIN, "t")
+        self.trial("b", B.PLAIN, "t2")
+        self.write("a.meta.json", json.dumps({"claude_code": VER, "pip_freeze_sha256": "1" * 64}))
+        self.write("b.meta.json", json.dumps({"claude_code": VER, "pip_freeze_sha256": "2" * 64}))
+        r = run_script(SCRIPT, "compare", str(self.tmp / "a"), str(self.tmp / "b"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("⚠️ pip freeze", r.stderr)
+        self.write("b.meta.json", json.dumps({"claude_code": VER, "pip_freeze_sha256": "1" * 64}))
+        self.assertNotIn("pip freeze", run_script(SCRIPT, "compare", str(self.tmp / "a"), str(self.tmp / "b")).stderr)
+
+    def test_report_names_the_test_it_really_runs(self):
+        for task, a, b in (("t1", 1, 0), ("t2", 0, 1)):
+            self.trial("one", B.PLAIN, task, reward=float(a))
+            self.trial("one", B.STACK, task, reward=float(b))
+        text = B.report(B.compare(B.load_trials([self.tmp / "one"])))
+        self.assertIn("McNemar chính xác p =", text)
+        self.assertNotIn("kiểm dấu chính xác", text)
+        for n in range(2):
+            self.trial("two", B.PLAIN, "t", reward=1.0, n=n)
+            self.trial("two", B.STACK, "t", reward=float(n), n=n)
+        res = B.compare(B.load_trials([self.tmp / "two"]))
+        self.assertTrue(res["multi_attempt"])
+        self.assertIn("kiểm dấu chính xác theo tỉ lệ đạt từng việc p =", B.report(res))
+        # cùng một hàm tính cho cả hai: p của kiểm dấu chính xác trên số việc lệch
+        self.assertAlmostEqual(res["comparisons"][0]["p_value"], B.exact_binomial_p(1, 0))
+
+    def test_claude_md_in_the_harbor_config_dir_is_checked_not_only_home(self):
+        d = self.trial("job", B.STACK, "t")
+        env = (d / "agent" / "agent-stack-env.txt")
+        env.write_text(env.read_text().replace("config_claude_md=yes", "config_claude_md=no"))
+        trial = B.load_trials([self.tmp / "job"])[0]
+        self.assertEqual(trial["structure"], ["config_claude_md=no (cần yes)"])
+        d = self.trial("job2", B.PLAIN, "t")
+        env = (d / "agent" / "agent-stack-env.txt")
+        env.write_text(env.read_text().replace("config_claude_md=no", "config_claude_md=yes"))
+        self.assertTrue(B.load_trials([self.tmp / "job2"])[0]["structure"])
+
     def test_python_version_threshold(self):
         for ok in ("3.9.2", "3.9", "3.11.15", "3.12.3", "3.13.0"):
             self.assertTrue(B.python_ok(ok), ok)
@@ -671,65 +940,103 @@ class CompareTests(Base):
 
 
 class SelectTests(Base):
-    def run_pilot(self, rows):
-        """rows: [(việc, điểm, chi phí, ngoại lệ, python3)]; việc có '__' là của SWE-rebench."""
-        for task, reward, cost, exc, py in rows:
-            self.trial("pilot", B.PLAIN, task, reward=reward, cost=cost, exception=exc, python3=py)
-        return B.load_trials([self.tmp / "pilot"])
+    """Mục 5: việc cho job lớn chọn theo nhãn độ khó mà bộ đo công bố, không đọc kết quả của bản nào."""
 
-    def test_keeps_only_borderline_tasks_and_explains_every_drop(self):
-        rows = [("e1", 1.0, 0.05, None, "3.12.3"), ("e2", 1.0, 0.06, None, "3.12.3"),      # đạt, rẻ: chắc đạt
-                ("m1", 1.0, 0.40, None, "3.12.3"), ("m2", 1.0, 0.50, None, "3.12.3"),      # đạt, tốn công: giữ
-                ("f1", 0.0, 0.04, None, "3.12.3"), ("f2", 0.0, 0.03, None, "3.12.3"),      # trượt, rẻ: giữ
-                ("h1", 0.0, 0.80, None, "3.12.3"), ("h2", 0.0, 0.90, None, "3.12.3"),      # trượt, tốn: chắc trượt
-                ("limit", 0.0, 0.1, "ApiUsageLimitError", "3.12.3"), ("nopy", 1.0, 0.5, None, ""),
-                ("o__bad-1", 0.0, 0.1, None, "3.12.3")]
-        res = B.classify_pilot(self.run_pilot(rows))
-        self.assertEqual(sorted(res["keep"]["tblite"]), ["f1", "f2", "m1", "m2"])
-        why = {t: w for _ds, t, w in res["drop"]}
-        self.assertIn("chắc đạt", why["e1"])
-        self.assertIn("chắc trượt", why["h1"])
-        self.assertIn("ApiUsageLimitError", why["limit"])
-        self.assertIn("python3", why["nopy"])
-        self.assertIn("chắc trượt", why["o__bad-1"])
+    def tblite(self, name, toml):
+        self.write(f"datasets/tblite/{name}/task.toml", toml)
 
-    def test_medians_are_taken_per_dataset_and_oracle_failures_drop(self):
-        rows = [("a", 1.0, 0.05, None, "3.12.3"), ("b", 1.0, 0.07, None, "3.12.3"), ("c", 1.0, 0.09, None, "3.12.3"),
-                ("x__1", 1.0, 1.0, None, "3.12.3"), ("x__2", 1.0, 2.0, None, "3.12.3"), ("x__3", 1.0, 3.0, None, "3.12.3")]
-        trials = self.run_pilot(rows)
-        oracle = [{"task": "b", "reward": 0.0, "agent": "oracle"}]
-        res = B.classify_pilot(trials, oracle)
-        self.assertEqual(sorted(res["keep"]["tblite"]), ["c"])          # trung vị TBLite 0,07; b bị oracle loại
-        self.assertEqual(sorted(res["keep"]["swerebench"]), ["x__2", "x__3"])
-        self.assertIn("lời giải mẫu", dict((t, w) for _d, t, w in res["drop"])["b"])
+    def swe(self, name):
+        self.write(f"datasets/swerebench/{name}/task.toml", '[task]\nname = "swe-rebench/x"\n[metadata]\ndifficulty = "medium"\n')
 
-    def test_several_attempts_keep_rates_strictly_between_zero_and_one(self):
-        for n, r in enumerate((1, 1, 0)):
-            self.trial("pilot", B.PLAIN, "mix", reward=float(r), n=n)
-        for n in range(3):
-            self.trial("pilot", B.PLAIN, "always", reward=1.0, n=n)
-            self.trial("pilot", B.PLAIN, "never", reward=0.0, n=n)
-        res = B.classify_pilot(B.load_trials([self.tmp / "pilot"]))
-        self.assertEqual(res["keep"], {"tblite": ["mix"]})
+    def test_difficulty_is_read_flexibly_from_task_toml_and_json(self):
+        cases = {
+            "meta-table": ('[metadata]\ndifficulty = "Hard"\n', "hard"),
+            "task-table": ('[task]\nname = "a/b"\ndifficulty = "extreme"\n', "extreme"),
+            "root": ('difficulty = "medium"\n', "medium"),
+            "deep": ('[a.b.c]\ndifficulty = "easy"\n', "easy"),
+            "suffix": ('[metadata]\ndifficulty = "Hard (pass rate 10-39%)"\n', "hard"),
+            "tags": ('[metadata]\ntags = ["python", "medium"]\n', "medium"),
+            "none": ('[metadata]\ncategory = "x"\n', None),
+            "odd": ('[metadata]\ndifficulty = 3\n', None),
+        }
+        for name, (toml, want) in cases.items():
+            with self.subTest(name):
+                self.tblite(name, toml)
+                self.assertEqual(B.task_difficulty(self.tmp / "datasets/tblite" / name), want)
+        self.tblite("from-json", "[task]\nname = 'x'\n")
+        self.write("datasets/tblite/from-json/metadata.json", json.dumps({"info": {"difficulty": "extreme"}}))
+        self.assertEqual(B.task_difficulty(self.tmp / "datasets/tblite/from-json"), "extreme")
+        self.tblite("broken", "không phải toml [[")
+        self.assertIsNone(B.task_difficulty(self.tmp / "datasets/tblite/broken"))
 
-    def test_cli_writes_a_main_list_that_make_configs_reads_back(self):
-        self.run_pilot([("m1", 1.0, 0.4, None, "3.12.3"), ("m2", 1.0, 0.3, None, "3.12.3"), ("f1", 0.0, 0.01, None, "3.12.3"),
-                        ("e1", 1.0, 0.02, None, "3.12.3"), ("s__a-1", 0.0, 0.1, None, "3.12.3")])
-        out = self.tmp / "tasks-main.txt"
-        r = run_script(SCRIPT, "select", str(self.tmp / "pilot"), "--out", str(out))
+    def test_keeps_medium_hard_extreme_plus_all_swerebench_and_ignores_easy(self):
+        for name, lv in (("e1", "easy"), ("e2", "easy"), ("m1", "medium"), ("h1", "hard"), ("h2", "hard"), ("x1", "extreme")):
+            self.tblite(name, f'[metadata]\ndifficulty = "{lv}"\n')
+        self.tblite("nolabel", "[task]\nname = 'x'\n")
+        for n in ("s__1", "s__2"):
+            self.swe(n)
+        res = B.select_main(self.tmp / "datasets", ["s__2", "s__1"])
+        self.assertEqual(res["tblite"], ["h1", "h2", "m1", "x1"])
+        self.assertEqual(res["swerebench"], ["s__1", "s__2"])
+        self.assertEqual(res["unlabeled"], ["nolabel"])
+        self.assertEqual(res["counts"], {"easy": 2, "medium": 1, "hard": 2, "extreme": 1, "không nhãn": 1})
+        self.assertEqual(B.select_main(self.tmp / "datasets", ["s__1"], ("hard",))["tblite"], ["h1", "h2"])
+
+    def test_stops_when_no_label_can_be_read_or_a_swerebench_task_vanished(self):
+        self.tblite("a", "[task]\nname = 'x'\n")
+        self.swe("s__1")
+        with self.assertRaises(SystemExit) as cm:
+            B.select_main(self.tmp / "datasets", ["s__1"])
+        self.assertIn("nhãn độ khó", str(cm.exception))
+        self.tblite("b", '[metadata]\ndifficulty = "hard"\n')
+        with self.assertRaises(SystemExit) as cm:
+            B.select_main(self.tmp / "datasets", ["s__1", "s__gone"])
+        self.assertIn("s__gone", str(cm.exception))
+
+    def test_cli_writes_a_documented_list_that_make_configs_reads_and_never_looks_at_results(self):
+        self.tblite("m1", '[metadata]\ndifficulty = "medium"\n')
+        self.tblite("e1", '[metadata]\ndifficulty = "easy"\n')
+        self.swe("s__1")
+        swe = self.write("tasks-swerebench.txt", "# chú thích\ns__1\n")
+        r = run_script(SCRIPT, "select", str(self.tmp / "datasets"), "--swerebench", str(swe))
         self.assertEqual(r.returncode, 0, r.stderr)
-        spec = B.read_task_spec(out)
-        self.assertEqual(sorted(spec["tblite"]), ["f1", "m1", "m2"])
-        self.assertIn("tiêu chí tự đề xuất".lower(), out.read_text().lower())
+        lines = r.stdout.splitlines()
+        self.assertEqual([ln for ln in lines if not ln.startswith("#")], ["tblite:m1", "swerebench:s__1"])
+        header = "\n".join(ln for ln in lines if ln.startswith("#"))
+        self.assertIn("KHÔNG từ kết quả", header)
+        self.assertIn("Haiku 4.5", header)
+        self.assertIn("1 việc TBLite + 1 SWE-rebench", r.stderr)
+        out = self.write("tasks-main.txt", r.stdout)
         r = run_script(SCRIPT, "make-configs", "--kind", "main", "--name", "main", "--tasks", str(out), "--attempts", "2",
                        "--out", str(self.tmp / "main.json"))
         self.assertEqual(r.returncode, 0, r.stderr)
+        cfg = json.loads((self.tmp / "main.json").read_text())
+        self.assertEqual(cfg["datasets"], [{"path": "datasets/tblite", "task_names": ["m1"]},
+                                           {"path": "datasets/swerebench", "task_names": ["s__1"]}])
+        # lệnh select không nhận thư mục kết quả nào, và code không còn đường chọn theo kết quả pilot
+        self.assertNotEqual(run_script(SCRIPT, "select", str(self.tmp / "pilot")).returncode, 0)
+        self.assertFalse(hasattr(B, "classify_pilot"))
+        self.assertEqual(run_script(SCRIPT, "select", str(self.tmp / "datasets"), "--swerebench", str(swe), "--levels",
+                                    "easy,bogus").returncode, 2)
 
-    def test_limit_per_dataset_is_seeded(self):
-        rows = [(f"t{i}", 0.0, 0.01 * (i + 1), None, "3.12.3") for i in range(10)]
-        trials = self.run_pilot(rows)
-        a = B.classify_pilot(trials, limit_per_ds=4)["keep"]["tblite"]
-        self.assertEqual((len(a), a), (4, B.classify_pilot(trials, limit_per_ds=4)["keep"]["tblite"]))
+    def test_pilot_report_groups_by_label_and_only_suggests_when_a_group_saturates(self):
+        labels = {"e1": "easy", "e2": "easy", "e3": "easy", "e4": "easy", "e5": "easy", "h1": "hard", "h2": "hard", "s__1": "swerebench"}
+        for t in labels:
+            self.trial("pilot", B.PLAIN, t, reward=0.0 if t.startswith("h") else 1.0, cost=0.2 if t.startswith("h") else 0.05)
+        self.write("pilot.meta.json", json.dumps({"claude_code": VER, "difficulty": labels}))
+        before = {p.name for p in self.tmp.rglob("*")}
+        r = run_script(SCRIPT, "pilot-report", str(self.tmp / "pilot"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertRegex(out, r"easy\s+5\s+100%")
+        self.assertRegex(out, r"hard\s+2\s+0%")
+        self.assertIn("nhóm 'easy' bão hòa", out)
+        self.assertIn("tasks-main.txt không đổi", out)
+        self.assertNotIn("nhóm 'hard' bão hòa", out)
+        self.assertEqual({p.name for p in self.tmp.rglob("*")}, before)          # không ghi gì
+        main = self.write("tasks-main.txt", "tblite:a\ntblite:b\nswerebench:c\n")
+        r = run_script(SCRIPT, "pilot-report", str(self.tmp / "pilot"), "--main-tasks", str(main), "--attempts", "2")
+        self.assertIn("3 việc × 4 cấu hình × 2 lần = 24 lượt", r.stdout)
 
 
 class TufScriptTests(unittest.TestCase):
@@ -746,8 +1053,8 @@ class TufScriptTests(unittest.TestCase):
         self.assertEqual(subprocess.run(["sh", "-n", str(self.TUF)]).returncode, 0)
         r = self.run_sh()
         self.assertEqual(r.returncode, 2)
-        for word in ("setup", "sync", "data", "pick", "check", "oracle", "pilot", "select", "run", "status", "stop", "fetch",
-                     "compare", "prune"):
+        for word in ("setup", "sync", "data", "pick", "check", "oracle", "pilot", "pilot-report", "select", "run", "status",
+                     "stop", "fetch", "compare", "prune"):
             self.assertIn(f"tuf.sh {word}", r.stdout)
         self.assertNotIn("set -eu", r.stdout)
 
@@ -784,8 +1091,12 @@ class TufScriptTests(unittest.TestCase):
             if ".env" in ln and not ln.lstrip().startswith("#"):
                 self.assertNotRegex(ln, r"\b(cat|head|tail|sed|awk|cut)\b[^|]*\.env\b", ln)
                 if "OAUTH" in ln and "grep" in ln:
-                    self.assertRegex(ln, r"grep -q", ln)
-        self.assertIn("sk-ant-", t)               # fetch kiểm lại lần cuối trên Mac
+                    self.assertRegex(ln, r"grep -q|wc -l|grep -oE '\^\[A-Za-z_\]\[A-Za-z0-9_\]\*='", ln)
+        fetch = t[t.index("  fetch)\n"):]
+        fetch = fetch[:fetch.index(";;")]
+        self.assertIn("harbor_bench.py\" residual", fetch)   # Mac quét lại bằng đúng mẫu của export, không phải grep riêng
+        self.assertNotIn("grep", fetch)
+        self.assertIn("--env-file .env", fetch)             # export trên TUF che cả giá trị khóa thật trong .env
 
     def test_background_job_is_grouped_so_ssh_returns_at_once_and_a_watcher_runs(self):
         t = self.text()
@@ -794,9 +1105,22 @@ class TufScriptTests(unittest.TestCase):
         self.assertEqual(body.count("< /dev/null &"), 2)      # harbor và watch, cả hai tách khỏi ssh
         self.assertIn("AGENT_STACK_PAYLOAD=", body)
         self.assertIn("harbor_bench.py watch", body)
-        self.assertIn("--env-file .env", body)
+        self.assertIn("run_harbor.sh", body)                # harbor chạy qua môi trường lọc, .env chỉ khi mode=token
+        self.assertEqual(body.count("kill -0"), 2)          # sau khi khởi động kiểm cả harbor lẫn watcher
+        self.assertIn("watch.pid", body)
         self.assertIn("validate-config", body)
         self.assertIn("meta configs/", body)
+
+    def test_harbor_runs_under_a_filtered_environment_and_loads_env_only_for_model_jobs(self):
+        t = (HARBOR / "run_harbor.sh").read_text(encoding="utf-8")
+        self.assertEqual(subprocess.run(["sh", "-n", str(HARBOR / "run_harbor.sh")]).returncode, 0)
+        self.assertIn("exec env -i", t)
+        token_line = next(ln for ln in t.splitlines() if "token)" in ln)
+        none_line = next(ln for ln in t.splitlines() if ln.strip().startswith("none)"))
+        self.assertIn("--env-file .env", token_line)
+        self.assertNotIn("--env-file", none_line)
+        for var in ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "AWS_", "GITHUB"):
+            self.assertNotIn(var, t.split("for v in")[1].split("; do")[0])
 
     def test_stop_signals_the_whole_group_and_lists_leftover_containers(self):
         t = self.text()
@@ -817,6 +1141,194 @@ class TufScriptTests(unittest.TestCase):
         body = t[t.index("  fetch)\n"):]
         body = body[:body.index(";;")]
         self.assertLess(body.index("export"), body.index("tar -xzf"))
+
+
+class TufBehaviourTests(TempDirTestCase):
+    """Chạy tuf.sh thật với `ssh` giả (chạy lệnh ngay trên máy này, HOME đổi sang thư mục tạm) và harbor giả. Chỉ kiểm
+    hành vi của script; không có Docker, không có Harbor thật."""
+
+    TOKEN = "sk-ant-oat01-" + "Zq7" * 14
+    LOCAL_JOB = "zzfetchtest"
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.tmp / "home"
+        self.rd = self.home / "harbor-eval"
+        (self.rd / ".venv" / "bin").mkdir(parents=True)
+        os.symlink(sys.executable, self.rd / ".venv" / "bin" / "python")
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir()
+        stub = self.tmp / "stub"
+        for rel in ("harbor", "harbor/models", "harbor/models/job"):
+            self.write(f"stub/{rel}/__init__.py", "")
+        self.write("stub/harbor/models/job/config.py",
+                   "class _C:\n    agents = []\nclass JobConfig:\n    @staticmethod\n    def model_validate_json(t):\n        return _C()\n")
+        self.write("stub/harbor-0.25.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: harbor\nVersion: 0.25.0\n")
+        # Qua cat để stdin của shell xa là ống (như ssh thật): với stdin là file, libc của python con đặt lại vị trí đọc khi thoát
+        # và shell đọc lại dòng cũ của script.
+        self.shim("ssh", f'host=$1; shift\ncat | env HOME={self.home} PYTHONPATH={stub} sh -c "$*"\n')
+        self.shim("setsid", 'exec "$@"\n')
+        self.shim("stat", 'if /usr/bin/stat --version >/dev/null 2>&1; then exec /usr/bin/stat "$@"; fi\n'
+                  'if [ "$1" = -c ] && [ "$2" = %a ]; then exec /usr/bin/stat -f %Lp "$3"; fi\nexec /usr/bin/stat "$@"\n')
+        ag = self.rd / "agent-stack"
+        (ag / "payload" / "full").mkdir(parents=True)
+        (ag / "payload" / "full" / ".agent-stack-root").write_text("")
+        (ag / "payload" / "full" / ".payload-commit").write_text("abc1234\n")
+        for f in ("harbor_bench.py", "agent_stack_agents.py", "run_harbor.sh", "compose-allow.txt"):
+            (ag / f).write_text((HARBOR / f).read_text(encoding="utf-8"), encoding="utf-8")
+        (ag / "tasks-swerebench.txt").write_text("swe-a\n")
+        (ag / "tasks-main.txt").write_text("tblite:t1\nswerebench:swe-a\n")
+        for ds, names in (("tblite", ("t1", "t2")), ("swerebench", ("swe-a",))):
+            for n in names:
+                self.write(f"home/harbor-eval/datasets/{ds}/{n}/task.toml", '[metadata]\ndifficulty = "hard"\n')
+        self.harbor("echo \"$@\" > \"$HOME/harbor-args.txt\"\nenv | sort > \"$HOME/harbor-env.txt\"\nsleep 6\n")
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n")
+        self.addCleanup(shutil_rmtree, REPO / ".tmp" / "harbor-jobs" / "jobs" / self.LOCAL_JOB)
+
+    def shim(self, name, body):
+        p = self.bin / name
+        p.write_text("#!/bin/sh\n" + body)
+        p.chmod(0o755)
+
+    def harbor(self, body):
+        p = self.rd / ".venv" / "bin" / "harbor"
+        p.write_text("#!/bin/sh\n" + body)
+        p.chmod(0o755)
+
+    def env_file(self, text, mode=0o600):
+        p = self.rd / ".env"
+        p.write_text(text)
+        p.chmod(mode)
+
+    def tuf(self, *args, extra_env=None):
+        env = {"PATH": f"{self.bin}:{os.path.dirname(sys.executable)}:/usr/bin:/bin", "HARBOR_HOST": "fake",
+               "HARBOR_WATCH_INTERVAL": "1", "HOME": os.environ.get("HOME", "/"), **(extra_env or {})}
+        return subprocess.run(["sh", str(HARBOR / "tuf.sh"), *args], capture_output=True, text=True, timeout=120, env=env,
+                              stdin=subprocess.DEVNULL)
+
+    def args_file(self):
+        return self.home / "harbor-args.txt"
+
+    def test_oracle_never_loads_env_and_pilot_does(self):
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\nOTHER_KEY=hunter2value\n")      # oracle không đọc .env nên không bị chặn
+        r = self.tuf("oracle", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, (r.stdout + r.stderr)[-800:])
+        self.assertIn("Đã chạy nền job pilot-oracle", r.stdout)
+        args = self.args_file().read_text().split()
+        self.assertEqual(args, ["run", "-c", "configs/pilot-oracle.json", "-q", "-y"])
+        self.assertNotIn("--env-file", args)
+        cfg = json.loads((self.rd / "configs" / "pilot-oracle.json").read_text())
+        self.assertEqual(cfg["agents"], [{"name": "oracle"}])
+
+    def test_model_job_loads_env_through_a_filtered_environment(self):
+        r = self.tuf("pilot", "--yes", "--force", extra_env={"DECOY_SECRET": "not-for-containers", "AWS_SECRET_ACCESS_KEY": "zzz"})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.args_file().read_text().split(), ["run", "-c", "configs/pilot.json", "--env-file", ".env", "-q", "-y"])
+        env = (self.home / "harbor-env.txt").read_text()
+        for needle in ("DECOY_SECRET", "AWS_SECRET_ACCESS_KEY", "not-for-containers", self.TOKEN, "OAUTH"):
+            self.assertNotIn(needle, env)
+        for needle in ("PATH=", "HOME=", "AGENT_STACK_PAYLOAD=", "PYTHONPATH="):
+            self.assertIn(needle, env)
+        self.assertTrue((self.rd / "jobs" / "pilot.watch.pid").is_file())
+        self.assertTrue((self.rd / "jobs" / "pilot.meta.json").is_file())
+        meta = json.loads((self.rd / "jobs" / "pilot.meta.json").read_text())
+        self.assertEqual(meta["difficulty"]["t1"], "hard")
+
+    def test_env_with_any_other_key_or_env_local_is_refused_without_printing_values(self):
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n# ghi chú\n\nANTHROPIC_API_KEY=hunter2value\nraw-secret-line\n")
+        for cmd in (("pilot", "--yes", "--force"), ("run", "--yes", "--force")):
+            r = self.tuf(*cmd)
+            self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+            out = r.stdout + r.stderr
+            self.assertIn("2 dòng ngoài CLAUDE_CODE_OAUTH_TOKEN", out)
+            self.assertIn("ANTHROPIC_API_KEY", out)
+            for secret in ("hunter2value", "raw-secret-line", self.TOKEN):
+                self.assertNotIn(secret, out)
+            self.assertFalse(self.args_file().exists())
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n")
+        (self.rd / ".env.local").write_text("X=1\n")
+        r = self.tuf("pilot", "--yes", "--force")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn(".env.local", r.stderr)
+        self.assertFalse(self.args_file().exists())
+
+    def test_wide_permissions_or_missing_token_are_refused(self):
+        self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n", mode=0o644)
+        r = self.tuf("pilot", "--yes", "--force")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("quyền 644", r.stderr)
+        self.assertNotIn(self.TOKEN, r.stdout + r.stderr)
+        self.env_file("")
+        self.assertIn("Chưa có CLAUDE_CODE_OAUTH_TOKEN", self.tuf("pilot", "--yes", "--force").stderr)
+        self.assertFalse(self.args_file().exists())
+
+    def test_without_yes_nothing_is_launched_and_the_plan_is_printed(self):
+        for cmd, what in ((("oracle",), "lời giải mẫu"), (("pilot",), "pilot"), (("run",), "job lớn")):
+            r = self.tuf(*cmd)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("Chưa chạy. Thêm --yes", r.stdout)
+            self.assertIn("Trần chi phí" if cmd != ("oracle",) else "Lời giải mẫu: không gọi model", r.stdout)
+            self.assertFalse(self.args_file().exists(), cmd)
+            self.assertFalse((self.rd / "jobs").exists() and any((self.rd / "jobs").glob("*.pid")), cmd)
+
+    def test_job_dies_at_start_is_reported_and_stopped(self):
+        self.harbor("exit 0\n")
+        r = self.tuf("pilot", "--yes", "--force")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("harbor hay watcher không chạy sau khi khởi động", r.stderr)
+
+    def test_data_sync_and_prune_refuse_while_a_job_is_running(self):
+        sleeper = subprocess.Popen(["sleep", "60"])
+        self.addCleanup(lambda: (sleeper.kill(), sleeper.wait()))
+        (self.rd / "jobs").mkdir()
+        (self.rd / "jobs" / "main.pid").write_text(f"{sleeper.pid}\n")
+        for cmd in ("data", "sync", "prune"):
+            r = self.tuf(cmd, "--force")
+            self.assertEqual(r.returncode, 3, (cmd, r.stdout, r.stderr))
+            self.assertIn("Còn job đang chạy", r.stderr)
+        r = self.tuf("pilot", "--yes", "--force")      # job khác cũng không được khởi động chồng lên
+        self.assertEqual(r.returncode, 3)
+        self.assertFalse(self.args_file().exists())
+        # pid cũ đã chết thì không chặn
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        (self.rd / "jobs" / "main.pid").write_text(f"{dead.pid}\n")
+        r = self.tuf("prune", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Chưa xóa", r.stdout)
+
+    def test_fetch_keeps_short_lookalikes_masks_real_keys_and_rescans_on_the_mac(self):
+        job = self.rd / "jobs" / self.LOCAL_JOB
+        trial = job / "t1__abc"
+        (trial / "agent").mkdir(parents=True)
+        (trial / "result.json").write_text(json.dumps({"task_name": "org/t1", "agent_info": {"name": B.PLAIN}}))
+        (trial / "agent" / "claude-code.txt").write_text(
+            f'{{"type":"user","content":"đọc sk-ant-xxx trong README; khóa thật {self.TOKEN} và CLAUDE_CODE_OAUTH_TOKEN=abcdefgh12345678"}}\n')
+        (self.rd / "jobs" / f"{self.LOCAL_JOB}.meta.json").write_text(json.dumps({"claude_code": VER}))
+        r = self.tuf("fetch", self.LOCAL_JOB)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        local = REPO / ".tmp" / "harbor-jobs" / "jobs" / self.LOCAL_JOB
+        self.assertTrue((local / "t1__abc" / "result.json").is_file(), "bản kéo về không được xóa chỉ vì chuỗi sk-ant-xxx ngắn")
+        text = (local / "t1__abc" / "agent" / "claude-code.txt").read_text()
+        self.assertIn("sk-ant-xxx", text)
+        self.assertNotIn(self.TOKEN, text)
+        self.assertNotIn("abcdefgh12345678", text)
+        self.assertTrue((local / "bench-meta.json").is_file())
+
+    def test_status_filters_the_log_it_prints(self):
+        (self.rd / "jobs" / "main").mkdir(parents=True)
+        (self.rd / "jobs" / "main.log").write_text(f"bắt đầu\n\x1b[31mđỏ\x1b[0m khóa {self.TOKEN}\n\x1b]0;giả\x07xong\n")
+        r = self.tuf("status")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn(self.TOKEN, r.stdout)
+        self.assertNotIn("\x1b", r.stdout)
+        self.assertIn("harbor: không thấy main.pid", r.stdout)
+        self.assertIn("xong", r.stdout)
+
+
+def shutil_rmtree(path):
+    import shutil
+    shutil.rmtree(path, ignore_errors=True)
 
 
 class AgentFileTests(unittest.TestCase):
@@ -869,7 +1381,8 @@ class AgentFileTests(unittest.TestCase):
         self.assertIn("python3", self.src)
 
     def test_env_file_keys_match_what_compare_reads(self):
-        for key in ("variant=", "python3=", "payload_commit=", "user_claude_md=", "plugin_dir=", "hooks_json=", "agents_dir="):
+        for key in ("variant=", "python3=", "payload_commit=", "user_claude_md=", "config_claude_md=", "plugin_dir=",
+                    "hooks_json=", "agents_dir="):
             self.assertIn(key, self.src)
 
 

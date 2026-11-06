@@ -45,6 +45,8 @@ class _Probed(ClaudeCode):
     async def _write_env_file(self, environment) -> None:
         out = shlex.quote((self.environment_logs_dir / ENV_FILE).as_posix())
         root = f'"$HOME/{HOME_REL}"'
+        # Harbor đặt CLAUDE_CONFIG_DIR=<logs>/sessions: CLAUDE.md cấp người dùng mà Claude Code thật sự đọc nằm ở đó
+        config_md = shlex.quote((self.environment_logs_dir / "sessions" / "CLAUDE.md").as_posix())
         await self.exec_as_agent(environment, command=(
             f'out={out}; py=$(command -v python3 2>/dev/null || true); ver=""; '
             'if [ -n "$py" ]; then ver=$("$py" -c \'import sys; print("%d.%d.%d" % sys.version_info[:3])\' '
@@ -54,6 +56,7 @@ class _Probed(ClaudeCode):
             f'echo "variant={self.VARIANT}"; echo "python3=$ver"; '
             f'echo "payload_commit=$(cat {root}/.payload-commit 2>/dev/null || true)"; '
             'echo "user_claude_md=$(yn "$HOME/.claude/CLAUDE.md")"; '
+            f'echo "config_claude_md=$(yn {config_md})"; '
             f'echo "plugin_dir=$(yn {root}/plugin)"; echo "hooks_json=$(yn {root}/plugin/hooks/hooks.json)"; '
             f'echo "agents_dir=$(yn {root}/plugin/agents)"; '
             '} > "$out"'))

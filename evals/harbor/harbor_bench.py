@@ -18,13 +18,18 @@ Lệnh (chạy trên Mac hay trên TUF; chỉ dùng thư viện chuẩn, trừ v
   meta CONFIG --out FILE --payload DIR  ghi phiên bản đã ghim (Harbor, Claude Code, commit bản chép, mã băm bộ việc)
   validate-config CONFIG                kiểm cấu hình bằng chính mô hình của Harbor (cần harbor)
   watch JOB_DIR --pid PID               dừng job khi số lượt lỗi hạn mức hay rate limit vượt ngưỡng
-  export JOB_DIR... --out DIR           chép kết quả cần thiết, che mọi chuỗi sk-ant-… trong MỌI file kéo về
-  select JOB_DIR --out FILE             từ kết quả pilot, chọn "việc phân biệt" cho job lớn
+  export JOB_DIR... --out DIR [--env-file F]  chép kết quả cần thiết, che mọi chuỗi sk-ant-… (và khóa thật trong .env,
+                                        cả dạng base64) trong MỌI file kéo về, rồi quét lại
+  residual DIR... [--env-file F]        quét lại thư mục đã kéo về với đúng mẫu của export (mọi file, kể cả nhị phân)
+  scrub                                 stdin -> stdout: che khóa, bỏ ký tự điều khiển (dùng cho đoạn log in ra terminal)
+  select DATASETS_DIR --swerebench FILE sinh tasks-main.txt từ nhãn độ khó công bố của TBLite + cả danh sách SWE-rebench
+  pilot-report JOB_DIR                  tỉ lệ đạt và chi phí của pilot theo nhãn độ khó (chỉ gợi ý, không chọn gì)
   compare JOB_DIR... [--oracle JOB_DIR] so ghép cặp bốn cấu hình
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import math
@@ -34,6 +39,7 @@ import re
 import shutil
 import signal
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -93,6 +99,8 @@ def verify_payload(root: Path) -> list:
             problems.append(f"mục thừa ở gốc: {item.name}")
     for p in root.rglob("*"):
         rel = p.relative_to(root).as_posix()
+        if p.is_symlink():
+            problems.append(f"symlink: {rel}")
         if p.name.startswith(".env"):
             problems.append(f"file môi trường: {rel}")
         if p.is_dir() and p.name in (".agent", "state", ".git", "backups", ".tmp"):
@@ -116,7 +124,7 @@ def build_payload(src: Path, dst: Path, commit: str) -> list:
         for name in PAYLOAD_ALLOW:
             s = src / name
             if s.is_dir():
-                shutil.copytree(s, out / name, symlinks=False, ignore=_skip_junk)
+                shutil.copytree(s, out / name, symlinks=True, ignore=_skip_junk)
             elif s.is_file():
                 shutil.copy2(s, out / name)
         if variant == "nohooks":
@@ -229,63 +237,46 @@ def cmd_lock(args) -> int:
 
 # ---------------------------------------------------------------- kiểm việc trước khi chạy (TM-74)
 
-_RE_TRUE = r"""\s*:\s*["']?(true|yes|on)["']?\s*(#.*)?$"""
-COMPOSE_RULES = (
-    (re.compile(r"^\s*privileged" + _RE_TRUE, re.I), "privileged: true"),
-    (re.compile(r"""^\s*network_mode\s*:\s*["']?host""", re.I), "network_mode: host"),
-    (re.compile(r"""^\s*(pid|ipc|uts|userns_mode|cgroup)\s*:\s*["']?host""", re.I), "dùng không gian tên của máy chủ (pid/ipc/uts/userns/cgroup: host)"),
-    (re.compile(r"^\s*cap_add\s*:", re.I), "cap_add"),
-    (re.compile(r"^\s*devices\s*:", re.I), "devices"),
-    (re.compile(r"^\s*device_cgroup_rules\s*:", re.I), "device_cgroup_rules"),
-    (re.compile(r"^\s*-?\s*(security_opt\s*:.*)?(seccomp|apparmor)\s*[=:]\s*unconfined", re.I), "security_opt unconfined"),
-    (re.compile(r"^\s*(runtime)\s*:\s*[\"']?(?!runc)\w+", re.I), "runtime lạ"),
-)
 SOCK_RE = re.compile(r"docker\.sock|containerd\.sock|/run/podman", re.I)
 INSECURE_BUILD_RE = re.compile(r"--security\s*=\s*insecure|--network\s*=\s*host", re.I)
-ALLOWED_VOLUME_VARS = ("${CONTEXT_DIR}",)
+# File compose: Harbor chạy `docker compose` với --project-directory <việc>/environment, nên mọi đường dẫn tương đối trong
+# compose (env_file, secrets, configs, build.context, volumes…) đi được tới file của máy chủ (~/harbor-eval/.env, ~/.ssh/…), và
+# YAML có quá nhiều cách viết cùng một việc (flow style, khóa có nháy, include, extends, driver_opts…) để lọc bằng mẫu chữ.
+# Nên mặc định từ chối mọi việc có file compose; việc nào bạn đã đọc tay thì ghi vào compose-allow.txt kèm sha256 của file.
+COMPOSE_NAME_RE = re.compile(r"compose", re.I)
+YAML_SUFFIXES = (".yml", ".yaml")
+COMPOSE_PROBLEM = "compose chưa duyệt"
+ALLOW_FILE = Path(__file__).resolve().with_name("compose-allow.txt")
 
 
-def _volume_sources(lines: list) -> list:
-    """Nguồn gắn của các mục dưới `volumes:` trong compose (dạng ngắn `- src:dst` và dạng dài `source: src`)."""
-    sources, in_vol, indent = [], False, 0
-    for raw in lines:
-        line = raw.split("#", 1)[0].rstrip() if not raw.lstrip().startswith("-") else raw.rstrip()
-        if not line.strip():
+def load_allow(path=None) -> dict:
+    """{tên việc: {sha256 đã duyệt}} từ compose-allow.txt (mỗi dòng `<tên việc> <sha256 nội dung file compose>`)."""
+    path = Path(path) if path else ALLOW_FILE
+    allow = {}
+    if not path.is_file():
+        return allow
+    for ln in path.read_text(encoding="utf-8").splitlines():
+        ln = ln.split("#", 1)[0].strip()
+        if not ln:
             continue
-        cur = len(line) - len(line.lstrip())
-        if re.match(r"^\s*volumes\s*:", line):
-            in_vol, indent = True, cur
-            rest = line.split(":", 1)[1].strip()
-            if rest.startswith("["):   # volumes: ["/a:/b"]
-                sources += [x.strip(" \"'").split(":")[0] for x in rest.strip("[]").split(",") if x.strip()]
+        parts = ln.split()
+        if len(parts) != 2 or not NAME_RE.match(parts[0]) or not re.fullmatch(r"[0-9a-f]{64}", parts[1]):
+            raise SystemExit(f"{path}: dòng không hợp lệ (cần `<tên việc> <sha256 hex 64 ký tự>`): {ln[:80]!r}")
+        allow.setdefault(parts[0], set()).add(parts[1])
+    return allow
+
+
+def compose_like_files(task_dir: Path) -> list:
+    """File compose trong thư mục việc: tên có 'compose' và đuôi yaml/yml ở bất kỳ đâu, hay mọi file yaml/yml trong environment/."""
+    env_dir = task_dir / "environment"
+    found = []
+    for p in sorted(task_dir.rglob("*")):
+        if p.is_symlink() or not p.is_file() or p.suffix.lower() not in YAML_SUFFIXES:
             continue
-        if in_vol and cur <= indent and not line.lstrip().startswith("-"):
-            in_vol = False
-        if in_vol:
-            m = re.match(r"""^\s*-\s*["']?([^"'\s]+)["']?\s*(:|$)""", line)
-            if m and not re.match(r"^\s*-\s*(type|source|target|read_only)\s*:", line):
-                sources.append(m.group(1))
-            m = re.match(r"""^\s*-?\s*source\s*:\s*["']?([^"'\s]+)""", line)
-            if m:
-                sources.append(m.group(1))
-    return sources
-
-
-def vet_compose(text: str) -> list:
-    problems = []
-    lines = text.splitlines()
-    for line in lines:
-        for rx, label in COMPOSE_RULES:
-            if rx.search(line):
-                problems.append(label)
-    if SOCK_RE.search(text):
-        problems.append("gắn socket của Docker (docker.sock)")
-    for src in _volume_sources(lines):
-        if src.startswith(ALLOWED_VOLUME_VARS):
-            src = src[len(ALLOWED_VOLUME_VARS[0]):]
-        if src.startswith(("/", "~")) or ".." in Path(src).parts or "${" in src or "$(" in src:
-            problems.append(f"gắn đường dẫn ngoài thư mục việc: {src}")
-    return sorted(set(problems))
+        in_env = env_dir in p.parents
+        if in_env or COMPOSE_NAME_RE.search(p.name):
+            found.append(p)
+    return found
 
 
 def _toml_findings(data, path="") -> list:
@@ -308,16 +299,18 @@ def _toml_findings(data, path="") -> list:
     return out
 
 
-def vet_task(task_dir: Path) -> list:
-    """Danh sách lý do từ chối một việc (rỗng là sạch). Đọc docker-compose*.y*ml, Dockerfile, task.toml."""
+def vet_task(task_dir: Path, allow: dict = None) -> list:
+    """Danh sách lý do từ chối một việc (rỗng là sạch): file compose chưa duyệt, Dockerfile, task.toml, symlink ra ngoài."""
+    allow = load_allow() if allow is None else allow
     problems = []
     env_dir = task_dir / "environment"
-    for f in sorted(list(task_dir.glob("docker-compose*.y*ml")) + (list(env_dir.glob("docker-compose*.y*ml"))
-                                                                    if env_dir.is_dir() else [])):
-        problems += [f"{f.relative_to(task_dir)}: {p}" for p in vet_compose(f.read_text(encoding="utf-8", errors="replace"))]
+    for f in compose_like_files(task_dir):
+        digest = hashlib.sha256(f.read_bytes()).hexdigest()
+        if digest not in allow.get(task_dir.name, set()):
+            problems.append(f"{COMPOSE_PROBLEM}: {f.relative_to(task_dir)} sha256 {digest}")
     if env_dir.is_dir():
         for f in sorted(env_dir.rglob("*")):
-            if f.is_file() and f.stat().st_size < 1_000_000 and not f.name.startswith("docker-compose"):
+            if f.is_file() and not f.is_symlink() and f.stat().st_size < 1_000_000:
                 text = f.read_text(encoding="utf-8", errors="replace")
                 if SOCK_RE.search(text):
                     problems.append(f"{f.relative_to(task_dir)}: nhắc socket của Docker")
@@ -334,36 +327,51 @@ def vet_task(task_dir: Path) -> list:
         try:
             import tomllib
             problems += _toml_findings(tomllib.loads(toml.read_text(encoding="utf-8")))
-        except Exception as exc:   # task.toml hỏng thì Harbor cũng không chạy được; không coi là sạch
-            problems.append(f"task.toml không đọc được: {exc}")
+        except Exception as exc:   # task.toml hỏng (kể cả lồng quá sâu) thì Harbor cũng không chạy được; không coi là sạch
+            problems.append(f"task.toml không đọc được: {type(exc).__name__}")
     else:
         problems.append("thiếu task.toml")
     return problems
 
 
-def vet_names(root: Path, names) -> dict:
+def vet_names(root: Path, names, allow: dict = None) -> dict:
     """{tên việc: [lý do]} cho các việc vi phạm; names=None là cả bộ."""
+    allow = load_allow() if allow is None else allow
     all_names = list_tasks(root)
     if names:
         missing = [n for n in names if n not in all_names]
         if missing:
             raise SystemExit("✗ Thiếu trong bộ việc: " + ", ".join(missing[:10]))
         all_names = list(names)
-    return {n: p for n in all_names if (p := vet_task(root / n))}
+    return {n: p for n in all_names if (p := vet_task(root / n, allow))}
+
+
+def compose_rejects(bad: dict) -> list:
+    return sorted(n for n, probs in bad.items() if any(p.startswith(COMPOSE_PROBLEM) for p in probs))
+
+
+def print_compose_summary(bad: dict, total: int) -> None:
+    names = compose_rejects(bad)
+    if names:
+        print(f"{len(names)}/{total} việc bị loại vì có file compose chưa duyệt: {', '.join(names[:40])}"
+              + (f" … (+{len(names) - 40})" if len(names) > 40 else "")
+              + ". Đọc file compose rồi thêm `<tên việc> <sha256>` vào compose-allow.txt nếu muốn giữ.", file=sys.stderr)
 
 
 def cmd_vet(args) -> int:
     root = Path(args.dir)
     total = len(list_tasks(root))
-    bad = vet_names(root, None)
+    bad = vet_names(root, None, load_allow(args.allow))
     for n, probs in bad.items():
         print(f"✗ {n}: " + "; ".join(probs), file=sys.stderr)
+    print_compose_summary(bad, total)
     if bad and args.drop:
         rej = root.parent / (root.name + ".rejected.txt")
         rej.write_text("".join(f"{n}\t{'; '.join(p)}\n" for n, p in bad.items()), encoding="utf-8")
         for n in bad:
             shutil.rmtree(root / n)
-        print(f"Đã loại {len(bad)}/{total} việc vi phạm (danh sách ở {rej}); còn {total - len(bad)}")
+        print(f"Đã loại {len(bad)}/{total} việc vi phạm, trong đó {len(compose_rejects(bad))} vì compose "
+              f"(danh sách ở {rej}); còn {total - len(bad)}")
         return 0
     if bad:
         print(f"{len(bad)}/{total} việc bị từ chối", file=sys.stderr)
@@ -375,14 +383,16 @@ def cmd_vet(args) -> int:
 def cmd_vet_config(args) -> int:
     """Kiểm đúng các việc mà cấu hình job sẽ chạy (TM-74), ngay trước khi chạy."""
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    allow = load_allow(args.allow)
     code, checked = 0, 0
     for d in cfg.get("datasets", []):
         root = Path(args.root) / d["path"]
-        bad = vet_names(root, d.get("task_names"))
+        bad = vet_names(root, d.get("task_names"), allow)
         checked += len(d.get("task_names") or list_tasks(root))
         for n, probs in bad.items():
             print(f"✗ {d['path']}/{n}: " + "; ".join(probs), file=sys.stderr)
             code = 1
+        print_compose_summary(bad, len(d.get("task_names") or list_tasks(root)))
     if not code:
         print(f"✓ {checked} việc sạch")
     return code
@@ -392,6 +402,19 @@ def cmd_status(args) -> int:
     job = Path(args.job)
     done = len(list(job.glob("*/result.json")))
     print(f"{done} lượt đã có kết quả; lỗi hạn mức/rate limit: {count_limit_errors(job)} (ngưỡng dừng 3)")
+    states = {}
+    for label, suffix in (("harbor", ".pid"), ("watcher", ".watch.pid")):
+        f = Path(str(job) + suffix)
+        try:
+            pid = int(f.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            print(f"{label}: không thấy {f.name}")
+            states[label] = None
+            continue
+        states[label] = pid_alive(pid)
+        print(f"{label}: PID {pid} {'đang chạy' if states[label] else 'ĐÃ DỪNG'}")
+    if states.get("harbor") and states.get("watcher") is False:
+        print("⚠️ watcher đã dừng: lỗi hạn mức sẽ không tự dừng job. Dừng job (tuf.sh stop) hoặc chạy lại watch.")
     marker = Path(str(job) + ".stopped")
     if marker.is_file():
         print(marker.read_text(encoding="utf-8").strip())
@@ -511,6 +534,15 @@ def pinned_versions(cfg: dict) -> dict:
             "effort": kw.get("reasoning_effort"), "max_budget_usd": kw.get("max_budget_usd")}
 
 
+def pip_freeze():
+    """Danh sách gói của venv đang chạy script (pip freeze), None khi không lấy được."""
+    try:
+        r = subprocess.run([sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return sorted(ln.strip() for ln in r.stdout.splitlines() if ln.strip()) if r.returncode == 0 else None
+
+
 def cmd_meta(args) -> int:
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     try:
@@ -528,9 +560,12 @@ def cmd_meta(args) -> int:
         lf = root / "datasets" / f"{ds}.lock.json"
         if lf.is_file():
             locks[ds] = json.loads(lf.read_text(encoding="utf-8"))
+    freeze = pip_freeze()
     meta = {"job": cfg["job_name"], "harbor": harbor, "harbor_pinned": HARBOR_VERSION, "payload_commit": commit,
             "arms": [a.get("import_path", a.get("name")) for a in cfg["agents"]], "datasets": locks,
-            "attempts": cfg.get("n_attempts", 1), **pinned_versions(cfg)}
+            "attempts": cfg.get("n_attempts", 1), "difficulty": difficulty_map(cfg, root),
+            "pip_freeze_sha256": hashlib.sha256("\n".join(freeze).encode()).hexdigest() if freeze else None,
+            "pip_freeze": freeze, **pinned_versions(cfg)}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
@@ -569,16 +604,17 @@ def task_month_info(task_dir: Path):
         created = str(d["created_at"])
         m = re.match(r"^(\d{4})-(\d{2})", created)
         return (f"{m.group(1)}-{m.group(2)}", d.get("instance_id") or task_dir.name) if m else None
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, RecursionError):
         return None
 
 
 def pick_swerebench(root: Path, n: int = 25, seed: int = SEED, month: str = None) -> tuple:
     """Chọn n việc của tháng mới nhất có ít nhất n việc sạch. Trả (danh sách tên, tháng, đếm theo tháng)."""
+    allow = load_allow()
     by_month = {}
     for name in list_tasks(root):
         info = task_month_info(root / name)
-        if info and not vet_task(root / name):
+        if info and not vet_task(root / name, allow):
             by_month.setdefault(info[0], []).append(name)
     if not by_month:
         raise SystemExit(f"Không thấy việc nào có tests/config.json với created_at dưới {root}")
@@ -748,11 +784,21 @@ def structure_problems(arm: str, env: dict) -> list:
     """Cấu trúc thật trong container có đúng định nghĩa của bản không (ghi bởi agent_stack_agents)."""
     if env is None:
         return []
-    want = {PLAIN: {"plugin_dir": "no", "user_claude_md": "no"},
-            STACK: {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "yes", "agents_dir": "yes"},
-            NOHOOKS: {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "no", "agents_dir": "yes"},
-            NOAGENTS: {"plugin_dir": "yes", "user_claude_md": "yes", "hooks_json": "yes", "agents_dir": "no"}}[arm]
+    # Claude Code của Harbor đọc CLAUDE.md cấp người dùng ở $CLAUDE_CONFIG_DIR (=<logs>/sessions), không phải ~/.claude: kiểm cả hai.
+    want = {PLAIN: {"plugin_dir": "no", "user_claude_md": "no", "config_claude_md": "no"},
+            STACK: {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "yes",
+                    "agents_dir": "yes"},
+            NOHOOKS: {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "no",
+                      "agents_dir": "yes"},
+            NOAGENTS: {"plugin_dir": "yes", "user_claude_md": "yes", "config_claude_md": "yes", "hooks_json": "yes",
+                       "agents_dir": "no"}}[arm]
     return [f"{k}={env.get(k)} (cần {v})" for k, v in want.items() if env.get(k) != v]
+
+
+def task_key(name) -> str:
+    """Tên việc = tên thư mục việc. Harbor đặt task_name = config.task.name, mà gói Hub bắt buộc dạng org/tên, còn thư mục
+    xuất bởi `harbor download --export` và `task_names` của job dùng tên ngắn. Cắt phần org/ để mọi chỗ dùng một dạng."""
+    return str(name).rsplit("/", 1)[-1]
 
 
 def load_trials(job_dirs) -> list:
@@ -773,7 +819,8 @@ def load_trials(job_dirs) -> list:
             env = parse_env_file(res.parent / "agent" / "agent-stack-env.txt")
             result = stream.get("result") or {}
             trials.append({
-                "task": d["task_name"],
+                "task": task_key(d["task_name"]),
+                "task_full": d["task_name"],
                 "agent": agent,
                 "source": d.get("source"),
                 "reward": rewards.get("reward"),
@@ -837,12 +884,21 @@ def consistency(trials: list, metas: list) -> list:
     return problems
 
 
+def warnings_for(metas: list) -> list:
+    """Cảnh báo, không từ chối: môi trường Python của Harbor (pip freeze) khác nhau giữa các job."""
+    sums = {m.get("pip_freeze_sha256") for m in metas if m.get("pip_freeze_sha256")}
+    if len(sums) > 1:
+        return ["pip freeze của venv Harbor khác nhau giữa các job (phụ thuộc của Harbor có thể đã đổi): "
+                + ", ".join(sorted(x[:12] for x in sums))]
+    return []
+
+
 # Lỗi do hạ tầng, không do agent: Harbor vẫn chạy grader sau các lỗi này nên lượt có điểm 0 mà không nói gì về chất lượng.
-# Lượt dính lỗi này bị loại cả cặp. Hết giờ, hết context, lỗi thoát chung thì giữ là kết quả thật (luật dài hơn có thể
+# Lượt dính lỗi này làm cả việc bị loại khỏi phép so (kể cả khi việc đó còn lượt khác dùng được). Hết giờ, hết context, lỗi thoát chung thì giữ là kết quả thật (luật dài hơn có thể
 # chính là nguyên nhân). Chạm trần ngân sách mỗi lượt cũng giữ: bản tốn hơn chạm trần sớm hơn là một cái giá.
 INFRA_ERRORS = {"ApiUsageLimitError", "ApiRateLimitError", "ApiOverloadedError", "AgentAuthenticationError",
                 "NetworkConnectionError", "ModelNotFoundError", "ApiInternalServerError", "ApiConnectionClosedError",
-                "ApiResponseStalledError"}
+                "ApiResponseStalledError", "UnknownApiError", "ApiProviderResourceNotFoundError"}   # tên trong harbor 0.25.0 agents/installed/base.py
 
 
 def graded(t) -> bool:
@@ -854,7 +910,8 @@ def passed(t) -> bool:
 
 
 def exact_binomial_p(b: int, c: int) -> float:
-    """Kiểm định McNemar chính xác (hai phía) trên b, c cặp lệch nhau."""
+    """Kiểm dấu chính xác hai phía trên b, c cặp lệch nhau. Với một lượt mỗi việc đây chính là McNemar chính xác; với nhiều
+    lượt mỗi việc, b và c là số việc mà tỉ lệ đạt của bản này thấp hơn, cao hơn (việc bằng nhau bỏ qua)."""
     n = b + c
     if n == 0:
         return 1.0
@@ -870,8 +927,8 @@ def _summary(values):
 
 
 def compare(trials: list, oracle: list = None, arms=None) -> dict:
-    """So ghép cặp theo việc trên tập việc chung của mọi bản có mặt. Lượt không có điểm (môi trường hỏng) hay hỏng vì hạ tầng
-    loại cả việc. Việc mà bản cần hook (agent-stack, noagents) chạy trong container không có python3 từ 3.9 cũng bị loại,
+    """So ghép cặp theo việc trên tập việc chung của mọi bản có mặt. Một lượt không có điểm (môi trường hỏng) hay hỏng vì
+    hạ tầng, ở bất kỳ bản nào và dù còn lượt khác của việc đó, loại cả việc khỏi mọi phép so. Việc mà bản cần hook (agent-stack, noagents) chạy trong container không có python3 từ 3.9 cũng bị loại,
     vì hook không chạy thì bản đó không còn là bản đã định nghĩa. Nhiều lượt mỗi việc thì so tỉ lệ đạt theo việc."""
     arms = list(arms) if arms else [a for a in ARMS if any(t["agent"] == a for t in trials)]
     by = {}
@@ -891,10 +948,11 @@ def compare(trials: list, oracle: list = None, arms=None) -> dict:
         why, rates = None, {}
         for arm in arms:
             ts = by.get((arm, task), [])
-            ok = [t for t in ts if graded(t)]
-            if not ok:
+            ok = ts
+            bad = [t for t in ts if not graded(t)]
+            if not ts or bad:       # bất kỳ lượt nào hỏng vì hạ tầng hay không có điểm: loại cả việc, không giữ lượt còn lại
                 why = f"thiếu điểm ở {SHORT.get(arm, arm)}: " + ", ".join(
-                    sorted({t["exception"] or "chưa chạy" for t in ts if not graded(t)}) or ["chưa chạy"])
+                    sorted({t["exception"] or "chưa chạy" for t in bad}) or ["chưa chạy"])
                 break
             if arm in HOOK_ARMS and any(t["hooks_ok"] is False for t in ok):
                 why = f"container thiếu python3 từ {MIN_PYTHON[0]}.{MIN_PYTHON[1]} ở {SHORT[arm]}: hook không chạy"
@@ -905,6 +963,7 @@ def compare(trials: list, oracle: list = None, arms=None) -> dict:
         else:
             rows.append({"task": task, "rates": rates})
     common = {r["task"] for r in rows}
+    multi = any(len(by.get((a, r["task"]), [])) > 1 for r in rows for a in arms)
 
     comparisons = []
     for a, b in PAIRS:
@@ -951,7 +1010,7 @@ def compare(trials: list, oracle: list = None, arms=None) -> dict:
         }
     stats = {a: arm_stats(a) for a in arms}
     return {"arms": arms, "pairs": len(rows), "rows": rows, "excluded": excluded, "comparisons": comparisons,
-            "stats": stats, "limit_errors": sum(s["limit_errors"] for s in stats.values())}
+            "multi_attempt": multi, "stats": stats, "limit_errors": sum(s["limit_errors"] for s in stats.values())}
 
 
 def _fmt(s, key="median", digits=0):
@@ -993,8 +1052,10 @@ def report(res: dict) -> str:
     total = len(res["rows"])
     for c in res["comparisons"]:
         a, b = SHORT[c["a"]], SHORT[c["b"]]
+        test = ("kiểm dấu chính xác theo tỉ lệ đạt từng việc" if res.get("multi_attempt")
+                else "McNemar chính xác")
         lines.append(f"{b} so với {a}: kém hơn ở {len(c['worse'])} việc, tốt hơn ở {len(c['better'])} việc; "
-                     f"McNemar chính xác p = {c['p_value']:.3f}.")
+                     f"{test} p = {c['p_value']:.3f}.")
         for label, names in (("kém hơn", c["worse"]), ("tốt hơn", c["better"])):
             if names:
                 lines.append(f"    {label}: {', '.join(names[:12])}" + (f" … (+{len(names) - 12})" if len(names) > 12 else ""))
@@ -1032,6 +1093,9 @@ def cmd_compare(args) -> int:
         return 2
     oracle = [t for t in load_trials([args.oracle]) if t["agent"] == "oracle"] if args.oracle else None
     res = compare(trials, oracle)
+    for w in warnings_for(load_metas(args.jobs)):
+        print("⚠️ " + w, file=sys.stderr)
+        res.setdefault("warnings", []).append(w)
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=2))
     else:
@@ -1046,10 +1110,55 @@ TOKEN_RE = re.compile(rb"sk-ant-[A-Za-z0-9_\-]{6,}")
 NAMED_RE = re.compile(rb"""((?:CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN)["']?\s*[=:]\s*["']?)[^\s"',}]{8,}""")
 MASK = b"[da che]"
 EXPORT_NAMES = ("result.json", "claude-code.txt", "reward.txt", "agent-stack-env.txt", "config.json", "lock.json")
+ANSI_RE = re.compile(rb"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
 
 
-def mask_secrets(data: bytes) -> bytes:
+def secret_variants(token: bytes) -> list:
+    """Chuỗi khóa thật và các dạng base64 của nó (chuẩn và url-safe), ở cả ba độ lệch có thể có khi khóa nằm giữa một
+    chuỗi base64 dài hơn. Mỗi dạng chỉ giữ phần ký tự chỉ phụ thuộc vào byte của khóa."""
+    out = {token}
+    for enc in (base64.b64encode, base64.urlsafe_b64encode):
+        for off in range(3):
+            raw = b"\0" * off + token
+            e = enc(raw).rstrip(b"=")
+            lead = (0, 2, 3)[off]
+            trail = 0 if len(raw) % 3 == 0 else 1
+            piece = e[lead:len(e) - trail]
+            if len(piece) >= 12:
+                out.add(piece)
+    return sorted(out, key=len, reverse=True)
+
+
+def read_env_token(env_file) -> bytes:
+    """Giá trị CLAUDE_CODE_OAUTH_TOKEN trong file .env (b'' khi không có). Không bao giờ in giá trị này."""
+    try:
+        text = Path(env_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return b""
+    for line in text.splitlines():
+        m = re.match(r"""^\s*(?:export\s+)?CLAUDE_CODE_OAUTH_TOKEN\s*=\s*["']?([^"'\s#]+)""", line)
+        if m and len(m.group(1)) >= 8:
+            return m.group(1).encode()
+    return b""
+
+
+def env_secrets(env_file) -> list:
+    tok = read_env_token(env_file) if env_file else b""
+    return secret_variants(tok) if tok else []
+
+
+def mask_secrets(data: bytes, extra=()) -> bytes:
+    """Che mọi chuỗi giống khóa Anthropic, giá trị của ba biến chứa khóa, và (nếu có) giá trị khóa thật cùng dạng base64."""
+    for v in extra:
+        data = data.replace(v, MASK)
     return NAMED_RE.sub(rb"\1" + MASK, TOKEN_RE.sub(MASK, data))
+
+
+def sanitize_log(data: bytes) -> str:
+    """Văn bản an toàn để in ra terminal: che khóa, bỏ chuỗi điều khiển ANSI và ký tự điều khiển (trừ xuống dòng, tab)."""
+    data = ANSI_RE.sub(b"", mask_secrets(data)).replace(b"\r", b"\n")
+    text = data.decode("utf-8", errors="replace")
+    return "".join(c for c in text if c in "\n\t" or (ord(c) >= 0x20 and not 0x7F <= ord(c) <= 0x9F))
 
 
 def _walk_files(root: Path) -> list:
@@ -1064,7 +1173,7 @@ def _walk_files(root: Path) -> list:
     return found
 
 
-def export(job_dirs, out: Path) -> tuple:
+def export(job_dirs, out: Path, extra=()) -> tuple:
     """Chép các file kết quả (và bench-meta.json) của các job sang `out`, giữ đường dẫn job/lượt/…; mọi file đều qua
     mask_secrets. Trả (số file, số file đã che)."""
     n = masked = 0
@@ -1080,16 +1189,24 @@ def export(job_dirs, out: Path) -> tuple:
             dst = out / job.name / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             raw = src.read_bytes()
-            clean = mask_secrets(raw)
+            clean = mask_secrets(raw, extra)
             masked += clean != raw
             dst.write_bytes(clean)
             n += 1
     return n, masked
 
 
-def residual_secrets(out: Path) -> list:
-    """File trong `out` còn chuỗi giống khóa (kiểm lại sau khi che)."""
-    return [str(p) for p in _walk_files(out) if TOKEN_RE.search(p.read_bytes())]
+def residual_secrets(root: Path, extra=()) -> list:
+    """File dưới `root` (mọi file, kể cả nhị phân) còn chuỗi giống khóa, hay còn giá trị khóa thật hay dạng base64 của nó.
+    Trả [(đường dẫn, loại)]; không bao giờ trả giá trị."""
+    found = []
+    for p in _walk_files(root):
+        data = p.read_bytes()
+        if TOKEN_RE.search(data):
+            found.append((str(p), "mẫu sk-ant-"))
+        elif any(v in data for v in extra):
+            found.append((str(p), "giá trị khóa trong .env"))
+    return found
 
 
 def cmd_export(args) -> int:
@@ -1099,109 +1216,215 @@ def cmd_export(args) -> int:
     except FileExistsError:
         print(f"{out} đã có; chọn thư mục mới", file=sys.stderr)
         return 1
-    n, masked = export(args.jobs, out)
+    extra = env_secrets(args.env_file)
+    n, masked = export(args.jobs, out, extra)
     if not n or not any(out.glob("*/*/result.json")):  # chưa có lượt nào xong: báo lỗi để fetch dừng trước khi xóa bản cũ trên Mac
         print("Chưa có kết quả nào để chép (job chưa có lượt nào xong?)", file=sys.stderr)
         return 1
-    left = residual_secrets(out)
+    left = residual_secrets(out, extra)
     if left:
-        print("✗ Còn chuỗi giống khóa sau khi che, không kéo về: " + ", ".join(left[:5]), file=sys.stderr)
+        print("✗ Còn khóa sau khi che, không kéo về: " + ", ".join(f"{p} ({k})" for p, k in left[:5]), file=sys.stderr)
         shutil.rmtree(out, ignore_errors=True)
         return 1
     print(f"Đã chép {n} file vào {out}" + (f"; che khóa trong {masked} file" if masked else ""))
     return 0
 
 
-# ---------------------------------------------------------------- select
+def cmd_residual(args) -> int:
+    """Quét lại thư mục đã kéo về với đúng mẫu mà export dùng (và khóa trong --env-file nếu chạy nơi có nó)."""
+    extra = env_secrets(args.env_file)
+    bad = []
+    for d in args.dirs:
+        if Path(d).is_dir():
+            bad += residual_secrets(Path(d), extra)
+    for p, kind in bad:
+        print(f"✗ {p}: {kind}", file=sys.stderr)
+    if not bad:
+        print(f"✓ không thấy khóa trong {len([d for d in args.dirs if Path(d).is_dir()])} thư mục")
+    return 1 if bad else 0
 
-def classify_pilot(trials: list, oracle: list = None, limit_per_ds: int = None, seed: int = SEED) -> dict:
-    """Từ kết quả pilot (bản plain) chọn "việc phân biệt". Trả {"keep": {khóa bộ: [tên]}, "drop": [(bộ, tên, lý do)]}.
 
-    Loại: lượt hỏng vì hạ tầng hay không có điểm; lời giải mẫu không đạt; container thiếu python3 từ 3.9 (hook không chạy
-    được, bản 2 và 4 không còn đúng định nghĩa).
-    Một lượt mỗi việc: đạt mà tốn ít công (chi phí dưới trung vị của bộ) là "chắc đạt", trượt mà tốn nhiều công
-    (từ trung vị trở lên) là "chắc trượt"; hai loại này bị loại. Giữ đạt mà tốn công, và trượt mà tốn ít công.
-    Từ hai lượt mỗi việc: giữ việc có tỉ lệ đạt giữa 0 và 1 (không tính hai đầu)."""
-    bad_grader = {t["task"] for t in (oracle or []) if not passed(t)}
-    by_task = {}
-    for t in trials:
-        if t["agent"] == PLAIN:
-            by_task.setdefault(t["task"], []).append(t)
+def cmd_scrub(_args) -> int:
+    sys.stdout.write(sanitize_log(sys.stdin.buffer.read()))
+    return 0
 
-    def dataset_of(ts):
-        src = next((t["source"] for t in ts if t.get("source")), None)
-        if src in DATASETS:
-            return src
-        return "swerebench" if "__" in ts[0]["task"] else "tblite"
 
-    cost_by_ds = {}
-    for task, ts in by_task.items():
-        for t in ts:
-            if graded(t) and isinstance(t["cost"], (int, float)):
-                cost_by_ds.setdefault(dataset_of(ts), []).append(t["cost"])
-    median = {ds: statistics.median(v) for ds, v in cost_by_ds.items() if v}
-    keep, drop = {}, []
-    for task, ts in sorted(by_task.items()):
-        ds = dataset_of(ts)
-        ok = [t for t in ts if graded(t)]
-        if task in bad_grader:
-            drop.append((ds, task, "lời giải mẫu không đạt"))
-        elif not ok:
-            drop.append((ds, task, "không có điểm dùng được: " + ", ".join(sorted({t["exception"] or "chưa chạy" for t in ts}))))
-        elif any(t["hooks_ok"] is False for t in ok):
-            drop.append((ds, task, f"container thiếu python3 từ {MIN_PYTHON[0]}.{MIN_PYTHON[1]}"))
-        elif len(ok) >= 2:
-            p = sum(passed(t) for t in ok) / len(ok)
-            (keep.setdefault(ds, []).append(task) if 0 < p < 1 else drop.append((ds, task, f"tỉ lệ đạt {p:.0%}")))
-        else:
-            t = ok[0]
-            costly = isinstance(t["cost"], (int, float)) and ds in median and t["cost"] >= median[ds]
-            if passed(t) and not costly:
-                drop.append((ds, task, "đạt và tốn ít công: chắc đạt"))
-            elif not passed(t) and costly:
-                drop.append((ds, task, "trượt và tốn nhiều công: chắc trượt"))
-            else:
-                keep.setdefault(ds, []).append(task)
-    if limit_per_ds:
-        rng = random.Random(seed)
-        for ds, names in keep.items():
-            if len(names) > limit_per_ds:
-                keep[ds] = sorted(rng.sample(sorted(names), limit_per_ds))
-    return {"keep": keep, "drop": drop, "median_cost": median}
+# ---------------------------------------------------------------- chọn việc theo độ khó công bố
+
+LEVELS = ("easy", "medium", "hard", "extreme")
+KEEP_LEVELS = ("medium", "hard", "extreme")
+
+
+def _level(raw):
+    if isinstance(raw, str):
+        low = raw.strip().lower()
+        for lv in LEVELS:
+            if low == lv or low.startswith(lv + " ") or low.startswith(lv + "-") or low.startswith(lv + "_"):
+                return lv
+    return None
+
+
+def _find_key(data, key, depth=0):
+    """Giá trị đầu tiên của khóa `key` trong dict/list lồng nhau (ưu tiên metadata, task, rồi gốc, rồi tìm sâu)."""
+    if depth > 8:
+        return None
+    if isinstance(data, dict):
+        for table in ("metadata", "task"):
+            sub = data.get(table)
+            if isinstance(sub, dict) and key in sub:
+                return sub[key]
+        if key in data:
+            return data[key]
+        for v in data.values():
+            r = _find_key(v, key, depth + 1)
+            if r is not None:
+                return r
+    elif isinstance(data, list):
+        for v in data:
+            r = _find_key(v, key, depth + 1)
+            if r is not None:
+                return r
+    return None
+
+
+def task_difficulty(task_dir: Path):
+    """Nhãn độ khó (easy, medium, hard, extreme) mà bộ đo công bố cho việc, hay None. TBLite gắn nhãn theo tỉ lệ đạt của Haiku 4.5.
+    Đọc linh hoạt vì chưa thấy file thật: khóa `difficulty` trong task.toml (bảng [metadata], [task] hay gốc, rồi tìm sâu),
+    rồi nhãn nằm trong `tags`, rồi các file JSON nhỏ metadata.json, info.json, task.json cạnh task.toml."""
+    docs = []
+    toml = task_dir / "task.toml"
+    if toml.is_file():
+        try:
+            import tomllib
+            docs.append(tomllib.loads(toml.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    for name in ("metadata.json", "info.json", "task.json"):
+        f = task_dir / name
+        if f.is_file() and f.stat().st_size < 1_000_000:
+            try:
+                docs.append(json.loads(f.read_text(encoding="utf-8")))
+            except (ValueError, RecursionError):
+                pass
+    for doc in docs:
+        lv = _level(_find_key(doc, "difficulty"))
+        if lv:
+            return lv
+    for doc in docs:
+        tags = _find_key(doc, "tags")
+        for tag in tags if isinstance(tags, list) else []:
+            lv = _level(tag)
+            if lv:
+                return lv
+    return None
+
+
+def select_main(root: Path, swe_names, levels=KEEP_LEVELS) -> dict:
+    """Việc cho job lớn, không dựa vào kết quả của bản nào: mọi việc TBLite có nhãn trong `levels` cộng các việc SWE-rebench đã
+    chọn. Dừng với lỗi rõ khi không đọc được nhãn nào."""
+    tb = root / "tblite"
+    names = list_tasks(tb)
+    labels = {n: task_difficulty(tb / n) for n in names}
+    if not any(labels.values()):
+        raise SystemExit(f"Không đọc được nhãn độ khó ở việc nào dưới {tb} (tìm `difficulty` trong task.toml/metadata.json): "
+                         "xem một task.toml thật rồi sửa task_difficulty() trong harbor_bench.py")
+    swe_have = set(list_tasks(root / "swerebench"))
+    missing = [n for n in swe_names if n not in swe_have]
+    if missing:
+        raise SystemExit("Việc SWE-rebench không còn trong bộ việc (bị loại khi kiểm an toàn?): " + ", ".join(missing[:10]))
+    counts = {}
+    for lv in labels.values():
+        counts[lv or "không nhãn"] = counts.get(lv or "không nhãn", 0) + 1
+    return {"tblite": sorted(n for n, lv in labels.items() if lv in levels), "swerebench": sorted(swe_names),
+            "counts": counts, "unlabeled": sorted(n for n, lv in labels.items() if lv is None), "labels": labels,
+            "levels": list(levels)}
 
 
 def cmd_select(args) -> int:
+    root = Path(args.datasets)
+    swe = [n for ln in Path(args.swerebench).read_text(encoding="utf-8").splitlines()
+           if (n := ln.split("#", 1)[0].strip())]
+    levels = tuple(x for x in args.levels.split(",") if x)
+    bad = [x for x in levels if x not in LEVELS]
+    if bad:
+        print(f"Nhãn lạ: {bad} (có {', '.join(LEVELS)})", file=sys.stderr)
+        return 2
+    res = select_main(root, swe, levels)
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(res["counts"].items()))
+    lines = [f"# Việc cho job lớn, sinh ngày {time.strftime('%d/%m/%Y')} từ nhãn độ khó mà bộ đo công bố, KHÔNG từ kết quả của bản nào.",
+             f"# TBLite: mọi việc có nhãn {'/'.join(levels)} ({len(res['tblite'])} việc; số việc theo nhãn trong bộ: {counts}).",
+             "# TBLite gắn nhãn theo tỉ lệ đạt của Haiku 4.5; việc easy bị bỏ vì ở đó mọi cấu hình đạt gần hết, không phân biệt được.",
+             f"# SWE-rebench: cả {len(res['swerebench'])} việc trong tasks-swerebench.txt."]
+    if res["unlabeled"]:
+        lines.append(f"# Không đọc được nhãn nên bị bỏ ({len(res['unlabeled'])}): " + ", ".join(res["unlabeled"][:30]))
+    lines += [f"tblite:{n}" for n in res["tblite"]] + [f"swerebench:{n}" for n in res["swerebench"]]
+    text = "\n".join(lines) + "\n"
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    else:
+        sys.stdout.write(text)
+    print(f"{len(res['tblite'])} việc TBLite + {len(res['swerebench'])} SWE-rebench = "
+          f"{len(res['tblite']) + len(res['swerebench'])} việc (nhãn: {counts})", file=sys.stderr)
+    if res["unlabeled"]:
+        print(f"⚠️ {len(res['unlabeled'])} việc TBLite không có nhãn, đã bỏ.", file=sys.stderr)
+    return 0
+
+
+def difficulty_map(cfg: dict, root: Path) -> dict:
+    """{tên việc: nhãn} cho các việc trong cấu hình job (SWE-rebench ghi 'swerebench'); ghi vào meta để pilot-report dùng."""
+    out = {}
+    for d in cfg.get("datasets", []):
+        ds_root = Path(root) / d["path"]
+        for n in d.get("task_names") or (list_tasks(ds_root) if ds_root.is_dir() else []):
+            out[n] = "swerebench" if d["path"].endswith("swerebench") else (task_difficulty(ds_root / n) or "không nhãn")
+    return out
+
+
+def pilot_report(trials: list, metas: list, main_tasks=None, attempts: int = 1) -> str:
+    """Pilot (bản plain) chỉ để đo chi phí mỗi lượt và độ bão hòa theo nhãn độ khó. Không chọn gì: chỉ in gợi ý."""
+    labels = {}
+    for m in metas:
+        labels.update(m.get("difficulty") or {})
+    plain = [t for t in trials if t["agent"] == PLAIN]
+    if not plain:
+        return "Không có lượt plain nào."
+    groups = {}
+    for t in plain:
+        groups.setdefault(labels.get(t["task"]) or ("swerebench" if t.get("source") == "swerebench" or "__" in t["task"]
+                                                    else "không nhãn"), []).append(t)
+    order = list(LEVELS) + ["swerebench", "không nhãn"]
+    lines = ["Pilot (bản plain): tỉ lệ đạt và chi phí theo nhãn độ khó", f"{'nhãn':14s}{'lượt':>6s}{'đạt':>8s}{'chi phí trung vị':>20s}"]
+    notes = []
+    for g in sorted(groups, key=lambda k: order.index(k) if k in order else 99):
+        ok = [t for t in groups[g] if graded(t)]
+        rate = (sum(passed(t) for t in ok) / len(ok)) if ok else None
+        med = statistics.median([t["cost"] for t in ok if isinstance(t["cost"], (int, float))] or [0])
+        lines.append(f"{g:14s}{len(ok):>6d}{'—' if rate is None else f'{100 * rate:.0f}%':>8s}{med:>20.3f}")
+        if rate is not None and len(ok) >= 5 and rate >= 0.95:
+            notes.append(f"Gợi ý: nhóm '{g}' bão hòa ({100 * rate:.0f}% đạt trên {len(ok)} lượt): ít phân biệt được các cấu hình. "
+                         "Chỉ là gợi ý, tasks-main.txt không đổi; bạn quyết định có bỏ nhóm này không.")
+    costs = [t["cost"] for t in plain if graded(t) and isinstance(t["cost"], (int, float))]
+    if costs:
+        med = statistics.median(costs)
+        lines.append(f"Chi phí trung vị mỗi lượt plain: ${med:.3f} (tổng pilot ${sum(costs):.2f}). Bản có agent-stack luôn tốn hơn "
+                     "(thêm luật và mô tả skill vào mỗi lần gọi model).")
+        if main_tasks:
+            n = main_tasks * 4 * attempts
+            lines.append(f"Job lớn: {main_tasks} việc × 4 cấu hình × {attempts} lần = {n} lượt; nếu mỗi lượt bằng plain thì khoảng "
+                         f"${n * med:,.0f} theo giá niêm yết (cận dưới).")
+    lines += notes
+    return "\n".join(lines)
+
+
+def cmd_pilot_report(args) -> int:
     trials = load_trials(args.jobs)
     if not trials:
         print("Không thấy lượt chạy nào trong các thư mục đã cho.", file=sys.stderr)
         return 1
-    problems = consistency(trials, load_metas(args.jobs))
-    if problems:
-        print("Từ chối: " + "; ".join(problems), file=sys.stderr)
-        return 2
-    oracle = [t for t in load_trials([args.oracle]) if t["agent"] == "oracle"] if args.oracle else None
-    res = classify_pilot(trials, oracle, args.limit_per_dataset)
-    total = sum(len(v) for v in res["keep"].values())
-    if not total:
-        print("Không việc nào được giữ.", file=sys.stderr)
-        return 1
-    lines = [f"# Việc phân biệt cho job lớn, chọn từ pilot ngày {time.strftime('%d/%m/%Y')} (bản plain, mỗi việc 1 lượt).",
-             "# Giữ: đạt nhưng tốn công (chi phí từ trung vị của bộ), hoặc trượt nhưng tốn ít công; từ 2 lượt thì giữ tỉ lệ đạt 0<p<1.",
-             "# Loại: chắc đạt, chắc trượt, lỗi hạ tầng, lời giải mẫu không đạt, container thiếu python3 từ 3.9.",
-             "# Tiêu chí tự đề xuất: một lượt chỉ cho tín hiệu yếu, xem README mục 'Chọn việc'."]
-    for ds in DATASETS:
-        for name in sorted(res["keep"].get(ds, [])):
-            lines.append(f"{ds}:{name}")
-    Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
-    reasons = {}
-    for _ds, _task, why in res["drop"]:
-        reasons[why.split(":")[0]] = reasons.get(why.split(":")[0], 0) + 1
-    print(f"Giữ {total} việc ({', '.join(f'{ds} {len(v)}' for ds, v in res['keep'].items())}); loại {len(res['drop'])}: "
-          + "; ".join(f"{k} {v}" for k, v in sorted(reasons.items())))
-    med = [v for v in res["median_cost"].values()]
-    if med:
-        print(f"Chi phí trung vị mỗi lượt ở pilot: ${statistics.mean(med):.3f}; job lớn với N lần = {total} × 4 × N lượt.")
-    print(f"Đã ghi {args.out}")
+    main_tasks = None
+    if args.main_tasks:
+        main_tasks = sum(len(v) for v in read_task_spec(Path(args.main_tasks)).values())
+    print(pilot_report(trials, load_metas(args.jobs), main_tasks, args.attempts))
     return 0
 
 
@@ -1227,9 +1450,11 @@ def main(argv=None) -> int:
     vt = sub.add_parser("vet")
     vt.add_argument("dir")
     vt.add_argument("--drop", action="store_true")
+    vt.add_argument("--allow", help="compose-allow.txt (mặc định file cạnh script)")
     vc2 = sub.add_parser("vet-config")
     vc2.add_argument("config")
     vc2.add_argument("--root", default=".")
+    vc2.add_argument("--allow")
     st = sub.add_parser("status")
     st.add_argument("job")
     pk = sub.add_parser("pick-swerebench")
@@ -1264,11 +1489,20 @@ def main(argv=None) -> int:
     ex = sub.add_parser("export")
     ex.add_argument("jobs", nargs="+")
     ex.add_argument("--out", required=True)
+    ex.add_argument("--env-file", help="file .env có CLAUDE_CODE_OAUTH_TOKEN: che cả giá trị thật (không in)")
+    rs = sub.add_parser("residual")
+    rs.add_argument("dirs", nargs="+")
+    rs.add_argument("--env-file")
+    sub.add_parser("scrub")
     se = sub.add_parser("select")
-    se.add_argument("jobs", nargs="+")
-    se.add_argument("--out", required=True)
-    se.add_argument("--oracle")
-    se.add_argument("--limit-per-dataset", type=int)
+    se.add_argument("datasets", help="thư mục chứa tblite/ và swerebench/")
+    se.add_argument("--swerebench", required=True, help="tasks-swerebench.txt")
+    se.add_argument("--levels", default=",".join(KEEP_LEVELS))
+    se.add_argument("--out")
+    pr = sub.add_parser("pilot-report")
+    pr.add_argument("jobs", nargs="+")
+    pr.add_argument("--main-tasks", help="tasks-main.txt, để ước chi phí job lớn")
+    pr.add_argument("--attempts", type=int, default=1)
     cp = sub.add_parser("compare")
     cp.add_argument("jobs", nargs="+", help="thư mục job của Harbor (chứa */result.json)")
     cp.add_argument("--oracle", help="thư mục job chạy lời giải mẫu; việc mà lời giải mẫu không đạt bị loại")
@@ -1279,7 +1513,8 @@ def main(argv=None) -> int:
     handlers = {"build-payload": cmd_build_payload, "datasets": cmd_datasets, "flatten": cmd_flatten, "lock": cmd_lock,
                 "vet": cmd_vet, "vet-config": cmd_vet_config, "status": cmd_status, "pick-swerebench": cmd_pick_swerebench, "make-configs": cmd_make_configs,
                 "plan": cmd_plan, "meta": cmd_meta, "validate-config": cmd_validate_config, "watch": cmd_watch,
-                "export": cmd_export, "select": cmd_select, "compare": cmd_compare}
+                "export": cmd_export, "residual": cmd_residual, "scrub": cmd_scrub, "select": cmd_select,
+                "pilot-report": cmd_pilot_report, "compare": cmd_compare}
     return handlers[args.cmd](args)
 
 

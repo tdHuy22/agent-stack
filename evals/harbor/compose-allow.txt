@@ -1,0 +1,9 @@
+# Việc có file compose đã được bạn đọc tay và cho phép chạy (TM-74).
+# Mặc định MỌI việc có file compose (docker-compose*.y*ml, compose*.y*ml, hay bất kỳ .yml/.yaml nào trong environment/) bị loại,
+# vì Harbor chạy `docker compose` với --project-directory <việc>/environment nên compose đọc được file của máy chủ qua đường dẫn
+# tương đối (env_file, secrets, configs, build.context, volumes, include, extends…), và YAML có quá nhiều cách viết để lọc bằng mẫu.
+#
+# Cách thêm một việc: mở file compose của việc (datasets/<bộ>.rejected.txt liệt kê việc bị loại kèm sha256), đọc từng dòng, rồi
+# thêm một dòng cho MỖI file compose của việc đó:
+#   <tên việc> <sha256 hex 64 ký tự của nội dung file compose>
+# Lấy mã băm bằng `sha256sum <file>` trên TUF. File đổi nội dung thì mã băm đổi và việc lại bị loại. Chạy lại `tuf.sh data` sau khi sửa.
