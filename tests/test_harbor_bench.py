@@ -1159,9 +1159,44 @@ class TufScriptTests(unittest.TestCase):
         t = self.text()
         body = t[t.index("  stop)\n"):]
         body = body[:body.index(";;")]
-        self.assertIn('kill -TERM -- "-\\$pid"', body)
         self.assertIn("docker ps", body)
         self.assertNotIn("docker stop $", body)
+
+    def test_group_kill_lines_work_under_dash(self):
+        """Ca 07/11/2026: `kill -TERM -- -PID` báo "Illegal number: -" trong dash (sh của Ubuntu trên tuf), job không dừng."""
+        import shutil
+        dash = shutil.which("dash")
+        if not dash:
+            self.skipTest("máy này không có dash")
+        lines = [ln.strip() for ln in self.text().splitlines() if "kill " in ln and '"-\\$' in ln]
+        self.assertEqual(len(lines), 2)                                   # dừng job, và dọn khi khởi động hỏng
+        for line in lines:
+            kill = line[line.index("kill "):].split("&&")[0].split(" 2>")[0].replace("\\$", "$")
+            # nhóm tiến trình riêng (như setsid) có cả cháu: tín hiệu phải tới cả nhóm, không chỉ tiến trình đầu nhóm
+            child = subprocess.Popen(["/bin/sh", "-c", "sleep 30 & echo $!; wait"], stdout=subprocess.PIPE, text=True,
+                                     start_new_session=True)
+            grandchild = int(child.stdout.readline())
+            try:
+                r = subprocess.run([dash, "-c", f"pid={child.pid}; hpid={child.pid}; {kill}"],
+                                   capture_output=True, text=True, timeout=10)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(child.wait(timeout=5), -signal.SIGTERM)
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    try:
+                        os.kill(grandchild, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(0.1)
+                else:
+                    self.fail(f"tiến trình cháu {grandchild} vẫn sống: tín hiệu không tới cả nhóm")
+            finally:
+                for pid in (child.pid, grandchild):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                child.wait(timeout=5)
 
     def test_sync_ships_only_the_allow_list(self):
         t = self.text()

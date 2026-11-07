@@ -165,7 +165,7 @@ wpid=\$!
 echo "\$wpid" > jobs/$job.watch.pid
 sleep 1
 if [ -z "\$hpid" ] || ! kill -0 "\$hpid" 2>/dev/null || ! kill -0 "\$wpid" 2>/dev/null; then
-  [ -z "\$hpid" ] || kill -TERM -- "-\$hpid" 2>/dev/null || true
+  [ -z "\$hpid" ] || kill -s TERM -- "-\$hpid" 2>/dev/null || true
   echo "✗ harbor hay watcher không chạy sau khi khởi động: đã dừng job. Xem ~/$REMOTE/jobs/$job.log và $job.watch.log" >&2
   exit 1
 fi
@@ -321,7 +321,7 @@ EOF
     rsh <<EOF
 pid=\$(cat jobs/$NAME.pid 2>/dev/null) || { echo "Không thấy jobs/$NAME.pid" >&2; exit 1; }
 if kill -0 "\$pid" 2>/dev/null; then
-  kill -TERM -- "-\$pid" && echo "Đã gửi SIGTERM cho nhóm tiến trình của job $NAME (PID \$pid); chờ 20 giây…"
+  kill -s TERM -- "-\$pid" && echo "Đã gửi SIGTERM cho nhóm tiến trình của job $NAME (PID \$pid); chờ 20 giây…"
   sleep 20
 else
   echo "Job $NAME không còn chạy."
