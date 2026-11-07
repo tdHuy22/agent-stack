@@ -10,6 +10,7 @@ import re
 import signal
 import subprocess
 import sys
+import time
 import tempfile
 import unittest
 import unittest.mock
@@ -1449,7 +1450,8 @@ class AgentFileTests(unittest.TestCase):
         install = next(n for n in probed.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "install")
         calls = [n for n in ast.walk(install) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") in
                  ("exec_as_root", "install")]
-        self.assertEqual([c.func.attr for c in calls], ["exec_as_root", "install"])   # tắt trước, rồi mới cài
+        self.assertEqual([c.func.attr for c in calls], ["exec_as_root", "exec_as_root", "install"])  # tắt trước, rồi mới cài
+        self.assertEqual(ast.unparse(calls[1].keywords[0].value), "APT_PREINSTALL")
         cmd = ast.literal_eval(next(k.value for k in calls[0].keywords if k.arg == "command"))
         with tempfile.TemporaryDirectory() as tmp:
             conf = Path(tmp) / "apt.conf.d"
@@ -1462,6 +1464,138 @@ class AgentFileTests(unittest.TestCase):
         bases = {name: [b.id for b in c.bases] for name, c in self.classes.items()}
         self.assertEqual(bases["ClaudeCodePlain"], ["_Probed"])
         self.assertEqual(bases["ClaudeCodeAgentStack"], ["_Probed"])
+
+    def test_apt_uses_the_host_cache_only_when_the_gateway_answers(self):
+        """Ca 07/11/2026: tải từ deb.debian.org lúc chỉ 181 kB/s; dùng apt-cacher-ng qua gateway, không tới được thì
+        đi thẳng."""
+        import socket
+        probed = self.classes["_Probed"]
+        install = next(n for n in probed.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "install")
+        call = next(n for n in ast.walk(install) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") ==
+                    "exec_as_root")
+        cmd = ast.literal_eval(next(k.value for k in call.keywords if k.arg == "command"))
+        self.assertEqual(cmd.count("/proc/net/route"), 1)
+        self.assertEqual(cmd.count("3142"), 2)                     # cổng thử và cổng ghi vào cấu hình
+        for weak in ("AllowInsecure", "allow-unauthenticated", "AllowUnauthenticated", "Verify-Peer"):
+            self.assertNotIn(weak, cmd + self.preinstall_script())  # không nới kiểm chữ ký gói
+        with tempfile.TemporaryDirectory() as tmp, socket.socket() as srv:
+            srv.bind(("127.0.0.1", 0))
+            srv.listen(4)
+            port = str(srv.getsockname()[1])
+            route = Path(tmp) / "route"
+            route.write_text("Iface\tDestination\tGateway \tFlags\n"
+                             "eth0\t00000000\t0100007F\t0003\n"            # gateway 127.0.0.1, little-endian
+                             "eth0\t000012AC\t00000000\t0001\n")
+            conf = Path(tmp) / "apt.conf.d"
+            conf.mkdir()
+
+            def run(p):
+                c = (cmd.replace("/etc/apt/apt.conf.d", str(conf)).replace("/proc/net/route", str(route))
+                     .replace("3142", p))
+                return subprocess.run(["sh", "-c", c], capture_output=True, text=True, timeout=30)
+
+            r = run(port)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((conf / "99agent-stack-proxy").read_text(), f'Acquire::http::Proxy "http://127.0.0.1:{port}";\n')
+            (conf / "99agent-stack-proxy").unlink()
+            srv.close()                                                   # cổng đóng: apt đi thẳng
+            r = run(port)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse((conf / "99agent-stack-proxy").exists())
+            self.assertTrue((conf / "99agent-stack-no-pipelining").exists())
+            route.write_text("Iface\tDestination\tGateway \tFlags\n")      # không có tuyến mặc định
+            r = run(port)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse((conf / "99agent-stack-proxy").exists())
+        self.assertIn("apt_proxy=", self.src)                             # mỗi lượt ghi lại có dùng bộ đệm không
+
+    def preinstall_script(self):
+        node = next(n for n in self.tree.body if isinstance(n, ast.Assign) and
+                    getattr(n.targets[0], "id", "") == "APT_PREINSTALL")
+        return ast.literal_eval(node.value)
+
+    @staticmethod
+    def isolated_bin(tmp, fakes):
+        """PATH riêng: chỉ công cụ script cần và lệnh giả, để node hay curl có sẵn trên máy không đổi kết quả."""
+        import shutil
+        bin_dir = Path(tmp) / "bin"
+        bin_dir.mkdir()
+        for tool in ("sleep", "find", "tail", "rm", "cat", "awk", "cut"):
+            (bin_dir / tool).symlink_to(shutil.which(tool))
+        for name, body in fakes.items():
+            (bin_dir / name).write_text("#!/bin/sh\n" + body)
+            (bin_dir / name).chmod(0o755)
+        return bin_dir
+
+    def run_preinstall(self, tmp, apt_body, present=()):
+        """Chạy APT_PREINSTALL với apt-get và dpkg giả; trả về các lệnh apt-get đã gọi, stderr, thư mục cấu hình apt."""
+        log = Path(tmp) / "apt.log"
+        conf = Path(tmp) / "apt.conf.d"
+        conf.mkdir()
+        (conf / "99agent-stack-proxy").write_text('Acquire::http::Proxy "http://172.18.0.1:3142";\n')
+        fakes = {"apt-get": f'echo "$*" >> {log}\n' + apt_body, "dpkg": "exit 0\n"}
+        fakes.update({name: "exit 0\n" for name in present})
+        bin_dir = self.isolated_bin(tmp, fakes)
+        cmd = (self.preinstall_script().replace("wd_update=90", "wd_update=1").replace("wd_install=300", "wd_install=1")
+               .replace("/var/lib/apt", f"{tmp}/lib-apt").replace("/var/cache/apt", f"{tmp}/cache-apt")
+               .replace("/etc/apt/apt.conf.d", str(conf)).replace("/tmp/agent-stack-apt.log", f"{tmp}/out.log"))
+        started = time.monotonic()
+        r = subprocess.run(["/bin/sh", "-c", cmd], capture_output=True, text=True, timeout=60,
+                           env={"PATH": str(bin_dir)})
+        self.assertEqual(r.returncode, 0, r.stderr)                       # luôn thoát 0: Harbor còn tự cài sau
+        self.assertLess(time.monotonic() - started, 15)
+        calls = log.read_text().splitlines() if log.exists() else []
+        return calls, r.stderr, conf
+
+    HANG_FIRST_UPDATE = ('if [ "$1" = update ] && [ ! -e "$0.da-treo" ]; then : > "$0.da-treo"; exec sleep 30; fi\n'
+                         'exit 0\n')
+
+    def test_preinstall_kills_a_hung_apt_update_then_retries_without_the_cache(self):
+        """Ca 07/11/2026: apt-get update chờ mãi tệp InRelease 0 byte từ bộ đệm; hẹn giờ, bỏ bộ đệm, thử lại."""
+        with tempfile.TemporaryDirectory() as tmp:
+            calls, err, conf = self.run_preinstall(tmp, self.HANG_FIRST_UPDATE)
+            self.assertFalse((conf / "99agent-stack-proxy").exists())      # lần 2 và bước cài của Harbor đi thẳng
+        self.assertEqual(calls, ["update", "update", "install -y -o DPkg::Lock::Timeout=60 curl bash nodejs npm procps"])
+        self.assertIn("apt lần 1", err)
+
+    def test_preinstall_gives_up_after_two_hung_installs_and_still_exits_zero(self):
+        body = 'if [ "$1" = install ]; then exec sleep 30; fi\nexit 0\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            calls, err, _ = self.run_preinstall(tmp, body)
+        self.assertEqual([c.split()[0] for c in calls], ["update", "install", "update", "install"])
+        self.assertIn("apt lần 2", err)
+
+    def test_preinstall_installs_only_missing_tools_and_keeps_the_cache_when_apt_works(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls, _, conf = self.run_preinstall(tmp, "exit 0\n", present=("node", "npm"))
+            self.assertTrue((conf / "99agent-stack-proxy").exists())
+        self.assertEqual(calls, ["update", "install -y -o DPkg::Lock::Timeout=60 curl bash procps"])
+        with tempfile.TemporaryDirectory() as tmp:
+            calls, _, _ = self.run_preinstall(tmp, "exit 0\n", present=("curl", "bash", "node", "npm", "pgrep"))
+        self.assertEqual(calls, [])                                       # Harbor cũng bỏ qua: không cài lại
+
+    def test_proxy_probe_gives_up_after_three_seconds_when_the_gateway_hangs(self):
+        probed = self.classes["_Probed"]
+        install = next(n for n in probed.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "install")
+        call = next(n for n in ast.walk(install) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") ==
+                    "exec_as_root")
+        cmd = ast.literal_eval(next(k.value for k in call.keywords if k.arg == "command"))
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = self.isolated_bin(tmp, {"bash": "exec sleep 30\n"})   # kết nối treo, không ai trả lời
+            route = Path(tmp) / "route"
+            route.write_text("Iface\tDestination\tGateway \tFlags\neth0\t00000000\t0100007F\t0003\n")
+            conf = Path(tmp) / "apt.conf.d"
+            conf.mkdir()
+            c = cmd.replace("/etc/apt/apt.conf.d", str(conf)).replace("/proc/net/route", str(route))
+            started = time.monotonic()
+            r = subprocess.run(["/bin/sh", "-c", c], capture_output=True, text=True, timeout=60,
+                               env={"PATH": str(bin_dir)})
+            elapsed = time.monotonic() - started
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse((conf / "99agent-stack-proxy").exists())
+            self.assertTrue((conf / "99agent-stack-no-pipelining").exists())
+        self.assertGreaterEqual(elapsed, 2.5)                             # đúng là chờ hẹn giờ
+        self.assertLess(elapsed, 10)
 
     def test_uses_only_harbor_api_verified_at_v0_25_0(self):
         for needle in ("exec_as_agent", "exec_as_root", "environment_logs_dir", "upload_dir", "build_cli_flags",

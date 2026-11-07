@@ -36,6 +36,32 @@ REMOTE_STAGE = "/tmp/agent-stack-payload"
 HOME_REL = "Documents/Claude/agent-stack"
 ENV_FILE = "agent-stack-env.txt"
 
+# Cài trước các gói còn thiếu trong bộ mà ClaudeCode.install của Harbor đòi (lệnh curl, bash, node, npm, pgrep), có hẹn
+# giờ và thử lại. Ca 07/11/2026 trên tuf: khi vài container cùng xin một tệp InRelease đúng lúc apt-cacher-ng hỏi lại máy
+# gốc, bộ đệm trả phần đầu không kèm nội dung và apt-get chờ mãi (tái hiện 1 trên 3 container). Harbor không hẹn giờ bước
+# này, nên lượt hỏng vì hết giờ dựng agent (360 giây × 3). Ở đây: quá giờ thì dừng apt; lần thứ hai bỏ bộ đệm, đi thẳng;
+# tổng tối đa 2 × (90 + 300) giây; vẫn hỏng thì Harbor tự cài như cũ (nó bỏ qua lệnh đã có). Đầu ra của apt ghi vào file
+# để tiến trình con mồ côi của apt không giữ đầu ra của `docker exec`. Hẹn giờ bằng vòng kiểm từng giây: không cần
+# `timeout` (image tối giản có thể thiếu) và không để lại `sleep` mồ côi.
+APT_PREINSTALL = (
+    'wd_update=90; wd_install=300; log=/tmp/agent-stack-apt.log; export DEBIAN_FRONTEND=noninteractive; '
+    'run_wd() { s=$1; shift; "$@" </dev/null >>"$log" 2>&1 & p=$!; n=0; '
+    'while kill -0 "$p" 2>/dev/null; do if [ "$n" -ge "$s" ]; then kill "$p" 2>/dev/null; break; fi; '
+    'sleep 1; n=$((n+1)); done; wait "$p"; }; '
+    'pk=""; command -v curl >/dev/null 2>&1 || pk="$pk curl"; command -v bash >/dev/null 2>&1 || pk="$pk bash"; '
+    'command -v node >/dev/null 2>&1 || pk="$pk nodejs"; command -v npm >/dev/null 2>&1 || pk="$pk npm"; '
+    'command -v pgrep >/dev/null 2>&1 || pk="$pk procps"; '
+    'if [ -n "$pk" ] && command -v apt-get >/dev/null 2>&1; then '
+    'for i in 1 2; do '
+    'find /var/lib/apt/lists/partial /var/cache/apt/archives/partial -type f -size 0 -delete 2>/dev/null; '
+    'dpkg --configure -a >/dev/null 2>&1; '
+    'run_wd "$wd_update" apt-get update && '
+    'run_wd "$wd_install" apt-get install -y -o DPkg::Lock::Timeout=60 $pk && break; '
+    'echo "agent-stack: apt lần $i hỏng hay quá giờ; bỏ bộ đệm, đi thẳng" >&2; tail -5 "$log" >&2; '
+    'rm -f /etc/apt/apt.conf.d/99agent-stack-proxy; '
+    'done; fi; true'
+)
+
 
 class _Probed(ClaudeCode):
     """Khung chung: ghi tình trạng container trước lượt chạy."""
@@ -46,9 +72,24 @@ class _Probed(ClaudeCode):
         # Ca 06/11/2026 trên tuf: apt trong container qua mạng bridge của Docker chỉ ~49 kB/s và báo "package cache
         # file is corrupted, it has the wrong hash"; tắt HTTP pipelining thì 6,6 MB/s. Harbor cài Claude Code bằng
         # apt-get, nên tắt pipelining trước, như nhau cho cả bốn cấu hình. Image không có apt thì bỏ qua.
+        # Ca 07/11/2026: vẫn có kết nối tới deb.debian.org chỉ 181 kB/s (22 phút cho nodejs), nên dùng bộ đệm
+        # apt-cacher-ng trên máy chủ (cổng 3142) qua gateway của mạng container, khi tới được trong 3 giây; không tới
+        # được thì apt đi thẳng như cũ. File proxy giữ nguyên suốt lượt, như nhau ở bốn cấu hình, nên apt-cacher-ng phải
+        # chạy suốt job.
         await self.exec_as_root(environment, command=(
             'if [ -d /etc/apt/apt.conf.d ]; then '
-            'printf \'Acquire::http::Pipeline-Depth "0";\\n\' > /etc/apt/apt.conf.d/99agent-stack-no-pipelining; fi'))
+            'printf \'Acquire::http::Pipeline-Depth "0";\\n\' > /etc/apt/apt.conf.d/99agent-stack-no-pipelining; '
+            'gw=$(awk \'$2=="00000000" {print $3; exit}\' /proc/net/route 2>/dev/null); '
+            'if [ "${#gw}" -eq 8 ] && command -v bash >/dev/null 2>&1; then '
+            'ip=$(printf "%d.%d.%d.%d" "0x$(echo "$gw" | cut -c7-8)" "0x$(echo "$gw" | cut -c5-6)" '
+            '"0x$(echo "$gw" | cut -c3-4)" "0x$(echo "$gw" | cut -c1-2)"); '
+            'bash -c "exec 3<>/dev/tcp/$ip/3142" </dev/null >/dev/null 2>&1 & p=$!; n=0; '
+            'while kill -0 "$p" 2>/dev/null && [ "$n" -lt 3 ]; do sleep 1; n=$((n+1)); done; '
+            'kill "$p" 2>/dev/null; '
+            'if wait "$p"; then '
+            'printf \'Acquire::http::Proxy "http://%s:3142";\\n\' "$ip" > /etc/apt/apt.conf.d/99agent-stack-proxy; '
+            'fi; fi; fi'))
+        await self.exec_as_root(environment, command=APT_PREINSTALL)
         await super().install(environment)
 
     async def _write_env_file(self, environment) -> None:
@@ -68,6 +109,7 @@ class _Probed(ClaudeCode):
             f'echo "config_claude_md=$(yn {config_md})"; '
             f'echo "plugin_dir=$(yn {root}/plugin)"; echo "hooks_json=$(yn {root}/plugin/hooks/hooks.json)"; '
             f'echo "agents_dir=$(yn {root}/plugin/agents)"; '
+            'echo "apt_proxy=$(yn /etc/apt/apt.conf.d/99agent-stack-proxy)"; '
             '} > "$out"'))
 
 
