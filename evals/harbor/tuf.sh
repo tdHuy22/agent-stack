@@ -6,9 +6,13 @@
 #   tuf.sh sync [--force]             đưa lên TUF: ba bản chép agent-stack, agent Harbor, script, danh sách việc
 #   tuf.sh data [--force]             tải hai bộ việc, ghim mã băm, loại việc vi phạm kiểm an toàn (kể cả có file compose)
 #   tuf.sh pick                       chọn 25 việc SWE-rebench tháng mới nhất, ghi evals/harbor/tasks-swerebench.txt
-#   tuf.sh select                     sinh evals/harbor/tasks-main.txt từ nhãn độ khó (không đọc kết quả nào), rồi sync lại
+#   tuf.sh select                     sinh evals/harbor/tasks-candidates.txt từ nhãn độ khó (không đọc kết quả nào)
 #   tuf.sh check                      kiểm mọi thứ đã sẵn sàng (phiên bản, .env, ổ đĩa, cấu hình); không chạy container
-#   tuf.sh oracle [TÊN] [--force]     chạy lời giải mẫu trên bộ việc của pilot (container, không gọi model, không nạp .env)
+#   tuf.sh oracle [TÊN] [--yes] [--force]
+#                                     chạy lời giải mẫu (container, không gọi model, không nạp .env): trên tasks-<TÊN>.txt
+#                                     nếu có (oracle recheck: tasks-recheck.txt), không thì trên bộ việc của pilot
+#   tuf.sh filter                     gộp mọi lần chạy lời giải mẫu, ghi tasks-main.txt (việc lời giải mẫu đạt ít nhất một
+#                                     lần, lấy từ tasks-candidates.txt) và tasks-recheck.txt (chưa chấm được vì hạ tầng)
 #   tuf.sh pilot [--yes] [--force]    pilot: bản plain trên mọi việc, 1 lần: đo chi phí và độ bão hòa (gọi model)
 #   tuf.sh pilot-report [--attempts N] in tỉ lệ đạt, chi phí theo nhãn độ khó của pilot đã kéo về (chỉ gợi ý)
 #   tuf.sh run [TÊN] [--attempts N] [--yes] [--force]
@@ -17,7 +21,8 @@
 #   tuf.sh stop [TÊN]                 dừng job (SIGTERM cả nhóm tiến trình) và liệt kê container còn lại
 #   tuf.sh fetch [TÊN]                kéo kết quả về .tmp/harbor-jobs/ (khóa bị che trên TUF trước khi kéo, quét lại trên Mac)
 #   tuf.sh compare [TÊN]              so ghép cặp kết quả đã kéo về
-#   tuf.sh prune [--yes]              xóa image swerebench/sweb.eval* đã kéo về (giải phóng ổ; kéo lại khi chạy)
+#   tuf.sh prune [--yes]              dọn ổ: container, image, network Harbor bỏ lại khi Docker sập, swerebench/sweb.eval*,
+#                                     và toàn bộ cache dựng của Docker (kéo, dựng lại khi chạy)
 #
 # TÊN mặc định: pilot cho oracle và pilot; main cho các lệnh còn lại. oracle, pilot, run, data, sync, prune từ chối khi có job
 # đang chạy, và khi TUF đang bận (có container khác, tải hay RAM cao) trừ khi thêm --force; pilot, run, oracle chỉ chạy thật
@@ -130,6 +135,14 @@ prepare_job() {
       remote "test -f $list" 2>/dev/null || { echo "Chưa có $(basename "$list") trên TUF: tạo evals/harbor/$(basename "$list"), commit rồi tuf.sh sync." >&2; exit 1; }
       tasks_arg="--tasks $list"
       remote "grep -qv '^#' $list" 2>/dev/null || { echo "Chưa có $(basename "$list"): chạy tuf.sh select rồi sync." >&2; exit 1; } ;;
+    oracle) list="agent-stack/tasks-$NAME.txt"
+      if remote "test -f $list" 2>/dev/null; then
+        remote "grep -qv '^#' $list" 2>/dev/null || { echo "$(basename "$list") không có việc nào: không có gì để chạy." >&2; exit 1; }
+        tasks_arg="--tasks $list"
+      else
+        tasks_arg=""
+        remote "grep -qv '^#' agent-stack/tasks-swerebench.txt" 2>/dev/null || { echo "Chưa có tasks-swerebench.txt: chạy tuf.sh pick." >&2; exit 1; }
+      fi ;;
     *) tasks_arg=""
       remote "grep -qv '^#' agent-stack/tasks-swerebench.txt" 2>/dev/null || { echo "Chưa có tasks-swerebench.txt: chạy tuf.sh pick." >&2; exit 1; } ;;
   esac
@@ -205,7 +218,8 @@ EOF
     commit=$(git -C "$REPO" rev-parse --short HEAD)
     python3 "$HERE/harbor_bench.py" build-payload "$STAGE/src" "$STAGE/payload" --commit "$commit"
     rm -rf "$STAGE/src"
-    cp "$HERE/agent_stack_agents.py" "$HERE/harbor_bench.py" "$HERE/run_harbor.sh" "$HERE/compose-allow.txt" "$STAGE/"
+    cp "$HERE/agent_stack_agents.py" "$HERE/serial_build_env.py" "$HERE/harbor_bench.py" "$HERE/run_harbor.sh" \
+      "$HERE/compose-allow.txt" "$STAGE/"
     for f in "$HERE"/tasks-*.txt; do [ -f "$f" ] && cp "$f" "$STAGE/"; done
     COPYFILE_DISABLE=1 tar --no-xattrs -C "$STAGE" -cf - . | ssh "$HOST" "mkdir -p \"\$HOME/$REMOTE\" && cd \"\$HOME/$REMOTE\" && rm -rf agent-stack && mkdir -p agent-stack && tar -xf - -C agent-stack"
     echo "Đã đưa lên $HOST:~/$REMOTE/agent-stack: agent-stack commit $commit (full, nohooks, noagents), $(ls "$STAGE" | grep -c '^tasks-') file danh sách việc"
@@ -241,10 +255,29 @@ EOF
     ;;
   select)
     # Nhãn độ khó nằm trong task.toml của từng việc trên TUF, nên chạy ở đó; danh sách ghi về Mac để commit.
-    tmp="$HERE/.tasks-main.new"
+    tmp="$HERE/.tasks-candidates.new"
     remote "$HB select datasets --swerebench agent-stack/tasks-swerebench.txt" > "$tmp" || { rm -f "$tmp"; echo "select lỗi (xem thông báo ở trên)" >&2; exit 1; }
-    mv "$tmp" "$HERE/tasks-main.txt"
-    echo "Đã ghi $HERE/tasks-main.txt: đọc, commit rồi chạy tuf.sh sync"
+    mv "$tmp" "$HERE/tasks-candidates.txt"
+    echo "Đã ghi $HERE/tasks-candidates.txt: đọc, commit, tuf.sh sync, rồi tuf.sh filter"
+    ;;
+  filter)
+    # Kết quả lời giải mẫu nằm trên TUF (jobs/*-oracle), nên lọc ở đó; hai danh sách ghi về Mac để commit.
+    refuse_if_running
+    rsh <<EOF
+set -e
+test -f agent-stack/tasks-candidates.txt || { echo "Chưa có tasks-candidates.txt trên TUF: commit nó rồi tuf.sh sync" >&2; exit 1; }
+jobs=""
+for j in jobs/*-oracle; do [ -d "\$j" ] && jobs="\$jobs \$j"; done
+[ -n "\$jobs" ] || { echo "Chưa có lần chạy lời giải mẫu nào: tuf.sh oracle --yes" >&2; exit 1; }
+rm -rf jobs/.filter && mkdir -p jobs/.filter
+$HB filter-oracle --candidates agent-stack/tasks-candidates.txt --root . --out-main jobs/.filter/main.txt --out-recheck jobs/.filter/recheck.txt \$jobs
+EOF
+    for f in main recheck; do
+      remote "cat jobs/.filter/$f.txt" > "$HERE/.tasks-$f.new" || { rm -f "$HERE"/.tasks-*.new; echo "Không đọc được kết quả lọc" >&2; exit 1; }
+    done
+    mv "$HERE/.tasks-main.new" "$HERE/tasks-main.txt"
+    mv "$HERE/.tasks-recheck.new" "$HERE/tasks-recheck.txt"
+    echo "Đã ghi $HERE/tasks-main.txt và tasks-recheck.txt: đọc, commit rồi tuf.sh sync"
     ;;
   check)
     ssh "$HOST" "cd \"\$HOME/$REMOTE\" && sh -s -- '$HARBOR_VERSION' '$REMOTE'" <<'EOF'
@@ -255,6 +288,7 @@ echo "✓ bản chép agent-stack: commit $(cat agent-stack/payload/full/.payloa
 v=$($PY -c 'import importlib.metadata as m; print(m.version("harbor"))' 2>/dev/null || true)
 if [ "$v" = "$want" ]; then echo "✓ Harbor $v (đã ghim)"; else echo "✗ Harbor '$v' khác bản ghim $want: chạy tuf.sh setup"; fi
 PYTHONPATH="$PWD/agent-stack" $PY -c 'import agent_stack_agents as m; print("✓ agent Harbor import được:", ", ".join(c.name() for c in (m.ClaudeCodePlain, m.ClaudeCodeAgentStack, m.ClaudeCodeAgentStackNoHooks, m.ClaudeCodeAgentStackNoAgents)))' || echo "✗ import agent_stack_agents lỗi"
+PYTHONPATH="$PWD/agent-stack" $PY -c 'import serial_build_env as m; print("✓ môi trường dựng lần lượt import được:", m.SerialBuildDockerEnvironment.__mro__[1].__name__)' || echo "✗ import serial_build_env lỗi"
 for ds in tblite swerebench; do
   if [ -d datasets/$ds ]; then
     echo "✓ bộ việc $ds: $(ls datasets/$ds | wc -l) việc, mã băm $(sed -n 's/.*"sha256": "\(.\{12\}\).*/\1/p' datasets/$ds.lock.json)"
@@ -285,9 +319,13 @@ EOF
     echo "$out" | grep -q '^BUSY$' && echo "· TUF đang bận: oracle, pilot và run sẽ từ chối tới khi rảnh" || echo "✓ TUF đang rảnh"
     ;;
   oracle)
-    prepare_job oracle "$NAME-oracle"
+    # Danh sách là tasks-$NAME.txt; tên job là $NAME-oracle, hay $NAME2-oracle, $NAME3-oracle… khi tên đó đã dùng (chạy
+    # recheck lần hai mà không xóa kết quả lần đầu, vì filter gộp mọi jobs/*-oracle).
+    job="$NAME-oracle"; k=2
+    while remote "test -e jobs/$job"; do job="$NAME$k-oracle"; k=$((k+1)); done
+    prepare_job oracle "$job"
     [ "$YES" -eq 1 ] || { echo "Chưa chạy. Thêm --yes để chạy lời giải mẫu (không gọi model)."; exit 0; }
-    launch_job "$NAME-oracle" none
+    launch_job "$job" none
     ;;
   pilot)
     prepare_job pilot pilot
@@ -360,9 +398,18 @@ EOF
     rsh <<EOF
 n=\$(docker ps -q | wc -l)
 [ "\$n" -eq 0 ] || { echo "Còn \$n container đang chạy: chưa xóa image" >&2; exit 1; }
-imgs=\$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^swerebench/sweb.eval' || true)
-echo "Image swerebench/sweb.eval*: \$(echo "\$imgs" | grep -c . || true)"
-if [ "$YES" -eq 1 ]; then [ -z "\$imgs" ] || echo "\$imgs" | xargs docker rmi; else echo "Chưa xóa. Thêm --yes."; fi
+# Harbor đặt tên container, image của lượt là <việc>__<7 ký tự>__env-…; khi Docker sập giữa lượt, chúng ở lại.
+ctrs=\$(docker ps -a --format '{{.Names}}' | grep -E '__[a-z0-9]{7}__env-' || true)
+imgs=\$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^swerebench/sweb\.eval|__[a-z0-9]{7}__env-' || true)
+echo "Container Harbor bỏ lại (kèm network của chúng): \$(echo "\$ctrs" | grep -c . || true) · image (swerebench/sweb.eval*, image dựng của Harbor): \$(echo "\$imgs" | grep -c . || true) · \$(docker system df --format '{{.Type}}: {{.Size}}' | grep -i 'build cache' || true)"
+if [ "$YES" -eq 1 ]; then
+  [ -z "\$ctrs" ] || echo "\$ctrs" | xargs docker rm -f >/dev/null || true
+  [ -z "\$imgs" ] || echo "\$imgs" | xargs docker rmi >/dev/null || true
+  nets=\$(docker network ls --format '{{.Name}}' | grep -E '__[a-z0-9]{7}__env_default\$' || true)
+  [ -z "\$nets" ] || echo "\$nets" | xargs docker network rm >/dev/null || true
+  docker builder prune -a -f | tail -1
+  echo "Ổ còn trống: \$(df -BG --output=avail "\$HOME" | tail -1 | tr -dc 0-9) GB"
+else echo "Chưa xóa. Thêm --yes."; fi
 EOF
     ;;
   *) sed -n '2,/^set -eu/{/^set -eu/!p;}' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;

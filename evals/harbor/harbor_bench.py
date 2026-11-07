@@ -22,9 +22,11 @@ Lệnh (chạy trên Mac hay trên TUF; chỉ dùng thư viện chuẩn, trừ v
                                         cả dạng base64) trong MỌI file kéo về, rồi quét lại
   residual DIR... [--env-file F]        quét lại thư mục đã kéo về với đúng mẫu của export (mọi file, kể cả nhị phân)
   scrub                                 stdin -> stdout: che khóa, bỏ ký tự điều khiển (dùng cho đoạn log in ra terminal)
-  select DATASETS_DIR --swerebench FILE sinh tasks-main.txt từ nhãn độ khó công bố của TBLite + cả danh sách SWE-rebench
+  select DATASETS_DIR --swerebench FILE sinh tasks-candidates.txt từ nhãn độ khó công bố của TBLite + cả danh sách SWE-rebench
+  filter-oracle --candidates F JOB...   lọc ứng viên theo lời giải mẫu (đạt ít nhất một lần): ghi tasks-main.txt và
+                                        tasks-recheck.txt (việc chưa chấm được lần nào vì hạ tầng)
   pilot-report JOB_DIR                  tỉ lệ đạt và chi phí của pilot theo nhãn độ khó (chỉ gợi ý, không chọn gì)
-  compare JOB_DIR... [--oracle JOB_DIR] so ghép cặp bốn cấu hình
+  compare JOB_DIR... [--oracle JOB_DIR]... so ghép cặp bốn cấu hình
 """
 from __future__ import annotations
 
@@ -406,10 +408,52 @@ def cmd_vet_config(args) -> int:
     return code
 
 
+RETRY_RE = re.compile(r"Trial (\S+) failed with exception (\w+)\. Retrying in")
+
+
+def retry_events(job_dir: Path) -> list:
+    """[(tên lượt, loại ngoại lệ)] mỗi lần Harbor thử lại, đọc từ job.log (Harbor ghi mức DEBUG vào file này; thư mục lượt
+    hỏng bị xóa, lần thử lại dùng lại đúng tên lượt nên khớp được với thư mục còn lại)."""
+    try:
+        text = (Path(job_dir) / "job.log").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return [(m.group(1), m.group(2)) for m in RETRY_RE.finditer(text)]
+
+
+def count_retries(job_dir: Path) -> dict:
+    """{loại ngoại lệ: số lần} Harbor đã thử lại."""
+    out = {}
+    for _, exc in retry_events(job_dir):
+        out[exc] = out.get(exc, 0) + 1
+    return out
+
+
+def retries_by_arm(job_dir: Path) -> dict:
+    """{cấu hình: số lần thử lại}, ghép tên lượt trong job.log với agent trong result.json của lượt cuối. Lượt chưa có
+    result.json (đang chạy, hay hỏng hẳn mà thư mục chưa ghi xong) tính vào '?'. Cấu hình bị thử lại nhiều hơn hẳn là dấu
+    hiệu lỗi "hạ tầng" có thể do chính agent gây ra; chi phí của lần hỏng không có trong cost_usd."""
+    out = {}
+    for trial, _ in retry_events(job_dir):
+        agent = "?"
+        try:
+            d = json.loads((Path(job_dir) / trial / "result.json").read_text(encoding="utf-8"))
+            agent = (d.get("agent_info") or {}).get("name") or "?"
+        except (OSError, ValueError, AttributeError):
+            pass
+        agent = SHORT.get(agent, agent)
+        out[agent] = out.get(agent, 0) + 1
+    return out
+
+
 def cmd_status(args) -> int:
     job = Path(args.job)
     done = len(list(job.glob("*/result.json")))
     print(f"{done} lượt đã có kết quả; lỗi hạn mức/rate limit: {count_limit_errors(job)} (ngưỡng dừng 3)")
+    retries = count_retries(job)
+    if retries:
+        print("đã thử lại vì lỗi hạ tầng: " + ", ".join(f"{k} {v}" for k, v in sorted(retries.items()))
+              + "; theo cấu hình: " + ", ".join(f"{k} {v}" for k, v in sorted(retries_by_arm(job).items())))
     states = {}
     for label, suffix in (("harbor", ".pid"), ("watcher", ".watch.pid")):
         f = Path(str(job) + suffix)
@@ -482,20 +526,37 @@ def dataset_entries(spec: dict) -> list:
 
 
 # Nới hạn giờ cài agent và dựng môi trường, như nhau cho mọi cấu hình; không đụng thời gian agent làm bài. Ca 06/11/2026
-# trên tuf: apt cài nodejs/npm vượt 360 giây ở 1/4 lượt thử, và 4/123 lượt oracle quá giờ dựng môi trường.
-SLOW_SETUP = {"agent_setup_timeout_multiplier": 3.0, "environment_build_timeout_multiplier": 2.0}
+# trên tuf: apt cài nodejs/npm vượt 360 giây ở 1/4 lượt thử, và 4/123 lượt oracle quá giờ dựng môi trường. Hạn dựng ×4
+# (không phải ×2) vì giờ chờ tới lượt dựng (SERIAL_ENV) cũng tính vào hạn này.
+SLOW_SETUP = {"agent_setup_timeout_multiplier": 3.0, "environment_build_timeout_multiplier": 4.0}
+
+# Môi trường Docker của Harbor, nhưng mỗi lúc cả job chỉ dựng một image (serial_build_env.py). Ca 07/11/2026 trên tuf:
+# containerd, dockerd sập 4 lần trong 35 phút khi 3 image dựng song song; 19/21 lỗi của SWE-rebench là lúc dựng image.
+SERIAL_ENV = {"delete": True, "import_path": "serial_build_env:SerialBuildDockerEnvironment"}
+
+# Thử lại lượt hỏng vì hạ tầng, tối đa 2 lần, như nhau cho mọi cấu hình. Chỉ theo loại ngoại lệ, không bao giờ theo điểm.
+# Harbor 0.25.0 so đúng tên lớp (trial/queue.py), nên RuntimeError không gồm NonZeroAgentExitCodeError (agent thoát lỗi)
+# dù lớp đó kế thừa RuntimeError. Ba loại này đều là lỗi Docker hay hết giờ trước khi agent làm bài:
+#   RuntimeError                  lệnh docker compose hỏng (containerd.sock refused, `failed to solve`, container chết)
+#   EnvironmentStartTimeoutError  quá giờ dựng, khởi động môi trường
+#   AgentSetupTimeoutError        quá giờ cài Claude Code (apt), chưa gọi model
+# Lỗi API (hạn mức, quá tải) không thử lại: compare() đã loại việc đó. Harbor xóa thư mục lượt hỏng trước khi thử lại; số lần
+# thử lại nằm trong job.log (`status` đếm). Chờ 30, 60 giây giữa các lần để containerd kịp khởi động lại.
+INFRA_RETRY = ("AgentSetupTimeoutError", "EnvironmentStartTimeoutError", "RuntimeError")
+RETRY = {"max_retries": 2, "include_exceptions": list(INFRA_RETRY), "min_wait_sec": 30.0, "wait_multiplier": 2.0,
+         "max_wait_sec": 120.0}
 
 
 def make_config(spec: dict, name: str, attempts: int, opts: dict, arms) -> dict:
     """Mọi cấu hình nằm chung một job để Harbor xen kẽ lượt chạy, tránh lệch theo giờ trong ngày."""
     return {"job_name": name, "jobs_dir": "jobs", "n_attempts": attempts, "n_concurrent_trials": opts["concurrent"],
-            "retry": {"max_retries": 0}, "environment": {"delete": True}, **SLOW_SETUP,
+            "retry": dict(RETRY), "environment": dict(SERIAL_ENV), **SLOW_SETUP,
             "datasets": dataset_entries(spec), "agents": [agent_config(a, opts) for a in arms]}
 
 
 def make_oracle_config(spec: dict, name: str, opts: dict) -> dict:
     return {"job_name": name, "jobs_dir": "jobs", "n_attempts": 1, "n_concurrent_trials": opts["concurrent"],
-            "environment": {"delete": True}, **SLOW_SETUP,
+            "retry": dict(RETRY), "environment": dict(SERIAL_ENV), **SLOW_SETUP,
             "datasets": dataset_entries(spec), "agents": [{"name": "oracle"}]}
 
 
@@ -510,7 +571,7 @@ def cmd_make_configs(args) -> int:
         cfg = make_oracle_config(spec, args.name, opts)
     else:
         if not args.tasks:
-            raise SystemExit("--kind main cần --tasks (tasks-main.txt do `select` ghi)")
+            raise SystemExit("--kind main cần --tasks (tasks-main.txt do `filter-oracle` ghi)")
         cfg = make_config(read_task_spec(Path(args.tasks)), args.name, args.attempts, opts, ARMS)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -604,6 +665,10 @@ def cmd_validate_config(args) -> int:
             mod, _, cls = a.import_path.partition(":")
             klass = getattr(import_module(mod), cls)
             klass.parse_options(a.kwargs, a.env)
+    env_path = getattr(getattr(cfg, "environment", None), "import_path", None)
+    if env_path:
+        mod, _, cls = env_path.partition(":")
+        getattr(import_module(mod), cls)        # sai tên mô-đun hay lớp thì dừng ở đây, không phải giữa job
     print(f"✓ {args.config}: hợp lệ ({len(cfg.agents)} bản)")
     return 0
 
@@ -949,11 +1014,12 @@ def compare(trials: list, oracle: list = None, arms=None) -> dict:
     for t in trials:
         by.setdefault((t["agent"], t["task"]), []).append(t)
     tasks = sorted({t["task"] for t in trials if t["agent"] in arms})
-    bad_grader = sorted({t["task"] for t in (oracle or []) if not passed(t)})
+    # lời giải mẫu đạt ít nhất một lần (qua mọi lần chạy oracle) là đủ: lần khác trượt thường do hạ tầng, không do grader
+    oracle_ok = {t["task"] for t in (oracle or []) if passed(t)}
     oracle_tasks = {t["task"] for t in (oracle or [])}
     rows, excluded = [], []
     for task in tasks:
-        if task in bad_grader:
+        if task in oracle_tasks and task not in oracle_ok:
             excluded.append((task, "lời giải mẫu không đạt"))
             continue
         if oracle is not None and task not in oracle_tasks:
@@ -1105,7 +1171,7 @@ def cmd_compare(args) -> int:
         for p in problems:
             print("  - " + p, file=sys.stderr)
         return 2
-    oracle = [t for t in load_trials([args.oracle]) if t["agent"] == "oracle"] if args.oracle else None
+    oracle = [t for t in load_trials(args.oracle) if t["agent"] == "oracle"] if args.oracle else None
     res = compare(trials, oracle)
     for w in warnings_for(load_metas(args.jobs)):
         print("⚠️ " + w, file=sys.stderr)
@@ -1384,6 +1450,75 @@ def cmd_select(args) -> int:
     return 0
 
 
+def oracle_status(oracle_trials) -> dict:
+    """{việc: 'dat' | 'truot' | 'chua-cham'} gộp mọi lần chạy lời giải mẫu. Đạt một lần là đạt. Trượt là grader đã chấm
+    (có điểm) mà không đạt, hay lượt hỏng vì lỗi của chính việc; lượt hỏng vì hạ tầng không tính. Còn lại (chỉ có lượt hỏng
+    Docker, quá giờ dựng, job bị dừng) là chưa chấm."""
+    st = {}
+    for t in oracle_trials:
+        task, cur = t["task"], st.get(t["task"])
+        infra = t["exception"] in INFRA_RETRY or t["exception"] == "CancelledError"     # CancelledError: job bị dừng
+        if passed(t):
+            st[task] = "dat"
+        elif (t["reward"] is not None or t["exception"]) and not infra and cur != "dat":
+            # có điểm mà không đạt, hay lỗi của chính việc dù không có điểm (VerifierTimeoutError, RewardFileNotFoundError…):
+            # Harbor không thử lại những lỗi này, chạy lại cũng vậy
+            st[task] = "truot"
+        elif cur is None:
+            st[task] = "chua-cham"
+    return st
+
+
+def filter_by_oracle(candidates: dict, status: dict) -> dict:
+    """Chia danh sách ứng viên {bộ: [tên]} thành giữ (lời giải mẫu đạt), bỏ (trượt) và chờ chạy lại (chưa chấm, chưa chạy)."""
+    out = {"keep": [], "drop": [], "recheck": []}
+    for ds in DATASETS:
+        for name in candidates.get(ds, []):
+            if name == "*":
+                raise SystemExit("Danh sách ứng viên phải liệt kê từng việc, không dùng '*'")
+            s = status.get(name)
+            out["keep" if s == "dat" else "drop" if s == "truot" else "recheck"].append(f"{ds}:{name}")
+    return out
+
+
+def cmd_filter_oracle(args) -> int:
+    candidates = read_task_spec(Path(args.candidates))
+    trials = [t for t in load_trials(args.jobs) if t["agent"] == "oracle"]
+    if not trials:
+        print("Không thấy lượt lời giải mẫu nào trong các thư mục đã cho.", file=sys.stderr)
+        return 1
+    # mọi lần oracle phải chạy trên cùng nội dung bộ việc, và đúng bộ việc đang có (tasks-candidates.txt chỉ tới nó)
+    metas = load_metas(args.jobs)
+    for ds in DATASETS:
+        vals = {(m.get("datasets") or {}).get(ds, {}).get("sha256") for m in metas} - {None}
+        lf = Path(args.root) / "datasets" / f"{ds}.lock.json"
+        if lf.is_file():
+            vals.add(json.loads(lf.read_text(encoding="utf-8")).get("sha256"))
+        vals.discard(None)
+        if len(vals) > 1:
+            print(f"Từ chối: các lần chạy lời giải mẫu (hay bộ việc hiện tại) khác nội dung bộ việc {ds}", file=sys.stderr)
+            return 2
+    res = filter_by_oracle(candidates, oracle_status(trials))
+    jobs = ", ".join(Path(j).name for j in args.jobs)
+    day = time.strftime("%d/%m/%Y")
+    count = lambda xs, ds: sum(x.startswith(ds + ":") for x in xs)    # noqa: E731
+    head = [f"# Việc cho job lớn, lọc ngày {day} từ {Path(args.candidates).name}: chỉ giữ việc mà lời giải mẫu đạt ít nhất "
+            "một lần.",
+            "# Lọc theo chính việc (grader và môi trường chạy được), KHÔNG theo kết quả của cấu hình nào.",
+            f"# Gộp các lần chạy lời giải mẫu: {jobs}.",
+            f"# Giữ {len(res['keep'])} (tblite {count(res['keep'], 'tblite')}, swerebench {count(res['keep'], 'swerebench')}); "
+            f"bỏ {len(res['drop'])} vì lời giải mẫu trượt hay lỗi; chờ chạy lại {len(res['recheck'])} (tasks-recheck.txt)."]
+    head += [f"# bỏ, lời giải mẫu trượt hay lỗi: {x}" for x in res["drop"]]
+    head += [f"# chờ chạy lại, chưa chấm được lần nào: {x}" for x in res["recheck"]]
+    Path(args.out_main).write_text("\n".join(head + res["keep"]) + "\n", encoding="utf-8")
+    Path(args.out_recheck).write_text("\n".join(
+        [f"# Việc chưa chấm được lời giải mẫu lần nào (chỉ hỏng hạ tầng hay chưa chạy), lọc ngày {day}.",
+         "# Chạy lại: tuf.sh oracle recheck --yes, rồi tuf.sh filter."] + res["recheck"]) + "\n", encoding="utf-8")
+    print(f"Giữ {len(res['keep'])}, bỏ {len(res['drop'])}, chờ chạy lại {len(res['recheck'])} "
+          f"(gộp {len(trials)} lượt lời giải mẫu từ {jobs})", file=sys.stderr)
+    return 0
+
+
 def difficulty_map(cfg: dict, root: Path) -> dict:
     """{tên việc: nhãn} cho các việc trong cấu hình job (SWE-rebench ghi 'swerebench'); ghi vào meta để pilot-report dùng."""
     out = {}
@@ -1513,13 +1648,20 @@ def main(argv=None) -> int:
     se.add_argument("--swerebench", required=True, help="tasks-swerebench.txt")
     se.add_argument("--levels", default=",".join(KEEP_LEVELS))
     se.add_argument("--out")
+    fo = sub.add_parser("filter-oracle")
+    fo.add_argument("jobs", nargs="+", help="thư mục job chạy lời giải mẫu")
+    fo.add_argument("--candidates", required=True, help="tasks-candidates.txt (do select ghi)")
+    fo.add_argument("--root", default=".", help="thư mục chứa datasets/ (đối chiếu mã băm bộ việc)")
+    fo.add_argument("--out-main", required=True)
+    fo.add_argument("--out-recheck", required=True)
     pr = sub.add_parser("pilot-report")
     pr.add_argument("jobs", nargs="+")
     pr.add_argument("--main-tasks", help="tasks-main.txt, để ước chi phí job lớn")
     pr.add_argument("--attempts", type=int, default=1)
     cp = sub.add_parser("compare")
     cp.add_argument("jobs", nargs="+", help="thư mục job của Harbor (chứa */result.json)")
-    cp.add_argument("--oracle", help="thư mục job chạy lời giải mẫu; việc mà lời giải mẫu không đạt bị loại")
+    cp.add_argument("--oracle", action="append", help="thư mục job chạy lời giải mẫu (lặp được); việc mà lời giải mẫu "
+                    "chưa đạt lần nào bị loại")
     cp.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     if getattr(args, "attempts", 1) < 1:
@@ -1528,6 +1670,7 @@ def main(argv=None) -> int:
                 "vet": cmd_vet, "vet-config": cmd_vet_config, "status": cmd_status, "pick-swerebench": cmd_pick_swerebench, "make-configs": cmd_make_configs,
                 "plan": cmd_plan, "meta": cmd_meta, "validate-config": cmd_validate_config, "watch": cmd_watch,
                 "export": cmd_export, "residual": cmd_residual, "scrub": cmd_scrub, "select": cmd_select,
+                "filter-oracle": cmd_filter_oracle,
                 "pilot-report": cmd_pilot_report, "compare": cmd_compare}
     return handlers[args.cmd](args)
 

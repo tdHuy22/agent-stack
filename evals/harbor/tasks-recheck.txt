@@ -1,0 +1,18 @@
+# Việc chưa chấm được lời giải mẫu lần nào (chỉ hỏng hạ tầng hay chưa chạy), lọc ngày 07/11/2026.
+# Chạy lại: tuf.sh oracle recheck --yes, rồi tuf.sh filter.
+tblite:sympy-bug-fix
+swerebench:azure-samples__azure-search-openai-demo-3025
+swerebench:beever-ai__beever-atlas-102
+swerebench:celestoai__smolvm-172
+swerebench:copier-org__copier-2646
+swerebench:cpp-linter__cpp-linter-hooks-206_interface
+swerebench:databricks__dbt-databricks-1428
+swerebench:microsoft__qcodes-8039
+swerebench:pennylaneai__pennylane-9298
+swerebench:pyinfra-dev__pyinfra-1679_interface
+swerebench:pypsa__pypsa-1653
+swerebench:reframe-hpc__reframe-3660_interface
+swerebench:tobymao__sqlglot-7457
+swerebench:ultraplot__ultraplot-696
+swerebench:unit8co__darts-3065
+swerebench:vprusso__toqito-1538

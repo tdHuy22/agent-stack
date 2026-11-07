@@ -186,11 +186,25 @@ class ConfigTests(Base):
         text = json.dumps(cfg)
         self.assertNotIn("sk-ant", text)
         self.assertNotRegex(text, r"OAUTH_TOKEN")   # chỉ CLAUDE_FORCE_OAUTH, không có tên biến chứa khóa
-        self.assertEqual(cfg["retry"]["max_retries"], 0)
-        # cài agent và dựng môi trường được nới hạn giờ, như nhau cho mọi cấu hình (ca 06/11/2026 trên tuf)
+        self.assert_infra_retry_and_serial_builds(cfg)
+        # cài agent và dựng môi trường được nới hạn giờ, như nhau cho mọi cấu hình (ca 06/11/2026 trên tuf); hạn dựng ×4 vì
+        # giờ chờ tới lượt dựng (dựng lần lượt, ca 07/11/2026) cũng tính vào hạn này
         self.assertEqual(cfg["agent_setup_timeout_multiplier"], 3.0)
-        self.assertEqual(cfg["environment_build_timeout_multiplier"], 2.0)
+        self.assertEqual(cfg["environment_build_timeout_multiplier"], 4.0)
         self.assertNotIn("agent_timeout_multiplier", cfg)
+
+    def assert_infra_retry_and_serial_builds(self, cfg):
+        """Thử lại chỉ lỗi Docker và quá giờ trước khi agent làm bài; agent thoát lỗi, hết giờ làm bài, lỗi API thì không."""
+        retry = cfg["retry"]
+        self.assertEqual(retry["max_retries"], 2)
+        self.assertEqual(sorted(retry["include_exceptions"]),
+                         ["AgentSetupTimeoutError", "EnvironmentStartTimeoutError", "RuntimeError"])
+        for never in ("NonZeroAgentExitCodeError", "AgentTimeoutError", "VerifierTimeoutError", "ContextWindowExceededError",
+                      *B.INFRA_ERRORS):
+            self.assertNotIn(never, retry["include_exceptions"])
+        self.assertGreaterEqual(retry["min_wait_sec"], 30)
+        self.assertEqual(cfg["environment"], {"delete": True,
+                                              "import_path": "serial_build_env:SerialBuildDockerEnvironment"})
 
     def test_pilot_runs_only_the_plain_arm_on_all_tblite_and_the_swerebench_list(self):
         cfg = self.make("pilot", swerebench=self.tasks_file())
@@ -203,6 +217,8 @@ class ConfigTests(Base):
         cfg = self.make("oracle", name="pilot-oracle", swerebench=self.tasks_file())
         self.assertEqual(cfg["agents"], [{"name": "oracle"}])
         self.assertEqual(cfg["datasets"][1]["task_names"], ["viec-a", "viec-b"])
+        self.assert_infra_retry_and_serial_builds(cfg)
+        self.assertEqual(cfg["environment_build_timeout_multiplier"], 4.0)
 
     def test_pilot_refuses_while_the_swerebench_list_is_still_empty(self):
         # danh sách chỉ có phần đầu giải thích, như trước khi `tuf.sh pick` chạy (file thật của repo nay đã có 25 việc)
@@ -570,6 +586,29 @@ class StatusTests(Base):
         (self.tmp / "jobs" / "j.watch.pid").unlink()
         self.assertIn("watcher: không thấy j.watch.pid", run_script(SCRIPT, "status", str(job)).stdout)
 
+    def test_status_counts_retries_from_the_job_log(self):
+        """Harbor xóa thư mục lượt hỏng trước khi thử lại; dấu vết duy nhất là dòng DEBUG trong job.log."""
+        job = self.tmp / "jobs" / "j"
+        self.trial("jobs/j", B.PLAIN, "t")
+        self.write("jobs/j/job.log", "\n".join([
+            "2026-11-07 DEBUG Trial a__x1 failed with exception RuntimeError. Retrying in 30.00 seconds...",
+            "2026-11-07 DEBUG Trial b__x2 failed with exception RuntimeError. Retrying in 60.00 seconds...",
+            "2026-11-07 DEBUG Trial c__x3 failed with exception EnvironmentStartTimeoutError. Retrying in 30.00 seconds...",
+            "2026-11-07 DEBUG Exception AgentTimeoutError is not in include_exceptions, not retrying"]) + "\n")
+        self.assertEqual(B.count_retries(job), {"RuntimeError": 2, "EnvironmentStartTimeoutError": 1})
+        # lần thử lại dùng lại đúng tên lượt: ghép với result.json cuối để biết cấu hình
+        self.write("jobs/j/a__x1/result.json", json.dumps({"task_name": "a", "agent_info": {"name": B.STACK}}))
+        self.write("jobs/j/b__x2/result.json", json.dumps({"task_name": "b", "agent_info": {"name": B.STACK}}))
+        self.write("jobs/j/c__x3/result.json", json.dumps({"task_name": "c", "agent_info": {"name": B.PLAIN}}))
+        self.assertEqual(B.retries_by_arm(job), {"stack": 2, "plain": 1})
+        r = run_script(SCRIPT, "status", str(job))
+        self.assertIn("đã thử lại vì lỗi hạ tầng: EnvironmentStartTimeoutError 1, RuntimeError 2; theo cấu hình: plain 1, stack 2",
+                      r.stdout)
+        (job / "c__x3" / "result.json").unlink()
+        self.assertEqual(B.retries_by_arm(job), {"stack": 2, "?": 1})
+        (job / "job.log").unlink()
+        self.assertNotIn("thử lại", run_script(SCRIPT, "status", str(job)).stdout)
+
     def test_scrub_masks_keys_and_drops_control_characters(self):
         dirty = (f"tiến độ \x1b[31mđỏ\x1b[0m\r50%\x1b]0;tiêu đề giả\x07 khóa {FAKE_KEY} ok\x00\x08\x7f\x9b xong\tđây\n"
                  "\x1b[2J\x1b[Hdòng hai CLAUDE_CODE_OAUTH_TOKEN=abcdefgh12345678\n").encode()
@@ -751,6 +790,28 @@ class CompareTests(Base):
         self.assertIn("EnvironmentStartTimeoutError", why["env-broken"])
         self.assertEqual(res["comparisons"][0]["worse"], ["timeout"])
         self.assertEqual(res["stats"][S]["n_exceptions"], 1)
+
+    def test_oracle_passing_once_across_runs_is_enough_and_never_passing_drops_the_task(self):
+        """Ca 07/11/2026: ba lần chạy lời giải mẫu, mỗi lần hỏng một nhóm việc khác vì Docker sập."""
+        P, S = B.PLAIN, B.STACK
+        for task in ("flaky-infra", "never", "both-ok"):
+            for arm in (P, S):
+                self.trial("job", arm, task, reward=1.0)
+        self.trial("o1", "oracle", "flaky-infra", reward=None, exception="RuntimeError")
+        self.trial("o2", "oracle", "flaky-infra", reward=1.0)
+        self.trial("o1", "oracle", "never", reward=0.0)
+        self.trial("o2", "oracle", "never", reward=None, exception="RuntimeError")
+        self.trial("o1", "oracle", "both-ok", reward=1.0)
+        self.trial("o2", "oracle", "both-ok", reward=1.0)
+        oracle = B.load_trials([self.tmp / "o1", self.tmp / "o2"])
+        res = B.compare(B.load_trials([self.tmp / "job"]), oracle, arms=[P, S])
+        self.assertEqual([r["task"] for r in res["rows"]], ["both-ok", "flaky-infra"])
+        self.assertEqual(dict(res["excluded"])["never"], "lời giải mẫu không đạt")
+        # dòng lệnh nhận --oracle nhiều lần
+        r = run_script(SCRIPT, "compare", str(self.tmp / "job"), "--oracle", str(self.tmp / "o1"), "--oracle",
+                       str(self.tmp / "o2"), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([x["task"] for x in json.loads(r.stdout)["rows"]], ["both-ok", "flaky-infra"])
 
     def test_infrastructure_errors_drop_the_task_and_limit_errors_are_counted(self):
         P, S = B.PLAIN, B.STACK
@@ -1052,6 +1113,64 @@ class SelectTests(Base):
         self.assertEqual(run_script(SCRIPT, "select", str(self.tmp / "datasets"), "--swerebench", str(swe), "--levels",
                                     "easy,bogus").returncode, 2)
 
+    def oracle_job(self, job, results, sha="aaa"):
+        for task, (reward, exc) in results.items():
+            self.trial(job, "oracle", task, reward=reward, exception=exc, full=f"org/{task}")
+        self.write(f"{job}.meta.json", json.dumps({"job": job, "datasets": {"tblite": {"sha256": sha}}}))
+        return self.tmp / job
+
+    def test_filter_keeps_tasks_whose_reference_solution_passed_once_and_lists_the_rest(self):
+        cand = self.write("tasks-candidates.txt", "# ứng viên\ntblite:ok-once\ntblite:no-solution\ntblite:docker-only\n"
+                          "tblite:never-run\nswerebench:s__1\ntblite:fail-then-infra\n")
+        o1 = self.oracle_job("a-oracle", {"ok-once": (None, "RuntimeError"), "no-solution": (0.0, None),
+                                          "docker-only": (None, "EnvironmentStartTimeoutError"), "s__1": (None, "RuntimeError"),
+                                          "fail-then-infra": (0.0, None)})
+        o2 = self.oracle_job("b-oracle", {"ok-once": (1.0, None), "docker-only": (None, "RuntimeError"), "s__1": (1.0, None),
+                                          "fail-then-infra": (None, "RuntimeError"),
+                                          "solution-timeout": (0.0, "AgentTimeoutError")})
+        main, recheck = self.tmp / "tasks-main.txt", self.tmp / "tasks-recheck.txt"
+        r = run_script(SCRIPT, "filter-oracle", str(o1), str(o2), "--candidates", str(cand), "--root", str(self.tmp),
+                       "--out-main", str(main), "--out-recheck", str(recheck))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Giữ 2, bỏ 2, chờ chạy lại 2", r.stderr)
+        self.assertEqual(B.read_task_spec(main), {"tblite": ["ok-once"], "swerebench": ["s__1"]})
+        self.assertEqual(B.read_task_spec(recheck, None), {"tblite": ["docker-only", "never-run"]})
+        text = main.read_text()
+        self.assertIn("KHÔNG theo kết quả của cấu hình nào", text)
+        self.assertIn("a-oracle, b-oracle", text)
+        self.assertIn("# bỏ, lời giải mẫu trượt hay lỗi: tblite:no-solution", text)
+        self.assertIn("# bỏ, lời giải mẫu trượt hay lỗi: tblite:fail-then-infra", text)
+        self.assertIn("# chờ chạy lại, chưa chấm được lần nào: tblite:never-run", text)
+        # danh sách ra đọc được bằng make-configs, như tuf.sh run main sẽ làm
+        r = run_script(SCRIPT, "make-configs", "--kind", "main", "--name", "main", "--tasks", str(main), "--out",
+                       str(self.tmp / "m.json"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(B.oracle_status(B.load_trials([o2]))["solution-timeout"], "truot")
+
+    def test_oracle_errors_of_the_task_itself_count_as_failed_but_a_stopped_job_does_not(self):
+        """Ca pilot-oracle 06/11: VerifierTimeoutError không có điểm; Harbor không thử lại lỗi này, chạy lại cũng vậy."""
+        self.oracle_job("c-oracle", {"grader-slow": (None, "VerifierTimeoutError"), "no-reward": (None, "RewardFileNotFoundError"),
+                                     "stopped": (None, "CancelledError"), "docker": (None, "RuntimeError")})
+        st = B.oracle_status(B.load_trials([self.tmp / "c-oracle"]))
+        self.assertEqual(st, {"grader-slow": "truot", "no-reward": "truot", "stopped": "chua-cham", "docker": "chua-cham"})
+
+    def test_filter_refuses_oracle_runs_on_different_task_content(self):
+        cand = self.write("tasks-candidates.txt", "tblite:a\n")
+        o1 = self.oracle_job("a-oracle", {"a": (1.0, None)}, sha="aaa")
+        o2 = self.oracle_job("b-oracle", {"a": (1.0, None)}, sha="bbb")
+        out = ["--out-main", str(self.tmp / "m.txt"), "--out-recheck", str(self.tmp / "r.txt")]
+        r = run_script(SCRIPT, "filter-oracle", str(o1), str(o2), "--candidates", str(cand), "--root", str(self.tmp), *out)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("khác nội dung bộ việc tblite", r.stderr)
+        self.assertFalse((self.tmp / "m.txt").exists())
+        # bộ việc hiện tại khác bộ việc của lần oracle cũng bị từ chối
+        self.write("datasets/tblite.lock.json", json.dumps({"sha256": "zzz"}))
+        r = run_script(SCRIPT, "filter-oracle", str(o1), "--candidates", str(cand), "--root", str(self.tmp), *out)
+        self.assertEqual(r.returncode, 2)
+        # không có lượt oracle nào
+        r = run_script(SCRIPT, "filter-oracle", str(self.tmp / "empty"), "--candidates", str(cand), *out)
+        self.assertEqual(r.returncode, 1)
+
     def test_pilot_report_groups_by_label_and_only_suggests_when_a_group_saturates(self):
         labels = {"e1": "easy", "e2": "easy", "e3": "easy", "e4": "easy", "e5": "easy", "h1": "hard", "h2": "hard", "s__1": "swerebench"}
         for t in labels:
@@ -1086,8 +1205,8 @@ class TufScriptTests(unittest.TestCase):
         self.assertEqual(subprocess.run(["sh", "-n", str(self.TUF)]).returncode, 0)
         r = self.run_sh()
         self.assertEqual(r.returncode, 2)
-        for word in ("setup", "sync", "data", "pick", "check", "oracle", "pilot", "pilot-report", "select", "run", "status",
-                     "stop", "fetch", "compare", "prune"):
+        for word in ("setup", "sync", "data", "pick", "check", "oracle", "pilot", "pilot-report", "select", "filter", "run",
+                     "status", "stop", "fetch", "compare", "prune"):
             self.assertIn(f"tuf.sh {word}", r.stdout)
         self.assertNotIn("set -eu", r.stdout)
 
@@ -1421,6 +1540,82 @@ class TufBehaviourTests(TempDirTestCase):
         self.assertNotIn("abcdefgh12345678", text)
         self.assertTrue((local / "bench-meta.json").is_file())
 
+    def test_oracle_recheck_runs_only_the_recheck_list_and_refuses_an_empty_one(self):
+        (self.rd / "agent-stack" / "tasks-recheck.txt").write_text("# chờ chạy lại\ntblite:t2\n")
+        r = self.tuf("oracle", "recheck", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, (r.stdout + r.stderr)[-800:])
+        cfg = json.loads((self.rd / "configs" / "recheck-oracle.json").read_text())
+        self.assertEqual(cfg["datasets"], [{"path": "datasets/tblite", "task_names": ["t2"]}])
+        self.assertEqual(cfg["agents"], [{"name": "oracle"}])
+        self.assertEqual(cfg["retry"]["max_retries"], 2)
+        # chạy lần hai: kết quả lần đầu giữ nguyên (filter gộp mọi jobs/*-oracle), job mới tên recheck2-oracle, cùng danh sách
+        (self.rd / "jobs" / "recheck-oracle").mkdir(parents=True, exist_ok=True)
+        pids = [int((self.rd / "jobs" / f"recheck-oracle{x}.pid").read_text()) for x in ("", ".watch")]
+        for _ in range(100):                      # harbor giả chạy 6 giây; job còn chạy thì tuf.sh từ chối job mới
+            if not any(B.pid_alive(p) for p in pids):
+                break
+            time.sleep(0.2)
+        r = self.tuf("oracle", "recheck", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, (r.stdout + r.stderr)[-800:])
+        self.assertIn("Đã chạy nền job recheck2-oracle", r.stdout)
+        cfg = json.loads((self.rd / "configs" / "recheck2-oracle.json").read_text())
+        self.assertEqual(cfg["datasets"], [{"path": "datasets/tblite", "task_names": ["t2"]}])
+        (self.rd / "agent-stack" / "tasks-recheck.txt").write_text("# không còn việc nào chờ\n")
+        for p in self.rd.glob("jobs/recheck-oracle*"):
+            shutil_rmtree(p) if p.is_dir() else p.unlink()
+        r = self.tuf("oracle", "recheck", "--yes", "--force")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("tasks-recheck.txt không có việc nào", r.stderr)
+
+    def test_filter_writes_both_lists_next_to_the_script(self):
+        """Chạy bản chép của tuf.sh trong thư mục tạm: filter ghi tasks-main.txt cạnh script, không đụng file thật của repo."""
+        here = self.tmp / "repo" / "evals" / "harbor"
+        here.mkdir(parents=True)
+        (here / "tuf.sh").write_text((HARBOR / "tuf.sh").read_text(encoding="utf-8"))
+        (self.rd / "agent-stack" / "tasks-candidates.txt").write_text("tblite:t1\ntblite:t2\nswerebench:swe-a\n")
+        for task, reward, exc in (("t1", 1.0, None), ("t2", 0.0, None), ("swe-a", None, "RuntimeError")):
+            d = self.rd / "jobs" / "pilot-oracle" / f"{task}__abc1234"
+            d.mkdir(parents=True)
+            (d / "result.json").write_text(json.dumps({
+                "task_name": f"org/{task}", "agent_info": {"name": "oracle"},
+                "verifier_result": None if reward is None else {"rewards": {"reward": reward}},
+                "exception_info": {"exception_type": exc} if exc else None}))
+        env = {"PATH": f"{self.bin}:{os.path.dirname(sys.executable)}:/usr/bin:/bin", "HARBOR_HOST": "fake",
+               "HOME": os.environ.get("HOME", "/")}
+        r = subprocess.run(["sh", str(here / "tuf.sh"), "filter"], capture_output=True, text=True, timeout=60, env=env,
+                           stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(B.read_task_spec(here / "tasks-main.txt"), {"tblite": ["t1"]})
+        self.assertEqual(B.read_task_spec(here / "tasks-recheck.txt"), {"swerebench": ["swe-a"]})
+        self.assertIn("pilot-oracle", (here / "tasks-main.txt").read_text())
+
+    def test_prune_removes_only_what_harbor_left_behind(self):
+        log = self.tmp / "docker.log"
+        self.shim("docker", f"""echo "$*" >> {log}
+case "$1 $2" in
+  "ps -q") ;;
+  "ps -a") printf '%s\\n' astronomy-commons__lsdb-1349__ecvqc4a__env-main-1 pi-agent-llama other_db_1 ;;
+  "images --format") printf '%s\\n' security-incident-log-analysis__xeiq2xd__env-main:latest swerebench/sweb.eval.x86_64.a:latest debian:trixie myproject__env-main:latest ;;
+  "system df") echo "Build Cache: 22.91GB" ;;
+  "network ls") printf '%s\\n' bridge astronomy-commons__lsdb-1349__ecvqc4a__env_default pi-agent_default ;;
+  "builder prune") echo "Total reclaimed space: 22.91GB" ;;
+esac
+""")
+        r = self.tuf("prune", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Container Harbor bỏ lại (kèm network của chúng): 1 · image (swerebench/sweb.eval*, image dựng của Harbor): 2", r.stdout)
+        self.assertIn("Chưa xóa", r.stdout)
+        self.assertNotIn("rmi", log.read_text())
+        r = self.tuf("prune", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        calls = log.read_text().splitlines()
+        self.assertIn("rm -f astronomy-commons__lsdb-1349__ecvqc4a__env-main-1", calls)
+        self.assertIn("rmi security-incident-log-analysis__xeiq2xd__env-main:latest swerebench/sweb.eval.x86_64.a:latest", calls)
+        self.assertIn("builder prune -a -f", calls)
+        self.assertIn("network rm astronomy-commons__lsdb-1349__ecvqc4a__env_default", calls)
+        for keep in ("pi-agent-llama", "other_db_1", "debian:trixie", "myproject__env-main", "pi-agent_default", "bridge"):
+            self.assertFalse(any(keep in c for c in calls if c.startswith(("rm ", "rmi ", "network rm"))), keep)
+
     def test_status_filters_the_log_it_prints(self):
         (self.rd / "jobs" / "main").mkdir(parents=True)
         (self.rd / "jobs" / "main.log").write_text(f"bắt đầu\n\x1b[31mđỏ\x1b[0m khóa {self.TOKEN}\n\x1b]0;giả\x07xong\n")
@@ -1435,6 +1630,88 @@ class TufBehaviourTests(TempDirTestCase):
 def shutil_rmtree(path):
     import shutil
     shutil.rmtree(path, ignore_errors=True)
+
+
+class SerialBuildEnvTests(TempDirTestCase):
+    """serial_build_env.py import harbor: thay mô-đun harbor bằng bản giả rồi chạy thật trong asyncio."""
+
+    def load(self):
+        import asyncio
+        import types
+        state = {"now": 0, "max_build": 0, "max_all": 0, "calls": []}
+
+        class FakeDocker:
+            async def _run_docker_compose_command(self, command, check=True, timeout_sec=None):
+                key = "build" if command[0] == "build" else "other"
+                state["calls"].append(command[0])
+                if key == "build":
+                    state.setdefault("build_timeouts", []).append(timeout_sec)
+                state["now"] += 1
+                state["max_all"] = max(state["max_all"], state["now"])
+                state.setdefault(key + "_now", 0)
+                state[key + "_now"] += 1
+                state["max_build"] = max(state["max_build"], state.get("build_now", 0))
+                await asyncio.sleep(0.05)
+                state[key + "_now"] -= 1
+                state["now"] -= 1
+                if command[0] == "build" and command[-1] == "boom":
+                    raise RuntimeError("failed to solve")
+                return (command, check, timeout_sec)
+
+        mods = {}
+        for name in ("harbor", "harbor.environments", "harbor.environments.docker", "harbor.environments.docker.docker"):
+            mods[name] = types.ModuleType(name)
+        mods["harbor.environments.docker.docker"].DockerEnvironment = FakeDocker
+        spec = importlib.util.spec_from_file_location("serial_build_env_test", HARBOR / "serial_build_env.py")
+        mod = importlib.util.module_from_spec(spec)
+        with unittest.mock.patch.dict(sys.modules, mods):
+            spec.loader.exec_module(mod)
+        return mod, state
+
+    def test_only_one_build_runs_at_a_time_while_other_compose_commands_overlap(self):
+        import asyncio
+        mod, state = self.load()
+        envs = [mod.SerialBuildDockerEnvironment() for _ in range(3)]
+
+        async def main():
+            r = await asyncio.gather(*(e._run_docker_compose_command(["build"]) for e in envs),
+                                     *(e._run_docker_compose_command(["up", "-d"], check=False) for e in envs))
+            # lần dựng hỏng nhả khóa: lần dựng sau vẫn chạy được
+            with self.assertRaises(RuntimeError):
+                await envs[0]._run_docker_compose_command(["build", "boom"])
+            await asyncio.wait_for(envs[1]._run_docker_compose_command(["build"]), 2)
+            return r
+
+        res = asyncio.run(main())
+        self.assertEqual(state["max_build"], 1)
+        self.assertEqual(state["build_timeouts"][:3], [1200, 1200, 1200])   # 2 × hạn dựng mặc định 600 của Harbor
+        self.assertGreaterEqual(state["max_all"], 3)        # up -d của các lượt khác vẫn chạy song song
+        self.assertEqual(res[3], (["up", "-d"], False, None))  # tham số đi nguyên vào lớp cha
+        self.assertEqual(state["calls"].count("build"), 5)
+
+    def test_a_build_gets_its_own_deadline_from_the_task_unless_the_caller_set_one(self):
+        """Dựng treo phải nhả khóa: Harbor chỉ dừng `docker compose build` khi chính lệnh hết hạn, không khi lượt bị hủy."""
+        import asyncio
+        import types
+        mod, state = self.load()
+        env = mod.SerialBuildDockerEnvironment()
+        env.task_env_config = types.SimpleNamespace(build_timeout_sec=1800.0)
+
+        async def main():
+            await env._run_docker_compose_command(["build"])
+            await env._run_docker_compose_command(["build"], timeout_sec=60)
+            await env._run_docker_compose_command(["build"], True, 30)
+            return await env._run_docker_compose_command(["up"])
+
+        self.assertEqual(asyncio.run(main()), (["up"], True, None))      # lệnh khác không bị gắn hạn
+        self.assertEqual(state["build_timeouts"], [3600, 60, 30])
+
+    def test_harbor_bench_points_the_job_at_this_class(self):
+        mod, _ = self.load()
+        path = B.SERIAL_ENV["import_path"]
+        self.assertEqual(path.split(":")[0], "serial_build_env")
+        self.assertTrue(hasattr(mod, path.split(":")[1]))
+        self.assertIn('"$HERE/serial_build_env.py"', (HARBOR / "tuf.sh").read_text(encoding="utf-8"))   # sync đưa lên TUF
 
 
 class AgentFileTests(unittest.TestCase):
