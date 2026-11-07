@@ -1,54 +1,40 @@
 # Việc cho job lớn, lọc ngày 07/11/2026 từ tasks-candidates.txt: chỉ giữ việc mà lời giải mẫu đạt ít nhất một lần.
 # Lọc theo chính việc (grader và môi trường chạy được), KHÔNG theo kết quả của cấu hình nào.
-# Gộp các lần chạy lời giải mẫu: lan2-oracle, lan3-oracle, pilot-oracle.
-# Giữ 50 (tblite 40, swerebench 10); bỏ 31 vì lời giải mẫu chạy mà trượt; chờ chạy lại 16 (tasks-recheck.txt).
-# bỏ, lời giải mẫu trượt: tblite:bash-log-processor-fix
-# bỏ, lời giải mẫu trượt: tblite:battery-charging-optimization
-# bỏ, lời giải mẫu trượt: tblite:bloom-filter-cache-penetration-prevention
-# bỏ, lời giải mẫu trượt: tblite:bracket-sequence-restoration
-# bỏ, lời giải mẫu trượt: tblite:breast-cancer-mlflow
-# bỏ, lời giải mẫu trượt: tblite:competitive-programming-solver
-# bỏ, lời giải mẫu trượt: tblite:floor-plan-geometry
-# bỏ, lời giải mẫu trượt: tblite:game-of-stones
-# bỏ, lời giải mẫu trượt: tblite:git-repo-forensics
-# bỏ, lời giải mẫu trượt: tblite:grid-pathfinding
-# bỏ, lời giải mẫu trượt: tblite:grpc-plant-position-server
-# bỏ, lời giải mẫu trượt: tblite:html-index-analysis
-# bỏ, lời giải mẫu trượt: tblite:iris-dataset-classification
-# bỏ, lời giải mẫu trượt: tblite:multi-server-configuration
-# bỏ, lời giải mẫu trượt: tblite:network-log-normalization
-# bỏ, lời giải mẫu trượt: tblite:pandas-numpy-data-analysis
-# bỏ, lời giải mẫu trượt: tblite:parking-lot-pathfinding
-# bỏ, lời giải mẫu trượt: tblite:pdf-table-parsing
-# bỏ, lời giải mẫu trượt: tblite:permutation-construction-100k
-# bỏ, lời giải mẫu trượt: tblite:prediction-model-evaluation
-# bỏ, lời giải mẫu trượt: tblite:publisher-market-analysis
-# bỏ, lời giải mẫu trượt: tblite:publisher-market-analysis-v2
-# bỏ, lời giải mẫu trượt: tblite:sakila-sqlite-queries
-# bỏ, lời giải mẫu trượt: tblite:security-breach-incident-response
-# bỏ, lời giải mẫu trượt: tblite:security-incident-log-analysis
-# bỏ, lời giải mẫu trượt: tblite:server-log-analysis
-# bỏ, lời giải mẫu trượt: tblite:simple-database-query-tool
-# bỏ, lời giải mẫu trượt: tblite:sql-injection-forensics
-# bỏ, lời giải mẫu trượt: tblite:symlink-chain-traversal
-# bỏ, lời giải mẫu trượt: tblite:tsl-test-case-generation
-# bỏ, lời giải mẫu trượt: tblite:word-derangement-mapping
+# Gộp các lần chạy lời giải mẫu: lan2-oracle, lan3-oracle, pilot-oracle, recheck-oracle.
+# Giữ 64 (tblite 40, swerebench 24); bỏ 31 vì lời giải mẫu trượt hay lỗi; chờ chạy lại 2 (tasks-recheck.txt).
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:bash-log-processor-fix
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:battery-charging-optimization
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:bloom-filter-cache-penetration-prevention
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:bracket-sequence-restoration
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:breast-cancer-mlflow
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:competitive-programming-solver
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:floor-plan-geometry
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:game-of-stones
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:git-repo-forensics
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:grid-pathfinding
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:grpc-plant-position-server
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:html-index-analysis
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:iris-dataset-classification
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:multi-server-configuration
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:network-log-normalization
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:pandas-numpy-data-analysis
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:parking-lot-pathfinding
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:pdf-table-parsing
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:permutation-construction-100k
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:prediction-model-evaluation
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:publisher-market-analysis
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:publisher-market-analysis-v2
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:sakila-sqlite-queries
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:security-breach-incident-response
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:security-incident-log-analysis
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:server-log-analysis
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:simple-database-query-tool
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:sql-injection-forensics
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:symlink-chain-traversal
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:tsl-test-case-generation
+# bỏ, lời giải mẫu trượt hay lỗi: tblite:word-derangement-mapping
 # chờ chạy lại, chưa chấm được lần nào: tblite:sympy-bug-fix
-# chờ chạy lại, chưa chấm được lần nào: swerebench:azure-samples__azure-search-openai-demo-3025
-# chờ chạy lại, chưa chấm được lần nào: swerebench:beever-ai__beever-atlas-102
-# chờ chạy lại, chưa chấm được lần nào: swerebench:celestoai__smolvm-172
-# chờ chạy lại, chưa chấm được lần nào: swerebench:copier-org__copier-2646
-# chờ chạy lại, chưa chấm được lần nào: swerebench:cpp-linter__cpp-linter-hooks-206_interface
-# chờ chạy lại, chưa chấm được lần nào: swerebench:databricks__dbt-databricks-1428
-# chờ chạy lại, chưa chấm được lần nào: swerebench:microsoft__qcodes-8039
-# chờ chạy lại, chưa chấm được lần nào: swerebench:pennylaneai__pennylane-9298
-# chờ chạy lại, chưa chấm được lần nào: swerebench:pyinfra-dev__pyinfra-1679_interface
-# chờ chạy lại, chưa chấm được lần nào: swerebench:pypsa__pypsa-1653
-# chờ chạy lại, chưa chấm được lần nào: swerebench:reframe-hpc__reframe-3660_interface
-# chờ chạy lại, chưa chấm được lần nào: swerebench:tobymao__sqlglot-7457
-# chờ chạy lại, chưa chấm được lần nào: swerebench:ultraplot__ultraplot-696
 # chờ chạy lại, chưa chấm được lần nào: swerebench:unit8co__darts-3065
-# chờ chạy lại, chưa chấm được lần nào: swerebench:vprusso__toqito-1538
 tblite:acl-permissions-inheritance
 tblite:anomaly-detection-ranking
 tblite:api-endpoint-permission-canonicalizer
@@ -93,9 +79,23 @@ swerebench:agentscope-ai__qwenpaw-3278
 swerebench:agronholm__anyio-1121
 swerebench:apache__iceberg-python-3295
 swerebench:astronomy-commons__lsdb-1349
+swerebench:azure-samples__azure-search-openai-demo-3025
+swerebench:beever-ai__beever-atlas-102
+swerebench:celestoai__smolvm-172
+swerebench:copier-org__copier-2646
+swerebench:cpp-linter__cpp-linter-hooks-206_interface
+swerebench:databricks__dbt-databricks-1428
 swerebench:keras-team__keras-22642
 swerebench:koxudaxi__datamodel-code-generator-3070
 swerebench:koxudaxi__datamodel-code-generator-3071
 swerebench:line__line-bot-sdk-python-981_interface
 swerebench:meltano__meltano-9950
 swerebench:mempalace__mempalace-1004
+swerebench:microsoft__qcodes-8039
+swerebench:pennylaneai__pennylane-9298
+swerebench:pyinfra-dev__pyinfra-1679_interface
+swerebench:pypsa__pypsa-1653
+swerebench:reframe-hpc__reframe-3660_interface
+swerebench:tobymao__sqlglot-7457
+swerebench:ultraplot__ultraplot-696
+swerebench:vprusso__toqito-1538
