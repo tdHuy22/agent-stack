@@ -170,6 +170,88 @@ class HookTests(TempDirTestCase):
         out = self.run_hook("prompt_submit.py", {"session_id": "q", "prompt": "x"})
         self.assertTrue(out is None or "Hạn mức" not in out.get("systemMessage", ""))
 
+    # ---------------------------------------------------------------- nơi người dùng gõ (điện thoại vào phiên Desktop)
+
+    def write_transcript(self, *records, junk_prefix=""):
+        path = self.tmp / f"t{len(list(self.tmp.glob('t*.jsonl')))}.jsonl"  # mỗi transcript một file
+        lines = [json.dumps(r, ensure_ascii=False) for r in records]
+        path.write_text(junk_prefix + "\n".join(lines) + "\n", encoding="utf-8")
+        return str(path)
+
+    @staticmethod
+    def user_rec(text, platform):
+        return {"type": "user", "entrypoint": "claude-desktop", "clientPlatform": platform,
+                "message": {"role": "user", "content": text}}
+
+    def phone_context(self, transcript, prompt, entrypoint="claude-desktop", sid="ph"):
+        out = self.run_hook("prompt_submit.py", {"session_id": sid, "prompt": prompt, "transcript_path": transcript},
+                            env_extra={"CLAUDE_CODE_ENTRYPOINT": entrypoint} if entrypoint else None)
+        return (out or {}).get("hookSpecificOutput", {}).get("additionalContext", "")
+
+    def test_prompt_submit_notes_phone_in_desktop_session(self):
+        # Bản ghi thật 08/11/2026: tin gõ từ iPhone vào phiên Desktop ghi clientPlatform "ios"
+        t = self.write_transcript(self.user_rec("câu trước", "desktop_app"),
+                                  {"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}},
+                                  self.user_rec("Tin này được gửi từ iphone", "ios"))
+        ctx = self.phone_context(t, "Tin này được gửi từ iphone")
+        self.assertIn("điện thoại (ios, theo tin này)", ctx)
+        self.assertIn("viết bằng chữ", ctx)
+        # tin đang gửi chưa có trong transcript: dùng tin trước và nói rõ
+        ctx = self.phone_context(t, "tin mới hơn", sid="ph2")
+        self.assertIn("theo tin người dùng gần nhất", ctx)
+
+    def test_prompt_submit_silent_when_not_phone_in_desktop(self):
+        mac = self.write_transcript(self.user_rec("gõ trên Mac", "desktop_app"))
+        phone = self.write_transcript(self.user_rec("từ iPhone", "ios"))
+        cases = [(mac, "claude-desktop"),  # Desktop trên Mac
+                 (phone, "sdk-cli"), (phone, "claudecodeui"), (phone, "cli"), (phone, None)]  # rc, CloudCLI, terminal
+        for i, (t, ep) in enumerate(cases):
+            with self.subTest(entrypoint=ep):
+                self.assertNotIn("điện thoại", self.phone_context(t, "x", entrypoint=ep, sid=f"s{i}"))
+
+    def test_prompt_submit_phone_note_reads_far_back_in_long_sessions(self):
+        # Phiên thật 08/11/2026: tin người dùng cuối cách cuối file hơn 1 MB sau một lượt nhiều công cụ
+        tool = {"type": "user", "message": {"content": [{"type": "tool_result", "content": "y" * 1000}]}}
+        t = self.write_transcript(self.user_rec("từ iPhone", "ios"), *([tool] * 1500))  # khoảng 1,6 MB phía sau
+        self.assertIn("điện thoại (ios, theo tin người dùng gần nhất", self.phone_context(t, "tin mới", sid="f0"))
+        self.assertLess(self.elapsed, 2)
+        # vượt giới hạn đọc ngược thì im, không đoán
+        out = self.run_hook("prompt_submit.py", {"session_id": "f1", "prompt": "x", "transcript_path": t},
+                            env_extra={"CLAUDE_CODE_ENTRYPOINT": "claude-desktop",
+                                       "AGENT_STACK_TRANSCRIPT_SCAN_BYTES": str(300 * 1024)})
+        self.assertNotIn("điện thoại", json.dumps(out or {}, ensure_ascii=False))
+
+    def test_prompt_submit_phone_note_handles_block_edges_and_attachments(self):
+        # bản ghi nằm vắt qua ranh giới khối 256 KB tính từ cuối file vẫn đọc được trọn
+        rec = json.dumps(self.user_rec("vắt qua ranh giới", "ios"), ensure_ascii=False).encode("utf-8")
+        # một dòng đệm dài vừa đủ để ranh giới khối rơi vào giữa bản ghi
+        pad_len = 256 * 1024 - (len(rec) - len(rec) // 2) - 1  # gồm cả ký tự xuống dòng của dòng đệm
+        base = '{"type": "user", "message": {"content": ""}}'
+        filler = base[:-3] + "z" * (pad_len - len(base) - 1) + base[-3:] + "\n"
+        path = self.tmp / "edge.jsonl"
+        path.write_bytes(rec + b"\n" + filler.encode("utf-8"))
+        start = path.stat().st_size - 256 * 1024
+        self.assertTrue(0 < start < len(rec), "bản ghi phải vắt qua ranh giới khối")
+        self.assertIn("điện thoại", self.phone_context(str(path), "khác", sid="e0"))
+        # dòng cuối rất dài và bị cắt ngang (đang ghi dở): bỏ qua, vẫn thấy bản ghi trước nó
+        cut = self.tmp / "cut.jsonl"
+        cut.write_text(json.dumps(self.user_rec("trước", "ios")) + "\n" + '{"type": "user", "clientPlatform": "desk'
+                       + "w" * (400 * 1024), encoding="utf-8")
+        self.assertIn("ios", self.phone_context(str(cut), "trước", sid="e1"))
+        # tin kèm ảnh: content là danh sách khối, vẫn nhận ra là tin đang gửi
+        att = self.write_transcript({"type": "user", "clientPlatform": "ios", "message": {"content": [
+            {"type": "image", "source": {}}, {"type": "text", "text": "xem ảnh này"}]}})
+        self.assertIn("theo tin này", self.phone_context(att, "xem ảnh này", sid="e2"))
+
+    def test_prompt_submit_phone_note_survives_bad_transcripts(self):
+        broken = self.tmp / "broken.jsonl"
+        broken.write_text('{"type": "user", "clientPlatform": \n[1,2]\n{"type":"user","clientPlatform":5}\n',
+                          encoding="utf-8")
+        for i, t in enumerate([str(broken), str(self.tmp / "khong-co.jsonl"), None, 123]):
+            with self.subTest(transcript=t):
+                self.assertNotIn("điện thoại", self.phone_context(t, "x", sid=f"b{i + 1}"))
+        self.assertLess(self.elapsed, 5)
+
     # ---------------------------------------------------------------- Stop ghi lượt cuối, nhờ cập nhật §0
 
     ANSWER = ("Đã sửa parser.py, test đạt (12 passed). Khóa cũ sk-ant-abcdef1234567890 đã thu hồi.\n\n"
