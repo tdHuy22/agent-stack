@@ -792,6 +792,46 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "siteboon/claudecodeui": {
+      "archived": false,
+      "human_review": {
+        "at": "2026-11-06T12:09:22Z",
+        "note": "Người dùng duyệt trong chat 06/11/2026 ('Đồng ý, cài'). Web UI tự host; HOST=127.0.0.1 + tailscale serve, không VITE_IS_PLATFORM, không dùng nút tự cập nhật",
+        "status": "approved"
+      },
+      "license": "AGPL-3.0",
+      "license_files": [
+        "LICENSE: AGPL"
+      ],
+      "pushed_at": "2026-11-04",
+      "redflags": {
+        "high": 149,
+        "medium": 15
+      },
+      "ref": "v1.37.7",
+      "report": "vet-reports/siteboon__claudecodeui@13e9ef64977d.md",
+      "reviews": [],
+      "scanner": {
+        "counts": {
+          "info": 2
+        },
+        "status": "ok",
+        "version": "2.1.0"
+      },
+      "sha": "13e9ef64977d909eaf881eb83fec250c679f3d5c",
+      "source": "github:siteboon/claudecodeui",
+      "spector": {
+        "counts": {},
+        "score": 0,
+        "status": "ok",
+        "version": "2.12.0"
+      },
+      "stars": 14470,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-06"
+    },
     "trailofbits/skills:plugins/differential-review": {
       "archived": false,
       "human_review": {
