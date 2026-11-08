@@ -23,6 +23,7 @@ API Harbor dùng (đã đọc ở tag v0.25.0): ClaudeCode kế thừa BaseInsta
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import shlex
 from pathlib import Path
@@ -62,6 +63,29 @@ APT_PREINSTALL = (
     'done; fi; true'
 )
 
+# Cài lại một lần khi bước cài của Harbor hỏng. Ca 08/11/2026 trên tuf: apt-cacher-ng giữ InRelease của bookworm-updates và
+# bookworm-security ghép lẫn hai bản (180 byte đầu của bản mới, phần còn lại và chữ ký của bản cũ, cùng độ dài), nên apt báo
+# BADSIG; 13/25 lượt đầu pilot hỏng ở `apt-get update` của Harbor, trước khi gọi model. Lần hai: hoàn tất dpkg dở, gỡ proxy,
+# xóa phần tải dở, đi thẳng tới máy gốc (đã thử: apt không dùng lại InRelease hỏng của lần trước). Không xóa danh sách gói:
+# lần hai có thể không chạy `apt-get update`, và agent của riêng lượt đó sẽ không cài được gói. Vẫn hỏng thì báo
+# AgentInstallError, Harbor chạy lại cả lượt trong môi trường mới (harbor_bench.py INFRA_RETRY). Như nhau ở bốn cấu hình.
+INSTALL_RETRY_WAIT = 30         # giây chờ trước lần cài thứ hai
+APT_GO_DIRECT = (
+    'DEBIAN_FRONTEND=noninteractive dpkg --configure -a </dev/null >/dev/null 2>&1; '
+    'rm -f /etc/apt/apt.conf.d/99agent-stack-proxy; '
+    'rm -rf /var/lib/apt/lists/partial/* 2>/dev/null; true'
+)
+
+
+class AgentInstallError(RuntimeError):
+    """Cài Claude Code hỏng cả hai lần, trước khi gọi model: lỗi hạ tầng, Harbor thử lại cả lượt."""
+
+
+def _short(exc: BaseException, head: int = 200, tail: int = 400) -> str:
+    """Giữ đầu (lệnh) và đuôi (lỗi thật của apt nằm cuối đầu ra)."""
+    text = f"{type(exc).__name__}: {exc}"
+    return text if len(text) <= head + tail else text[:head] + " … " + text[-tail:]
+
 
 class _Probed(ClaudeCode):
     """Khung chung: ghi tình trạng container trước lượt chạy."""
@@ -90,7 +114,16 @@ class _Probed(ClaudeCode):
             'printf \'Acquire::http::Proxy "http://%s:3142";\\n\' "$ip" > /etc/apt/apt.conf.d/99agent-stack-proxy; '
             'fi; fi; fi'))
         await self.exec_as_root(environment, command=APT_PREINSTALL)
-        await super().install(environment)
+        try:
+            await super().install(environment)
+        except Exception as first:      # CancelledError (hết giờ cài) không bắt: Harbor tự báo AgentSetupTimeoutError
+            await asyncio.sleep(INSTALL_RETRY_WAIT)
+            try:
+                await self.exec_as_root(environment, command=APT_GO_DIRECT)
+                await super().install(environment)
+            except Exception as second:
+                raise AgentInstallError(
+                    f"Cài Claude Code hỏng hai lần. Lần 1: {_short(first)} | Lần 2 (đi thẳng): {_short(second)}") from second
 
     async def _write_env_file(self, environment) -> None:
         out = shlex.quote((self.environment_logs_dir / ENV_FILE).as_posix())

@@ -542,13 +542,15 @@ SERIAL_ENV = {"delete": True, "import_path": "serial_build_env:SerialBuildDocker
 
 # Thử lại lượt hỏng vì hạ tầng, tối đa 2 lần, như nhau cho mọi cấu hình. Chỉ theo loại ngoại lệ, không bao giờ theo điểm.
 # Harbor 0.25.0 so đúng tên lớp (trial/queue.py), nên RuntimeError không gồm NonZeroAgentExitCodeError (agent thoát lỗi)
-# dù lớp đó kế thừa RuntimeError. Ba loại này đều là lỗi Docker hay hết giờ trước khi agent làm bài:
+# dù lớp đó kế thừa RuntimeError. Bốn loại này đều là lỗi Docker, cài đặt hay hết giờ trước khi agent làm bài:
 #   RuntimeError                  lệnh docker compose hỏng (containerd.sock refused, `failed to solve`, container chết)
 #   EnvironmentStartTimeoutError  quá giờ dựng, khởi động môi trường
 #   AgentSetupTimeoutError        quá giờ cài Claude Code (apt), chưa gọi model
+#   AgentInstallError             cài Claude Code hỏng cả lần đi thẳng (agent_stack_agents.py), chưa gọi model; ca 08/11/2026:
+#                                 apt-cacher-ng giữ InRelease ghép lẫn hai bản, 13/25 lượt đầu pilot hỏng ở apt BADSIG
 # Lỗi API (hạn mức, quá tải) không thử lại: compare() đã loại việc đó. Harbor xóa thư mục lượt hỏng trước khi thử lại; số lần
 # thử lại nằm trong job.log (`status` đếm). Chờ 30, 60 giây giữa các lần để containerd kịp khởi động lại.
-INFRA_RETRY = ("AgentSetupTimeoutError", "EnvironmentStartTimeoutError", "RuntimeError")
+INFRA_RETRY = ("AgentInstallError", "AgentSetupTimeoutError", "EnvironmentStartTimeoutError", "RuntimeError")
 RETRY = {"max_retries": 2, "include_exceptions": list(INFRA_RETRY), "min_wait_sec": 30.0, "wait_multiplier": 2.0,
          "max_wait_sec": 120.0}
 

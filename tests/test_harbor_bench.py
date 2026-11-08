@@ -198,7 +198,8 @@ class ConfigTests(Base):
         retry = cfg["retry"]
         self.assertEqual(retry["max_retries"], 2)
         self.assertEqual(sorted(retry["include_exceptions"]),
-                         ["AgentSetupTimeoutError", "EnvironmentStartTimeoutError", "RuntimeError"])
+                         ["AgentInstallError", "AgentSetupTimeoutError", "EnvironmentStartTimeoutError",
+                          "RuntimeError"])
         for never in ("NonZeroAgentExitCodeError", "AgentTimeoutError", "VerifierTimeoutError", "ContextWindowExceededError",
                       *B.INFRA_ERRORS):
             self.assertNotIn(never, retry["include_exceptions"])
@@ -1791,6 +1792,105 @@ class SerialBuildEnvTests(TempDirTestCase):
         self.assertIn('"$HERE/serial_build_env.py"', (HARBOR / "tuf.sh").read_text(encoding="utf-8"))   # sync đưa lên TUF
 
 
+class AgentInstallTests(TempDirTestCase):
+    """_Probed.install với ClaudeCode giả (agent_stack_agents.py import harbor): cài lại một lần đi thẳng, rồi báo lỗi hạ
+    tầng. Ca 08/11/2026: apt-cacher-ng giữ InRelease ghép lẫn hai bản, 13/25 lượt đầu pilot hỏng ở apt BADSIG."""
+
+    def load(self, outcomes):
+        import types
+        calls = []
+
+        class FakeClaudeCode:
+            async def exec_as_root(self, environment, command, env=None):
+                calls.append(("root", command))
+
+            async def exec_as_agent(self, environment, command, env=None):
+                calls.append(("agent", command))
+
+            async def install(self, environment):
+                calls.append(("install", None))
+                out = outcomes.pop(0)
+                if isinstance(out, BaseException):
+                    raise out
+
+        mods = {n: types.ModuleType(n) for n in
+                ("harbor", "harbor.agents", "harbor.agents.installed", "harbor.agents.installed.claude_code")}
+        mods["harbor.agents.installed.claude_code"].ClaudeCode = FakeClaudeCode
+        spec = importlib.util.spec_from_file_location("agent_stack_agents_test", HARBOR / "agent_stack_agents.py")
+        mod = importlib.util.module_from_spec(spec)
+        with unittest.mock.patch.dict(sys.modules, mods):
+            spec.loader.exec_module(mod)
+        mod.INSTALL_RETRY_WAIT = 0
+        return mod, calls
+
+    def run_install(self, outcomes):
+        import asyncio
+        mod, calls = self.load(outcomes)
+        agent = mod.ClaudeCodePlain.__new__(mod.ClaudeCodePlain)
+        try:
+            asyncio.run(agent.install(object()))
+            return mod, calls, None
+        except BaseException as e:      # noqa: BLE001 - test cần cả CancelledError
+            return mod, calls, e
+
+    def kinds(self, mod, calls):
+        return [k if k == "install" else ("go-direct" if c == mod.APT_GO_DIRECT else "root") for k, c in calls]
+
+    def test_working_install_runs_once_and_keeps_the_cache(self):
+        mod, calls, err = self.run_install([None])
+        self.assertIsNone(err)
+        self.assertEqual(self.kinds(mod, calls), ["root", "root", "install"])
+
+    def test_failed_install_bypasses_the_cache_and_retries_once_directly(self):
+        mod, calls, err = self.run_install([RuntimeError("Command failed (exit 100): apt-get update ... BADSIG"), None])
+        self.assertIsNone(err)
+        self.assertEqual(self.kinds(mod, calls), ["root", "root", "install", "go-direct", "install"])
+
+    def test_two_failed_installs_raise_an_infra_error_that_harbor_retries(self):
+        long = "x" * 5000
+        mod, calls, err = self.run_install([RuntimeError("Command failed (exit 100): " + long + " BADSIG"),
+                                            RuntimeError("timed out")])
+        self.assertIsInstance(err, mod.AgentInstallError)
+        self.assertIn(type(err).__name__, B.INFRA_RETRY)          # Harbor so đúng tên lớp
+        self.assertIn("BADSIG", str(err))
+        self.assertIn("timed out", str(err))
+        self.assertLess(len(str(err)), 1500)                       # đầu ra apt dài bị cắt
+        self.assertEqual(self.kinds(mod, calls), ["root", "root", "install", "go-direct", "install"])
+
+    def test_setup_timeout_cancellation_is_not_swallowed_or_retried(self):
+        import asyncio
+        mod, calls, err = self.run_install([asyncio.CancelledError()])
+        self.assertIsInstance(err, asyncio.CancelledError)
+        self.assertEqual(self.kinds(mod, calls), ["root", "root", "install"])
+
+    def test_go_direct_removes_the_proxy_and_partial_downloads_but_keeps_the_package_lists(self):
+        mod, _ = self.load([])
+        # hoàn tất dpkg dở trước khi gỡ proxy và cài lại
+        self.assertLess(mod.APT_GO_DIRECT.index("dpkg --configure -a"), mod.APT_GO_DIRECT.index("rm -f"))
+        root = self.tmp
+        conf = root / "etc/apt/apt.conf.d"
+        lists = root / "var/lib/apt/lists"
+        (lists / "partial").mkdir(parents=True)
+        conf.mkdir(parents=True)
+        (conf / "99agent-stack-proxy").write_text('Acquire::http::Proxy "http://172.17.0.1:3142";\n')
+        (conf / "99agent-stack-no-pipelining").write_text("x")
+        (lists / "deb.debian.org_debian_dists_bookworm-updates_InRelease").write_text("hỏng")
+        (lists / "partial" / "x_InRelease").write_text("dở")
+        (lists / "lock").write_text("")
+        cmd = (mod.APT_GO_DIRECT.replace("/etc/apt", str(root / "etc/apt")).replace("/var/lib/apt", str(root / "var/lib/apt"))
+               .replace("dpkg ", "true "))                     # không chạy dpkg thật của máy test
+        r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse((conf / "99agent-stack-proxy").exists())
+        self.assertTrue((conf / "99agent-stack-no-pipelining").exists())
+        # danh sách gói giữ lại: lần cài hai có thể không chạy apt-get update, agent vẫn phải cài được gói
+        self.assertEqual(sorted(p.name for p in lists.iterdir()),
+                         ["deb.debian.org_debian_dists_bookworm-updates_InRelease", "lock", "partial"])
+        self.assertEqual(list((lists / "partial").iterdir()), [])
+        r = subprocess.run(["sh", "-c", cmd.replace(str(root), str(root / "khong-co"))], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0)                          # image không có apt: vẫn thoát 0
+
+
 class AgentFileTests(unittest.TestCase):
     """agent_stack_agents.py import harbor nên không import được ở đây: đọc cú pháp."""
 
@@ -1839,7 +1939,8 @@ class AgentFileTests(unittest.TestCase):
         install = next(n for n in probed.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "install")
         calls = [n for n in ast.walk(install) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") in
                  ("exec_as_root", "install")]
-        self.assertEqual([c.func.attr for c in calls], ["exec_as_root", "exec_as_root", "install"])  # tắt trước, rồi mới cài
+        # tắt trước, rồi mới cài; lần cài thứ hai (đi thẳng) chỉ khi lần đầu hỏng: AgentInstallTests chạy thật nhánh đó
+        self.assertEqual([c.func.attr for c in calls], ["exec_as_root", "exec_as_root", "install", "exec_as_root", "install"])
         self.assertEqual(ast.unparse(calls[1].keywords[0].value), "APT_PREINSTALL")
         cmd = ast.literal_eval(next(k.value for k in calls[0].keywords if k.arg == "command"))
         with tempfile.TemporaryDirectory() as tmp:
