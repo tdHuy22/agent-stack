@@ -18,6 +18,9 @@
 #   tuf.sh pilot-report [--attempts N] in tỉ lệ đạt, chi phí theo nhãn độ khó của pilot đã kéo về (chỉ gợi ý)
 #   tuf.sh run [TÊN] [--attempts N] [--yes] [--force]
 #                                     job lớn: 4 cấu hình × tasks-main.txt × N lần (gọi model)
+#   tuf.sh resume TÊN [--yes] [--force]
+#                                     chạy tiếp job dừng giữa chừng (ổ đầy, máy treo): giữ bản chép agent-stack của job,
+#                                     bỏ qua lượt đã có kết quả; job lời giải mẫu (TÊN-oracle) không nạp .env
 #   tuf.sh status [TÊN]               tiến độ, harbor và watcher còn sống không, số lượt lỗi hạn mức
 #   tuf.sh stop [TÊN]                 dừng job (SIGTERM cả nhóm tiến trình) và liệt kê container còn lại
 #   tuf.sh fetch [TÊN]                kéo kết quả về .tmp/harbor-jobs/ (khóa bị che trên TUF trước khi kéo, quét lại trên Mac)
@@ -41,6 +44,10 @@ LOCAL_JOBS="$REPO/.tmp/harbor-jobs/jobs"
 PY=.venv/bin/python
 HB="$PY agent-stack/harbor_bench.py"
 WATCH_INTERVAL=${HARBOR_WATCH_INTERVAL:-60}
+# Ổ trống tối thiểu khi khởi chạy, và ngưỡng để watcher dọn cache dựng của Docker. Ca 09/11/2026: còn 27 GB sau khi
+# dọn, một lượt dựng image SWE-rebench cộng 3 container đang chạy và 7,8 GB cache tích từ đầu job (BuildKit không tự dọn
+# kịp) làm đầy ổ, Harbor dừng cả job ở lượt 110/153.
+MIN_FREE_GB=${HARBOR_MIN_FREE_GB:-30}
 
 cmd=${1:-}; [ $# -gt 0 ] && shift
 NAME=; FORCE=0; YES=0; ATTEMPTS=1
@@ -156,25 +163,52 @@ $HB plan configs/$job.json --root .
 EOF
 }
 
-launch_job() {  # $1: tên job, $2: token (nạp .env: chỉ job gọi model) hay none (lời giải mẫu: không nạp gì)
-  job=$1; mode=$2
+# Ổ trên TUF còn dưới MIN_FREE_GB thì không khởi chạy (--force bỏ qua). df không đọc được thì chỉ cảnh báo.
+refuse_if_low_disk() {
+  free=$(remote 'df -BG --output=avail "$HOME" 2>/dev/null | tail -1 | tr -dc 0-9' || true)
+  case "$free" in
+    ''|*[!0-9]*) echo "⚠️ không đọc được dung lượng ổ trên TUF" >&2 ;;
+    *) if [ "$free" -lt "$MIN_FREE_GB" ]; then
+         if [ "$FORCE" -ne 1 ]; then
+           echo "Ổ trên TUF còn $free GB, dưới $MIN_FREE_GB GB: chưa chạy. Dọn bằng tuf.sh prune --yes, hay thêm --force." >&2
+           exit 3
+         fi
+         echo "⚠️ ổ trên TUF còn $free GB, dưới $MIN_FREE_GB GB (--force: vẫn chạy)" >&2
+       fi ;;
+  esac
+}
+
+# $1: tên job, $2: token (nạp .env: chỉ job gọi model) hay none (lời giải mẫu: không nạp gì), $3: resume (chạy tiếp
+# jobs/$1 đã có, giữ nguyên bản chép agent-stack và meta của nó; log nối thêm thay vì ghi đè)
+launch_job() {
+  job=$1; mode=$2; resume=${3:-}
+  # mọi đường khởi chạy, kể cả resume của job lời giải mẫu (không qua prepare_job hay require_token)
+  if remote "test -e .env.local"; then echo "Có ~/$REMOTE/.env.local (Harbor tự nạp vào mọi job): xóa nó." >&2; exit 1; fi
   [ "$mode" = token ] && require_token
   refuse_if_running
+  refuse_if_low_disk
   refuse_if_busy
+  if [ -n "$resume" ]; then
+    prep="test -f jobs/$job/config.json && test -f jobs/$job.payload/full/.payload-commit"
+    target="jobs/$job"; rmode="resume-$mode"; redir=">>"
+  else
+    prep="$HB validate-config configs/$job.json
+rm -rf jobs/$job.payload && cp -R agent-stack/payload jobs/$job.payload
+$HB meta configs/$job.json --out jobs/$job.meta.json --payload jobs/$job.payload --root ."
+    target="configs/$job.json"; rmode=$mode; redir=">"
+  fi
   # Bản chép agent-stack của job nằm riêng trong jobs/<job>.payload: sync giữa chừng không đổi được job đang chạy, và
   # commit của bản chép đi cùng kết quả. Phần chạy nền tách phiên để ssh trả về ngay; harbor và watch ghi pid vào .pid.
   # run_harbor.sh chạy harbor với môi trường lọc. Sau khi khởi động, kiểm cả harbor lẫn watcher còn sống, không thì dừng job.
   rsh <<EOF
 set -e
-$HB validate-config configs/$job.json
-rm -rf jobs/$job.payload && cp -R agent-stack/payload jobs/$job.payload
-$HB meta configs/$job.json --out jobs/$job.meta.json --payload jobs/$job.payload --root .
+$prep
 rm -f jobs/$job.pid jobs/$job.watch.pid
-AGENT_STACK_PAYLOAD="\$PWD/jobs/$job.payload" PYTHONPATH="\$PWD/agent-stack" nohup setsid sh -c 'echo \$\$ > jobs/$job.pid; exec sh agent-stack/run_harbor.sh configs/$job.json $mode' > jobs/$job.log 2>&1 < /dev/null &
+AGENT_STACK_PAYLOAD="\$PWD/jobs/$job.payload" PYTHONPATH="\$PWD/agent-stack" nohup setsid sh -c 'echo \$\$ > jobs/$job.pid; exec sh agent-stack/run_harbor.sh $target $rmode' $redir jobs/$job.log 2>&1 < /dev/null &
 # chờ file pid tới 20 giây (lần 06/11 chờ cứng 2 giây thì file chưa kịp có, job bị coi là chết và dừng oan)
 i=0; hpid=""
 while [ \$i -lt 20 ] && [ -z "\$hpid" ]; do sleep 1; i=\$((i+1)); hpid=\$(cat jobs/$job.pid 2>/dev/null || true); done
-nohup setsid $PY agent-stack/harbor_bench.py watch jobs/$job --pid "\$hpid" --interval $WATCH_INTERVAL > jobs/$job.watch.log 2>&1 < /dev/null &
+nohup setsid $PY agent-stack/harbor_bench.py watch jobs/$job --pid "\$hpid" --interval $WATCH_INTERVAL --min-free-gb $MIN_FREE_GB $redir jobs/$job.watch.log 2>&1 < /dev/null &
 wpid=\$!
 echo "\$wpid" > jobs/$job.watch.pid
 sleep 1
@@ -299,8 +333,8 @@ EOF
     echo "Đã ghi $HERE/tasks-main.txt và tasks-recheck.txt: đọc, commit rồi tuf.sh sync"
     ;;
   check)
-    ssh "$HOST" "cd \"\$HOME/$REMOTE\" && sh -s -- '$HARBOR_VERSION' '$REMOTE'" <<'EOF'
-want=$1; rdir=$2
+    ssh "$HOST" "cd \"\$HOME/$REMOTE\" && sh -s -- '$HARBOR_VERSION' '$REMOTE' '$MIN_FREE_GB'" <<'EOF'
+want=$1; rdir=$2; minfree=$3
 PY=.venv/bin/python; HB="$PY agent-stack/harbor_bench.py"
 test -f agent-stack/payload/full/.agent-stack-root || { echo "✗ chưa sync"; exit 1; }
 echo "✓ bản chép agent-stack: commit $(cat agent-stack/payload/full/.payload-commit) (full, nohooks, noagents)"
@@ -326,8 +360,8 @@ fi
 if [ -e .env.local ]; then echo "✗ có file .env.local: Harbor tự nạp nó; xóa đi (pilot và run sẽ từ chối)"; fi
 if docker info >/dev/null 2>&1; then echo "✓ Docker chạy được"; else echo "✗ Docker không chạy được"; fi
 free=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc 0-9)
-echo "· ổ còn trống: ${free} GB (image SWE-rebench nặng; Harbor gỡ image dựng cục bộ sau mỗi lượt nhưng image gốc swerebench/* còn lại: tuf.sh prune)"
-if [ "$free" -lt 25 ]; then echo "✗ ổ còn dưới 25 GB: dọn trước khi chạy"; fi
+echo "· ổ còn trống: ${free} GB (image SWE-rebench nặng; cache dựng của Docker tích dần qua các lượt: tuf.sh prune; watcher tự dọn khi ổ dưới ${minfree} GB)"
+if [ "$free" -lt "$minfree" ]; then echo "✗ ổ còn dưới ${minfree} GB: oracle, pilot, run, resume sẽ từ chối; dọn bằng tuf.sh prune --yes"; fi
 docker system df 2>/dev/null | sed 's/^/· /' || true
 for c in configs/*.json; do
   [ -f "$c" ] || continue
@@ -364,6 +398,19 @@ EOF
     prepare_job main "$NAME"
     [ "$YES" -eq 1 ] || { echo "Chưa chạy. Thêm --yes để chạy job lớn (gọi model, tính vào hạn mức)."; exit 0; }
     launch_job "$NAME" token
+    ;;
+  resume)
+    remote "test -f jobs/$NAME/config.json" || { echo "Không thấy jobs/$NAME/config.json trên TUF: job chưa từng chạy?" >&2; exit 1; }
+    remote "test -f jobs/$NAME.payload/full/.payload-commit" || { echo "Không thấy bản chép agent-stack jobs/$NAME.payload: không chạy tiếp được (kết quả sẽ lẫn hai bản)." >&2; exit 1; }
+    # watcher đếm cả lượt lỗi hạn mức của lần trước: chạy tiếp thì nó giết job ngay vòng đầu
+    if remote "test -e jobs/$NAME.stopped"; then
+      echo "Job $NAME đã bị watcher dừng vì lỗi hạn mức (jobs/$NAME.stopped). Chờ hạn mức hồi, xem lại, rồi tự xóa file đó và các lượt lỗi hạn mức trước khi chạy tiếp." >&2
+      exit 1
+    fi
+    remote "$HB status jobs/$NAME" || true
+    case "$NAME" in *-oracle) rmode=none ;; *) rmode=token ;; esac
+    [ "$YES" -eq 1 ] || { echo "Chưa chạy. Thêm --yes để chạy tiếp job $NAME$([ $rmode = token ] && echo ' (gọi model, tính vào hạn mức)')."; exit 0; }
+    launch_job "$NAME" "$rmode" resume
     ;;
   status)
     for job in "$NAME-oracle" "$NAME"; do

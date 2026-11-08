@@ -3,7 +3,9 @@ ssh) và agent_stack_agents.py (chỉ đọc cú pháp: file này import harbor 
 import argparse
 import ast
 import base64
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -562,6 +564,43 @@ class WatchTests(Base):
         self.assertEqual(code, 0)
         self.assertEqual(proc.returncode, 0)
         self.assertFalse((self.tmp / "jobs" / "j.stopped").exists())
+
+
+    def test_low_disk_prunes_the_build_cache_and_keeps_watching(self):
+        """Ca 09/11/2026: ổ đầy ở lượt 110/153 làm Harbor dừng cả job; cache dựng tích 7,8 GB từ đầu job."""
+        job = self.limit_trials(0)
+        proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
+        frees, pruned, ticks = iter([12.0, 45.0, None]), [], []
+
+        def tick(_):
+            ticks.append(1)
+            if len(ticks) == 3:
+                proc.kill()
+                proc.wait()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = B.watch(job, proc.pid, limit=3, interval=0, sleep=tick, min_free_gb=30, free=lambda _: next(frees),
+                           prune=lambda: pruned.append(1) or "Total reclaimed space: 7.6GB")
+        self.assertEqual(code, 0)
+        self.assertEqual(pruned, [1])                         # chỉ lần 12 GB; 45 GB và không đọc được thì không dọn
+        self.assertIn("ổ còn 12.0 GB, dưới 30 GB", out.getvalue())
+        self.assertIn("Total reclaimed space: 7.6GB", out.getvalue())
+
+    def test_disk_check_is_off_by_default_and_free_gb_handles_a_missing_job_dir(self):
+        job = self.limit_trials(0)
+        proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
+        ticks = []
+
+        def tick(_):
+            ticks.append(1)
+            if len(ticks) == 2:
+                proc.kill()
+                proc.wait()
+        code = B.watch(job, proc.pid, interval=0, sleep=tick, free=lambda _: 1.0, prune=lambda: self.fail("không được dọn"))
+        self.assertEqual((code, len(ticks)), (0, 2))          # vòng lặp có chạy, ổ 1 GB mà vẫn không dọn
+        self.assertGreater(B.free_gb(self.tmp / "chưa" / "có"), 0)
 
 
 class StatusTests(Base):
@@ -1445,7 +1484,9 @@ class TufBehaviourTests(TempDirTestCase):
 
     def tuf(self, *args, extra_env=None):
         env = {"PATH": f"{self.bin}:{os.path.dirname(sys.executable)}:/usr/bin:/bin", "HARBOR_HOST": "fake",
-               "HARBOR_WATCH_INTERVAL": "1", "HOME": os.environ.get("HOME", "/"), **(extra_env or {})}
+               "HARBOR_WATCH_INTERVAL": "1", "HOME": os.environ.get("HOME", "/"),
+               # 0: không kiểm ổ, watcher không dọn cache dựng của Docker (test chạy trên máy thật của bạn)
+               "HARBOR_MIN_FREE_GB": "0", **(extra_env or {})}
         return subprocess.run(["sh", str(HARBOR / "tuf.sh"), *args], capture_output=True, text=True, timeout=120, env=env,
                               stdin=subprocess.DEVNULL)
 
@@ -1499,9 +1540,72 @@ class TufBehaviourTests(TempDirTestCase):
         meta = json.loads((self.rd / "jobs" / "pilot.meta.json").read_text())
         self.assertEqual(meta["difficulty"]["t1"], "hard")
 
+    def started_job(self, name):
+        """Dựng jobs/<name> như sau khi Harbor dừng giữa chừng: config.json, bản chép agent-stack, log cũ."""
+        (self.rd / "jobs" / name).mkdir(parents=True)
+        (self.rd / "jobs" / name / "config.json").write_text("{}")
+        (self.rd / "jobs" / f"{name}.payload" / "full").mkdir(parents=True)
+        (self.rd / "jobs" / f"{name}.payload" / "full" / ".payload-commit").write_text("63b4e6d\n")
+        (self.rd / "jobs" / f"{name}.log").write_text("log lần đầu\n")
+        # python-dotenv giả: .venv/bin/python ở đây là python của máy, không có thư viện của Harbor
+        (self.rd / "agent-stack" / "dotenv.py").write_text(
+            "import os\ndef load_dotenv(path, override=False):\n    for ln in open(path):\n"
+            "        k, _, v = ln.strip().partition('=')\n        if k and not k.startswith('#'):\n"
+            "            os.environ[k] = v if override or k not in os.environ else os.environ[k]\n")
+
+    def test_resume_continues_the_job_with_its_own_payload_and_loads_env_like_harbor_run(self):
+        """Ca 09/11/2026: ổ đầy, Harbor dừng ở lượt 110/153; `harbor jobs resume` không có --env-file."""
+        self.started_job("pilot")
+        r = self.tuf("resume", "pilot")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Chưa chạy. Thêm --yes", r.stdout)
+        self.assertFalse(self.args_file().exists())
+        r = self.tuf("resume", "pilot", "--yes", "--force", extra_env={"DECOY_SECRET": "not-for-containers"})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Đã chạy nền job pilot", r.stdout)
+        self.assertIn("commit 63b4e6d", r.stdout)            # bản chép cũ của job, không chép lại từ agent-stack/payload
+        self.assertEqual(self.args_file().read_text().split(), ["jobs", "resume", "-p", "jobs/pilot"])
+        env = (self.home / "harbor-env.txt").read_text()
+        self.assertIn(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}", env)   # như harbor run sau load_dotenv(.env, override=True)
+        self.assertNotIn("DECOY_SECRET", env)                 # vẫn sau env -i
+        self.assertFalse((self.rd / "jobs" / "pilot.meta.json").exists())
+        self.assertTrue((self.rd / "jobs" / "pilot.log").read_text().startswith("log lần đầu\n"))   # nối, không ghi đè
+
+    def test_resume_of_an_oracle_job_never_loads_env_and_a_job_without_its_payload_is_refused(self):
+        self.started_job("pilot-oracle")
+        r = self.tuf("resume", "pilot-oracle", "--yes", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("OAUTH", (self.home / "harbor-env.txt").read_text())
+        self.args_file().unlink()
+        self.started_job("other")
+        shutil_rmtree(self.rd / "jobs" / "other.payload")
+        r = self.tuf("resume", "other", "--yes", "--force")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("jobs/other.payload", r.stderr)
+        (self.rd / "jobs" / "pilot-oracle.stopped").write_text("Dừng: 4 lượt lỗi hạn mức\n")
+        r = self.tuf("resume", "pilot-oracle", "--yes", "--force")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("đã bị watcher dừng vì lỗi hạn mức", r.stderr)
+        r = self.tuf("resume", "never", "--yes", "--force")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Không thấy jobs/never/config.json", r.stderr)
+        self.assertFalse(self.args_file().exists())
+
+    def test_launch_refuses_when_the_disk_is_low_unless_forced(self):
+        self.shim("df", 'printf "Avail\\n  12G\\n"\n')
+        self.started_job("pilot")
+        r = self.tuf("resume", "pilot", "--yes", extra_env={"HARBOR_MIN_FREE_GB": "30"})
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("còn 12 GB, dưới 30 GB", r.stderr)
+        self.assertFalse(self.args_file().exists())
+        r = self.tuf("resume", "pilot", "--yes", "--force", extra_env={"HARBOR_MIN_FREE_GB": "10"})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("dưới", r.stderr)
+
     def test_env_with_any_other_key_or_env_local_is_refused_without_printing_values(self):
         self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n# ghi chú\n\nANTHROPIC_API_KEY=hunter2value\nraw-secret-line\n")
-        for cmd in (("pilot", "--yes", "--force"), ("run", "--yes", "--force")):
+        self.started_job("resumed")
+        for cmd in (("pilot", "--yes", "--force"), ("run", "--yes", "--force"), ("resume", "resumed", "--yes", "--force")):
             r = self.tuf(*cmd)
             self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
             out = r.stdout + r.stderr
@@ -1512,10 +1616,13 @@ class TufBehaviourTests(TempDirTestCase):
             self.assertFalse(self.args_file().exists())
         self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n")
         (self.rd / ".env.local").write_text("X=1\n")
-        r = self.tuf("pilot", "--yes", "--force")
-        self.assertEqual(r.returncode, 1)
-        self.assertIn(".env.local", r.stderr)
-        self.assertFalse(self.args_file().exists())
+        self.started_job("resumed-oracle")
+        for cmd in (("pilot", "--yes", "--force"), ("resume", "resumed", "--yes", "--force"),
+                    ("resume", "resumed-oracle", "--yes", "--force")):    # oracle không qua require_token
+            r = self.tuf(*cmd)
+            self.assertEqual(r.returncode, 1, cmd)
+            self.assertIn(".env.local", r.stderr)
+            self.assertFalse(self.args_file().exists())
 
     def test_env_with_a_lone_carriage_return_hiding_a_second_key_is_refused(self):
         """Review vòng 1: python-dotenv tách dòng ở \\r đơn, grep thì không."""

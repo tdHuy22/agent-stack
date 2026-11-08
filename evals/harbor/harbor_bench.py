@@ -775,8 +775,34 @@ def pid_alive(pid: int) -> bool:
         return True
 
 
-def watch(job_dir: Path, pid: int, limit: int = 3, interval: float = 60.0, sleep=time.sleep) -> int:
-    """Chờ job; số lượt lỗi hạn mức hay rate limit vượt `limit` thì gửi SIGTERM cho cả nhóm tiến trình của job."""
+def free_gb(path: Path) -> float | None:
+    """GB còn trống trên ổ chứa `path` (lùi lên thư mục cha khi `path` chưa có); None khi không đọc được."""
+    p = Path(path)
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    try:
+        return shutil.disk_usage(p).free / 2**30
+    except OSError:
+        return None
+
+
+def prune_build_cache() -> str:
+    """Dọn cache dựng của Docker không dùng trong 30 phút qua. Bản ghi cache của lượt đang dựng không bị xóa (Docker giữ
+    lease), nên chạy được khi job đang chạy. Trả dòng cuối của docker, hay mô tả lỗi; không bao giờ ném lỗi."""
+    try:
+        r = subprocess.run(["docker", "builder", "prune", "-f", "--filter", "until=30m"], capture_output=True, text=True,
+                           timeout=600)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"lỗi: {type(exc).__name__}"
+    lines = (r.stdout or r.stderr).strip().splitlines()
+    return (lines[-1] if lines else "") + ("" if r.returncode == 0 else f" (mã {r.returncode})")
+
+
+def watch(job_dir: Path, pid: int, limit: int = 3, interval: float = 60.0, sleep=time.sleep, min_free_gb: float = 0,
+          free=free_gb, prune=prune_build_cache) -> int:
+    """Chờ job; số lượt lỗi hạn mức hay rate limit vượt `limit` thì gửi SIGTERM cho cả nhóm tiến trình của job.
+    Ổ còn dưới `min_free_gb` thì dọn cache dựng của Docker: cache tích dần qua từng lượt (7,8 GB sau 110 lượt), và
+    ngày 09/11/2026 ổ đầy làm Harbor dừng cả job ở lượt 110/153."""
     while pid_alive(pid):
         n = count_limit_errors(job_dir)
         if n > limit:
@@ -788,12 +814,39 @@ def watch(job_dir: Path, pid: int, limit: int = 3, interval: float = 60.0, sleep
             except ProcessLookupError:
                 pass
             return 3
+        if min_free_gb > 0:
+            gb = free(job_dir)
+            if gb is not None and gb < min_free_gb:
+                print(f"{time.strftime('%d/%m %H:%M:%S')} ổ còn {gb:.1f} GB, dưới {min_free_gb:g} GB: dọn cache dựng "
+                      f"của Docker: {prune()}", flush=True)
         sleep(interval)
     return 0
 
 
 def cmd_watch(args) -> int:
-    return watch(Path(args.job), args.pid, args.limit, args.interval)
+    return watch(Path(args.job), args.pid, args.limit, args.interval, min_free_gb=args.min_free_gb)
+
+
+def cmd_resume_exec(args) -> int:
+    """Chạy tiếp job Harbor dừng giữa chừng (`harbor jobs resume`: bỏ qua lượt đã có result.json). Lệnh đó không có
+    --env-file, nên nạp .env bằng đúng hàm `harbor run --env-file` dùng (load_dotenv của python-dotenv, override=True)
+    rồi exec harbor. Gọi qua run_harbor.sh, sau env -i, nên môi trường vẫn là môi trường đã lọc (TM-73)."""
+    job = Path(args.job)
+    if not (job / "config.json").is_file():
+        print(f"✗ không thấy {job}/config.json", file=sys.stderr)
+        return 1
+    if args.env_file:
+        if not Path(args.env_file).is_file():
+            print(f"✗ không thấy {args.env_file}", file=sys.stderr)
+            return 1
+        try:
+            from dotenv import load_dotenv      # phụ thuộc của Harbor, có trong .venv trên TUF
+        except ImportError as exc:
+            print(f"✗ chưa có python-dotenv ở python này ({exc})", file=sys.stderr)
+            return 3
+        load_dotenv(args.env_file, override=True)
+    os.execv(args.harbor, [args.harbor, "jobs", "resume", "-p", str(job)])
+    return 0   # không tới
 
 
 # ---------------------------------------------------------------- đọc kết quả
@@ -1677,6 +1730,11 @@ def main(argv=None) -> int:
     wt.add_argument("--pid", type=int, required=True)
     wt.add_argument("--limit", type=int, default=3)
     wt.add_argument("--interval", type=float, default=60.0)
+    wt.add_argument("--min-free-gb", type=float, default=0, help="ổ còn dưới ngần này GB thì dọn cache dựng của Docker")
+    re_ = sub.add_parser("resume-exec")
+    re_.add_argument("job")
+    re_.add_argument("--env-file")
+    re_.add_argument("--harbor", default=".venv/bin/harbor")
     ex = sub.add_parser("export")
     ex.add_argument("jobs", nargs="+")
     ex.add_argument("--out", required=True)
@@ -1711,7 +1769,7 @@ def main(argv=None) -> int:
         ap.error("--attempts phải từ 1")
     handlers = {"build-payload": cmd_build_payload, "datasets": cmd_datasets, "flatten": cmd_flatten, "lock": cmd_lock,
                 "vet": cmd_vet, "vet-config": cmd_vet_config, "status": cmd_status, "pick-swerebench": cmd_pick_swerebench, "make-configs": cmd_make_configs,
-                "plan": cmd_plan, "meta": cmd_meta, "validate-config": cmd_validate_config, "watch": cmd_watch,
+                "plan": cmd_plan, "meta": cmd_meta, "validate-config": cmd_validate_config, "watch": cmd_watch, "resume-exec": cmd_resume_exec,
                 "export": cmd_export, "residual": cmd_residual, "scrub": cmd_scrub, "select": cmd_select,
                 "filter-oracle": cmd_filter_oracle,
                 "pilot-report": cmd_pilot_report, "compare": cmd_compare}
