@@ -1,0 +1,296 @@
+<title>Bench tiếng Việt cho agent-stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng được rộng hơn và cuộn ngang trong khung riêng */
+:root {
+  --bg: #f4f5f1; --panel: #ffffff; --fg: #1d231f; --muted: #58635b; --line: #d6dcd3;
+  --accent: #b23a1e; --accent-soft: #f6e4dd;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee8;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151816; --panel: #1d211e; --fg: #e4e8e3; --muted: #9ba59d; --line: #323a34;
+  --accent: #ee8a6c; --accent-soft: #3d241c;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111412; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151816; --panel: #1d211e; --fg: #e4e8e3; --muted: #9ba59d; --line: #323a34;
+  --accent: #ee8a6c; --accent-soft: #3d241c;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111412; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0; white-space: pre-wrap }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 07/11/2026</div>
+    <h1>Bộ bench tiếng Việt nên đo gì, chạy ở đâu?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code, tuf">
+    <h2>Tóm tắt</h2>
+    <p>Bạn muốn một bộ bài thử tiếng Việt chi tiết để đo xem bộ luật và công cụ agent-stack có giúp Claude Code làm việc tốt hơn khi bạn giao việc bằng tiếng Việt không. Chưa có bộ công khai nào dùng lại được, nên phải tự viết. Khuyến nghị: khoảng 30 bài, chia ba nhóm (sửa code theo đề tiếng Việt, xử lý chữ tiếng Việt, viết báo cáo tiếng Việt), chấm hoàn toàn bằng script, viết theo đúng định dạng bài của bench đang chạy trên máy Linux để so cùng lúc bốn cấu hình. Chưa viết bài nào; bench tiếng Anh vẫn chạy được nên giữ nguyên, không cần đọc đề rồi dựng lại. Bạn cần chốt bốn câu ở cuối trang: gồm những nhóm nào, chạy ở đâu, bao nhiêu bài, có dùng model để chấm phần viết không.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack là phần bạn gắn thêm cho Claude Code, gồm bốn thứ: <dfn>luật chung</dfn> (file chỉ dẫn model đọc đầu mỗi phiên, ví dụ "trả lời bằng tiếng Việt"); <dfn>skill</dfn> (hướng dẫn cho một loại việc, model tự nạp khi cần, ví dụ skill sửa giọng văn); <dfn>subagent</dfn> (model phụ được giao một phần việc, ví dụ một reviewer đọc lại diff); và <dfn>hook</dfn> (script tự chạy ở mốc cố định, ví dụ nhắc chạy test trước khi báo xong). Skill, subagent và hook đóng gói chung thành một <dfn>plugin</dfn>.</p>
+    <p>Để biết agent-stack giúp thật hay chỉ tốn thêm, đang có hai bộ đo. Bộ thứ nhất chạy bằng <dfn>Harbor</dfn> (công cụ chạy bench) trên máy Linux ở nhà, tên máy <code>tuf</code>. Mỗi bài chạy trong một <dfn>container</dfn> (máy ảo nhẹ của Docker, dựng lại y hệt mỗi lần). Bộ này so bốn <dfn>cấu hình</dfn>, tức bốn cách bật Claude Code: trơn; đủ agent-stack; đủ nhưng bỏ hook; đủ nhưng bỏ subagent. Nó chạy trên 64 bài tiếng Anh. 64 bài này là phần còn lại của 97 bài ứng viên sau khi bỏ 31 bài mà lời giải mẫu không đạt; 2 bài còn chờ chạy lại. Bộ thứ hai là 24 bài tự viết chạy thẳng trên Mac bằng <code>evals/run_eval.py</code>, hiện dùng để so các model và mức suy nghĩ, chưa so bốn cấu hình. Trong 24 bài chỉ một bài có tiếng Việt (viết lại một đoạn văn).</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  D[Đề bài tiếng Việt] --> A[Claude Code, 4 cấu hình]
+  A --> K[Kết quả: code, file, câu trả lời]
+  K --> G[Script chấm, model không thấy]
+  G --> S[Đạt hay trượt, so từng cặp cấu hình]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Bạn giao việc cho Claude Code bằng tiếng Việt, và nhiều luật của agent-stack chỉ có tác dụng ở tiếng Việt: trả lời bằng tiếng Việt, giọng văn tự nhiên không "văn AI", báo cáo viết thành trang dễ đọc, dòng gợi ý việc tiếp theo ở cuối. 64 bài tiếng Anh không chạm tới những luật đó. Ví dụ thật: bài viết lại đoạn văn (tên <code>write-vn-rewrite</code>) là chỗ duy nhất hiện nay kiểm được giọng văn tiếng Việt, và một bài thì không đủ để kết luận gì. Bài đó chấm bằng <code>tells.py</code>, một script của repo đếm dấu hiệu văn AI (câu mở bài sáo, "không chỉ… mà còn"…).</p>
+    <p>Hạ tầng cũng là vấn đề: máy Linux hay sập phần chạy container (containerd). Tối 07/11, khi chạy lại lời giải mẫu của 16 bài trước đó chỉ hỏng vì máy, nó sập 3 lần trong 40 phút; cơ chế tự chạy lại cứu được 14 trong 16 bài.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Bài thử</b>: một đề, một môi trường (thư mục code, dữ liệu), một script chấm mà model không thấy, và một lời giải mẫu. Ví dụ: đề "sửa hàm tính phí ship", test ẩn gọi hàm với 12 đơn hàng. Cần để hiểu mọi phần dưới.</li>
+      <li><b>Lời giải mẫu</b>: bản làm đúng do người viết bài soạn. Chạy script chấm trên nó phải ra "đạt", trên bản chưa sửa phải ra "trượt"; không thế thì script chấm sai. <code>run_eval.py --self-test</code> làm đúng hai phép kiểm này mà không gọi model. Ví dụ: 31 bài tiếng Anh bị bỏ vì lời giải mẫu không đạt. Cần cho bảng ràng buộc.</li>
+      <li><b>Chấm bằng script hay bằng model</b>: script đếm, so khớp được (đủ 6 con số, đúng thứ tự tên); model chấm thì đọc được ý nhưng tốn hạn mức và có thể cho điểm cao văn trơn tru mà sai số liệu. Cần cho câu chốt số 4.</li>
+      <li><b>Chạy lặp và so theo cặp</b>: cùng một bài, model có thể lúc đạt lúc trượt, nên mỗi bài chạy 2 lần mỗi cấu hình. Hai cấu hình được so trên các bài mà một bên đạt còn bên kia trượt; với 30 bài, cần lệch kiểu 8 bài so với 1 thì mới chắc không phải ngẫu nhiên (kiểm dấu, p dưới 0,05). Cần cho câu chốt 3.</li>
+      <li><b>Định dạng bài của bench Docker</b>: mỗi bài là một thư mục có file mô tả, đề, môi trường dựng bằng Docker, test, lời giải. Viết theo định dạng này thì bài chạy được chung với bốn cấu hình. Cần cho phương án A.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>TBLite</dt><dd>Bộ bài dòng lệnh công khai (tiếng Anh), một trong hai bộ đang chạy trên Harbor.</dd>
+        <dt>SWE-rebench</dt><dd>Bộ bài sửa lỗi trong repo Python thật (tiếng Anh), bộ còn lại.</dd>
+        <dt>NFC</dt><dd>Cách lưu chữ có dấu thành một ký tự: "ệ" là 1 ký tự.</dd>
+        <dt>NFD</dt><dd>Cách lưu "ệ" thành "e" cộng hai dấu rời; nhìn giống NFC mà so chuỗi thì khác.</dd>
+        <dt>USD</dt><dd>Đô la Mỹ theo giá niêm yết. Gói Max không trừ tiền thật mà trừ hạn mức tuần; con số chỉ để so độ tốn.</dd>
+        <dt>PyICU</dt><dd>Thư viện ngoài (không thuộc thư viện chuẩn Python) có sẵn thứ tự từ điển cho nhiều ngôn ngữ.</dd>
+        <dt>pilot</dt><dd>Lượt chạy thử bản trơn trên mọi bài trước job lớn, để đo chi phí và độ khó.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: sửa code theo đề tiếng Việt</h3>
+        <p>Tình huống: repo nhỏ của một shop, đề viết như bạn hay viết.</p>
+        <pre><code>Phí ship sai: đơn từ 500.000đ phải miễn phí, nội thành Hà Nội 20.000đ,
+tỉnh khác 35.000đ. Sửa hàm tinh_phi_ship, đừng đổi chữ ký hàm.</code></pre>
+        <div class="scroll"><table><thead><tr><th>Đơn</th><th>Đáp án</th><th>Kiểu sai thường gặp</th></tr></thead><tbody>
+          <tr><td>499.000đ, Hà Nội</td><td>20.000đ</td><td>đọc "500.000" thành 500 nên miễn phí mọi đơn</td></tr>
+          <tr><td>500.000đ, Đà Nẵng</td><td>0đ</td><td>dùng <code>&gt;</code> thay <code>&gt;=</code> nên tính 35.000đ</td></tr>
+          <tr><td>120.000đ, "Ha Noi" không dấu</td><td>20.000đ</td><td>so chuỗi có dấu nên coi là tỉnh khác, 35.000đ</td></tr>
+        </tbody></table></div>
+        <p>Script chấm gọi hàm với 12 đơn như trên. Cái khó: "500.000" dùng dấu chấm phân cách nghìn, model quen kiểu Anh dễ đọc thành 500. Vì sao quan trọng: đây là cách bạn giao việc hằng ngày; bài tiếng Anh không đo được chỗ hiểu sai đề tiếng Việt.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: sắp xếp tên tiếng Việt</h3>
+        <p>Tình huống: đề yêu cầu sắp danh sách nhân viên theo thứ tự từ điển tiếng Việt.</p>
+        <pre><code>sorted(["Đặng", "Dương", "Ánh", "Anh", "Ăn"])
+# Python cho: ['Anh', 'Dương', 'Ánh', 'Ăn', 'Đặng']   (sai: theo mã Unicode)
+# Đúng:      ['Anh', 'Ánh', 'Ăn', 'Dương', 'Đặng']   (a < ă < â, d < đ, dấu thanh xét sau)</code></pre>
+        <p>Script chấm so đúng thứ tự trên 40 tên, có tên lưu NFD lẫn NFC. Vì sao quan trọng: lỗi này không gây báo lỗi, chạy vẫn ra kết quả, nên chỉ bài có đáp án tính tay mới bắt được.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: chấm văn bằng model</h3>
+        <p>Tình huống: đề yêu cầu viết báo cáo sự cố cho sếp không chuyên kỹ thuật, từ một file log có 6 con số: sập lúc 14:05, khôi phục sau 18 phút, mất 37 đơn, 2 đơn bị trừ tiền hai lần, 1.240 khách bị ảnh hưởng, hoàn 2 lần × 459.000đ.</p>
+        <pre><code>Đạt:  "Lúc 14:05 trang đặt hàng ngừng chạy 18 phút. 37 đơn không lưu được…"
+Trượt: "Hệ thống gặp sự cố nhỏ và đã nhanh chóng được khắc phục hoàn toàn,
+        ảnh hưởng tới 73 đơn hàng…"   (sai số đơn, thiếu 4 con số, câu sáo)</code></pre>
+        <p>Nếu để model chấm "văn có tự nhiên không", bài viết trơn tru mà ghi nhầm 37 thành 73 vẫn có thể đạt. Chấm bằng script thì kiểm từng thứ đếm được: đủ 6 con số đúng, chữ có dấu hợp lệ (bắt "ngừoi", chữ không dấu), không câu sáo theo <code>tells.py</code>, không chèn câu tiếng Anh thừa. Vì sao quan trọng: script không đo được "hay", nhưng đo được "đúng"; chọn sai cách chấm thì kết quả so bốn cấu hình không tin được.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · 30 bài, định dạng bench Docker <span class="chip">khuyên</span></h3>
+        <p>Tự viết 30 bài (mỗi nhóm 10), mỗi bài có Dockerfile, test ẩn, lời giải mẫu, chạy chung job với bốn cấu hình trên máy Linux.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Đặt bài vào bộ thứ ba cạnh TBLite và SWE-rebench; chạy lời giải mẫu trước, rồi pilot, rồi job lớn.</dd>
+          <dt>Được</dt><dd>So đúng bốn cấu hình như bộ tiếng Anh, cùng một bảng kết quả; môi trường mỗi bài cố định.</dd>
+          <dt>Mất</dt><dd>Phụ thuộc máy Linux đang chập chờn (xem "Vấn đề hôm nay"). Mỗi bài thêm một Dockerfile.</dd>
+          <dt>Chi phí lâu dài</dt><dd>30 × 4 cấu hình × 2 lần = 240 lượt. Mỗi lượt có trần 1 USD nên trần cả đợt 240 USD; bốn lượt thử ngày 06/11 tốn 0,02–0,11 USD mỗi lượt, nên ước 5–26 USD, trừ vào hạn mức. Bài cố định nên dùng lại được nhiều đợt.</dd>
+          <dt>Đảo ngược</dt><dd>Được: bài là file thường, chuyển sang phương án B bằng script chép.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · 30 bài, chạy trên Mac</h3>
+        <p>Cùng 30 bài, nhưng theo định dạng của <code>run_eval.py</code>, chạy thẳng trên Mac trong thư mục tạm, không Docker.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd><code>run_eval.py</code> hiện so model và mức suy nghĩ; cấu hình duy nhất có agent-stack chỉ bật skill, không có luật chung, không gọi được subagent. Phải thêm 3 cấu hình (đủ, bỏ hook, bỏ subagent) vào <code>evals/configs.json</code> để có đủ bốn cấu hình như bộ Linux.</dd>
+          <dt>Được</dt><dd>Không phụ thuộc máy Linux; kiểm lời giải bằng <code>--self-test</code> sẵn có.</dd>
+          <dt>Mất</dt><dd>Môi trường là máy Mac của bạn (phiên bản Python, công cụ cài sẵn), không cố định như container; kết quả không ghép được với bảng của bộ tiếng Anh.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Như A về hạn mức; phải bảo trì thêm phần cấu hình trong <code>run_eval.py</code>.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="C">
+        <h3>C · Dịch bài có sẵn sang tiếng Việt</h3>
+        <p>Lấy 30 bài TBLite đã có lời giải mẫu đạt, dịch đề sang tiếng Việt, giữ nguyên môi trường và script chấm.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Chép thư mục bài, thay file đề bằng bản dịch tay; chạy như bộ hiện tại.</dd>
+          <dt>Được</dt><dd>Ít công nhất; lời giải mẫu đã đạt; so trực tiếp được đề Anh và đề Việt của cùng bài.</dd>
+          <dt>Mất</dt><dd>Chỉ đo "hiểu đề dịch", không đo xử lý chữ tiếng Việt hay viết báo cáo tiếng Việt, tức phần luật agent-stack tác động nhiều nhất. Bài công khai có thể đã nằm trong dữ liệu huấn luyện.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Thấp; nhưng không trả lời câu bạn hỏi.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Ba ví dụ qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A · Docker</th><th>B · Mac</th><th>C · Dịch</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Phí ship, đề tiếng Việt</td>
+            <td data-cho="A">Có, chạy trong container Python cố định; so được 4 cấu hình cùng job với bài tiếng Anh.</td>
+            <td data-cho="B">Có, chạy bằng Python 3.11 của Mac; so 4 cấu hình sau khi thêm cấu hình.</td>
+            <td data-cho="C">Không có bài kiểu này; chỉ có đề TBLite dịch, như bài <code>acl-permissions-inheritance</code>: "Tạo thư mục /srv/shared thuộc nhóm research, bật setgid, quyền 2770…".</td></tr>
+          <tr><td>2 · Sắp tên tiếng Việt, lẫn NFD</td>
+            <td data-cho="A">Có; dữ liệu NFD nằm trong image nên không bị trình soạn thảo tự chuẩn hóa.</td>
+            <td data-cho="B">Có; cần cẩn thận vì công cụ chép file trên Mac có thể đổi NFD thành NFC (macOS hay làm vậy với tên file).</td>
+            <td data-cho="C">Không đo.</td></tr>
+          <tr><td>3 · Báo cáo sự cố, chấm bằng script</td>
+            <td data-cho="A">Có; script chấm đọc file báo cáo agent ghi ra trong container.</td>
+            <td data-cho="B">Có; dùng lại <code>tells.py</code> như bài <code>write-vn-rewrite</code>.</td>
+            <td data-cho="C">Không đo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Luật</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15"><td>Python chỉ dùng thư viện chuẩn<span class="src">CLAUDE.md:15</span></td>
+            <td data-cho="A" data-ket-qua="dat">Script chấm viết bằng thư viện chuẩn (so thứ tự tiếng Việt tự viết, không dùng PyICU).</td>
+            <td data-cho="B" data-ket-qua="dat">Như A.</td>
+            <td data-cho="C" data-ket-qua="dat">Giữ script chấm của bài gốc, chạy trong container, không vào repo.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:21"><td>Model không được đọc script chấm hay lời giải<span class="src">CLAUDE.md:21</span></td>
+            <td data-cho="A" data-ket-qua="dat">Harbor chỉ chép test vào container sau khi agent làm xong.</td>
+            <td data-cho="B" data-ket-qua="dat"><code>run_eval.py</code> chỉ chép phần đề và mã vào thư mục tạm ngoài repo; script chấm và lời giải ở lại trong repo, model không với tới.</td>
+            <td data-cho="C" data-ket-qua="dat">Chạy bằng Harbor như A.</td></tr>
+          <tr data-rang-buoc data-nguon="evals/README.md:19"><td>Mỗi bài có lời giải mẫu; script chấm trượt bản chưa sửa, đạt bản lời giải<span class="src">evals/README.md:19</span></td>
+            <td data-cho="A" data-ket-qua="dat">Chạy lời giải mẫu trên Harbor, cộng chạy script chấm trên bản chưa sửa.</td>
+            <td data-cho="B" data-ket-qua="dat"><code>--self-test</code> làm sẵn cả hai.</td>
+            <td data-cho="C" data-ket-qua="dat">Chỉ lấy bài lời giải mẫu đã đạt.</td></tr>
+          <tr data-rang-buoc data-nguon="PLAN.md:8"><td>Chọn bài không theo kết quả của cấu hình nào (bạn chốt 06/11)<span class="src">PLAN.md:8</span></td>
+            <td data-cho="A" data-ket-qua="dat">Gắn nhãn độ khó khi viết bài, trước mọi lượt chạy.</td>
+            <td data-cho="B" data-ket-qua="dat">Như A.</td>
+            <td data-cho="C" data-ket-qua="dat">Dùng nhãn công bố của bài gốc.</td></tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:31"><td>Việc tốn nhiều hạn mức phải hỏi trước<span class="src">global/SHARED.global.md:31</span></td>
+            <td data-cho="A" data-ket-qua="can-duyet">240 lượt: hỏi riêng trước pilot và job lớn.</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cũng 240 lượt gọi model: hỏi riêng trước khi chạy.</td>
+            <td data-cho="C" data-ket-qua="can-duyet">30 bài dịch × 4 cấu hình × 2 lần vẫn gọi model: hỏi trước.</td></tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:11"><td>Đồ bên thứ ba phải qua kiểm duyệt<span class="src">CLAUDE.md:11</span></td>
+            <td data-cho="A" data-ket-qua="khong-lien-quan">Bài tự viết, không thêm skill hay plugin.</td>
+            <td data-cho="B" data-ket-qua="khong-lien-quan">Như A.</td>
+            <td data-cho="C" data-ket-qua="khong-lien-quan">Bài TBLite đã tải và kiểm an toàn từ trước.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> có sẵn <code>run_eval.py</code> không phải lý do chọn B; B chỉ hơn khi máy Linux không dùng được.</li>
+      <li><b>Chiều theo người dùng:</b> "chi tiết" được hiểu là bài kỹ (đáp án tính tay, ca biên), không phải nhiều bài; 30 bài chỉ thấy được chênh lệch lớn (khoảng 8 bài so với 1), và trang nói rõ vậy.</li>
+      <li><b>Chọn vì ít công:</b> C ít công nhất nhưng không đo phần bạn quan tâm, nên không khuyên.</li>
+      <li><b>Phương án bù nhìn:</b> C là cách nhiều nhóm làm thật (các bộ dữ liệu dịch máy của 5CD-AI trên Hugging Face), không phải đặt cho có.</li>
+      <li><b>Giấu rủi ro:</b> A dựa vào máy Linux đang sập containerd; ghi ngay trên thẻ A. Tự chạy lại đang cứu được phần lớn lượt hỏng; nếu pilot vẫn hỏng nhiều thì B là đường lui.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> dùng model chấm mà không có bộ đáp án để đo độ tin của nó là đi tắt; câu chốt 4 khuyên không dùng ở đợt đầu.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>1 · Bộ bench gồm những nhóm nào?</h3>
+      <p>Ba nhóm: (a) sửa code theo đề tiếng Việt, như ví dụ 1; (b) xử lý chữ tiếng Việt (sắp xếp, chuẩn hóa dấu, đọc số tiền, ngày tháng), như ví dụ 2; (c) viết báo cáo, tóm tắt tiếng Việt, như ví dụ 3. Lựa chọn: cả ba, hay chỉ (a) và (b). Khuyên cả ba, vì nhóm viết là chỗ luật agent-stack tác động nhiều nhất. Bỏ nhóm viết thì nhẹ phần chấm nhưng không đo được luật giọng văn và trang báo cáo.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>2 · Chạy ở đâu?</h3>
+      <p>A (Docker trên máy Linux, chung job bốn cấu hình) hay B (trên Mac). Khuyên A để ghép một bảng với bộ tiếng Anh. Chọn B thì chạy được ngay nhưng phải thêm ba cấu hình vào <code>run_eval.py</code> và môi trường không cố định.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>3 · Bao nhiêu bài, chạy mấy lần?</h3>
+      <p>Khuyên 30 bài × 2 lần (240 lượt, ước 5–26 USD theo giá niêm yết, trừ hạn mức). 45 bài thì thấy được chênh lệch nhỏ hơn nhưng phải viết thêm 15 bài; 15 bài thì chỉ thấy chênh lệch rất lớn. Chạy 2 lần vì cùng bài model có lúc đạt lúc trượt.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>4 · Có dùng model để chấm phần viết không?</h3>
+      <p>Khuyên không ở đợt đầu: chỉ chấm những gì đếm được (con số, dấu, câu sáo, chữ Anh thừa). Muốn chấm "văn hay" bằng model thì làm đợt sau, kèm 20 bài văn bạn tự chấm tay (khoảng một giờ của bạn) để đo model chấm có khớp bạn không.</p>
+    </div>
+  </section>
+
+  <section data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li><code>evals/README.md</code>: 24 bài tự viết, <code>--self-test</code>, bài <code>write-vn-rewrite</code> (dòng 13, 19).</li>
+      <li><code>evals/harbor/README.md</code>, <code>evals/harbor/tasks-main.txt</code>: 64 bài tiếng Anh sau lọc (commit <code>191b631</code>).</li>
+      <li><code>PLAN.md</code> §0 (file kế hoạch của repo): kết quả lời giải mẫu, sập containerd, chi phí lượt thử 0,02–0,11 USD; bạn chốt 06/11 chọn bài theo nhãn độ khó công bố, không theo kết quả chạy.</li>
+      <li>Tìm bench tiếng Việt có sẵn (07/11/2026): <a href="https://github.com/fpt-corp/fpt-bench">fpt-corp/fpt-bench</a> chấm theo độ giống commit gốc, không chạy code, không có bộ bài; các bộ dịch máy của 5CD-AI trên Hugging Face là dữ liệu huấn luyện, không phải bench agent.</li>
+      <li>Ví dụ 2: thứ tự <code>sorted()</code> chạy thật bằng Python 3.11.</li>
+    </ul>
+  </section>
+</main>

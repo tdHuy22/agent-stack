@@ -1,0 +1,12 @@
+Ghi chú của Minh (kỹ thuật), 7/11 tối
+
+- Nguyên nhân: chương trình khuyến mãi 11/11 chạy sớm lúc 14:00 nên lượng người vào trang tăng gấp 6 lần. Cơ sở dữ liệu chỉ cho tối đa 50 kết nối cùng lúc, hết chỗ thì mọi yêu cầu mới phải chờ rồi hỏng.
+- 14:12 thử khởi động lại máy web-1, không ăn thua vì vẫn hết chỗ kết nối.
+- 14:23 nâng giới hạn lên 200 kết nối rồi khởi động lại cả hai máy web thì chạy lại bình thường.
+- Theo bên chăm sóc khách hàng thì khoảng 1.240 khách vào trang trong lúc sập (số này lấy từ thống kê truy cập, không phải số đơn).
+- Có 2 khách bị trừ tiền hai lần do bấm thanh toán lại khi trang treo, mỗi lần 459.000đ. Bên thanh toán đã hoàn đủ lúc gần 16h.
+
+Việc sẽ làm:
+- Minh: đặt giới hạn kết nối theo lượng khách dự kiến và thử tải trước mỗi đợt khuyến mãi, xong trước 10/11.
+- Hà (vận hành): thêm cảnh báo gửi điện thoại khi số kết nối vượt 80%, xong trước 15/11.
+- Tuấn (thanh toán): chặn bấm thanh toán hai lần cho cùng một đơn, xong trước 20/11.

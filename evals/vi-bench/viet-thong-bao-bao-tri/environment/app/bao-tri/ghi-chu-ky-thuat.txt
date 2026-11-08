@@ -1,0 +1,19 @@
+MAINT-2026-11-14: kế hoạch bảo trì hạ tầng (Quang soạn, chốt ngày 09/11/2026)
+Mọi mốc giờ trong file này là UTC, trừ khi ghi khác.
+
+Bản nháp cũ (ĐÃ HỦY, đừng dùng): 16:00 đến 19:00 UTC ngày 14/11.
+
+Bản chốt:
+- Bắt đầu: 2026-11-14 17:30 UTC.
+- Kết thúc dự kiến: 2026-11-14 20:15 UTC.
+- Việc làm: failover postgres primary sang cụm mới và nâng phiên bản. Nếu kéo dài, đội trực sẽ báo thêm sau; thông báo cho khách chỉ ghi giờ kết thúc dự kiến.
+
+Ảnh hưởng trong cửa sổ bảo trì:
+- payments-svc: ngừng hoàn toàn. Thanh toán bằng thẻ, ví điện tử và chuyển khoản QR đều không dùng được.
+- orders-api: vẫn nhận đơn, nhưng chỉ đặt được đơn thanh toán khi nhận hàng (COD) vì COD không đi qua payments-svc.
+- auth-svc: không ảnh hưởng, đăng nhập bình thường.
+- catalog và search: bình thường, khách vẫn xem sản phẩm và thêm vào giỏ.
+- notify-queue: email xác nhận đơn đến chậm, tối đa 30 phút sau khi bảo trì kết thúc.
+- loyalty-svc: điểm thưởng của các đơn đặt trong cửa sổ được cộng muộn, chậm nhất lúc 00:00 UTC ngày 15/11.
+
+Hỗ trợ khách: hotline 1900 6868 (8:00 đến 22:00 giờ Việt Nam). Cửa hàng xưng "chúng mình", gọi khách là "bạn".

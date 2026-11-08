@@ -1,0 +1,7 @@
+Ghi chú của kế toán (Phương), gửi kèm file doanh-thu.csv, 05/10/2026
+
+- Cột doanh_thu tính bằng đồng, chưa gồm thuế giá trị gia tăng. Cột so_don là số đơn đã thanh toán trong tháng.
+- Tháng 8, chi nhánh Thủ Đức đóng cửa 5 ngày để sửa mái. Số liệu tháng 8 trong file là số thật, không cần điều chỉnh.
+- Chi nhánh Quận 1 chạy khuyến mãi khai trương tầng 2 trong tháng 5. Số liệu đã đúng.
+- SAI SÓT CỦA FILE: dòng của chi nhánh Thủ Đức, tháng 2026-09, kênh giao-hang bị sót, chưa nhập vào file. Số thật của dòng đó: 186 đơn, doanh thu 49.901.000 đồng. Khi tính thì cộng dòng này vào tháng 9 của Thủ Đức.
+- Mọi dòng còn lại trong file đều đúng, không trùng lặp.

@@ -1,0 +1,9 @@
+Issue #87: Tổng tiền đơn hàng sai khi dùng mã giảm giá
+Người báo: Mai (chăm sóc khách hàng), 02/11/2026
+
+Khách báo ba chuyện:
+1. Mã LAN1 giảm cố định 100.000đ. Khách mua đơn 80.000đ thì tổng ra số âm (-20.000đ), hệ thống coi như phải trả tiền lại cho khách.
+2. Mã đã hết hạn mà khách vẫn dùng được (LAN1 hết hạn từ 31/10).
+3. Mã giảm phần trăm đang tính luôn cả phí ship nên khách được giảm nhiều hơn quy định. Quy định của cửa hàng: mã chỉ giảm trên tiền hàng, không giảm phí ship.
+
+Ghi chú của anh Sơn (03/11): từ nay phí ship tăng, nên nâng mức miễn phí ship cho gọn: đơn có tiền hàng từ 500.000đ mới miễn phí ship (mức cũ là 300.000đ). Làm chung trong lần sửa này.

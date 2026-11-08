@@ -2,6 +2,8 @@
 
 Mục đích: chọn cấu hình model và effort **rẻ nhất mà vẫn giữ chất lượng**, bằng số liệu trên việc giống việc thật của bạn, thay vì đoán.
 
+Bộ 30 bài tiếng Việt (sửa code theo đề tiếng Việt, xử lý chữ tiếng Việt, viết văn bản) nằm ở [`vi-bench/`](vi-bench/README.md) và chạy chung với bench Harbor.
+
 Muốn biết bật agent-stack có làm Claude Code tốt hơn hay chỉ đắt hơn (4 cấu hình: trơn, đủ agent-stack, bỏ hook, bỏ subagent; trên bộ việc TBLite và SWE-rebench chạy trong Docker ở máy Linux TUF), xem [`harbor/README.md`](harbor/README.md).
 
 | Nhóm | Việc | Cách chấm |

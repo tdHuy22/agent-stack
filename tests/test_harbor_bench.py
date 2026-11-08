@@ -813,6 +813,36 @@ class CompareTests(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual([x["task"] for x in json.loads(r.stdout)["rows"]], ["both-ok", "flaky-infra"])
 
+    def test_pilot_report_keeps_the_vietnamese_set_in_its_own_group(self):
+        cfg = {"datasets": [{"path": "datasets/tblite", "task_names": ["t1"]}, {"path": "datasets/vi"}]}
+        self.write("datasets/tblite/t1/task.toml", '[metadata]\ndifficulty = "medium"\n')
+        self.write("datasets/vi/code-a/task.toml", '[metadata]\ndifficulty = "medium"\n')
+        self.assertEqual(B.difficulty_map(cfg, self.tmp), {"t1": "medium", "code-a": "vi"})
+
+    def test_compare_can_be_limited_to_one_task_list(self):
+        P, S = B.PLAIN, B.STACK
+        for task, (rp, rs) in {"code-a": (0.0, 1.0), "viet-b": (0.0, 1.0), "tb-x": (1.0, 0.0)}.items():
+            self.trial("job", P, task, reward=rp)
+            self.trial("job", S, task, reward=rs)
+        lst = self.write("tasks-vi.txt", "vi:code-a\nvi:viet-b\n")
+        r = run_script(SCRIPT, "compare", str(self.tmp / "job"), "--tasks", str(lst), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        res = json.loads(r.stdout)
+        self.assertEqual([x["task"] for x in res["rows"]], ["code-a", "viet-b"])
+        c = next(c for c in res["comparisons"] if c["a"] == P and c["b"] == S)
+        self.assertEqual((c["worse"], c["better"]), ([], ["code-a", "viet-b"]))
+        # chỉ số phụ cạnh reward (reward.json của bộ tiếng Việt) đi vào bảng, không đổi đạt/trượt
+        for arm, n in ((P, 3), (S, 1)):
+            d = next((self.tmp / "job").glob(f"viet-b__{SHORT(arm)}0"))
+            res_json = json.loads((d / "result.json").read_text())
+            res_json["verifier_result"]["rewards"]["van_ai"] = n
+            (d / "result.json").write_text(json.dumps(res_json))
+        r = run_script(SCRIPT, "compare", str(self.tmp / "job"), "--tasks", str(lst))
+        self.assertRegex(r.stdout, r"Dấu hiệu văn AI mỗi bài viết \(TB\)\s+3\.00\s+1\.00")
+        self.assertIn("tốt hơn ở 2 việc", r.stdout)
+        other = self.write("tasks-none.txt", "vi:khong-co\n")
+        self.assertEqual(run_script(SCRIPT, "compare", str(self.tmp / "job"), "--tasks", str(other)).returncode, 1)
+
     def test_infrastructure_errors_drop_the_task_and_limit_errors_are_counted(self):
         P, S = B.PLAIN, B.STACK
         cases = (("limit", "ApiUsageLimitError"), ("rate", "ApiRateLimitError"), ("auth", "AgentAuthenticationError"),
@@ -1170,6 +1200,31 @@ class SelectTests(Base):
         # không có lượt oracle nào
         r = run_script(SCRIPT, "filter-oracle", str(self.tmp / "empty"), "--candidates", str(cand), *out)
         self.assertEqual(r.returncode, 1)
+
+    def test_select_and_pilot_take_the_whole_vietnamese_set_when_it_was_gathered(self):
+        self.tblite("m1", '[metadata]\ndifficulty = "medium"\n')
+        self.swe("s__1")
+        for n in ("code-a", "viet-b"):
+            self.write(f"datasets/vi/{n}/task.toml", '[metadata]\ndifficulty = "easy"\n')   # nhãn không lọc bộ tự viết
+        swe = self.write("tasks-swerebench.txt", "s__1\n")
+        r = run_script(SCRIPT, "select", str(self.tmp / "datasets"), "--swerebench", str(swe))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([ln for ln in r.stdout.splitlines() if not ln.startswith("#")],
+                         ["tblite:m1", "swerebench:s__1", "vi:code-a", "vi:viet-b"])
+        self.assertIn("+ 2 tiếng Việt = 4 việc", r.stderr)
+        for kind in ("pilot", "oracle"):
+            r = run_script(SCRIPT, "make-configs", "--kind", kind, "--name", kind, "--swerebench", str(swe), "--root",
+                           str(self.tmp), "--out", str(self.tmp / f"{kind}.json"))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            cfg = json.loads((self.tmp / f"{kind}.json").read_text())
+            self.assertEqual(cfg["datasets"][-1], {"path": "datasets/vi"})
+        # chưa gom bộ tiếng Việt thì pilot như cũ; datasets (danh sách tải từ Hub) không bao giờ có bộ tự viết
+        r = run_script(SCRIPT, "make-configs", "--kind", "pilot", "--name", "p", "--swerebench", str(swe), "--root",
+                       str(self.tmp / "nowhere"), "--out", str(self.tmp / "p.json"))
+        self.assertEqual([d["path"] for d in json.loads((self.tmp / "p.json").read_text())["datasets"]],
+                         ["datasets/tblite", "datasets/swerebench"])
+        self.assertEqual([ln.split("\t")[0] for ln in run_script(SCRIPT, "datasets").stdout.splitlines()],
+                         ["tblite", "swerebench"])
 
     def test_pilot_report_groups_by_label_and_only_suggests_when_a_group_saturates(self):
         labels = {"e1": "easy", "e2": "easy", "e3": "easy", "e4": "easy", "e5": "easy", "h1": "hard", "h2": "hard", "s__1": "swerebench"}
@@ -1615,6 +1670,28 @@ esac
         self.assertIn("network rm astronomy-commons__lsdb-1349__ecvqc4a__env_default", calls)
         for keep in ("pi-agent-llama", "other_db_1", "debian:trixie", "myproject__env-main", "pi-agent_default", "bridge"):
             self.assertFalse(any(keep in c for c in calls if c.startswith(("rm ", "rmi ", "network rm"))), keep)
+
+    def test_data_vi_gathers_the_synced_vietnamese_set_locks_and_vets_it(self):
+        ag = self.rd / "agent-stack"
+        src = HARBOR.parent / "vi-bench" / "code-phi-ship"
+        import shutil
+        shutil.copytree(src, ag / "vi-bench" / "code-phi-ship")
+        shutil.copytree(src, ag / "vi-bench" / "code-xau")
+        (ag / "vi-bench" / "code-xau" / "environment" / "docker-compose.yaml").write_text("services: {}\n")
+        (ag / "vi-bench" / "_lib").mkdir()
+        (ag / "vi-bench" / "selftest.py").write_text("# không phải bài\n")
+        self.harbor("echo harbor download không được gọi >&2; exit 9\n")
+        r = self.tuf("data", "vi", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(sorted(p.name for p in (self.rd / "datasets" / "vi").iterdir()), ["code-phi-ship"])  # bài có compose bị loại
+        lock = json.loads((self.rd / "datasets" / "vi.lock.json").read_text())
+        self.assertEqual(lock.get("ref"), "abc1234")
+        self.assertTrue((self.rd / "datasets" / "vi.rejected.txt").is_file())
+        # chạy lại sau khi bài đổi (commit mới): lock được ghi lại, không báo lệch mã băm
+        (ag / "vi-bench" / "code-phi-ship" / "instruction.md").write_text("Đề đã sửa.\n")
+        r = self.tuf("data", "vi", "--force")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotEqual(json.loads((self.rd / "datasets" / "vi.lock.json").read_text())["sha256"], lock["sha256"])
 
     def test_status_filters_the_log_it_prints(self):
         (self.rd / "jobs" / "main").mkdir(parents=True)

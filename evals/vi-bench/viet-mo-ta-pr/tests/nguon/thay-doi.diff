@@ -1,0 +1,117 @@
+diff --git a/cua_hang/cau_hinh.py b/cua_hang/cau_hinh.py
+index 0d8e8a6..81d86a7 100644
+--- a/cua_hang/cau_hinh.py
++++ b/cua_hang/cau_hinh.py
+@@ -1,5 +1,5 @@
+ """Cấu hình chung của cửa hàng."""
+ 
+ # Đơn có tiền hàng từ mức này trở lên thì miễn phí ship.
+-MIEN_PHI_SHIP_TU = 300_000
++MIEN_PHI_SHIP_TU = 500_000
+ PHI_SHIP_MAC_DINH = 25_000
+diff --git a/cua_hang/don_hang.py b/cua_hang/don_hang.py
+index 275942a..d476d0f 100644
+--- a/cua_hang/don_hang.py
++++ b/cua_hang/don_hang.py
+@@ -1,10 +1,12 @@
+ """Tính tiền đơn hàng."""
++from datetime import date
++
+ from . import cau_hinh, giam_gia
+ 
+ 
+-def tinh_tong(tien_hang, phi_ship, ma=None):
+-    """Tổng khách phải trả."""
++def tinh_tong(tien_hang, phi_ship, ma=None, hom_nay=None):
++    """Tổng khách phải trả: tiền hàng trừ giảm giá (tính trên tiền hàng) cộng phí ship."""
++    hom_nay = hom_nay or date.today()
+     ship = 0 if tien_hang >= cau_hinh.MIEN_PHI_SHIP_TU else phi_ship
+-    tong = tien_hang + ship
+-    giam = giam_gia.ap_dung_ma(tong, ma) if ma else 0
+-    return tong - giam
++    giam = giam_gia.ap_dung_ma(tien_hang, ma, hom_nay) if ma else 0
++    return tien_hang - giam + ship
+diff --git a/cua_hang/giam_gia.py b/cua_hang/giam_gia.py
+index 4ad2909..098b892 100644
+--- a/cua_hang/giam_gia.py
++++ b/cua_hang/giam_gia.py
+@@ -1,26 +1,30 @@
+ """Mã giảm giá."""
++from datetime import date
+ 
+-# mã: (loại, giá trị, trần giảm tối đa)
++# mã: (loại, giá trị, trần giảm tối đa, hạn dùng đến hết ngày)
+ MA_GIAM = {
+-    "GIAM10": ("phan_tram", 10, 30_000),
+-    "BANMOI": ("phan_tram", 20, 50_000),
+-    "LAN1": ("co_dinh", 100_000, None),
++    "GIAM10": ("phan_tram", 10, 30_000, date(2026, 12, 31)),
++    "BANMOI": ("phan_tram", 20, 50_000, date(2026, 11, 30)),
++    "LAN1": ("co_dinh", 100_000, None, date(2026, 10, 31)),
+ }
+ 
+ 
+-def tinh_giam_gia_cu(tong, ma):
+-    """Bản cũ, không còn nơi nào gọi."""
+-    return 0
++def ma_con_han(ma, hom_nay):
++    """Mã có tồn tại và còn dùng được vào ngày hom_nay không."""
++    if ma not in MA_GIAM:
++        return False
++    return hom_nay <= MA_GIAM[ma][3]
+ 
+ 
+-def ap_dung_ma(tong, ma):
+-    """Trả về số tiền được giảm."""
+-    if ma not in MA_GIAM:
++def ap_dung_ma(tien_hang, ma, hom_nay):
++    """Trả về số tiền được giảm: 0 nếu mã sai hay hết hạn, không bao giờ vượt tiền hàng."""
++    if not ma_con_han(ma, hom_nay):
+         return 0
+-    loai, gia_tri, tran = MA_GIAM[ma]
++    loai, gia_tri, tran, _han = MA_GIAM[ma]
+     if loai == "phan_tram":
+-        giam = tong * gia_tri // 100
++        giam = tien_hang * gia_tri // 100
+         if tran is not None:
+             giam = min(giam, tran)
+-        return giam
+-    return gia_tri
++    else:
++        giam = gia_tri
++    return min(giam, tien_hang)
+diff --git a/tests/test_giam_gia.py b/tests/test_giam_gia.py
+index 0d032f3..bb0b538 100644
+--- a/tests/test_giam_gia.py
++++ b/tests/test_giam_gia.py
+@@ -1,14 +1,27 @@
+ import unittest
++from datetime import date
+ 
+-from cua_hang import giam_gia
++from cua_hang import don_hang, giam_gia
++
++HOM_NAY = date(2026, 11, 10)
+ 
+ 
+ class TestGiamGia(unittest.TestCase):
+     def test_giam_phan_tram(self):
+-        self.assertEqual(giam_gia.ap_dung_ma(200_000, "GIAM10"), 20_000)
++        self.assertEqual(giam_gia.ap_dung_ma(200_000, "GIAM10", HOM_NAY), 20_000)
+ 
+     def test_ma_sai(self):
+-        self.assertEqual(giam_gia.ap_dung_ma(200_000, "KHONGCO"), 0)
++        self.assertEqual(giam_gia.ap_dung_ma(200_000, "KHONGCO", HOM_NAY), 0)
++
++    def test_ma_het_han(self):
++        self.assertFalse(giam_gia.ma_con_han("LAN1", HOM_NAY))
++        self.assertEqual(giam_gia.ap_dung_ma(500_000, "LAN1", HOM_NAY), 0)
++
++    def test_giam_khong_vuot_tien_hang(self):
++        self.assertEqual(giam_gia.ap_dung_ma(80_000, "LAN1", date(2026, 10, 1)), 80_000)
++
++    def test_phi_ship_khong_tinh_giam(self):
++        self.assertEqual(don_hang.tinh_tong(100_000, 25_000, "GIAM10", HOM_NAY), 115_000)
+ 
+ 
+ if __name__ == "__main__":

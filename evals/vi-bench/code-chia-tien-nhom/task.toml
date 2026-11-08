@@ -1,0 +1,23 @@
+version = "1.0"
+
+[task]
+name = "agent-stack/code-chia-tien-nhom"
+
+[metadata]
+category = "code"
+difficulty = "extreme"
+tags = ["tiền tệ", "làm tròn", "tên tiếng Việt có dấu", "Unicode NFC/NFD", "đề tiếng Việt"]
+
+[verifier]
+timeout_sec = 300.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+build_timeout_sec = 300.0
+cpus = 1
+memory_mb = 2048
+storage_mb = 4096
+gpus = 0
+allow_internet = true

@@ -1,0 +1,50 @@
+2026-11-07T13:58:02+07:00 INFO  web-1  checkout ok order=88412 amount=215000
+2026-11-07T14:01:47+07:00 INFO  web-2  checkout ok order=88413 amount=1250000
+2026-11-07T14:04:59+07:00 WARN  db     connection pool usage 96% (48/50)
+2026-11-07T14:05:12+07:00 ERROR web-1  connection pool exhausted: timeout after 30s
+2026-11-07T14:05:12+07:00 ERROR web-1  order_failed order=88414 reason=db_timeout
+2026-11-07T14:05:13+07:00 ERROR web-1  order_failed order=88415 reason=db_timeout
+2026-11-07T14:05:14+07:00 ERROR web-2  order_failed order=88416 reason=db_timeout
+2026-11-07T14:05:39+07:00 ERROR web-1  order_failed order=88417 reason=db_timeout
+2026-11-07T14:05:43+07:00 ERROR web-2  order_failed order=88418 reason=db_timeout
+2026-11-07T14:07:52+07:00 ERROR web-1  order_failed order=88419 reason=db_timeout
+2026-11-07T14:07:59+07:00 ERROR web-2  order_failed order=88420 reason=db_timeout
+2026-11-07T14:08:01+07:00 ERROR web-1  order_failed order=88421 reason=db_timeout
+2026-11-07T14:08:08+07:00 ERROR web-2  order_failed order=88422 reason=db_timeout
+2026-11-07T14:08:30+07:00 ERROR web-1  order_failed order=88423 reason=db_timeout
+2026-11-07T14:08:56+07:00 ERROR web-2  order_failed order=88424 reason=db_timeout
+2026-11-07T14:09:30+07:00 WARN  pay    double_charge order=88402 customer=KH-20931 amount=459000
+2026-11-07T14:11:29+07:00 ERROR web-1  order_failed order=88425 reason=db_timeout
+2026-11-07T14:12:00+07:00 INFO  ops    restart web-1 requested by minh.nv
+2026-11-07T14:12:06+07:00 ERROR web-2  order_failed order=88426 reason=db_timeout
+2026-11-07T14:12:41+07:00 ERROR web-1  restart failed: pool still exhausted
+2026-11-07T14:12:49+07:00 ERROR web-1  order_failed order=88427 reason=db_timeout
+2026-11-07T14:14:12+07:00 ERROR web-2  order_failed order=88428 reason=db_timeout
+2026-11-07T14:15:21+07:00 ERROR web-1  order_failed order=88429 reason=db_timeout
+2026-11-07T14:15:23+07:00 ERROR web-2  order_failed order=88430 reason=db_timeout
+2026-11-07T14:16:04+07:00 WARN  pay    double_charge order=88407 customer=KH-11870 amount=459000
+2026-11-07T14:16:23+07:00 ERROR web-1  order_failed order=88431 reason=db_timeout
+2026-11-07T14:16:40+07:00 ERROR web-2  order_failed order=88432 reason=db_timeout
+2026-11-07T14:17:57+07:00 ERROR web-1  order_failed order=88433 reason=db_timeout
+2026-11-07T14:18:00+07:00 ERROR web-2  order_failed order=88434 reason=db_timeout
+2026-11-07T14:18:22+07:00 ERROR web-1  order_failed order=88435 reason=db_timeout
+2026-11-07T14:18:24+07:00 ERROR web-2  order_failed order=88436 reason=db_timeout
+2026-11-07T14:18:35+07:00 ERROR web-1  order_failed order=88437 reason=db_timeout
+2026-11-07T14:18:52+07:00 ERROR web-2  order_failed order=88438 reason=db_timeout
+2026-11-07T14:18:59+07:00 ERROR web-1  order_failed order=88439 reason=db_timeout
+2026-11-07T14:19:42+07:00 ERROR web-2  order_failed order=88440 reason=db_timeout
+2026-11-07T14:19:43+07:00 ERROR web-1  order_failed order=88441 reason=db_timeout
+2026-11-07T14:19:58+07:00 ERROR web-2  order_failed order=88442 reason=db_timeout
+2026-11-07T14:20:35+07:00 ERROR web-1  order_failed order=88443 reason=db_timeout
+2026-11-07T14:20:36+07:00 ERROR web-2  order_failed order=88444 reason=db_timeout
+2026-11-07T14:20:52+07:00 ERROR web-1  order_failed order=88445 reason=db_timeout
+2026-11-07T14:21:09+07:00 ERROR web-2  order_failed order=88446 reason=db_timeout
+2026-11-07T14:21:54+07:00 ERROR web-1  order_failed order=88447 reason=db_timeout
+2026-11-07T14:22:09+07:00 ERROR web-2  order_failed order=88448 reason=db_timeout
+2026-11-07T14:22:16+07:00 ERROR web-1  order_failed order=88449 reason=db_timeout
+2026-11-07T14:22:47+07:00 ERROR web-2  order_failed order=88450 reason=db_timeout
+2026-11-07T14:23:40+07:00 INFO  ops    db max_connections raised 50 -> 200, web-1 web-2 restarted
+2026-11-07T14:23:41+07:00 INFO  web-1  health check ok
+2026-11-07T14:24:05+07:00 INFO  web-2  checkout ok order=88452 amount=320000
+2026-11-07T15:40:00+07:00 INFO  pay    refund ok order=88402 customer=KH-20931 amount=459000
+2026-11-07T15:41:12+07:00 INFO  pay    refund ok order=88407 customer=KH-11870 amount=459000

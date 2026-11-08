@@ -35,6 +35,10 @@ Cùng model `anthropic/claude-sonnet-5-5`, effort `medium`, cùng phiên bản C
 - Lời giải mẫu: bước `oracle` chạy lời giải mẫu trên đúng bộ việc của pilot. `filter` chỉ giữ cho job lớn việc mà lời giải mẫu đạt ít nhất một lần (mục Chọn việc); `compare --oracle` cũng loại việc chưa đạt lần nào. Bản cũ ghi 27 việc TBLite chỉ in "no solution written"; chưa kiểm trên bản Hub hiện tại, `oracle` sẽ lộ ra.
 - Tên việc: Harbor đặt `task_name` trong `result.json` theo `[task] name` (dạng `org/tên` với gói Hub), còn thư mục xuất và `task_names` của job dùng tên ngắn. `load_trials` cắt phần `org/`, nên `compare`, `pilot-report` và lời giải mẫu dùng cùng một tên (có test với `org/abc`).
 
+## Bộ tiếng Việt
+
+Bộ thứ ba `vi` là 30 bài tiếng Việt tự viết trong `evals/vi-bench/`; cách viết và tự kiểm nằm ở [`../vi-bench/README.md`](../vi-bench/README.md). Bộ này không tải từ Hub. `tuf.sh sync` đưa bản của HEAD lên máy Linux, rồi `tuf.sh data vi` gom bài vào `datasets/vi` và ghim mã băm theo commit; mã băm này vào meta của từng job. `select` lấy cả bộ, giống SWE-rebench. Pilot và lời giải mẫu tự chạy cả bộ khi đã gom. `tuf.sh compare` in thêm một bảng riêng cho các bài trong `tasks-vi.txt`.
+
 ## Chọn việc: theo độ khó công bố, không theo kết quả của bản nào
 
 Chọn việc theo kết quả của một bản (ví dụ pilot bản trơn) làm lệch phép so cỡ vài điểm: việc "plain đạt" bị loại là việc plain đã chắc đạt, nên chênh lệch còn lại nghiêng về một phía. Vì vậy job lớn lấy việc theo nhãn độ khó mà bộ đo công bố, không dựa vào lượt chạy nào:

@@ -2,11 +2,12 @@
 """Bench Claude Code có và không có agent-stack trên Harbor (xem README.md cùng thư mục).
 
 Bốn cấu hình (cùng model, effort, phiên bản Claude Code): plain, agent-stack, agent-stack-nohooks, agent-stack-noagents.
-Hai bộ việc: TBLite (openthoughts/openthoughts-tblite) và SWE-rebench (swe-rebench/swe-rebench-leaderboard).
+Ba bộ việc: TBLite (openthoughts/openthoughts-tblite), SWE-rebench (swe-rebench/swe-rebench-leaderboard) và bộ tiếng Việt tự
+viết (evals/vi-bench, đưa lên TUF bằng sync, không tải từ Hub).
 
 Lệnh (chạy trên Mac hay trên TUF; chỉ dùng thư viện chuẩn, trừ validate-config cần harbor):
   build-payload SRC DST --commit SHA   dựng ba bản chép agent-stack (full, nohooks, noagents) từ danh sách cho phép
-  datasets                              in khóa, tên và ref của hai bộ việc
+  datasets                              in khóa, tên và ref của các bộ việc tải từ Hub (không gồm bộ tiếng Việt)
   flatten SRC --out DIR                 gom thư mục việc (có task.toml) ở bất kỳ độ sâu nào thành DIR/<tên việc>
   lock DIR --name KEY --lock FILE       ghi hay đối chiếu mã băm nội dung bộ việc (ghim bản)
   vet DIR [--drop]                      kiểm từng việc (container đặc quyền, mạng host, gắn thư mục ngoài…); --drop loại việc vi phạm
@@ -80,7 +81,11 @@ DATASETS = {
     "swerebench": {"name": "swe-rebench/swe-rebench-leaderboard",
                    "ref": "sha256:ebe7444e313a0d8db94fa541139826eaebe2b0abcd4900c6f73e750494910dca",
                    "env": "SWEREBENCH_REF"},
+    # Bộ tiếng Việt tự viết (bạn chốt 08/11/2026): nằm trong repo, `tuf.sh sync` đưa bản của HEAD lên, `tuf.sh data vi` gom
+    # vào datasets/vi; mã băm đổi theo commit và được ghi vào meta của từng job.
+    "vi": {"name": "agent-stack/vi-bench", "ref": "local", "env": "VI_REF", "local": "vi-bench"},
 }
+LOCAL_DATASETS = tuple(k for k, d in DATASETS.items() if d.get("local"))
 # TM-76: chỉ những mục này vào container.
 PAYLOAD_ALLOW = (".agent-stack-root", "plugin", "global", "routing-table.md", "vetted.lock")
 PAYLOAD_VARIANTS = ("full", "nohooks", "noagents")
@@ -163,7 +168,8 @@ def dataset_info() -> dict:
 
 def cmd_datasets(_args) -> int:
     for key, d in dataset_info().items():
-        print(f"{key}\t{d['name']}\t{d['ref']}")
+        if key not in LOCAL_DATASETS:
+            print(f"{key}\t{d['name']}\t{d['ref']}")
     return 0
 
 
@@ -560,14 +566,21 @@ def make_oracle_config(spec: dict, name: str, opts: dict) -> dict:
             "datasets": dataset_entries(spec), "agents": [{"name": "oracle"}]}
 
 
+def local_sets(root: Path) -> dict:
+    """{khóa: ['*']} cho các bộ tự viết đã gom vào root/datasets/<khóa> (pilot và lời giải mẫu chạy cả bộ)."""
+    return {k: ["*"] for k in LOCAL_DATASETS if (root / "datasets" / k).is_dir()}
+
+
 def cmd_make_configs(args) -> int:
     opts = {k: getattr(args, k) for k in DEFAULTS}
     if args.kind == "pilot":
-        spec = {"tblite": ["*"], "swerebench": read_task_spec(Path(args.swerebench), "swerebench")["swerebench"]}
+        spec = {"tblite": ["*"], "swerebench": read_task_spec(Path(args.swerebench), "swerebench")["swerebench"],
+                **local_sets(Path(args.root))}
         cfg = make_config(spec, args.name, args.attempts, opts, (PLAIN,))
     elif args.kind == "oracle":
         spec = read_task_spec(Path(args.tasks), None) if args.tasks else {
-            "tblite": ["*"], "swerebench": read_task_spec(Path(args.swerebench), "swerebench")["swerebench"]}
+            "tblite": ["*"], "swerebench": read_task_spec(Path(args.swerebench), "swerebench")["swerebench"],
+            **local_sets(Path(args.root))}
         cfg = make_oracle_config(spec, args.name, opts)
     else:
         if not args.tasks:
@@ -903,6 +916,8 @@ def load_trials(job_dirs) -> list:
                 "agent": agent,
                 "source": d.get("source"),
                 "reward": rewards.get("reward"),
+                # chỉ số phụ cạnh reward (bộ tiếng Việt ghi "van_ai": số dấu hiệu văn AI); không đổi đạt/trượt
+                "metrics": {k: v for k, v in rewards.items() if k != "reward" and isinstance(v, (int, float))},
                 "exception": (exc.get("exception_type") or "lỗi") if isinstance(exc, dict) else (str(exc) if exc else None),
                 "input": ar.get("n_input_tokens"), "cache": ar.get("n_cache_tokens"),
                 "output": ar.get("n_output_tokens"), "cost": ar.get("cost_usd"),
@@ -1082,6 +1097,7 @@ def compare(trials: list, oracle: list = None, arms=None) -> dict:
             "agent_calls": _summary(t["agent_calls"] for t in ts),
             "stack_agent_calls": _summary(t["stack_agent_calls"] for t in ts),
             "skill_calls": _summary(t["skill_calls"] for t in ts),
+            "van_ai": _summary((t.get("metrics") or {}).get("van_ai") for t in ts),
             "init_seen": sum(1 for i in init if i is not None),
             "init_mismatch": mismatch,
             "no_log": sum(1 for i in init if i is None),
@@ -1123,6 +1139,10 @@ def report(res: dict) -> str:
     row("Gọi subagent (tổng)", lambda s: _fmt(s["agent_calls"], "total"))
     row("  trong đó subagent agent-stack", lambda s: _fmt(s["stack_agent_calls"], "total"))
     row("Gọi skill (tổng)", lambda s: _fmt(s["skill_calls"], "total"))
+    if any(res["stats"][a].get("van_ai") for a in arms):
+        # chỉ số phụ của nhóm viết tiếng Việt: không quyết định đạt/trượt (danh sách mẫu chính là của skill writing-voice)
+        row("Dấu hiệu văn AI mỗi bài viết (TB)", lambda s: "—" if not s.get("van_ai") else
+            f"{s['van_ai']['total'] / s['van_ai']['n']:.2f}")
     row("Lượt lỗi (hết giờ, lỗi agent)", lambda s: str(s["n_exceptions"]))
     row("Lượt chạm trần ngân sách", lambda s: str(s["budget_hit"]))
     row("Lượt bỏ vì hạ tầng", lambda s: str(s["infra_dropped"]))
@@ -1172,6 +1192,17 @@ def cmd_compare(args) -> int:
             print("  - " + p, file=sys.stderr)
         return 2
     oracle = [t for t in load_trials(args.oracle) if t["agent"] == "oracle"] if args.oracle else None
+    if args.tasks:
+        keep = {n for names in read_task_spec(Path(args.tasks)).values() for n in names}
+        if "*" in keep:
+            print("--tasks phải liệt kê từng việc, không dùng '*'", file=sys.stderr)
+            return 2
+        trials = [t for t in trials if t["task"] in keep]
+        if oracle is not None:
+            oracle = [t for t in oracle if t["task"] in keep]
+        if not trials:
+            print(f"Không có lượt nào thuộc các việc trong {args.tasks}.", file=sys.stderr)
+            return 1
     res = compare(trials, oracle)
     for w in warnings_for(load_metas(args.jobs)):
         print("⚠️ " + w, file=sys.stderr)
@@ -1415,7 +1446,8 @@ def select_main(root: Path, swe_names, levels=KEEP_LEVELS) -> dict:
     counts = {}
     for lv in labels.values():
         counts[lv or "không nhãn"] = counts.get(lv or "không nhãn", 0) + 1
-    return {"tblite": sorted(n for n, lv in labels.items() if lv in levels), "swerebench": sorted(swe_names),
+    vi = sorted(list_tasks(root / "vi")) if (root / "vi").is_dir() else []     # bộ tự viết: lấy cả bộ, như SWE-rebench
+    return {"tblite": sorted(n for n, lv in labels.items() if lv in levels), "swerebench": sorted(swe_names), "vi": vi,
             "counts": counts, "unlabeled": sorted(n for n, lv in labels.items() if lv is None), "labels": labels,
             "levels": list(levels)}
 
@@ -1435,16 +1467,20 @@ def cmd_select(args) -> int:
              f"# TBLite: mọi việc có nhãn {'/'.join(levels)} ({len(res['tblite'])} việc; số việc theo nhãn trong bộ: {counts}).",
              "# TBLite gắn nhãn theo tỉ lệ đạt của Haiku 4.5; việc easy bị bỏ vì ở đó mọi cấu hình đạt gần hết, không phân biệt được.",
              f"# SWE-rebench: cả {len(res['swerebench'])} việc trong tasks-swerebench.txt."]
+    if res["vi"]:
+        lines.append(f"# Bộ tiếng Việt tự viết: cả {len(res['vi'])} việc trong datasets/vi.")
     if res["unlabeled"]:
         lines.append(f"# Không đọc được nhãn nên bị bỏ ({len(res['unlabeled'])}): " + ", ".join(res["unlabeled"][:30]))
-    lines += [f"tblite:{n}" for n in res["tblite"]] + [f"swerebench:{n}" for n in res["swerebench"]]
+    lines += ([f"tblite:{n}" for n in res["tblite"]] + [f"swerebench:{n}" for n in res["swerebench"]]
+              + [f"vi:{n}" for n in res["vi"]])
     text = "\n".join(lines) + "\n"
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
     else:
         sys.stdout.write(text)
-    print(f"{len(res['tblite'])} việc TBLite + {len(res['swerebench'])} SWE-rebench = "
-          f"{len(res['tblite']) + len(res['swerebench'])} việc (nhãn: {counts})", file=sys.stderr)
+    vi_part = f" + {len(res['vi'])} tiếng Việt" if res["vi"] else ""
+    print(f"{len(res['tblite'])} việc TBLite + {len(res['swerebench'])} SWE-rebench{vi_part} = "
+          f"{len(res['tblite']) + len(res['swerebench']) + len(res['vi'])} việc (nhãn: {counts})", file=sys.stderr)
     if res["unlabeled"]:
         print(f"⚠️ {len(res['unlabeled'])} việc TBLite không có nhãn, đã bỏ.", file=sys.stderr)
     return 0
@@ -1525,7 +1561,9 @@ def difficulty_map(cfg: dict, root: Path) -> dict:
     for d in cfg.get("datasets", []):
         ds_root = Path(root) / d["path"]
         for n in d.get("task_names") or (list_tasks(ds_root) if ds_root.is_dir() else []):
-            out[n] = "swerebench" if d["path"].endswith("swerebench") else (task_difficulty(ds_root / n) or "không nhãn")
+            # SWE-rebench và bộ tiếng Việt có nhóm riêng: nhãn medium/hard của bộ tự viết không trộn vào nhóm nhãn của TBLite
+            key = d["path"].rsplit("/", 1)[-1]
+            out[n] = key if key in ("swerebench", *LOCAL_DATASETS) else (task_difficulty(ds_root / n) or "không nhãn")
     return out
 
 
@@ -1541,7 +1579,7 @@ def pilot_report(trials: list, metas: list, main_tasks=None, attempts: int = 1) 
     for t in plain:
         groups.setdefault(labels.get(t["task"]) or ("swerebench" if t.get("source") == "swerebench" or "__" in t["task"]
                                                     else "không nhãn"), []).append(t)
-    order = list(LEVELS) + ["swerebench", "không nhãn"]
+    order = list(LEVELS) + ["swerebench", *LOCAL_DATASETS, "không nhãn"]
     lines = ["Pilot (bản plain): tỉ lệ đạt và chi phí theo nhãn độ khó", f"{'nhãn':14s}{'lượt':>6s}{'đạt':>8s}{'chi phí trung vị':>20s}"]
     notes = []
     for g in sorted(groups, key=lambda k: order.index(k) if k in order else 99):
@@ -1617,6 +1655,7 @@ def main(argv=None) -> int:
     mk.add_argument("--tasks", help="tasks-main.txt (bộ:tên mỗi dòng)")
     mk.add_argument("--swerebench", default="tasks-swerebench.txt")
     mk.add_argument("--attempts", type=int, default=1)
+    mk.add_argument("--root", default=".", help="thư mục chứa datasets/ (pilot, oracle chạy cả bộ tự viết nếu đã gom)")
     mk.add_argument("--out", required=True)
     for key, val in DEFAULTS.items():
         mk.add_argument(f"--{key.replace('_', '-')}", dest=key, type=type(val), default=val, help=f"mặc định {val}")
@@ -1662,6 +1701,7 @@ def main(argv=None) -> int:
     cp.add_argument("jobs", nargs="+", help="thư mục job của Harbor (chứa */result.json)")
     cp.add_argument("--oracle", action="append", help="thư mục job chạy lời giải mẫu (lặp được); việc mà lời giải mẫu "
                     "chưa đạt lần nào bị loại")
+    cp.add_argument("--tasks", help="chỉ so các việc trong file này (ví dụ tasks-vi.txt: riêng bộ tiếng Việt)")
     cp.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     if getattr(args, "attempts", 1) < 1:

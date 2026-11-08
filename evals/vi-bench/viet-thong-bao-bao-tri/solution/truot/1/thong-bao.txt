@@ -1,0 +1,7 @@
+Thông báo bảo trì hệ thống quan trọng
+
+Trong bối cảnh khách hàng ngày càng kỳ vọng cao vào trải nghiệm mua sắm, chúng tôi thực hiện bảo trì hệ thống từ 17:30 đến 20:15 UTC ngày 14/11 để nâng tầm chất lượng dịch vụ. Trong thời gian này, payments-svc sẽ ngừng hoạt động do failover postgres primary.
+
+Chúng tôi không chỉ nỗ lực hạn chế gián đoạn mà còn cam kết đồng hành cùng quý khách trên hành trình mua sắm.
+
+Tóm lại, đợt bảo trì này đóng vai trò quan trọng và mang lại những giá trị to lớn cho quý khách.

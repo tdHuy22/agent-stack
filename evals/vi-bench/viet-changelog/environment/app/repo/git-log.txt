@@ -1,0 +1,185 @@
+commit b65c1c2
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Tue Nov 3 10:12:55 2026 +0700
+
+    feat: add savings goals (#440)
+
+    Set a target amount and a date; progress shows on the home screen.
+
+commit 6203280
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Mon Nov 2 15:40:01 2026 +0700
+
+    fix: typo in onboarding text (#439)
+
+commit d6fd1d9 (tag: v2.4.0)
+Author: Phạm Mai Anh <anh.pham@soquy.example>
+Date:   Fri Oct 30 16:20:31 2026 +0700
+
+    chore: release 2.4.0
+
+commit 9530fcd
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Thu Oct 29 11:05:43 2026 +0700
+
+    docs: update contributing guide (#436)
+
+commit 2ebe579
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Wed Oct 28 17:31:31 2026 +0700
+
+    fix(ci): pin node version to 18 (#435)
+
+    The build broke on the runner after node 20 became the default.
+
+commit 37e06c7
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Tue Oct 27 09:48:43 2026 +0700
+
+    perf: speed up reports with over 5,000 transactions (#431)
+
+    Report screen now opens in about 2 seconds for large accounts (was about 9).
+
+commit ff8f735
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Mon Oct 26 14:02:53 2026 +0700
+
+    Revert "feat: add dark mode (#425)" (#433)
+
+    Dark mode flickers on some Android phones. We will ship it again in 2.5.
+
+    This reverts commit ae80b07.
+
+commit 2ad61d5
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Sun Oct 25 10:27:43 2026 +0700
+
+    feat: add widget showing today's spending on the home screen (#430)
+
+    Android only. Tap the widget to open the app.
+
+commit 31b03dd
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Fri Oct 23 16:55:19 2026 +0700
+
+    feat!: require Android 9 or newer (#429)
+
+    Minimum SDK is now 28 (Android 9).
+
+    BREAKING CHANGE: phones on Android 8 can no longer update and stay on 2.3.x.
+
+commit 2b5c138
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Thu Oct 22 13:14:34 2026 +0700
+
+    fix(ui): button label cut off on small screens (#427)
+
+    Affects screens narrower than 360dp.
+
+commit abbf3b8
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Wed Oct 21 10:03:42 2026 +0700
+
+    feat(ui): rename "Wallets" tab to "Accounts" (#426)
+
+    Vietnamese string: "Ví" becomes "Tài khoản".
+
+commit ae80b07
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Tue Oct 20 18:22:59 2026 +0700
+
+    feat: add dark mode (#425)
+
+    Follows the system setting.
+
+commit 177f53c
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Mon Oct 19 11:36:20 2026 +0700
+
+    fix: login code email sent twice (#424)
+
+    Users received two identical emails with the same code.
+
+commit b4b4e56
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Fri Oct 16 09:20:57 2026 +0700
+
+    chore(deps): bump react-native from 0.72.4 to 0.73.1 (#423)
+
+commit c1fb0cf
+Author: Trần Thu Hà <ha.tran@soquy.example>
+Date:   Thu Oct 15 15:08:19 2026 +0700
+
+    feat: support recurring transactions, weekly or monthly (#421)
+
+    Set it with the new "Lặp lại" field in the transaction form.
+
+commit ffada06
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Wed Oct 14 10:45:15 2026 +0700
+
+    refactor: extract TransactionRepository (#420)
+
+commit 26bb9d1
+Author: Phạm Mai Anh <anh.pham@soquy.example>
+Date:   Tue Oct 13 14:30:52 2026 +0700
+
+    fix: wrong total after switching currency from USD to VND (#419)
+
+    The total kept using the old exchange rate until restart.
+
+commit ce6f291
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Mon Oct 12 16:10:55 2026 +0700
+
+    feat: export transactions to CSV from the report screen (#418)
+
+commit b4e16c7
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Fri Oct 9 11:51:17 2026 +0700
+
+    test: add unit tests for budget calculator (#417)
+
+commit 488b09a
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Thu Oct 8 09:33:59 2026 +0700
+
+    fix: crash when opening a report with no transactions (#415)
+
+commit b97582c
+Author: Phạm Mai Anh <anh.pham@soquy.example>
+Date:   Wed Oct 7 17:17:05 2026 +0700
+
+    style: format code with prettier (#414)
+
+commit ec13f9a
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Tue Oct 6 13:49:50 2026 +0700
+
+    feat: add monthly spending limit for each category (#412)
+
+    Set it from Settings > Categories > "Hạn mức".
+
+commit c414d39
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Mon Oct 5 10:21:41 2026 +0700
+
+    fix(test): make sync test less flaky (#413)
+
+commit 0341123 (tag: v2.3.0)
+Author: Phạm Mai Anh <anh.pham@soquy.example>
+Date:   Fri Sep 25 16:00:20 2026 +0700
+
+    chore: release 2.3.0
+
+commit 70fe21e
+Author: Lê Quang Vinh <vinh.le@soquy.example>
+Date:   Thu Sep 24 11:12:12 2026 +0700
+
+    fix: sync fails on slow network (#401)
+
+commit 77bf23b
+Author: Nguyễn Hoàng Long <long.nguyen@soquy.example>
+Date:   Tue Sep 22 14:05:30 2026 +0700
+
+    feat: add search in the transaction list (#398)

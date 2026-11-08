@@ -1,0 +1,20 @@
+KHONHANH: TÀI LIỆU HƯỚNG DẪN CHO ĐỘI HỖ TRỢ (bản tháng 11/2026)
+Tên nút và tên màn hình trong tài liệu này là đúng như hiển thị trong ứng dụng.
+
+1. Đổi mật khẩu khi đang đăng nhập
+Vào Cài đặt > Tài khoản > bấm nút "Đổi mật khẩu", nhập mật khẩu cũ, nhập mật khẩu mới hai lần rồi bấm "Lưu". Mật khẩu mới dài ít nhất 8 ký tự, có chữ hoa và số.
+
+2. Quên mật khẩu
+Ở màn hình đăng nhập, bấm liên kết "Quên mật khẩu?", nhập email đã đăng ký rồi bấm "Gửi mã". Mã gồm 6 số, gửi qua email, chỉ có hiệu lực 15 phút. Hết 15 phút mã không dùng được nữa: bấm "Gửi mã" lần nữa để nhận mã mới (mã cũ mất hiệu lực ngay). Nhập mã, rồi đặt mật khẩu mới.
+
+3. Xuất báo cáo
+Vào Báo cáo, chọn kỳ ở ô "Kỳ báo cáo" (có các lựa chọn Hôm nay, Tuần này, Tháng này, Tháng trước, Tùy chọn), bấm nút "Xuất file", rồi chọn "PDF" hoặc "Excel". KhoNhanh chưa hỗ trợ xuất thẳng sang MISA, Google Sheets hay định dạng nào khác. Muốn đưa số liệu vào phần mềm khác, hãy xuất "Excel" rồi nhập file đó vào phần mềm kia.
+
+4. Thêm nhân viên
+Vào Cài đặt > Nhân viên > bấm "Thêm nhân viên", nhập email nhân viên, chọn quyền, bấm "Gửi lời mời". Số nhân viên tối đa, không tính chủ cửa hàng: gói Cơ bản 3 người, gói Chuyên nghiệp 10 người. Đủ số thì nút "Thêm nhân viên" báo không thêm được.
+
+5. Nâng cấp gói
+Vào Cài đặt > Gói dịch vụ > bấm "Nâng cấp", chọn gói "Chuyên nghiệp" rồi thanh toán. Gói có hiệu lực ngay sau khi thanh toán. Gói Chuyên nghiệp giá 199.000đ mỗi tháng.
+
+6. Khôi phục sản phẩm đã xóa
+Sản phẩm xóa nhầm được giữ trong thẻ "Đã xóa" của màn hình Kho trong 30 ngày. Vào Kho > thẻ "Đã xóa", chọn sản phẩm, bấm "Khôi phục". Quá 30 ngày kể từ ngày xóa, sản phẩm bị xóa vĩnh viễn và không ai khôi phục được, kể cả bộ phận hỗ trợ; khi đó phải tạo sản phẩm mới bằng nút "Thêm sản phẩm".

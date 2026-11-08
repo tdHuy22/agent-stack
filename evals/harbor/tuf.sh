@@ -4,7 +4,8 @@
 #
 #   tuf.sh setup                      cài Harbor đã ghim vào ~/harbor-eval/.venv, tạo .env rỗng chmod 600 (lần đầu)
 #   tuf.sh sync [--force]             đưa lên TUF: ba bản chép agent-stack, agent Harbor, script, danh sách việc
-#   tuf.sh data [--force]             tải hai bộ việc, ghim mã băm, loại việc vi phạm kiểm an toàn (kể cả có file compose)
+#   tuf.sh data [vi] [--force]        tải hai bộ việc từ Hub và gom bộ tiếng Việt (đã sync), ghim mã băm, loại việc vi phạm
+#                                     kiểm an toàn (kể cả có file compose); `data vi` chỉ gom lại bộ tiếng Việt
 #   tuf.sh pick                       chọn 25 việc SWE-rebench tháng mới nhất, ghi evals/harbor/tasks-swerebench.txt
 #   tuf.sh select                     sinh evals/harbor/tasks-candidates.txt từ nhãn độ khó (không đọc kết quả nào)
 #   tuf.sh check                      kiểm mọi thứ đã sẵn sàng (phiên bản, .env, ổ đĩa, cấu hình); không chạy container
@@ -149,7 +150,7 @@ prepare_job() {
   rsh <<EOF
 set -e
 mkdir -p configs jobs
-$HB make-configs --kind $kind --name $job $tasks_arg --swerebench agent-stack/tasks-swerebench.txt --attempts $ATTEMPTS --out configs/$job.json >/dev/null
+$HB make-configs --kind $kind --name $job --root . $tasks_arg --swerebench agent-stack/tasks-swerebench.txt --attempts $ATTEMPTS --out configs/$job.json >/dev/null
 $HB vet-config configs/$job.json --root . --allow agent-stack/compose-allow.txt
 $HB plan configs/$job.json --root .
 EOF
@@ -207,9 +208,9 @@ EOF
   sync)
     refuse_if_running
     refuse_if_busy
-    dirty=$(git -C "$REPO" status --porcelain -- plugin global routing-table.md vetted.lock .agent-stack-root)
+    dirty=$(git -C "$REPO" status --porcelain -- plugin global routing-table.md vetted.lock .agent-stack-root evals/vi-bench)
     if [ -n "$dirty" ] && [ "$FORCE" -ne 1 ]; then
-      echo "plugin/ hay global/ còn thay đổi chưa commit; bản chép lấy từ HEAD nên sẽ không có chúng:" >&2
+      echo "plugin/, global/ hay evals/vi-bench/ còn thay đổi chưa commit; bản chép lấy từ HEAD nên sẽ không có chúng:" >&2
       echo "$dirty" >&2; echo "Commit trước, hoặc thêm --force." >&2; exit 1
     fi
     rm -rf "$STAGE"; mkdir -p "$STAGE/src"
@@ -218,19 +219,24 @@ EOF
     commit=$(git -C "$REPO" rev-parse --short HEAD)
     python3 "$HERE/harbor_bench.py" build-payload "$STAGE/src" "$STAGE/payload" --commit "$commit"
     rm -rf "$STAGE/src"
+    # Bộ tiếng Việt cũng lấy từ HEAD (đúng bản đã commit), để mã băm trong meta của job ứng với một commit.
+    mkdir -p "$STAGE/vi-src"
+    git -C "$REPO" archive HEAD evals/vi-bench | tar -x -C "$STAGE/vi-src"
+    mv "$STAGE/vi-src/evals/vi-bench" "$STAGE/vi-bench" && rm -rf "$STAGE/vi-src"
     cp "$HERE/agent_stack_agents.py" "$HERE/serial_build_env.py" "$HERE/harbor_bench.py" "$HERE/run_harbor.sh" \
       "$HERE/compose-allow.txt" "$STAGE/"
     for f in "$HERE"/tasks-*.txt; do [ -f "$f" ] && cp "$f" "$STAGE/"; done
     COPYFILE_DISABLE=1 tar --no-xattrs -C "$STAGE" -cf - . | ssh "$HOST" "mkdir -p \"\$HOME/$REMOTE\" && cd \"\$HOME/$REMOTE\" && rm -rf agent-stack && mkdir -p agent-stack && tar -xf - -C agent-stack"
-    echo "Đã đưa lên $HOST:~/$REMOTE/agent-stack: agent-stack commit $commit (full, nohooks, noagents), $(ls "$STAGE" | grep -c '^tasks-') file danh sách việc"
+    echo "Đã đưa lên $HOST:~/$REMOTE/agent-stack: agent-stack commit $commit (full, nohooks, noagents), $(ls "$STAGE" | grep -c '^tasks-') file danh sách việc, $(ls "$STAGE/vi-bench" | grep -c -- '-') bài tiếng Việt (gom bằng tuf.sh data vi)"
     ;;
   data)
     refuse_if_running
     refuse_if_busy
+    only_vi=0; [ "$NAME" = vi ] && only_vi=1
     rsh <<EOF
 set -e
 mkdir -p datasets
-$HB datasets | while IFS="\$(printf '\t')" read -r key name ref; do
+[ "$only_vi" -eq 1 ] || $HB datasets | while IFS="\$(printf '\t')" read -r key name ref; do
   echo "== \$key: \$name@\$ref"
   rm -rf "datasets/.dl-\$key" "datasets/\$key.new"
   .venv/bin/harbor download "\$name@\$ref" --export --output-dir "datasets/.dl-\$key"
@@ -243,6 +249,19 @@ $HB datasets | while IFS="\$(printf '\t')" read -r key name ref; do
   mv "datasets/\$key.new" "datasets/\$key"
   [ -f "datasets/\$key.new.rejected.txt" ] && mv "datasets/\$key.new.rejected.txt" "datasets/\$key.rejected.txt" || true
 done
+# Bộ tiếng Việt: gom từ bản sync (agent-stack/vi-bench), ghim mã băm mới theo commit của bản sync (bộ tự viết đổi theo
+# commit nên ghi lại lock thay vì đối chiếu), rồi kiểm an toàn như hai bộ kia.
+if [ -d agent-stack/vi-bench ]; then
+  echo "== vi: bộ tiếng Việt từ commit \$(cat agent-stack/payload/full/.payload-commit)"
+  rm -rf datasets/vi.new datasets/vi.lock.json
+  $HB flatten agent-stack/vi-bench --out datasets/vi.new
+  $HB lock datasets/vi.new --name vi --ref "\$(cat agent-stack/payload/full/.payload-commit)" --lock datasets/vi.lock.json
+  $HB vet datasets/vi.new --drop --allow agent-stack/compose-allow.txt
+  rm -rf datasets/vi && mv datasets/vi.new datasets/vi
+  [ -f datasets/vi.new.rejected.txt ] && mv datasets/vi.new.rejected.txt datasets/vi.rejected.txt || true
+elif [ "$only_vi" -eq 1 ]; then
+  echo "Chưa có agent-stack/vi-bench trên TUF: commit evals/vi-bench rồi tuf.sh sync" >&2; exit 1
+fi
 echo "Xong. Kiểm: tuf.sh check"
 EOF
     ;;
@@ -289,7 +308,7 @@ v=$($PY -c 'import importlib.metadata as m; print(m.version("harbor"))' 2>/dev/n
 if [ "$v" = "$want" ]; then echo "✓ Harbor $v (đã ghim)"; else echo "✗ Harbor '$v' khác bản ghim $want: chạy tuf.sh setup"; fi
 PYTHONPATH="$PWD/agent-stack" $PY -c 'import agent_stack_agents as m; print("✓ agent Harbor import được:", ", ".join(c.name() for c in (m.ClaudeCodePlain, m.ClaudeCodeAgentStack, m.ClaudeCodeAgentStackNoHooks, m.ClaudeCodeAgentStackNoAgents)))' || echo "✗ import agent_stack_agents lỗi"
 PYTHONPATH="$PWD/agent-stack" $PY -c 'import serial_build_env as m; print("✓ môi trường dựng lần lượt import được:", m.SerialBuildDockerEnvironment.__mro__[1].__name__)' || echo "✗ import serial_build_env lỗi"
-for ds in tblite swerebench; do
+for ds in tblite swerebench vi; do
   if [ -d datasets/$ds ]; then
     echo "✓ bộ việc $ds: $(ls datasets/$ds | wc -l) việc, mã băm $(sed -n 's/.*"sha256": "\(.\{12\}\).*/\1/p' datasets/$ds.lock.json)"
     if [ -f datasets/$ds.rejected.txt ]; then echo "· $ds: $(wc -l < datasets/$ds.rejected.txt) việc bị loại khi kiểm an toàn (datasets/$ds.rejected.txt)"; fi
@@ -386,10 +405,14 @@ EOF
     ;;
   compare)
     [ -d "$LOCAL_JOBS/$NAME" ] || { echo "Chưa có $LOCAL_JOBS/$NAME: chạy tuf.sh fetch $NAME" >&2; exit 1; }
-    if [ -d "$LOCAL_JOBS/$NAME-oracle" ]; then
-      python3 "$HERE/harbor_bench.py" compare "$LOCAL_JOBS/$NAME" --oracle "$LOCAL_JOBS/$NAME-oracle"
-    else
-      python3 "$HERE/harbor_bench.py" compare "$LOCAL_JOBS/$NAME"
+    oracle_arg=""; [ -d "$LOCAL_JOBS/$NAME-oracle" ] && oracle_arg="--oracle $LOCAL_JOBS/$NAME-oracle"
+    # shellcheck disable=SC2086
+    python3 "$HERE/harbor_bench.py" compare "$LOCAL_JOBS/$NAME" $oracle_arg
+    # Riêng bộ tiếng Việt: cùng phép so, chỉ trên các bài trong tasks-vi.txt (bỏ qua khi job không có bài nào trong đó)
+    if [ -f "$HERE/tasks-vi.txt" ]; then
+      echo; echo "== Riêng bộ tiếng Việt (tasks-vi.txt)"
+      # shellcheck disable=SC2086
+      python3 "$HERE/harbor_bench.py" compare "$LOCAL_JOBS/$NAME" $oracle_arg --tasks "$HERE/tasks-vi.txt" || true
     fi
     ;;
   prune)
