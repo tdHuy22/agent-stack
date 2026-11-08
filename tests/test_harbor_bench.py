@@ -603,6 +603,56 @@ class WatchTests(Base):
         self.assertGreater(B.free_gb(self.tmp / "chưa" / "có"), 0)
 
 
+class ResumeExecTests(Base):
+    """Ca 09/11/2026: `harbor jobs resume` đọc config.json mà Harbor đã che CLAUDE_FORCE_OAUTH thành ****."""
+
+    AGENT = "agent_stack_agents:ClaudeCodePlain"
+
+    def setup_job(self, original_env):
+        job = self.tmp / "jobs" / "p"
+        self.write("jobs/p/config.json", json.dumps({"agents": [{"import_path": self.AGENT,
+                                                                 "env": {"CLAUDE_FORCE_OAUTH": "****"}}]}))
+        for name, result in (("t1__a", '{"x": 1}'), ("t2__b", "")):
+            self.write(f"jobs/p/{name}/config.json", json.dumps({"agent": {"import_path": self.AGENT,
+                                                                         "env": {"CLAUDE_FORCE_OAUTH": "****"}}}))
+            self.write(f"jobs/p/{name}/result.json", result)
+        orig = self.write("configs/p.json", json.dumps({"agents": [{"import_path": self.AGENT, "env": original_env}]}))
+        return job, orig
+
+    def test_redacted_env_is_restored_in_job_and_trial_configs_from_the_original(self):
+        job, orig = self.setup_job({"CLAUDE_FORCE_OAUTH": "1"})
+        done = B.restore_redacted_env(job, orig)
+        self.assertEqual(len(done), 3)
+        self.assertEqual(json.loads((job / "config.json").read_text())["agents"][0]["env"], {"CLAUDE_FORCE_OAUTH": "1"})
+        self.assertEqual(json.loads((job / "t1__a" / "config.json").read_text())["agent"]["env"]["CLAUDE_FORCE_OAUTH"], "1")
+        self.assertEqual(B.restore_redacted_env(job, orig), [])          # chạy lại: không còn gì để khôi phục
+
+    def test_every_agent_of_a_four_arm_job_is_restored(self):
+        job, _ = self.setup_job({"CLAUDE_FORCE_OAUTH": "1"})
+        arms = [f"agent_stack_agents:{c}" for c in B.CLASS_OF.values()]
+        self.write("jobs/p/config.json", json.dumps({"agents": [{"import_path": a, "env": {"CLAUDE_FORCE_OAUTH": "****"}}
+                                                               for a in arms]}))
+        orig = self.write("configs/p.json", json.dumps({"agents": [{"import_path": a, "env": {"CLAUDE_FORCE_OAUTH": "1"}}
+                                                                  for a in arms]}))
+        B.restore_redacted_env(job, orig)
+        envs = [a["env"]["CLAUDE_FORCE_OAUTH"] for a in json.loads((job / "config.json").read_text())["agents"]]
+        self.assertEqual(envs, ["1"] * 4)
+
+    def test_an_original_value_that_looks_like_a_key_is_never_written(self):
+        job, orig = self.setup_job({"CLAUDE_FORCE_OAUTH": "sk-ant-oat01-" + "Q" * 20})
+        with self.assertRaises(ValueError):
+            B.restore_redacted_env(job, orig)
+        self.assertIn("****", (job / "config.json").read_text())
+        self.assertNotIn("sk-ant", "".join(p.read_text() for p in job.rglob("config.json")))
+
+    def test_trials_with_an_empty_result_are_set_aside_not_deleted(self):
+        job, _ = self.setup_job({"CLAUDE_FORCE_OAUTH": "1"})
+        self.assertEqual(B.set_aside_incomplete(job), ["t2__b"])
+        self.assertFalse((job / "t2__b").exists())
+        self.assertTrue((self.tmp / "jobs" / "p.incomplete" / "t2__b" / "config.json").is_file())
+        self.assertTrue((job / "t1__a").is_dir())
+
+
 class StatusTests(Base):
     """Mục 8: status cho biết harbor và watcher còn sống không; log in ra được lọc."""
 
@@ -1556,9 +1606,14 @@ class TufBehaviourTests(TempDirTestCase):
     def test_resume_continues_the_job_with_its_own_payload_and_loads_env_like_harbor_run(self):
         """Ca 09/11/2026: ổ đầy, Harbor dừng ở lượt 110/153; `harbor jobs resume` không có --env-file."""
         self.started_job("pilot")
+        agent = {"import_path": "agent_stack_agents:ClaudeCodePlain"}
+        (self.rd / "jobs" / "pilot" / "config.json").write_text(json.dumps({"agents": [{**agent, "env": {"CLAUDE_FORCE_OAUTH": "****"}}]}))
+        (self.rd / "configs").mkdir(exist_ok=True)
+        (self.rd / "configs" / "pilot.json").write_text(json.dumps({"agents": [{**agent, "env": {"CLAUDE_FORCE_OAUTH": "1"}}]}))
         r = self.tuf("resume", "pilot")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Chưa chạy. Thêm --yes", r.stdout)
+        self.assertIn("****", (self.rd / "jobs" / "pilot" / "config.json").read_text())   # không --yes: không đụng gì
         self.assertFalse(self.args_file().exists())
         r = self.tuf("resume", "pilot", "--yes", "--force", extra_env={"DECOY_SECRET": "not-for-containers"})
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -1570,6 +1625,9 @@ class TufBehaviourTests(TempDirTestCase):
         self.assertNotIn("DECOY_SECRET", env)                 # vẫn sau env -i
         self.assertFalse((self.rd / "jobs" / "pilot.meta.json").exists())
         self.assertTrue((self.rd / "jobs" / "pilot.log").read_text().startswith("log lần đầu\n"))   # nối, không ghi đè
+        cfg = json.loads((self.rd / "jobs" / "pilot" / "config.json").read_text())
+        self.assertEqual(cfg["agents"][0]["env"], {"CLAUDE_FORCE_OAUTH": "1"})          # Harbor che thành ****
+        self.assertIn("khôi phục giá trị env bị Harbor che", (self.rd / "jobs" / "pilot.log").read_text())
 
     def test_resume_of_an_oracle_job_never_loads_env_and_a_job_without_its_payload_is_refused(self):
         self.started_job("pilot-oracle")

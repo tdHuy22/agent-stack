@@ -827,6 +827,61 @@ def cmd_watch(args) -> int:
     return watch(Path(args.job), args.pid, args.limit, args.interval, min_free_gb=args.min_free_gb)
 
 
+def _agent_key(agent: dict) -> str:
+    return str(agent.get("import_path") or agent.get("name") or "")
+
+
+def restore_redacted_env(job: Path, original: Path) -> list[str]:
+    """Harbor che giá trị env có tên giống khóa (`CLAUDE_FORCE_OAUTH` vì chứa OAUTH) thành `****` khi lưu config.json của
+    job và của từng lượt, rồi `jobs resume` đọc lại bản đã che: lỗi "cannot parse '****' as bool" (ca 09/11/2026). Ghi lại
+    giá trị từ cấu hình gốc configs/<job>.json (do make-configs sinh, không chứa khóa: khóa chỉ ở .env), ghép theo agent.
+    Trả danh sách "file: biến" đã khôi phục. Giá trị gốc trông như khóa thì từ chối (ValueError)."""
+    src = {_agent_key(a): a.get("env") or {} for a in json.loads(original.read_text(encoding="utf-8")).get("agents", [])}
+
+    def fix(agent: dict, where: Path, done: list) -> bool:
+        env = agent.get("env") or {}
+        changed = False
+        for k, v in env.items():
+            if isinstance(v, str) and "****" in v and k in src.get(_agent_key(agent), {}):
+                val = src[_agent_key(agent)][k]
+                if TOKEN_RE.search(str(val).encode()):
+                    raise ValueError(f"{original}: giá trị gốc của {k} trông như khóa, không ghi vào {where}")
+                env[k] = val
+                done.append(f"{where}: {k}")
+                changed = True
+        return changed
+
+    done: list[str] = []
+    paths = [job / "config.json"] + sorted(job.glob("*/config.json"))
+    for path in paths:
+        try:
+            cfg = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        agents = cfg.get("agents") if path.parent == job else [cfg.get("agent")]
+        changed = [fix(a, path, done) for a in agents or [] if isinstance(a, dict)]   # không any(): sửa đủ mọi agent
+        if any(changed):
+            path.write_text(json.dumps(cfg, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
+    return done
+
+
+def set_aside_incomplete(job: Path) -> list[str]:
+    """Lượt có result.json rỗng (Harbor bị giết lúc đang ghi) bị Harbor bỏ qua mà không xóa khi resume, nên nằm lẫn với
+    lượt chạy lại. Dời sang jobs/<job>.incomplete/ (không xóa: còn log để xem)."""
+    moved = []
+    for res in sorted(job.glob("*/result.json")):
+        try:
+            empty = not res.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            continue
+        if empty:
+            dest = Path(str(job) + ".incomplete")
+            dest.mkdir(exist_ok=True)
+            shutil.move(str(res.parent), str(dest / res.parent.name))
+            moved.append(res.parent.name)
+    return moved
+
+
 def cmd_resume_exec(args) -> int:
     """Chạy tiếp job Harbor dừng giữa chừng (`harbor jobs resume`: bỏ qua lượt đã có result.json). Lệnh đó không có
     --env-file, nên nạp .env bằng đúng hàm `harbor run --env-file` dùng (load_dotenv của python-dotenv, override=True)
@@ -835,6 +890,18 @@ def cmd_resume_exec(args) -> int:
     if not (job / "config.json").is_file():
         print(f"✗ không thấy {job}/config.json", file=sys.stderr)
         return 1
+    original = Path(args.original) if args.original else Path("configs") / f"{job.name}.json"
+    if original.is_file():
+        try:
+            for item in restore_redacted_env(job, original):
+                print(f"khôi phục giá trị env bị Harbor che: {item}", flush=True)
+        except ValueError as exc:
+            print(f"✗ {exc}", file=sys.stderr)
+            return 1
+    else:
+        print(f"⚠️ không thấy {original}: không khôi phục được env bị Harbor che", flush=True)
+    for name in set_aside_incomplete(job):
+        print(f"dời lượt dở (result.json rỗng) sang {job}.incomplete/: {name}", flush=True)
     if args.env_file:
         if not Path(args.env_file).is_file():
             print(f"✗ không thấy {args.env_file}", file=sys.stderr)
@@ -1735,6 +1802,7 @@ def main(argv=None) -> int:
     re_.add_argument("job")
     re_.add_argument("--env-file")
     re_.add_argument("--harbor", default=".venv/bin/harbor")
+    re_.add_argument("--original", help="cấu hình gốc của job (mặc định configs/<tên job>.json)")
     ex = sub.add_parser("export")
     ex.add_argument("jobs", nargs="+")
     ex.add_argument("--out", required=True)
