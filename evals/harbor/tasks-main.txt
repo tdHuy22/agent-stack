@@ -1,7 +1,7 @@
-# Việc cho job lớn, lọc ngày 07/11/2026 từ tasks-candidates.txt: chỉ giữ việc mà lời giải mẫu đạt ít nhất một lần.
+# Việc cho job lớn, lọc ngày 08/11/2026 từ tasks-candidates.txt: chỉ giữ việc mà lời giải mẫu đạt ít nhất một lần.
 # Lọc theo chính việc (grader và môi trường chạy được), KHÔNG theo kết quả của cấu hình nào.
-# Gộp các lần chạy lời giải mẫu: lan2-oracle, lan3-oracle, pilot-oracle, recheck-oracle.
-# Giữ 64 (tblite 40, swerebench 24); bỏ 31 vì lời giải mẫu trượt hay lỗi; chờ chạy lại 2 (tasks-recheck.txt).
+# Gộp các lần chạy lời giải mẫu: lan2-oracle, lan3-oracle, pilot-oracle, recheck-oracle, vi-oracle.
+# Giữ 94 (tblite 40, swerebench 24, vi 30); bỏ 31 vì lời giải mẫu trượt hay lỗi; chờ chạy lại 2 (tasks-recheck.txt).
 # bỏ, lời giải mẫu trượt hay lỗi: tblite:bash-log-processor-fix
 # bỏ, lời giải mẫu trượt hay lỗi: tblite:battery-charging-optimization
 # bỏ, lời giải mẫu trượt hay lỗi: tblite:bloom-filter-cache-penetration-prevention
@@ -99,3 +99,33 @@ swerebench:reframe-hpc__reframe-3660_interface
 swerebench:tobymao__sqlglot-7457
 swerebench:ultraplot__ultraplot-696
 swerebench:vprusso__toqito-1538
+vi:chu-dau-thanh
+vi:chu-doc-so-tien
+vi:chu-ngay-thang
+vi:chu-sap-xep-ten
+vi:chu-slug
+vi:chu-so-tien-viet-tat
+vi:chu-tach-ho-ten
+vi:chu-telex
+vi:chu-tim-khong-dau
+vi:chu-viet-hoa-ten-rieng
+vi:code-chia-tien-nhom
+vi:code-cli-bao-cao
+vi:code-csv-excel
+vi:code-dia-chi-tinh
+vi:code-hoa-don-vat
+vi:code-lich-tra-no
+vi:code-luong-lam-them
+vi:code-ngay-lam-viec
+vi:code-phi-ship
+vi:code-thue-tncn
+vi:viet-bao-cao-su-co
+vi:viet-bien-ban-hop
+vi:viet-changelog
+vi:viet-email-khach
+vi:viet-mo-ta-pr
+vi:viet-readme-script
+vi:viet-rut-gon
+vi:viet-thong-bao-bao-tri
+vi:viet-tom-tat-so-lieu
+vi:viet-tra-loi-ticket

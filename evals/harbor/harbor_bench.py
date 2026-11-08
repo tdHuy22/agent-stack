@@ -1542,7 +1542,8 @@ def cmd_filter_oracle(args) -> int:
             "một lần.",
             "# Lọc theo chính việc (grader và môi trường chạy được), KHÔNG theo kết quả của cấu hình nào.",
             f"# Gộp các lần chạy lời giải mẫu: {jobs}.",
-            f"# Giữ {len(res['keep'])} (tblite {count(res['keep'], 'tblite')}, swerebench {count(res['keep'], 'swerebench')}); "
+            f"# Giữ {len(res['keep'])} (" + ", ".join(f"{ds} {count(res['keep'], ds)}" for ds in DATASETS if count(res['keep'], ds))
+            + "); "
             f"bỏ {len(res['drop'])} vì lời giải mẫu trượt hay lỗi; chờ chạy lại {len(res['recheck'])} (tasks-recheck.txt)."]
     head += [f"# bỏ, lời giải mẫu trượt hay lỗi: {x}" for x in res["drop"]]
     head += [f"# chờ chạy lại, chưa chấm được lần nào: {x}" for x in res["recheck"]]
