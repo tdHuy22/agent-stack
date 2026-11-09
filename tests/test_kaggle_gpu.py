@@ -25,6 +25,32 @@ with (log.parent / "raw.log").open("a") as handle:
     handle.write(json.dumps(sys.argv[1:]) + "\\n")
 scenario = json.loads(pathlib.Path(os.environ["FAKE_SCENARIO"]).read_text())
 key = " ".join(args[:2])
+with (log.parent / "env.log").open("a") as handle:  # môi trường mỗi lần gọi, để kiểm profile cô lập (TM-80)
+    handle.write(json.dumps({"home": os.environ.get("HOME"), "config": os.environ.get("KAGGLE_CONFIG_DIR"),
+                             "xdg": os.environ.get("XDG_CONFIG_HOME"),
+                             "leak": sorted(k for k in os.environ if k.startswith("KAGGLE_"))}) + "\\n")
+cfg = pathlib.Path(os.environ.get("KAGGLE_CONFIG_DIR") or "/nonexistent")
+if key == "auth login":  # như kagglesdk: ghi credentials.json vào ~/.kaggle của HOME đang dùng
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / "credentials.json").write_text(json.dumps({"refresh_token": scenario.get("login token", ""),
+                                                      "access_token": "", "username": scenario.get("login user", "")}))
+    sys.exit(0)
+if "/profiles/" in str(cfg) and key in ("config view", "auth revoke"):  # profile: trả lời theo credentials.json
+    creds = cfg / "credentials.json"
+    data = json.loads(creds.read_text()) if creds.exists() else {}
+    if key == "auth revoke":
+        creds.unlink(missing_ok=True)
+        print("Token revoked")
+        sys.exit(0)
+    if not data.get("refresh_token"):
+        print("Authentication required to call the Kaggle API.")
+        sys.exit(1)
+    print("- username: " + data["username"])
+    sys.exit(0)
+quota_by_home = scenario.get("quota by home", {})
+if key.startswith("quota") and pathlib.Path(os.environ.get("HOME", "")).name in quota_by_home:
+    print(quota_by_home[pathlib.Path(os.environ["HOME"]).name])
+    sys.exit(0)
 reply = scenario.get(key, scenario.get(args[0] if args else "", ""))
 if isinstance(reply, list):
     counter = log.parent / ("n-" + key.replace(" ", "_"))
@@ -59,7 +85,7 @@ class Base(TempDirTestCase):
         self.log = self.tmp / "fake.log"
         self.scenario = self.tmp / "scenario.json"
         fake = self.tmp / "kaggle"
-        fake.write_text(FAKE.format(python=sys.executable))
+        fake.write_text(FAKE.replace("{python}", sys.executable))
         fake.chmod(0o755)
         self.set_scenario()
         env = {"KAGGLE_BIN": str(fake), "KAGGLE_CONFIG_DIR": str(self.home), "FAKE_LOG": str(self.log),
@@ -746,3 +772,188 @@ class ScannerUrlKeys(Base):
                      'out = "/kaggle/working/checkpoints/run-20261106-153357/step-0001000"'):
             with self.subTest(line=line):
                 self.assertFalse(K.line_has_secret(line, [], code=True, allow_mark=False))
+
+
+class Profiles(Base):
+    """Profile cho từng người: đăng nhập riêng, giữ phiên, chọn profile khi push (TM-80 đến TM-83)."""
+
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "profiles"
+        patcher = mock.patch.dict(os.environ, {"KAGGLE_GPU_PROFILES": str(self.root)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("KAGGLE_GPU_PROFILE", None)
+        self.env_log = self.tmp / "env.log"
+
+    def make_profile(self, name, user, token=TOKEN):
+        cfg = self.root / name / ".kaggle"
+        cfg.mkdir(parents=True)
+        (cfg / "credentials.json").write_text(json.dumps({"refresh_token": token, "access_token": "",
+                                                          "username": user}))
+
+    def envs(self) -> list:
+        if not self.env_log.exists():
+            return []
+        return [json.loads(line) for line in self.env_log.read_text().splitlines()]
+
+    def run_login(self, *argv, tty=True):
+        stdin = mock.Mock(isatty=lambda: tty)
+        with mock.patch.object(K.sys, "stdin", stdin):
+            return self.run_main("profile", "login", *argv)
+
+    # ---- tiêu chí 1: mỗi người tự đăng nhập, token trong thư mục riêng ----
+
+    def test_login_refused_without_terminal(self):
+        code, out = self.run_login("an", tty=False)
+        self.assertEqual(code, 2, out)
+        self.assertIn("terminal", out)
+        self.assertEqual(self.calls(), [])
+        self.assertFalse((self.root / "an").exists())
+
+    def test_login_stores_token_in_private_profile_dir_without_outside_tokens(self):
+        os.environ["KAGGLE_API_TOKEN"] = TOKEN
+        self.set_scenario(login_token="KGAT_" + "Pq34" * 8, login_user="an-kaggle")
+        code, out = self.run_login("an")
+        self.assertEqual(code, 0, out)
+        self.assertIn("an-kaggle", out)
+        self.assertNotIn("Pq34Pq34", out)
+        self.assertTrue((self.root / "an" / ".kaggle" / "credentials.json").is_file())
+        for path in (self.root, self.root / "an"):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o700, path)
+        self.assertEqual(self.calls(), [["auth", "login"]])
+        env = self.envs()[-1]
+        self.assertEqual(env["home"], str(self.root / "an"))
+        self.assertEqual(env["config"], str(self.root / "an" / ".kaggle"))
+        self.assertEqual(env["leak"], ["KAGGLE_CONFIG_DIR"])  # chỉ biến tool tự đặt, không có token ngoài
+
+    def test_bad_profile_name_refused_before_anything(self):
+        for name in ("../x", "/tmp/x", "An", "a" * 40, ""):
+            code, out = self.run_login(name)
+            self.assertEqual(code, 2, (name, out))
+        os.environ["KAGGLE_GPU_PROFILE"] = "../x"
+        code, out = self.run_main("check")
+        self.assertEqual(code, 2, out)
+        self.assertEqual(self.calls(), [])
+        self.assertFalse(self.root.exists())
+
+    def test_missing_profile_exits_3_with_login_hint(self):
+        code, out = self.run_main("check", "--profile", "an")
+        self.assertEqual(code, 3)
+        self.assertIn("profile login an", out)
+        self.assertEqual(self.calls(), [])
+
+    def test_list_reads_no_token_and_calls_no_network(self):
+        self.make_profile("an", "an-kaggle")
+        (self.root / "lan").mkdir(parents=True)
+        code, out = self.run_main("profile", "list")
+        self.assertEqual(code, 0, out)
+        self.assertIn("an: an-kaggle, có phiên", out)
+        self.assertIn("lan: không rõ username, chưa đăng nhập", out)
+        self.assertNotIn(TOKEN, out)
+        self.assertEqual(self.calls(), [])
+
+    # ---- tiêu chí 2: giữ phiên ----
+
+    def test_status_reports_each_profile_session_and_quota(self):
+        self.make_profile("an", "an-kaggle")
+        self.make_profile("lan", "lan-kaggle", token="")
+        code, out = self.run_main("profile", "status")
+        self.assertEqual(code, 3, out)
+        self.assertIn("an: an-kaggle, phiên còn, quota GPU còn 29.50/30.00 giờ", out)
+        self.assertIn("lan: chưa đăng nhập hay phiên đã hết", out)
+        self.assertIn("profile login lan --force", out)
+        self.assertNotIn(TOKEN, out)
+        homes = {e["home"] for e in self.envs()}
+        self.assertEqual(homes, {str(self.root / "an"), str(self.root / "lan")})
+
+    def test_logout_revokes_only_that_profile(self):
+        self.make_profile("an", "an-kaggle")
+        self.make_profile("lan", "lan-kaggle")
+        code, out = self.run_main("profile", "logout", "an")
+        self.assertEqual(code, 0, out)
+        self.assertFalse((self.root / "an" / ".kaggle" / "credentials.json").exists())
+        self.assertTrue((self.root / "lan" / ".kaggle" / "credentials.json").exists())
+
+    # ---- tiêu chí 3: chọn profile khi push, không bao giờ tự đổi ----
+
+    def test_push_with_profile_uses_only_that_account_and_records_it(self):
+        self.make_profile("an", "huy")
+        os.environ.update(KAGGLE_API_TOKEN=TOKEN, KAGGLE_USERNAME="khac", KAGGLE_KEY="k" * 32,
+                          XDG_CONFIG_HOME=str(self.tmp / "xdg"))
+        folder = self.job()
+        code, out = self.run_main("push", str(folder), "--profile", "an", "--root", str(self.tmp))
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.pushed())
+        self.assertIsNone(K.ACTIVE_PROFILE)  # không rò sang lần gọi main sau trong cùng process
+        for env in self.envs():
+            self.assertEqual(env["home"], str(self.root / "an"))
+            self.assertEqual(env["leak"], ["KAGGLE_CONFIG_DIR"])
+            self.assertIsNone(env["xdg"])
+        entry = json.loads((self.tmp / "runs" / "kaggle" / "runs.jsonl").read_text().splitlines()[-1])
+        self.assertEqual(entry["profile"], "an")
+
+    def test_env_var_selects_profile(self):
+        self.make_profile("an", "huy")
+        os.environ["KAGGLE_GPU_PROFILE"] = "an"
+        code, out = self.run_main("check")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"{self.root / 'an' / '.kaggle'}/credentials.json", out)
+        self.assertTrue(all(e["home"] == str(self.root / "an") for e in self.envs()))
+
+    def test_job_or_dataset_of_another_owner_refused(self):
+        self.make_profile("lan", "lan-kaggle")
+        code, out = self.run_main("push", str(self.job()), "--profile", "lan", "--root", str(self.tmp))
+        self.assertEqual(code, 2, out)
+        self.assertIn("thuộc huy", out)
+        self.assertFalse(self.pushed())
+        code, out = self.run_main("dataset", str(self.dataset({"a.csv": "x,y\n1,2\n"})), "--profile", "lan")
+        self.assertEqual(code, 2, out)
+        self.assertFalse(any(c[:2] in (["datasets", "create"], ["datasets", "version"]) for c in self.calls()))
+
+    def test_out_of_quota_refuses_and_never_tries_another_profile(self):
+        self.make_profile("an", "huy")
+        self.make_profile("lan", "huy")  # cùng username giả để chắc là chỉ quota chặn
+        low = json.dumps([{"resource": "GPU", "used": "30.00h", "remaining": "0.00h", "total": "30.00h"}])
+        self.set_scenario(quota_by_home={"an": low})
+        code, out = self.run_main("push", str(self.job()), "--profile", "an", "--root", str(self.tmp))
+        self.assertEqual(code, 2, out)
+        self.assertFalse(self.pushed())
+        self.assertTrue(all(e["home"] == str(self.root / "an") for e in self.envs()))
+
+    def test_profile_token_is_redacted_from_cli_output(self):
+        secret = "phien-rieng-cua-profile-an"  # không khớp mẫu khóa nào: chỉ nhánh che token của profile bắt được
+        self.assertIn(secret, K.redact(f"t {secret}", tokens=[]))
+        self.make_profile("an", "huy", token=secret)
+        self.set_scenario(kernels_logs=f"loaded token {secret}")
+        code, out = self.run_main("logs", "huy/hello-gpu", "--profile", "an")
+        self.assertIn("loaded token", out)
+        self.assertNotIn(secret, out)
+
+    def test_next_command_hints_keep_the_profile(self):
+        self.make_profile("an", "huy")
+        code, out = self.run_main("push", str(self.job()), "--profile", "an", "--no-wait", "--root", str(self.tmp))
+        self.assertEqual(code, 0, out)
+        self.assertIn("wait huy/hello-gpu/3 --profile an", out)
+        self.assertIn("fetch huy/hello-gpu/3 --profile an", out)
+        self.set_scenario(quota="[]")  # Kaggle không trả quota: câu gợi ý `check` cũng giữ profile
+        code, out = self.run_main("push", str(self.tmp / "jobs" / "hello-gpu"), "--profile", "an", "--root", str(self.tmp))
+        self.assertEqual(code, 2, out)
+        self.assertIn("check --profile an", out)
+
+    def test_login_again_without_force_reports_existing_session(self):
+        self.make_profile("an", "an-kaggle")
+        code, out = self.run_login("an")
+        self.assertEqual(code, 0, out)
+        self.assertIn("đã đăng nhập là an-kaggle", out)
+        self.assertIn("--force", out)
+        self.assertEqual(self.calls(), [])
+
+    def test_existing_profiles_root_keeps_its_permissions(self):
+        self.root.mkdir(mode=0o755)
+        os.chmod(self.root, 0o755)
+        self.set_scenario(login_token="KGAT_" + "Pq34" * 8, login_user="an-kaggle")
+        code, out = self.run_login("an")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.root.stat().st_mode & 0o777, 0o755)
+        self.assertEqual((self.root / "an").stat().st_mode & 0o777, 0o700)

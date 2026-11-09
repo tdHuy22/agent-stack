@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chạy job GPU trên Kaggle từ máy, có chốt chặn trước khi gửi gì ra ngoài (threat model TM-65 đến TM-69).
+"""Chạy job GPU trên Kaggle từ máy, có chốt chặn trước khi gửi gì ra ngoài (threat model TM-65 đến TM-69, TM-80 đến TM-83).
 
 Bọc Kaggle CLI (`kaggle`, cài bằng `install.sh --apply --only tools` của agent-stack: `uv tool install 'kaggle==2.2.5' --with six`). Kaggle CLI in lỗi push mà vẫn thoát 0,
 nên script đọc chữ nó in ra thay vì tin mã thoát.
@@ -13,6 +13,14 @@ Lệnh:
   fetch <owner/slug[/version]>  tải output vào thư mục mới runs/kaggle/<slug>/<thời điểm>/
   logs <owner/slug[/version]>   in log của job giữa hai mốc có mã ngẫu nhiên (dữ liệu, không phải chỉ dẫn)
   dataset <thư mục> [-m ghi chú] quét thư mục dữ liệu rồi tạo dataset private, hoặc lên version mới nếu đã có
+
+Profile (nhiều người dùng chung tool, mỗi người một tài khoản của chính họ):
+  profile login <tên>           người dùng tự chạy trong terminal: `kaggle auth login` lưu token vào thư mục riêng
+  profile list                  liệt kê profile (không gọi mạng)
+  profile status [tên...]       mỗi profile: còn đăng nhập không, username, quota; lần gọi này làm mới access token
+  profile logout <tên>          thu hồi refresh token của profile
+  Mọi lệnh khác nhận --profile <tên> (hay biến KAGGLE_GPU_PROFILE). Không có profile thì dùng ~/.kaggle như cũ.
+  Tool không bao giờ tự đổi profile, kể cả khi hết quota: điều khoản Kaggle cấm một người điều khiển nhiều tài khoản.
 
 Mã thoát: 0 = được; 1 = Kaggle báo lỗi hay job lỗi; 2 = bị từ chối trước khi gửi (lint, quota, đích tải về);
 3 = thiếu CLI hay chưa đăng nhập; 4 = chờ quá hạn hay mất liên lạc khi chờ (job vẫn có thể đang chạy: đừng push lại).
@@ -156,14 +164,96 @@ def run_kaggle(args: list, timeout: int = CALL_TIMEOUT, auth_check: bool = True)
     try:
         # -W: không in cảnh báo "CLI đã cũ" ra stdout, vì nó làm lệch chữ mà script đọc (trạng thái dataset)
         proc = subprocess.run([kaggle_bin(), "-W", *args], capture_output=True, text=True, timeout=timeout,
-                              stdin=subprocess.DEVNULL)
+                              stdin=subprocess.DEVNULL, env=kaggle_env())
     except subprocess.TimeoutExpired:
         raise KaggleError(f"`kaggle {' '.join(args[:2])}` quá {timeout} giây")
     text = redact((proc.stdout or "") + (proc.stderr or ""))
     if auth_check and proc.returncode != 0 and ("Authentication required" in text or "401 Client Error" in text):
-        raise NotReady("chưa đăng nhập Kaggle. Bạn tự chạy: kaggle auth login (hay đặt KAGGLE_API_TOKEN); "
-                       "agent không nhập token")
+        raise NotReady(login_hint())
     return proc.returncode, text
+
+
+def login_hint() -> str:
+    if ACTIVE_PROFILE:
+        return (f"profile {ACTIVE_PROFILE} chưa đăng nhập hay phiên đã hết. Chủ profile tự chạy trong terminal: "
+                f"python3 {HERE} profile login {ACTIVE_PROFILE} --force; agent không đăng nhập hộ")
+    return "chưa đăng nhập Kaggle. Bạn tự chạy: kaggle auth login (hay đặt KAGGLE_API_TOKEN); agent không nhập token"
+
+
+# ---------- profile: mỗi người một tài khoản, token trong thư mục riêng (TM-80 đến TM-83) ----------
+
+PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+ACTIVE_PROFILE: str | None = None
+
+
+def profiles_root() -> Path:
+    return Path(os.environ.get("KAGGLE_GPU_PROFILES") or Path.home() / ".config" / "kaggle-gpu" / "profiles")
+
+
+def profile_home(name: str) -> Path:
+    """Thư mục làm HOME cho `kaggle` của profile: kagglesdk luôn đọc ~/.kaggle/credentials.json, nên đổi HOME."""
+    if not isinstance(name, str) or not PROFILE_RE.match(name):
+        raise Refused(f"tên profile {name!r} không hợp lệ: chỉ chữ thường, số, '-', '_', tối đa 32 ký tự")
+    return profiles_root() / name
+
+
+def make_private_dir(path: Path) -> None:
+    """Thư mục profile quyền 0700. Thư mục gốc chỉ đặt 0700 khi script tự tạo: KAGGLE_GPU_PROFILES có thể trỏ vào
+    thư mục có sẵn của người dùng, không đổi quyền thư mục đó."""
+    root = profiles_root()
+    if not root.exists():
+        root.mkdir(parents=True, mode=0o700)
+        os.chmod(root, 0o700)  # mkdir bị umask che bớt quyền
+    path.mkdir(exist_ok=True, mode=0o700)
+    os.chmod(path, 0o700)
+
+
+def kaggle_env() -> dict | None:
+    """Môi trường cho `kaggle` khi có profile: bỏ mọi nguồn đăng nhập khác (CLI ưu tiên biến KAGGLE_* và
+    access_token, kaggle.json hơn OAuth), HOME và KAGGLE_CONFIG_DIR trỏ vào profile. Không profile thì None (giữ nguyên)."""
+    if not ACTIVE_PROFILE:
+        return None
+    home = profile_home(ACTIVE_PROFILE)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("KAGGLE_") and k != "XDG_CONFIG_HOME"}
+    env.update(HOME=str(home), KAGGLE_CONFIG_DIR=str(home / ".kaggle"))
+    return env
+
+
+def credentials_summary(name: str) -> tuple:
+    """(username, có refresh token hay không) đọc từ credentials.json của profile; không trả token."""
+    try:
+        data = json.loads((profile_home(name) / ".kaggle" / "credentials.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "", False
+    if not isinstance(data, dict):
+        return "", False
+    return str(data.get("username") or ""), bool(data.get("refresh_token"))
+
+
+def select_profile(name: str | None) -> None:
+    global ACTIVE_PROFILE
+    name = name or os.environ.get("KAGGLE_GPU_PROFILE") or None
+    if name is None:
+        ACTIVE_PROFILE = None
+        return
+    if not profile_home(name).is_dir():
+        raise NotReady(f"chưa có profile {name}. Chủ profile tự chạy trong terminal: python3 {HERE} profile login {name}")
+    ACTIVE_PROFILE = name
+
+
+def profile_flag() -> str:
+    """Đuôi ` --profile <tên>` cho mọi câu gợi ý lệnh tiếp theo, để lệnh chép lại chạy đúng tài khoản đã push."""
+    return f" --profile {ACTIVE_PROFILE}" if ACTIVE_PROFILE else ""
+
+
+def check_owner(ident: str, what: str) -> None:
+    """Có profile thì owner trong id phải là tài khoản của profile, để không gửi nhầm tài khoản (TM-80)."""
+    if not ACTIVE_PROFILE:
+        return
+    owner, user = ident.split("/", 1)[0].lower(), username().lower()
+    if owner != user:
+        raise Refused(f"{what} {ident} thuộc {owner}, mà profile {ACTIVE_PROFILE} đăng nhập là {user}: "
+                      f"sửa id cho đúng tài khoản, hay chọn đúng profile")
 
 
 def redact(text: str, tokens: list | None = None) -> str:
@@ -205,15 +295,17 @@ def local_tokens() -> list:
 
 
 def kaggle_home() -> Path:
+    if ACTIVE_PROFILE:
+        return profile_home(ACTIVE_PROFILE) / ".kaggle"
     return Path(os.environ.get("KAGGLE_CONFIG_DIR") or Path.home() / ".kaggle")
 
 
 def auth_sources() -> list:
-    """Nguồn đăng nhập có trên máy: chỉ tên, không giá trị."""
+    """Nguồn đăng nhập có trên máy: chỉ tên, không giá trị. Có profile thì biến môi trường không được dùng."""
     found = []
-    if os.environ.get("KAGGLE_API_TOKEN"):
+    if not ACTIVE_PROFILE and os.environ.get("KAGGLE_API_TOKEN"):
         found.append("biến KAGGLE_API_TOKEN")
-    if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
+    if not ACTIVE_PROFILE and os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
         found.append("biến KAGGLE_USERNAME/KAGGLE_KEY")
     home = kaggle_home()
     for name in ("access_token", "kaggle.json", "credentials.json"):
@@ -519,7 +611,7 @@ def wait(kernel: str, interval: int, max_wait: int) -> str:
             misses += 1
             if misses >= STATUS_RETRIES or time.monotonic() + interval > deadline:
                 raise TimeoutError(f"{misses} lần liền không hỏi được trạng thái ({A.clip(text.strip(), 200)}); "
-                                   f"job có thể vẫn chạy, đừng push lại. Chờ tiếp: kaggle_job.py wait {kernel}")
+                                   f"job có thể vẫn chạy, đừng push lại. Chờ tiếp: kaggle_job.py wait {kernel}{profile_flag()}")
             time.sleep(interval * misses)
             continue
         misses = 0
@@ -530,9 +622,9 @@ def wait(kernel: str, interval: int, max_wait: int) -> str:
             return status
         if status in TERMINAL_BAD:
             raise KaggleError(f"job dừng ở {status}{': ' + failure if failure else ''}. "
-                              f"Xem log: kaggle_job.py logs {kernel}")
+                              f"Xem log: kaggle_job.py logs {kernel}{profile_flag()}")
         if time.monotonic() + interval > deadline:
-            raise TimeoutError(f"chờ quá {max_wait} giây, job vẫn {status}. Chờ tiếp: kaggle_job.py wait {kernel}")
+            raise TimeoutError(f"chờ quá {max_wait} giây, job vẫn {status}. Chờ tiếp: kaggle_job.py wait {kernel}{profile_flag()}")
         time.sleep(interval)
 
 
@@ -677,6 +769,7 @@ def cmd_push(args) -> int:
     report(errors, warnings)
     if errors:
         raise Refused(f"{len(errors)} lỗi ở thư mục job, chưa gửi gì lên Kaggle")
+    check_owner(meta["id"], "job")
     timeout = args.timeout
     if not 60 <= timeout <= MAX_TIMEOUT:
         raise Refused(f"--timeout phải từ 60 tới {MAX_TIMEOUT} giây")
@@ -686,7 +779,7 @@ def cmd_push(args) -> int:
         quota = gpu_quota()
         remaining = quota and quota["remaining"]
         if remaining is None:
-            raise Refused("Kaggle không trả quota GPU (tài khoản chưa có GPU?). Chạy `kaggle_job.py check`")
+            raise Refused(f"Kaggle không trả quota GPU (tài khoản chưa có GPU?). Chạy `kaggle_job.py check{profile_flag()}`")
         if remaining * 3600 < timeout and not args.allow_low_quota:
             raise Refused(f"quota GPU còn {remaining:.2f} giờ, ít hơn --timeout {timeout} giây. "
                           f"Hạ --timeout, hay thêm --allow-low-quota khi người dùng đồng ý")
@@ -700,9 +793,12 @@ def cmd_push(args) -> int:
         raise KaggleError("push không thành công (Kaggle CLI có khi thoát 0 dù lỗi)")
     kernel = f"{meta['id']}/{match.group(1)}"
     entry = {"kernel": kernel, "accelerator": accelerator or "CPU", "timeout": timeout, "status": "pushed"}
+    if ACTIVE_PROFILE:
+        entry["profile"] = ACTIVE_PROFILE
     if args.no_wait:
         record(root, entry)
-        print(f"Đã push {kernel}. Chờ: kaggle_job.py wait {kernel}; tải: kaggle_job.py fetch {kernel}")
+        flag = profile_flag()
+        print(f"Đã push {kernel}. Chờ: kaggle_job.py wait {kernel}{flag}; tải: kaggle_job.py fetch {kernel}{flag}")
         return 0
     try:
         entry["status"] = wait(kernel, args.interval, args.max_wait)
@@ -769,6 +865,7 @@ def cmd_dataset(args) -> int:
     if errors:
         raise Refused(f"{len(errors)} lỗi ở thư mục dữ liệu, chưa gửi gì lên Kaggle")
     ident = meta["id"]
+    check_owner(ident, "dataset")
     code, status_text = run_kaggle(["datasets", "status", ident])
     last_line = (status_text.strip().splitlines() or [""])[-1]
     state = last_line.strip().lower().rsplit(".", 1)[-1]
@@ -792,12 +889,97 @@ def cmd_dataset(args) -> int:
     return 0
 
 
+def profile_names() -> list:
+    root = profiles_root()
+    if not root.is_dir():
+        return []
+    return sorted(d.name for d in root.iterdir() if d.is_dir() and PROFILE_RE.match(d.name))
+
+
+def cmd_profile(args) -> int:
+    global ACTIVE_PROFILE
+    if args.action == "list":
+        names = profile_names()
+        if not names:
+            print(f"Chưa có profile nào trong {profiles_root()}. Tạo: python3 {HERE} profile login <tên>")
+        for name in names:
+            user, has_token = credentials_summary(name)
+            print(f"{name}: {user or 'không rõ username'}, {'có phiên' if has_token else 'chưa đăng nhập'}")
+        return 0
+    if args.action == "login":
+        home = profile_home(args.name)
+        user, has_token = credentials_summary(args.name)
+        if has_token and not args.force:  # kaggle auth login thoát 1 khi đã có phiên; đó không phải lỗi
+            print(f"Profile {args.name} đã đăng nhập là {user or 'không rõ username'}. Đăng nhập lại: thêm --force")
+            return 0
+        if not sys.stdin.isatty():  # mỗi người tự đăng nhập; agent không có terminal nên không làm hộ (TM-82)
+            raise Refused("profile login phải do chủ tài khoản tự chạy trong terminal của họ, "
+                          f"không chạy qua agent: python3 {HERE} profile login {args.name}")
+        make_private_dir(home)
+        ACTIVE_PROFILE = args.name
+        cmd = [kaggle_bin(), "-W", "auth", "login"]
+        cmd += ["--no-launch-browser"] if args.no_launch_browser else []
+        cmd += ["--force"] if args.force else []
+        code = subprocess.run(cmd, env=kaggle_env()).returncode  # tương tác: in URL, có thể hỏi mã
+        user, has_token = credentials_summary(args.name)
+        if code != 0 or not has_token:
+            print(f"Chưa đăng nhập được profile {args.name} (kaggle thoát {code}).")
+            return 3
+        print(f"Profile {args.name} đã đăng nhập là {user}. Đẩy job: python3 {HERE} push <thư mục> --profile {args.name}")
+        return 0
+    if args.action == "logout":
+        home = profile_home(args.name)
+        if not home.is_dir():
+            raise Refused(f"không có profile {args.name}")
+        ACTIVE_PROFILE = args.name
+        code, text = run_kaggle(["auth", "revoke"], auth_check=False)
+        print(text.strip())
+        return 0 if code == 0 else 1
+    # status: gọi Kaggle cho từng profile; CLI tự làm mới access token hết hạn bằng refresh token và lưu lại,
+    # nên lệnh này vừa kiểm vừa giữ phiên còn dùng được. Mỗi profile một dòng, không bao giờ đổi profile hộ ai.
+    names = args.names or profile_names()
+    if not names:
+        print(f"Chưa có profile nào trong {profiles_root()}.")
+        return 3
+    worst = 0
+    for name in names:
+        home = profile_home(name)
+        if not home.is_dir():
+            print(f"{name}: không có profile này")
+            worst = max(worst, 2)
+            continue
+        ACTIVE_PROFILE = name
+        try:
+            user = username()
+            quota = gpu_quota()
+        except NotReady:
+            print(f"{name}: chưa đăng nhập hay phiên đã hết; chủ profile chạy: python3 {HERE} profile login {name} --force")
+            worst = max(worst, 3)
+            continue
+        except KaggleError as exc:
+            print(f"{name}: Kaggle lỗi: {A.clip(str(exc), 200)}")
+            worst = max(worst, 1)
+            continue
+        if quota and quota["remaining"] is not None:
+            print(f"{name}: {user}, phiên còn, quota GPU còn {quota['remaining']:.2f}/{quota['total']:.2f} giờ, "
+                  f"làm mới lúc {quota['refresh_at'] or 'không rõ'}")
+        else:
+            print(f"{name}: {user}, phiên còn, Kaggle không trả quota GPU (chưa xác minh số điện thoại?)")
+    return worst
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("check")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--profile", help="profile Kaggle của người chạy (mặc định: biến KAGGLE_GPU_PROFILE, rồi ~/.kaggle)")
 
-    new = sub.add_parser("new")
+    def command(name):  # mọi lệnh gọi Kaggle đều nhận --profile
+        return sub.add_parser(name, parents=[common])
+
+    command("check")
+
+    new = command("new")
     new.add_argument("folder")
     new.add_argument("--title", required=True)
     new.add_argument("--user")
@@ -808,7 +990,7 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument("--kernel-source", action="append")
     new.add_argument("--model-source", action="append")
 
-    lint = sub.add_parser("lint")
+    lint = command("lint")
     lint.add_argument("folder")
     lint.add_argument("--data", action="store_true", help="kiểm thư mục dataset thay vì thư mục job")
     unscanned_help = "mẫu glob (như '*.png') cho file nhị phân hay nén gửi lên mà không quét; chỉ khi người dùng đồng ý"
@@ -822,7 +1004,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--out")
         p.add_argument("--root", default=".")
 
-    push = sub.add_parser("push")
+    push = command("push")
     push.add_argument("folder")
     push.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     push.add_argument("--accelerator")
@@ -831,32 +1013,47 @@ def build_parser() -> argparse.ArgumentParser:
     waiting(push)
     output(push)
 
-    w = sub.add_parser("wait")
+    w = command("wait")
     w.add_argument("kernel")
     waiting(w)
 
-    f = sub.add_parser("fetch")
+    f = command("fetch")
     f.add_argument("kernel")
     output(f)
 
-    logs = sub.add_parser("logs")
+    logs = command("logs")
     logs.add_argument("kernel")
     logs.add_argument("--tail", type=int, default=200)
 
-    data = sub.add_parser("dataset")
+    data = command("dataset")
     data.add_argument("folder")
     data.add_argument("-m", "--message")
     data.add_argument("--allow-unscanned", action="append", default=[], help=unscanned_help)
+
+    prof = sub.add_parser("profile")
+    actions = prof.add_subparsers(dest="action", required=True)
+    login = actions.add_parser("login")
+    login.add_argument("name")
+    login.add_argument("--no-launch-browser", action="store_true", help="in URL thay vì mở trình duyệt (máy không màn hình)")
+    login.add_argument("--force", action="store_true", help="đăng nhập lại dù đã có phiên")
+    actions.add_parser("list")
+    status = actions.add_parser("status")
+    status.add_argument("names", nargs="*")
+    logout = actions.add_parser("logout")
+    logout.add_argument("name")
     return parser
 
 
 COMMANDS = {"check": cmd_check, "new": cmd_new, "lint": cmd_lint, "push": cmd_push, "wait": cmd_wait,
-            "fetch": cmd_fetch, "logs": cmd_logs, "dataset": cmd_dataset}
+            "fetch": cmd_fetch, "logs": cmd_logs, "dataset": cmd_dataset, "profile": cmd_profile}
 
 
 def main(argv=None) -> int:
+    global ACTIVE_PROFILE
     args = build_parser().parse_args(argv)
     try:
+        if args.command != "profile":
+            select_profile(getattr(args, "profile", None))
         return COMMANDS[args.command](args)
     except Refused as exc:
         print(f"Từ chối: {exc}")
@@ -870,6 +1067,8 @@ def main(argv=None) -> int:
     except TimeoutError as exc:
         print(f"Quá hạn: {exc}")
         return 4
+    finally:
+        ACTIVE_PROFILE = None
 
 
 if __name__ == "__main__":
