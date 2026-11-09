@@ -77,7 +77,7 @@
   },
   "skills": {
     "use": ["done-gate", "writing-voice", "remote-mcp", "threat-model", "reuse-best", "session-keeper", "task-router",
-            "progress", "reader-page", "vet-skill", "kaggle-gpu"],
+            "progress", "reader-page", "vet-skill", "kaggle-gpu", "aside-web"],
     "skip": {}
   }
 }
