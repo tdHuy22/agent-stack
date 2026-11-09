@@ -407,11 +407,16 @@ class Redact(Base):
     def test_ordinary_text_and_page_values_not_masked(self):
         for text in ("HTTP status code=404", "author=Bob design=blue monkey=1", "<div data-state=open>",
                      "const key=getKey()", '{"state": "open", "code": "vi"}',
-                     "sidebar=open side=left inside=1 aside=on hotpot=1", '{"side": "left", "sidebar": "open"}'):
+                     "sidebar=open side=left inside=1 aside=on hotpot=1", '{"side": "left", "sidebar": "open"}',
+                     "assessment=good possessive=1"):
             self.assertEqual(W.redact(text), text)
 
     def test_mask_applied_once_and_bare_query_string_masked(self):
         self.assertEqual(W.redact("a=1;sid=zz"), f"a=1;sid={W.A.REDACTED}")
+        for text in ("PHPSESSID=abc123def456", "Cookie: sessid=abc", "https://x.vn/a?PHPSESSID=abc&p=1",
+                     '{"PHPSESSID":"abc"}', "x ASP.NET_SessionId=abc", "a=1; accessSession=abc",
+                     '{"classSession":"abc"}'):
+            self.assertNotIn("abc", W.redact(text), text)
         self.assertEqual(W.redact("x ;token=abc"), f"x ;token={W.A.REDACTED}")
         red = W.redact("code=abc123&state=def456\nnext line")
         self.assertNotIn("abc123", red)

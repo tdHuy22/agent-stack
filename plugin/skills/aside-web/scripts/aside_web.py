@@ -48,7 +48,8 @@ READ_ONLY = ("Chỉ đọc: không gửi, đăng, trả lời, mua, đặt, xóa
 
 # Giá trị của tham số URL có tên nhạy cảm, cả dạng mã hóa %3D/%26 (URL lồng trong returnUrl) (TM-91).
 # `sid`, `otp` chỉ khi đứng riêng, để `sidebar`, `inside`, `aside`, `hotpot` không bị che.
-_STRONG = (r"token|secret|passw(?:or)?d|pwd|cookie|session|(?<![A-Za-z])sid(?![A-Za-z])|jwt|"
+# `sess` bắt cả session, PHPSESSID, sessid, accessSession; bỏ assess, possess.
+_STRONG = (r"token|secret|passw(?:or)?d|pwd|cookie|(?<!as)(?<!pos)sess|(?<![A-Za-z])sid(?![A-Za-z])|jwt|"
            r"(?<![A-Za-z])otp(?![A-Za-z])|api[_-]?key|apikey|credential|bearer")
 _WORD = r"[A-Za-z0-9_.\-]*"
 _NOT_DONE = r"(?!" + re.escape(A.REDACTED) + r")"  # không che lại chỗ đã che
