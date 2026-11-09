@@ -746,19 +746,30 @@ def cmd_pick_swerebench(args) -> int:
 # ---------------------------------------------------------------- watch (TM-77)
 
 LIMIT_ERRORS = {"ApiUsageLimitError", "ApiRateLimitError"}
+# Claude Code hết hạn mức thì thoát mã 1 sau một dòng kết quả JSON có `"api_error_status":429`; Harbor xếp lượt đó vào
+# `NonZeroAgentExitCodeError` chứ không phải hai lớp trên (ca 09/11/2026: 45 lượt hỏng trước khi job bị dừng tay). Chỉ
+# nhận khóa ở cấp ngoài cùng của dòng JSON (không có `\` đứng trước): chữ model in ra nằm trong chuỗi, dấu nháy bị thoát.
+LIMIT_STATUS_RE = re.compile(r'(?<!\\)"api_error_status":\s*429\b')
 
 
-def count_limit_errors(job_dir: Path) -> int:
-    n = 0
-    for res in Path(job_dir).glob("*/result.json"):
+def limit_error_trials(job_dir: Path) -> list[Path]:
+    """Thư mục các lượt hỏng vì hạn mức hay rate limit."""
+    found = []
+    for res in sorted(Path(job_dir).glob("*/result.json")):
         try:
             d = json.loads(res.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         exc = d.get("exception_info") if isinstance(d, dict) else None
-        if isinstance(exc, dict) and exc.get("exception_type") in LIMIT_ERRORS:
-            n += 1
-    return n
+        if not isinstance(exc, dict):
+            continue
+        if exc.get("exception_type") in LIMIT_ERRORS or LIMIT_STATUS_RE.search(str(exc.get("exception_message") or "")):
+            found.append(res.parent)
+    return found
+
+
+def count_limit_errors(job_dir: Path) -> int:
+    return len(limit_error_trials(job_dir))
 
 
 def pid_alive(pid: int) -> bool:
@@ -890,6 +901,23 @@ def set_aside_incomplete(job: Path) -> list[str]:
     return moved
 
 
+def set_aside_limit_errors(job: Path) -> list[str]:
+    """Lượt hỏng vì hạn mức đã có result.json nên `harbor jobs resume` bỏ qua (giữ là trượt), và watcher của lần chạy
+    tiếp đếm lại chúng rồi dừng job ngay. Dời sang jobs/<job>.limit/ để Harbor chạy lại (không xóa: còn log để xem)."""
+    moved = []
+    dest = Path(str(job) + ".limit")
+    for trial in limit_error_trials(job):
+        dest.mkdir(exist_ok=True)
+        target = dest / trial.name
+        i = 1
+        while target.exists():          # lần dừng trước đã dời một lượt cùng tên
+            target = dest / f"{trial.name}.{i}"
+            i += 1
+        shutil.move(str(trial), str(target))
+        moved.append(trial.name)
+    return moved
+
+
 def cmd_resume_exec(args) -> int:
     """Chạy tiếp job Harbor dừng giữa chừng (`harbor jobs resume`: bỏ qua lượt đã có result.json). Lệnh đó không có
     --env-file, nên nạp .env bằng đúng hàm `harbor run --env-file` dùng (load_dotenv của python-dotenv, override=True)
@@ -910,6 +938,9 @@ def cmd_resume_exec(args) -> int:
         print(f"⚠️ không thấy {original}: không khôi phục được env bị Harbor che", flush=True)
     for name in set_aside_incomplete(job):
         print(f"dời lượt dở (result.json rỗng) sang {job}.incomplete/: {name}", flush=True)
+    limited = set_aside_limit_errors(job)
+    if limited:
+        print(f"dời {len(limited)} lượt hỏng vì hạn mức sang {job}.limit/ để chạy lại: {', '.join(limited)}", flush=True)
     if args.env_file:
         if not Path(args.env_file).is_file():
             print(f"✗ không thấy {args.env_file}", file=sys.stderr)

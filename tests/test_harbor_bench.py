@@ -547,6 +547,23 @@ class WatchTests(Base):
         self.trial("jobs/j", B.PLAIN, "y", exception="AgentTimeoutError")
         self.assertEqual(B.count_limit_errors(job), 3)
 
+    def test_counts_agent_exits_that_report_http_429_but_not_quoted_text(self):
+        """Ca 09/11/2026: hết hạn mức phiên của gói Max, Claude Code thoát mã 1 với `"api_error_status":429`, Harbor xếp
+        vào `NonZeroAgentExitCodeError`; watcher bỏ sót, 45 lượt hỏng tới khi job bị dừng tay."""
+        job = self.tmp / "jobs" / "j"
+        msgs = {
+            "hit": 'Command failed (exit 1): claude ...\nstdout: {"type":"result","is_error":true,'
+                   '"api_error_status":429,"api_error":"usage_limit_reached","result":"You\'ve hit your session limit"}',
+            "quoted": 'Command failed (exit 1): claude ...\nstdout: {"type":"user","content":"grep \\"api_error_status\\":429 log"}',
+            "other": 'Command failed (exit 1): claude ...\nstdout: {"type":"result","api_error_status":500}',
+        }
+        for name, msg in msgs.items():
+            d = self.trial("jobs/j", B.PLAIN, name, reward=None, exception="NonZeroAgentExitCodeError")
+            res = json.loads((d / "result.json").read_text())
+            res["exception_info"]["exception_message"] = msg
+            (d / "result.json").write_text(json.dumps(res))
+        self.assertEqual(B.count_limit_errors(job), 1)
+
     def test_terminates_the_process_group_over_the_threshold(self):
         job = self.limit_trials(4)
         proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
@@ -667,6 +684,21 @@ class ResumeExecTests(Base):
         self.assertFalse((job / "t2__b").exists())
         self.assertTrue((self.tmp / "jobs" / "p.incomplete" / "t2__b" / "config.json").is_file())
         self.assertTrue((job / "t1__a").is_dir())
+
+    def test_limit_error_trials_are_set_aside_so_resume_reruns_them(self):
+        """Ca 09/11/2026: 45 lượt hỏng vì hết hạn mức; giữ lại thì resume bỏ qua (tính trượt) và watcher dừng job ngay."""
+        job, _ = self.setup_job({"CLAUDE_FORCE_OAUTH": "1"})
+        for name, exc in (("t3__c", "ApiUsageLimitError"), ("t4__d", "AgentTimeoutError")):
+            self.write(f"jobs/p/{name}/result.json", json.dumps({"exception_info": {"exception_type": exc}}))
+        self.write("jobs/p/t5__e/result.json", json.dumps({"exception_info": {
+            "exception_type": "NonZeroAgentExitCodeError",
+            "exception_message": 'stdout: {"type":"result","is_error":true,"api_error_status":429}'}}))
+        self.write("jobs/p.limit/t3__c/result.json", "{}")          # lần dừng trước đã dời một lượt cùng tên
+        self.assertEqual(B.set_aside_limit_errors(job), ["t3__c", "t5__e"])
+        self.assertFalse((job / "t3__c").exists())
+        self.assertTrue((self.tmp / "jobs" / "p.limit" / "t3__c.1" / "result.json").is_file())
+        self.assertTrue((job / "t4__d").is_dir())
+        self.assertEqual(B.count_limit_errors(job), 0)
 
 
 class StatusTests(Base):

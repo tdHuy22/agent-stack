@@ -404,7 +404,7 @@ EOF
     remote "test -f jobs/$NAME.payload/full/.payload-commit" || { echo "Không thấy bản chép agent-stack jobs/$NAME.payload: không chạy tiếp được (kết quả sẽ lẫn hai bản)." >&2; exit 1; }
     # watcher đếm cả lượt lỗi hạn mức của lần trước: chạy tiếp thì nó giết job ngay vòng đầu
     if remote "test -e jobs/$NAME.stopped"; then
-      echo "Job $NAME đã bị watcher dừng vì lỗi hạn mức (jobs/$NAME.stopped). Chờ hạn mức hồi, xem lại, rồi tự xóa file đó và các lượt lỗi hạn mức trước khi chạy tiếp." >&2
+      echo "Job $NAME đã bị watcher dừng vì lỗi hạn mức (jobs/$NAME.stopped). Chờ hạn mức hồi, xem lại, rồi tự xóa file đó (resume tự dời lượt lỗi hạn mức sang jobs/$NAME.limit/ để chạy lại)." >&2
       exit 1
     fi
     remote "$HB status jobs/$NAME" || true
