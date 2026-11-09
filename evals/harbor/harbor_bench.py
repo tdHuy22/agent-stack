@@ -786,12 +786,16 @@ def free_gb(path: Path) -> float | None:
         return None
 
 
-def prune_build_cache() -> str:
-    """Dọn cache dựng của Docker không dùng trong 30 phút qua. Bản ghi cache của lượt đang dựng không bị xóa (Docker giữ
-    lease), nên chạy được khi job đang chạy. Trả dòng cuối của docker, hay mô tả lỗi; không bao giờ ném lỗi."""
+PRUNE_KEEP_MIN = 30   # phút: watcher giữ cache dựng mới hơn mức này, trừ khi ổ dưới 2/3 ngưỡng
+
+
+def prune_build_cache(keep: str | None = f"{PRUNE_KEEP_MIN}m") -> str:
+    """Dọn cache dựng của Docker không dùng trong khoảng `keep` qua (None: mọi cache không dùng). Giữ cache mới để ba
+    lượt cùng việc dựng lại nhanh. Bản ghi cache của lượt đang dựng không bị xóa (Docker giữ lease), nên chạy được khi
+    job đang chạy. Trả dòng cuối của docker, hay mô tả lỗi; không bao giờ ném lỗi."""
+    cmd = ["docker", "builder", "prune", "-f"] + (["--filter", f"until={keep}"] if keep else [])
     try:
-        r = subprocess.run(["docker", "builder", "prune", "-f", "--filter", "until=30m"], capture_output=True, text=True,
-                           timeout=600)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except (OSError, subprocess.SubprocessError) as exc:
         return f"lỗi: {type(exc).__name__}"
     lines = (r.stdout or r.stderr).strip().splitlines()
@@ -801,8 +805,10 @@ def prune_build_cache() -> str:
 def watch(job_dir: Path, pid: int, limit: int = 3, interval: float = 60.0, sleep=time.sleep, min_free_gb: float = 0,
           free=free_gb, prune=prune_build_cache) -> int:
     """Chờ job; số lượt lỗi hạn mức hay rate limit vượt `limit` thì gửi SIGTERM cho cả nhóm tiến trình của job.
-    Ổ còn dưới `min_free_gb` thì dọn cache dựng của Docker: cache tích dần qua từng lượt (7,8 GB sau 110 lượt), và
-    ngày 09/11/2026 ổ đầy làm Harbor dừng cả job ở lượt 110/153."""
+    Ổ còn dưới `min_free_gb` thì dọn cache dựng của Docker cũ hơn 30 phút: cache tích dần qua từng lượt (7,8 GB sau
+    110 lượt), và ngày 09/11/2026 ổ đầy làm Harbor dừng cả job ở lượt 110/153. Dưới 2/3 ngưỡng thì dọn mọi cache không
+    dùng: cùng ngày, image SWE-rebench 5,9 GB mỗi việc làm cache mới tích 14 GB trong chưa tới 30 phút, ổ xuống 17 GB mà
+    lần dọn theo tuổi không xóa được gì."""
     while pid_alive(pid):
         n = count_limit_errors(job_dir)
         if n > limit:
@@ -817,8 +823,10 @@ def watch(job_dir: Path, pid: int, limit: int = 3, interval: float = 60.0, sleep
         if min_free_gb > 0:
             gb = free(job_dir)
             if gb is not None and gb < min_free_gb:
-                print(f"{time.strftime('%d/%m %H:%M:%S')} ổ còn {gb:.1f} GB, dưới {min_free_gb:g} GB: dọn cache dựng "
-                      f"của Docker: {prune()}", flush=True)
+                low = gb < min_free_gb * 2 / 3
+                what = "mọi cache dựng không dùng" if low else f"cache dựng cũ hơn {PRUNE_KEEP_MIN} phút"
+                print(f"{time.strftime('%d/%m %H:%M:%S')} ổ còn {gb:.1f} GB, dưới {min_free_gb:g} GB: dọn {what} "
+                      f"của Docker: {prune(None if low else f'{PRUNE_KEEP_MIN}m')}", flush=True)
         sleep(interval)
     return 0
 

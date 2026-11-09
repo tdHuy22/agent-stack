@@ -571,21 +571,37 @@ class WatchTests(Base):
         job = self.limit_trials(0)
         proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
         self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
-        frees, pruned, ticks = iter([12.0, 45.0, None]), [], []
+        frees, pruned, ticks = iter([25.0, 45.0, None, 17.2, 20.0]), [], []
 
         def tick(_):
             ticks.append(1)
-            if len(ticks) == 3:
+            if len(ticks) == 5:
                 proc.kill()
                 proc.wait()
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             code = B.watch(job, proc.pid, limit=3, interval=0, sleep=tick, min_free_gb=30, free=lambda _: next(frees),
-                           prune=lambda: pruned.append(1) or "Total reclaimed space: 7.6GB")
+                           prune=lambda keep: pruned.append(keep) or "Total reclaimed space: 7.6GB")
         self.assertEqual(code, 0)
-        self.assertEqual(pruned, [1])                         # chỉ lần 12 GB; 45 GB và không đọc được thì không dọn
-        self.assertIn("ổ còn 12.0 GB, dưới 30 GB", out.getvalue())
+        # 25 GB: chỉ cache cũ hơn 30 phút; 45 GB và không đọc được: không dọn; 17,2 GB (dưới 2/3 ngưỡng): mọi cache;
+        # đúng 20 GB (bằng 2/3 ngưỡng): vẫn chỉ cache cũ
+        self.assertEqual(pruned, ["30m", None, "30m"])
+        self.assertIn("ổ còn 25.0 GB, dưới 30 GB: dọn cache dựng cũ hơn 30 phút", out.getvalue())
+        self.assertIn("ổ còn 17.2 GB, dưới 30 GB: dọn mọi cache dựng không dùng", out.getvalue())
         self.assertIn("Total reclaimed space: 7.6GB", out.getvalue())
+
+    def test_prune_build_cache_filters_by_age_unless_keep_is_none(self):
+        """Ca 09/11/2026 11:30: cache SWE-rebench mới tích 14 GB, `until=30m` không xóa được gì, ổ còn 17 GB."""
+        calls = []
+
+        def run(cmd, **_):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, "Total:\t14.03GB\n", "")
+        with unittest.mock.patch.object(B.subprocess, "run", run):
+            self.assertEqual(B.prune_build_cache(), "Total:\t14.03GB")
+            self.assertEqual(B.prune_build_cache(None), "Total:\t14.03GB")
+        self.assertEqual(calls, [["docker", "builder", "prune", "-f", "--filter", "until=30m"],
+                                 ["docker", "builder", "prune", "-f"]])
 
     def test_disk_check_is_off_by_default_and_free_gb_handles_a_missing_job_dir(self):
         job = self.limit_trials(0)
@@ -598,7 +614,7 @@ class WatchTests(Base):
             if len(ticks) == 2:
                 proc.kill()
                 proc.wait()
-        code = B.watch(job, proc.pid, interval=0, sleep=tick, free=lambda _: 1.0, prune=lambda: self.fail("không được dọn"))
+        code = B.watch(job, proc.pid, interval=0, sleep=tick, free=lambda _: 1.0, prune=lambda keep: self.fail("không được dọn"))
         self.assertEqual((code, len(ticks)), (0, 2))          # vòng lặp có chạy, ổ 1 GB mà vẫn không dọn
         self.assertGreater(B.free_gb(self.tmp / "chưa" / "có"), 0)
 
