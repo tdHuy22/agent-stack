@@ -22,6 +22,12 @@
         "hooks": [
           {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pretool_guard.py"], "timeout": 5}
         ]
+      },
+      {
+        "matcher": "mcp__ccd_turn__.*",
+        "hooks": [
+          {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pretool_client.py"], "timeout": 5}
+        ]
       }
     ],
     "SubagentStart": [

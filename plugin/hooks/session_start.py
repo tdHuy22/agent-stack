@@ -36,6 +36,14 @@ def main():
         A.write_json_atomic(sessions / name, {"session": sid, "model": data.get("model"),
                                               "effort": (data.get("effort") or {}).get("level"),
                                               "cwd": str(root), "ts": time.time()})
+    try:  # nơi người dùng gõ: lời nhắc "đang ở điện thoại" có thể mất sau compact hay /clear, nên báo lại lần sau
+        import client_place  # noqa: E402
+        if sid and source in ("compact", "clear"):
+            client_place.forget(sid)
+        if source == "startup":
+            A.prune(A.state_dir() / "client-place", 14)
+    except Exception as exc:  # noqa: BLE001 (việc phụ)
+        A.log_event("hook-error", {"hook": "client-place-forget", "error": repr(exc)[:300]})
     try:  # cloud: kéo bản agent-stack mới ở nền, tối đa một lần mỗi 10 phút (không chờ)
         import cloud_update  # noqa: E402
         cloud_update.maybe_start(A.home_dir())

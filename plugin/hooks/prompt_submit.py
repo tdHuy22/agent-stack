@@ -17,11 +17,10 @@ Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook g
 (state/turns/), để hook Stop biết lượt vừa xong đổi file nào, §0 đã được cập nhật chưa và có cần chốt việc không.
 Khi router thấy việc là chức năng đụng ranh giới tin cậy, lượt được đánh dấu threat_model cho hook PreToolUse.
 
-Tin gõ từ điện thoại vào phiên Desktop (Remote Control): hộp next-step của app không hiện trên điện thoại, nên hook
-nhắc Claude viết câu hỏi bằng chữ. Nơi gõ lấy từ trường clientPlatform của tin người dùng cuối trong transcript.
+Phiên Desktop: hook đánh dấu lượt mới để hook PreToolUse kiểm nơi người dùng gõ (Mac hay điện thoại) và nhắc Claude
+viết câu hỏi bằng chữ khi người dùng sang điện thoại (xem plugin/lib/client_place.py).
 """
 import hashlib
-import json
 import os
 import sys
 import time
@@ -29,81 +28,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import agentstack as A  # noqa: E402
+import client_place  # noqa: E402
 
 WARN_5H = float(os.environ.get("AGENT_STACK_WARN_5H", "90"))
 WARN_7D = float(os.environ.get("AGENT_STACK_WARN_7D", "80"))
 MAX_AGE_SECONDS = 30 * 60
-PHONE_PLATFORMS = {"ios", "android"}  # clientPlatform của tin gõ từ app Claude trên điện thoại (ios đã kiểm 08/11/2026)
-TRANSCRIPT_BLOCK_BYTES = 256 * 1024
-# Đọc ngược tối đa chừng này byte: một lượt nhiều công cụ đẩy tin người dùng cuối ra xa hơn 1 MB (đo 08/11/2026).
-try:  # biến chỉ để test; giá trị hỏng không được làm hook văng lúc nạp
-    TRANSCRIPT_SCAN_BYTES = int(os.environ.get("AGENT_STACK_TRANSCRIPT_SCAN_BYTES", ""))
-except ValueError:
-    TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
-
-
-def reverse_lines(path: Path, limit: int):
-    """Các dòng (bytes) của file từ cuối lên, đọc từng khối, dừng sau `limit` byte. Khi dừng vì `limit`, dòng cuối
-    cùng trả về có thể bị cắt ngang: nó hỏng JSON và bị bỏ qua ở nơi gọi."""
-    with path.open("rb") as fh:
-        pos = fh.seek(0, 2)
-        stop = max(0, pos - limit)
-        carry = b""
-        while pos > stop:
-            size = min(TRANSCRIPT_BLOCK_BYTES, pos - stop)
-            pos -= size
-            fh.seek(pos)
-            parts = (fh.read(size) + carry).split(b"\n")
-            carry = parts[0]  # có thể là nửa dòng: ghép tiếp với khối đứng trước
-            yield from reversed(parts[1:])
-        yield carry
-
-
-def message_text(message) -> str:
-    """Chữ của tin người dùng: content là chuỗi, hay danh sách khối (tin kèm ảnh, tệp) thì ghép các khối text."""
-    content = message.get("content") if isinstance(message, dict) else None
-    if isinstance(content, list):
-        return "\n".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
-    return content if isinstance(content, str) else ""
-
-
-def last_client_platform(transcript, prompt: str):
-    """(clientPlatform của tin người dùng cuối trong transcript, tin đó có phải tin đang gửi không).
-
-    Trả (None, False) khi không đọc được hay không thấy trong TRANSCRIPT_SCAN_BYTES cuối."""
-    try:
-        for raw in reverse_lines(Path(transcript), TRANSCRIPT_SCAN_BYTES):
-            if b'"clientPlatform"' not in raw:
-                continue
-            try:
-                rec = json.loads(raw.decode("utf-8", "replace"))
-            except ValueError:
-                continue
-            if not isinstance(rec, dict) or rec.get("type") != "user" or not isinstance(rec.get("clientPlatform"), str):
-                continue
-            return rec["clientPlatform"], message_text(rec.get("message")).strip() == prompt.strip()
-    except (OSError, TypeError, ValueError):
-        pass
-    return None, False
-
-
-def phone_note(data: dict) -> str:
-    """Dòng ngữ cảnh khi người dùng gõ từ điện thoại vào phiên Desktop; chuỗi rỗng ở mọi nơi khác.
-
-    Phiên `rc`, CloudCLI và terminal không có hộp next-step nên Claude vốn đã viết bằng chữ: không cần nhắc."""
-    if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "") != "claude-desktop":
-        return ""
-    platform, current = last_client_platform(data.get("transcript_path"), data.get("prompt") or "")
-    A.log_event("client-platform", {"session": data.get("session_id", ""), "platform": platform, "current": current})
-    if platform not in PHONE_PLATFORMS:
-        return ""
-    which = "tin này" if current else "tin người dùng gần nhất trong transcript"
-    return (f"[agent-stack] Người dùng đang gõ từ điện thoại ({platform}, theo {which}) vào phiên Desktop qua Remote "
-            "Control. Trên điện thoại hộp next-step (wrap_up) không hiện, hộp AskUserQuestion thì hiện. Mọi câu hỏi "
-            "cần người dùng trả lời phải viết bằng chữ trong tin nhắn, kèm lựa chọn đánh số, kể cả câu đã đặt trong "
-            "hộp wrap_up.")
-
-
 def limit_notes(sid: str):
     data = A.read_json(A.state_dir() / "limits.json", {}) or {}
     if time.time() - float(data.get("ts", 0)) > MAX_AGE_SECONDS:
@@ -170,12 +99,10 @@ def main():
         if stale_ctx:
             context.append(stale_ctx)
             user.append(stale_user)
-        try:  # nơi người dùng gõ: lỗi ở phần phụ này không được làm mất cảnh báo hạn mức hay gợi ý router
-            note = phone_note(data) if claude_code else ""
-            if note:
-                context.append(note)
-        except Exception as exc:  # noqa: BLE001
-            A.log_event("hook-error", {"hook": "phone-note", "error": repr(exc)[:300]})
+        try:  # nơi người dùng gõ: chỉ đánh dấu, hook PreToolUse đọc khi tin đã vào transcript (xem client_place)
+            client_place.mark_pending(data)
+        except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)
+            A.log_event("hook-error", {"hook": "client-place", "error": repr(exc)[:300]})
         try:  # router (GĐ5): gợi ý skill, model, effort, subagent
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
             import route  # noqa: E402

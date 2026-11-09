@@ -172,56 +172,148 @@ class HookTests(TempDirTestCase):
 
     # ---------------------------------------------------------------- nơi người dùng gõ (điện thoại vào phiên Desktop)
 
+    DESKTOP = {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop"}
+
     def write_transcript(self, *records, junk_prefix=""):
         path = self.tmp / f"t{len(list(self.tmp.glob('t*.jsonl')))}.jsonl"  # mỗi transcript một file
         lines = [json.dumps(r, ensure_ascii=False) for r in records]
-        path.write_text(junk_prefix + "\n".join(lines) + "\n", encoding="utf-8")
+        path.write_text(junk_prefix + "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
         return str(path)
+
+    @staticmethod
+    def append_rec(transcript, rec):
+        with open(transcript, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     @staticmethod
     def user_rec(text, platform):
         return {"type": "user", "entrypoint": "claude-desktop", "clientPlatform": platform,
                 "message": {"role": "user", "content": text}}
 
-    def phone_context(self, transcript, prompt, entrypoint="claude-desktop", sid="ph"):
-        out = self.run_hook("prompt_submit.py", {"session_id": sid, "prompt": prompt, "transcript_path": transcript},
-                            env_extra={"CLAUDE_CODE_ENTRYPOINT": entrypoint} if entrypoint else None)
+    def cp_submit(self, transcript, prompt, sid, env=None):
+        self.run_hook("prompt_submit.py", {"session_id": sid, "prompt": prompt, "transcript_path": transcript},
+                      env_extra=self.DESKTOP if env is None else env)
+
+    def cp_pretool(self, transcript, sid, env=None):
+        out = self.run_hook("pretool_client.py", {"session_id": sid, "transcript_path": transcript,
+                                                  "hook_event_name": "PreToolUse",
+                                                  "tool_name": "mcp__ccd_turn__update_plan", "tool_input": {}},
+                            env_extra=self.DESKTOP if env is None else env)
+        if out is not None:  # chỉ thêm ngữ cảnh, không bao giờ cho phép hay chặn công cụ
+            self.assertEqual(set(out), {"hookSpecificOutput"})
+            self.assertEqual(set(out["hookSpecificOutput"]), {"hookEventName", "additionalContext"})
         return (out or {}).get("hookSpecificOutput", {}).get("additionalContext", "")
 
-    def test_prompt_submit_notes_phone_in_desktop_session(self):
-        # Bản ghi thật 08/11/2026: tin gõ từ iPhone vào phiên Desktop ghi clientPlatform "ios"
-        t = self.write_transcript(self.user_rec("câu trước", "desktop_app"),
-                                  {"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}},
-                                  self.user_rec("Tin này được gửi từ iphone", "ios"))
-        ctx = self.phone_context(t, "Tin này được gửi từ iphone")
-        self.assertIn("điện thoại (ios, theo tin này)", ctx)
-        self.assertIn("viết bằng chữ", ctx)
-        # tin đang gửi chưa có trong transcript: dùng tin trước và nói rõ
-        ctx = self.phone_context(t, "tin mới hơn", sid="ph2")
-        self.assertIn("theo tin người dùng gần nhất", ctx)
+    def cp_turn(self, transcript, prompt, platform, sid, env=None):
+        """Một lượt như thật: hook UserPromptSubmit chạy trước khi tin vào transcript, công cụ đầu tiên chạy sau."""
+        self.cp_submit(transcript, prompt, sid, env)
+        if platform:
+            self.append_rec(transcript, self.user_rec(prompt, platform))
+        return self.cp_pretool(transcript, sid, env)
 
-    def test_prompt_submit_silent_when_not_phone_in_desktop(self):
-        mac = self.write_transcript(self.user_rec("gõ trên Mac", "desktop_app"))
-        phone = self.write_transcript(self.user_rec("từ iPhone", "ios"))
-        cases = [(mac, "claude-desktop"),  # Desktop trên Mac
-                 (phone, "sdk-cli"), (phone, "claudecodeui"), (phone, "cli"), (phone, None)]  # rc, CloudCLI, terminal
-        for i, (t, ep) in enumerate(cases):
-            with self.subTest(entrypoint=ep):
-                self.assertNotIn("điện thoại", self.phone_context(t, "x", entrypoint=ep, sid=f"s{i}"))
+    def test_client_place_notes_only_when_device_changes(self):
+        t = self.write_transcript()
+        self.assertEqual(self.cp_turn(t, "gõ trên Mac", "desktop_app", "dv"), "")  # Mac là mặc định: không nhắc
+        notes = [self.cp_turn(t, f"tin {i} từ iPhone", "ios", "dv") for i in range(20)]
+        back = self.cp_turn(t, "về Mac rồi", "desktop_app", "dv")
+        # tin đầu tiên sau khi đổi máy được nhắc đúng ngay lượt đó, các lượt sau im
+        self.assertIn("điện thoại (ios, theo tin này)", notes[0])
+        self.assertIn("viết bằng chữ", notes[0])
+        self.assertEqual(notes[1:], [""] * 19)
+        self.assertIn("quay lại gõ trên Mac", back)
+        self.assertEqual(sum(1 for n in notes + [back] if n), 2)
+        self.assertEqual(self.cp_turn(t, "vẫn ở Mac", "desktop_app", "dv"), "")
+        self.assertIn("điện thoại", self.cp_turn(t, "lại sang iPhone", "ios", "dv"))
 
-    def test_prompt_submit_phone_note_reads_far_back_in_long_sessions(self):
+    def test_client_place_checks_once_per_turn(self):
+        t = self.write_transcript()
+        self.assertIn("điện thoại", self.cp_turn(t, "từ iPhone", "ios", "ot"))
+        # các công cụ sau trong cùng lượt: không đọc lại, không nhắc lại, kể cả khi transcript đổi, hỏng hay mất
+        self.append_rec(t, self.user_rec("đọc lại thì sẽ thấy Mac", "desktop_app"))
+        self.assertEqual(self.cp_pretool(t, "ot"), "")
+        self.assertEqual(self.cp_pretool(str(self.tmp / "khong-co.jsonl"), "ot"), "")
+        # phiên chưa có tin nào qua hook UserPromptSubmit: không làm gì
+        self.assertEqual(self.cp_pretool(t, "chua-co-tin"), "")
+
+    def test_client_place_waits_until_message_is_in_transcript(self):
+        t = self.write_transcript(self.user_rec("câu trước", "desktop_app"))
+        self.cp_submit(t, "Tin này được gửi từ iphone", "w1")
+        # công cụ đầu tiên chạy khi tin chưa ghi xong: chưa kết luận theo tin cũ (desktop_app)
+        self.assertEqual(self.cp_pretool(t, "w1"), "")
+        self.append_rec(t, self.user_rec("Tin này được gửi từ iphone", "ios"))
+        self.assertIn("điện thoại (ios, theo tin này)", self.cp_pretool(t, "w1"))
+        # tin do hệ thống tạo (thông báo nền) không bao giờ có clientPlatform: sau vài lần dùng tin người dùng gần nhất
+        t2 = self.write_transcript(self.user_rec("từ iPhone", "ios"))
+        self.cp_submit(t2, "<task-notification>xong</task-notification>", "w2")
+        ctx = [self.cp_pretool(t2, "w2") for _ in range(4)]
+        self.assertEqual(ctx[:2], ["", ""])
+        self.assertIn("theo tin người dùng gần nhất", ctx[2])
+        self.assertEqual(ctx[3], "")
+
+    def test_client_place_retries_when_transcript_has_no_user_record_yet(self):
+        # phiên mới (hay sau /clear): công cụ đầu tiên chạy khi tin đầu chưa ghi xong, chưa có bản ghi nào để đọc
+        t = self.write_transcript()
+        self.cp_submit(t, "tin đầu từ iPhone", "n1")
+        self.assertEqual(self.cp_pretool(t, "n1"), "")
+        self.append_rec(t, self.user_rec("tin đầu từ iPhone", "ios"))
+        self.assertIn("điện thoại (ios, theo tin này)", self.cp_pretool(t, "n1"))
+
+    def test_client_place_same_text_on_both_devices(self):
+        # iPhone gõ "ok", rồi Mac gõ lại đúng "ok": tin cũ trùng chữ không được tính là tin đang gửi
+        t = self.write_transcript()
+        self.assertIn("điện thoại", self.cp_turn(t, "ok", "ios", "same"))
+        # thêm dấu cách: lớp chống chạy trùng của hook (cùng chữ trong 5 giây) coi là tin khác, phép so chữ thì vẫn trùng
+        self.cp_submit(t, "ok ", "same")
+        self.assertEqual(self.cp_pretool(t, "same"), "")  # tin Mac chưa ghi xong: chờ, không kết luận theo tin iPhone
+        self.append_rec(t, self.user_rec("ok", "desktop_app"))
+        self.assertIn("quay lại gõ trên Mac", self.cp_pretool(t, "same"))
+
+    def test_client_place_unknown_platform_is_not_guessed(self):
+        t = self.write_transcript()
+        self.assertIn("điện thoại", self.cp_turn(t, "từ iPhone", "ios", "uk"))
+        self.assertEqual(self.cp_turn(t, "từ trình duyệt", "web", "uk"), "")  # không nói "về Mac"
+        self.assertEqual(self.cp_turn(t, "vẫn iPhone", "ios", "uk"), "")  # vẫn nhớ đã báo điện thoại
+
+    def test_client_place_renotifies_after_compact_or_clear(self):
+        t = self.write_transcript()
+        for i, source in enumerate(["compact", "clear"]):
+            sid = f"cp{i}"
+            with self.subTest(source=source):
+                self.assertIn("điện thoại", self.cp_turn(t, f"iPhone {i}", "ios", sid))
+                self.assertEqual(self.cp_turn(t, f"iPhone {i} nữa", "ios", sid), "")
+                self.run_hook("session_start.py", {"session_id": sid, "source": source, "cwd": str(self.project)},
+                              env_extra=self.DESKTOP)
+                self.assertIn("điện thoại", self.cp_turn(t, f"sau {source} {i}", "ios", sid))
+        # resume giữ nguyên: lời nhắc cũ còn trong hội thoại
+        self.run_hook("session_start.py", {"session_id": "cp0", "source": "resume", "cwd": str(self.project)},
+                      env_extra=self.DESKTOP)
+        self.assertEqual(self.cp_turn(t, "sau resume", "ios", "cp0"), "")
+
+    def test_client_place_silent_outside_desktop(self):
+        t = self.write_transcript()
+        envs = [{"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}, {"CLAUDE_CODE_ENTRYPOINT": "claudecodeui"},  # rc, CloudCLI
+                {"CLAUDE_CODE_ENTRYPOINT": "cli"}, {},  # terminal, không đặt
+                {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "AGENT_STACK_HOST": "pi"}]  # cầu nối pi
+        for i, env in enumerate(envs):
+            with self.subTest(env=env):
+                self.assertEqual(self.cp_turn(t, f"từ iPhone {i}", "ios", f"s{i}", env=env), "")
+        self.assertFalse((self.state / "client-place").exists() and any((self.state / "client-place").iterdir()))
+
+    def test_client_place_reads_far_back_in_long_sessions(self):
         # Phiên thật 08/11/2026: tin người dùng cuối cách cuối file hơn 1 MB sau một lượt nhiều công cụ
         tool = {"type": "user", "message": {"content": [{"type": "tool_result", "content": "y" * 1000}]}}
-        t = self.write_transcript(self.user_rec("từ iPhone", "ios"), *([tool] * 1500))  # khoảng 1,6 MB phía sau
-        self.assertIn("điện thoại (ios, theo tin người dùng gần nhất", self.phone_context(t, "tin mới", sid="f0"))
+        t = self.write_transcript()
+        self.cp_submit(t, "từ iPhone", "f0")
+        for rec in [self.user_rec("từ iPhone", "ios")] + [tool] * 1500:  # khoảng 1,6 MB phía sau
+            self.append_rec(t, rec)
+        self.assertIn("điện thoại (ios, theo tin này)", self.cp_pretool(t, "f0"))
         self.assertLess(self.elapsed, 2)
         # vượt giới hạn đọc ngược thì im, không đoán
-        out = self.run_hook("prompt_submit.py", {"session_id": "f1", "prompt": "x", "transcript_path": t},
-                            env_extra={"CLAUDE_CODE_ENTRYPOINT": "claude-desktop",
-                                       "AGENT_STACK_TRANSCRIPT_SCAN_BYTES": str(300 * 1024)})
-        self.assertNotIn("điện thoại", json.dumps(out or {}, ensure_ascii=False))
+        small = dict(self.DESKTOP, AGENT_STACK_TRANSCRIPT_SCAN_BYTES=str(300 * 1024))
+        self.cp_submit(t, "tin khác", "f1", env=small)
+        self.assertEqual(self.cp_pretool(t, "f1", env=small), "")
 
-    def test_prompt_submit_phone_note_handles_block_edges_and_attachments(self):
+    def test_client_place_handles_block_edges_and_attachments(self):
         # bản ghi nằm vắt qua ranh giới khối 256 KB tính từ cuối file vẫn đọc được trọn
         rec = json.dumps(self.user_rec("vắt qua ranh giới", "ios"), ensure_ascii=False).encode("utf-8")
         # một dòng đệm dài vừa đủ để ranh giới khối rơi vào giữa bản ghi
@@ -229,28 +321,43 @@ class HookTests(TempDirTestCase):
         base = '{"type": "user", "message": {"content": ""}}'
         filler = base[:-3] + "z" * (pad_len - len(base) - 1) + base[-3:] + "\n"
         path = self.tmp / "edge.jsonl"
+        self.cp_submit(str(path), "vắt qua ranh giới", "e0")  # gửi tin lúc file chưa có: mọi bản ghi sau đó là mới
         path.write_bytes(rec + b"\n" + filler.encode("utf-8"))
         start = path.stat().st_size - 256 * 1024
         self.assertTrue(0 < start < len(rec), "bản ghi phải vắt qua ranh giới khối")
-        self.assertIn("điện thoại", self.phone_context(str(path), "khác", sid="e0"))
+        self.assertIn("theo tin này", self.cp_pretool(str(path), "e0"))
         # dòng cuối rất dài và bị cắt ngang (đang ghi dở): bỏ qua, vẫn thấy bản ghi trước nó
         cut = self.tmp / "cut.jsonl"
+        self.cp_submit(str(cut), "trước", "e1")
         cut.write_text(json.dumps(self.user_rec("trước", "ios")) + "\n" + '{"type": "user", "clientPlatform": "desk'
                        + "w" * (400 * 1024), encoding="utf-8")
-        self.assertIn("ios", self.phone_context(str(cut), "trước", sid="e1"))
-        # tin kèm ảnh: content là danh sách khối, vẫn nhận ra là tin đang gửi
-        att = self.write_transcript({"type": "user", "clientPlatform": "ios", "message": {"content": [
+        self.assertIn("theo tin này", self.cp_pretool(str(cut), "e1"))
+        # tin kèm ảnh: chữ trong transcript khác prompt hook nhận, vẫn nhận ra là tin đang gửi nhờ vị trí trong file
+        att = self.write_transcript(self.user_rec("câu trước", "desktop_app"))
+        self.cp_submit(att, "[Image #1] xem ảnh này", "e2")
+        self.append_rec(att, {"type": "user", "clientPlatform": "ios", "message": {"content": [
             {"type": "image", "source": {}}, {"type": "text", "text": "xem ảnh này"}]}})
-        self.assertIn("theo tin này", self.phone_context(att, "xem ảnh này", sid="e2"))
+        self.assertIn("theo tin này", self.cp_pretool(att, "e2"))
 
-    def test_prompt_submit_phone_note_survives_bad_transcripts(self):
+    def test_client_place_survives_bad_transcripts_and_state(self):
         broken = self.tmp / "broken.jsonl"
         broken.write_text('{"type": "user", "clientPlatform": \n[1,2]\n{"type":"user","clientPlatform":5}\n',
                           encoding="utf-8")
         for i, t in enumerate([str(broken), str(self.tmp / "khong-co.jsonl"), None, 123]):
             with self.subTest(transcript=t):
-                self.assertNotIn("điện thoại", self.phone_context(t, "x", sid=f"b{i + 1}"))
+                self.cp_submit(t, "x", f"b{i}")
+                self.assertEqual(self.cp_pretool(t, f"b{i}"), "")
         self.assertLess(self.elapsed, 5)
+        # file trạng thái hỏng hay sai kiểu: coi như chưa có, không văng
+        t = self.write_transcript()
+        folder = self.state / "client-place"
+        folder.mkdir(exist_ok=True)
+        for i, junk in enumerate(["{không phải json", "[1, 2]", '{"pending": "x", "told": 5}',
+                                  '{"pending": {"tries": "nhiều"}}']):
+            with self.subTest(state=junk):
+                (folder / f"j{i}.json").write_text(junk, encoding="utf-8")
+                self.assertEqual(self.cp_pretool(t, f"j{i}"), "")
+                self.assertIn("điện thoại", self.cp_turn(t, f"iPhone {i}", "ios", f"j{i}"))
 
     # ---------------------------------------------------------------- Stop ghi lượt cuối, nhờ cập nhật §0
 
@@ -1255,8 +1362,12 @@ class HooksConfig(unittest.TestCase):
         hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))["hooks"]
         for kept in ("SessionStart", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd"):
             self.assertIn(kept, hooks)  # các hook cũ giữ nguyên
-        (guard,) = hooks["PreToolUse"]
+        guard, client = hooks["PreToolUse"]
         self.assertEqual(set(guard["matcher"].split("|")), {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"})
+        # nơi người dùng gõ: chỉ công cụ của app Desktop, để phiên khác không tốn thêm một lần chạy Python mỗi công cụ
+        self.assertEqual(client, {"matcher": "mcp__ccd_turn__.*", "hooks": [
+            {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pretool_client.py"],
+             "timeout": 5}]})
         (group,) = hooks["SubagentStart"]
         self.assertNotIn("matcher", group)  # không matcher: khớp mọi subagent, kể cả skill chạy context: fork
         (hook,) = group["hooks"]
