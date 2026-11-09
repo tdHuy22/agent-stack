@@ -67,6 +67,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Tìm vị trí code, nơi dùng một hàm | giữ nguyên | — | agent-stack:explore-lite (`claude-haiku-5-5 · low`) hoặc Explore | — | P: chỉ đọc, kết quả kiểm được |
 | Đọc hiểu một vùng code lạ | `sonnet · medium` | `opus · medium` | Explore | — | P |
 | Nghiên cứu web, so sánh công cụ | `sonnet · medium` | `opus · medium` (đổi model, không tăng effort) | agent-stack:researcher | reuse-best | A: đường cong effort gần phẳng |
+| Trang cần đăng nhập, tab trong trình duyệt Aside | giữ nguyên; agent Aside `sonnet · medium` | agent Aside `opus · high` (`--tier kho`), rồi `fable · high` | — | aside-web | E: đo 09/11/2026, `exec` Sonnet 5.5 ≈0,094 USD khi cache nguội, nối tiếp ≈0,014; `repl`, `memory` không gọi model của Aside |
 | Nghiên cứu sâu nhiều nguồn, kết luận đắt nếu sai | `opus · medium` | `fable · low` | agent-stack:researcher | — | A: Fable 5.1 ở `low` hơn Sonnet 5 khoảng 10 điểm trên DeepResearch Bench II, đắt gấp khoảng 4 |
 | Trước khi build: tìm thứ có sẵn | `sonnet · medium` | — | — | reuse-best | P |
 | Đọc sâu một bài báo | `sonnet · medium` | `sonnet · high` | — | paper-anatomy | E: skill mới ở sonnet·medium thắng bản cũ 10/12 lần chấm mù |

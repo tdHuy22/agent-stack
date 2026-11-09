@@ -13,6 +13,7 @@ Model (mới nhất, kiểm 08/10/2026): `sonnet` (Sonnet 5.5), `opus` (Opus 5.5
 | Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite chạy Haiku 5.5, rẻ hơn) | – |
 | Việc cơ học hàng loạt có kiểm tra tự động, dịch tài liệu | claude-haiku-5-5·low | – | – |
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
+| Trang cần đăng nhập, tab trong trình duyệt Aside, email, Slack, Google Docs | giữ nguyên | – | aside-web (agent Aside mặc định Sonnet, khó thì `--tier kho`) |
 | Nghiên cứu sâu nhiều nguồn, sai thì đắt | opus·medium | researcher | – |
 | Đọc sâu bài báo; phản biện bài báo | sonnet·medium; sonnet·high | – | paper-anatomy |
 | Tính năng, viết test, lỗi có traceback rõ, khi project có test | claude-haiku-5-5·low; test trượt thì sonnet·medium | test-runner khi chạy test | reuse-best nếu không tầm thường |
