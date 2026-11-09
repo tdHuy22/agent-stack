@@ -163,7 +163,9 @@ def run_kaggle(args: list, timeout: int = CALL_TIMEOUT, auth_check: bool = True)
     Chỉ coi là chưa đăng nhập khi lệnh thất bại: log của job có thể chứa "401" của dịch vụ khác (Hugging Face)."""
     try:
         # -W: không in cảnh báo "CLI đã cũ" ra stdout, vì nó làm lệch chữ mà script đọc (trạng thái dataset)
-        proc = subprocess.run([kaggle_bin(), "-W", *args], capture_output=True, text=True, timeout=timeout,
+        # `--version` phải đứng một mình thì CLI mới cho chạy khi chưa đăng nhập (nó không in cảnh báo phiên bản)
+        flags = [] if args == ["--version"] else ["-W"]
+        proc = subprocess.run([kaggle_bin(), *flags, *args], capture_output=True, text=True, timeout=timeout,
                               stdin=subprocess.DEVNULL, env=kaggle_env())
     except subprocess.TimeoutExpired:
         raise KaggleError(f"`kaggle {' '.join(args[:2])}` quá {timeout} giây")
@@ -917,7 +919,8 @@ def cmd_profile(args) -> int:
                           f"không chạy qua agent: python3 {HERE} profile login {args.name}")
         make_private_dir(home)
         ACTIVE_PROFILE = args.name
-        cmd = [kaggle_bin(), "-W", "auth", "login"]
+        # Không có -W: CLI chỉ cho chạy chưa đăng nhập khi lệnh bắt đầu đúng bằng "auth login" (kiểm sys.argv)
+        cmd = [kaggle_bin(), "auth", "login"]
         cmd += ["--no-launch-browser"] if args.no_launch_browser else []
         cmd += ["--force"] if args.force else []
         code = subprocess.run(cmd, env=kaggle_env()).returncode  # tương tác: in URL, có thể hỏi mã

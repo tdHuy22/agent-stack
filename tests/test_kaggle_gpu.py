@@ -30,7 +30,15 @@ with (log.parent / "env.log").open("a") as handle:  # môi trường mỗi lần
                              "xdg": os.environ.get("XDG_CONFIG_HOME"),
                              "leak": sorted(k for k in os.environ if k.startswith("KAGGLE_"))}) + "\\n")
 cfg = pathlib.Path(os.environ.get("KAGGLE_CONFIG_DIR") or "/nonexistent")
+if scenario.get("logged out") and "--version" in sys.argv[1:] and sys.argv[1:] != ["--version"]:
+    print("Authentication required to call the Kaggle API.")  # CLI thật: --version kèm cờ khác thì đòi đăng nhập
+    sys.exit(0)
 if key == "auth login":  # như kagglesdk: ghi credentials.json vào ~/.kaggle của HOME đang dùng
+    # CLI 2.2.5 chỉ cho chạy chưa đăng nhập khi " ".join(argv[1:]) bắt đầu bằng "auth login": cờ đứng trước
+    # (như -W) làm nó đòi đăng nhập ngay cho chính lệnh login
+    if not " ".join(sys.argv[1:]).startswith("auth login"):
+        print("Authentication required to call the Kaggle API.")
+        sys.exit(1)
     cfg.mkdir(parents=True, exist_ok=True)
     (cfg / "credentials.json").write_text(json.dumps({"refresh_token": scenario.get("login token", ""),
                                                       "access_token": "", "username": scenario.get("login user", "")}))
@@ -171,10 +179,12 @@ class KaggleJob(Base):
         self.assertNotIn(TOKEN, out)
 
     def test_check_not_logged_in_exits_3_with_fix(self):
-        self.set_scenario(config_view={"out": "Authentication required to call the Kaggle API.", "rc": 1})
+        self.set_scenario(config_view={"out": "Authentication required to call the Kaggle API.", "rc": 1},
+                          logged_out=True)
         code, out = self.run_main("check")
         self.assertEqual(code, 3)
         self.assertIn("kaggle auth login", out)
+        self.assertIn("Kaggle CLI 2.2.5", out)  # --version chạy được dù chưa đăng nhập
 
     def test_check_missing_cli_exits_3(self):
         os.environ["KAGGLE_BIN"] = ""
