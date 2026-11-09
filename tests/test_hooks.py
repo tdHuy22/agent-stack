@@ -219,6 +219,9 @@ class HookTests(TempDirTestCase):
         # tin đầu tiên sau khi đổi máy được nhắc đúng ngay lượt đó, các lượt sau im
         self.assertIn("điện thoại (ios, theo tin này)", notes[0])
         self.assertIn("viết bằng chữ", notes[0])
+        # câu hỏi giữa lượt vẫn dùng hộp AskUserQuestion (hiện trên điện thoại), không dừng lượt để hỏi bằng chữ
+        self.assertIn("câu hỏi giữa lượt", notes[0])
+        self.assertIn("gọi AskUserQuestion", notes[0])
         self.assertEqual(notes[1:], [""] * 19)
         self.assertIn("quay lại gõ trên Mac", back)
         self.assertEqual(sum(1 for n in notes + [back] if n), 2)

@@ -32,9 +32,11 @@ except ValueError:
     TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
 
 PHONE_NOTE = ("[agent-stack] Người dùng đang gõ từ điện thoại ({platform}, theo {which}) vào phiên Desktop qua Remote "
-              "Control. Trên điện thoại hộp next-step (wrap_up) không hiện, hộp AskUserQuestion thì hiện. Từ giờ tới "
-              "khi có thông báo người dùng về Mac, mọi câu hỏi cần người dùng trả lời phải viết bằng chữ trong tin "
-              "nhắn, kèm lựa chọn đánh số, kể cả câu đã đặt trong hộp wrap_up.")
+              "Control. Trên điện thoại hộp next-step (wrap_up) không hiện; hộp AskUserQuestion thì hiện và giữ lượt "
+              "chạy tiếp. Từ giờ tới khi có thông báo người dùng về Mac: câu hỏi giữa lượt (cần người dùng chọn rồi "
+              "mới làm tiếp được) thì gọi AskUserQuestion và làm tiếp ngay khi có câu trả lời, không viết câu hỏi bằng "
+              "chữ rồi gọi wrap_up hay kết thúc lượt chỉ để chờ. Riêng câu hỏi cuối lượt, khi việc đã xong và câu hỏi "
+              "đặt trong hộp wrap_up, thì viết bằng chữ trong tin nhắn cuối, kèm lựa chọn đánh số.")
 BACK_NOTE = ("[agent-stack] Người dùng đã quay lại gõ trên Mac ({platform}): hộp next-step hiện lại, không cần viết "
              "lại câu hỏi bằng chữ nữa.")
 
