@@ -1,0 +1,331 @@
+<title>Tối ưu agent-stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+.bar { display: grid; grid-template-columns: 11rem 1fr 4.5rem; gap: 8px; align-items: center; font-size: .9rem }
+.bar span.fill { display: block; height: 14px; border-radius: 3px; background: var(--accent) }
+.bar span.fill.warn { background: var(--warn) }
+@media (max-width: 520px) { .bar { grid-template-columns: 1fr 3.5rem } .bar .lbl { grid-column: 1 / -1 } }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 10/11/2026</div>
+    <h1>Làm sao để agent-stack tốn ít hạn mức hơn mà vẫn giữ những gì bạn thấy có ích?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Claude Code, Opus, Sonnet, Harbor">
+    <h2>Tóm tắt</h2>
+    <p>Bạn đã chốt giữ agent-stack vì nó giúp theo dõi tiến độ và dùng hết chức năng của Claude một cách tự động. Đo 14 ngày dùng thật cho thấy phần tốn nhất không phải các luật và script tự chạy của agent-stack, mà là những cuộc trò chuyện rất dài với Claude: một cuộc duy nhất chiếm gần một nửa tổng hạn mức, vì mỗi lần trả lời Claude phải đọc lại toàn bộ chữ đã có trong cuộc đó. Khuyến nghị: giữ nguyên phần kiểm chứng và review code (đó là phần làm kết quả tốt hơn), nhắc mở cuộc trò chuyện mới khi chuyển sang việc khác, tách việc theo dõi định kỳ ra ngoài, và rút gọn luật nạp sẵn. Không ép nén hội thoại sớm, vì nén giữa chừng một việc làm mất chi tiết. Mức tiết kiệm thấp hơn con số tối đa 20% nhưng không đổi chất lượng lấy hạn mức. Bạn đã chốt (10/11): làm theo khuyến nghị.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>Claude Code là công cụ cho model Claude đọc, sửa code và chạy lệnh trên máy bạn. Bạn dùng nó với gói thuê bao Max: không trả theo lượt, nhưng có hạn mức dùng mỗi 5 giờ và mỗi tuần; hết thì phải chờ. Claude có vài model: <dfn>Opus</dfn> mạnh và đắt hơn, <dfn>Sonnet</dfn> rẻ hơn. Model đọc và viết theo đơn vị <dfn>token</dfn>, khoảng 2 ký tự tiếng Việt một token. Toàn bộ chữ model nhận trong một lần gọi gọi là <dfn>context</dfn>.</p>
+    <p>agent-stack là bộ công cụ cá nhân chạy cùng Claude Code. Nó có bốn phần, mỗi phần tốn hạn mức theo cách khác nhau:</p>
+    <ul>
+      <li><b>Luật chung</b>: khoảng 24 nghìn ký tự tiếng Việt (khoảng 11 nghìn token) trong <code>global/SHARED.global.md</code> và <code>global/CLAUDE.global.md</code>, nạp vào mọi lần gọi model.</li>
+      <li><dfn>Hook</dfn>: script tự chạy ở các mốc của một <dfn>phiên</dfn> (một cuộc trò chuyện với Claude Code). Ví dụ: lúc mở phiên thì nạp trạng thái dự án; lúc Claude định kết thúc lượt trả lời thì chặn lại nếu đã sửa code mà chưa chạy kiểm chứng. Kiểm chứng ở đây là chạy test qua một script ghi lại <dfn>biên nhận kiểm chứng</dfn> (lệnh nào, đạt hay trượt, trên bản code nào).</li>
+      <li><b>Skill</b>: hướng dẫn cho từng loại việc, chỉ nạp khi dùng. Nhưng mô tả ngắn của mọi skill (khoảng 9 nghìn ký tự, khoảng 4 nghìn token) vẫn nằm sẵn trong context.</li>
+      <li><dfn>Subagent</dfn>: một model phụ chạy trong context riêng rồi gửi kết quả về, ví dụ người review code.</li>
+    </ul>
+    <p>Tổng cộng, phần nạp sẵn của agent-stack thêm khoảng 15 nghìn token vào mọi lần gọi model.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  U[Tin nhắn của bạn] --> M[Lần gọi model]
+  L[Luật chung, mô tả skill] --> M
+  H[Hội thoại cũ của phiên] --> M
+  M --> T[Công cụ, sửa file]
+  T --> S{Hook cuối lượt}
+  S -- chưa kiểm chứng --> M
+  M --> R[Subagent review]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Đợt đo tự động (gọi là <dfn>bench</dfn>) cho Claude giải 94 việc lập trình trong máy Linux với bốn bản: <b>trơn</b> (không agent-stack), <b>đầy đủ</b>, <b>chỉ luật</b> (đầy đủ nhưng bỏ hook), <b>bỏ subagent</b>. Mỗi việc chạy 1–3 lần cho mỗi bản, tổng 598 lần chạy, khoảng 145 lần mỗi bản. Bản đầy đủ tốn gấp khoảng 2 lần bản trơn, theo giá công bố mà công cụ đo ghi lại. Nhưng mỗi việc trong bench ngắn, chỉ khoảng 10 lần gọi model, nên phần nạp sẵn chiếm tỉ lệ lớn. Câu hỏi là trong cách bạn dùng thật, phần nào thật sự ăn hạn mức. Mình đọc nhật ký của 21 phiên trong 14 ngày (chỉ đếm, không đọc nội dung) để trả lời.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Mỗi lần gọi model đọc lại cả hội thoại.</b> Model không nhớ giữa các lần gọi. Claude Code gửi lại toàn bộ luật, công cụ và hội thoại cũ mỗi lần. Ví dụ: phiên đã có 300 nghìn token thì một câu hỏi ngắn cũng gửi 300 nghìn token. Cần để hiểu ví dụ 1.</li>
+      <li><b>Bộ đệm (cache) làm phần đọc lại rẻ hơn, nhưng không miễn phí.</b> Phần đã gửi trước đó được tính khoảng một phần mười giá. Ví dụ: 300 nghìn token đọc từ bộ đệm tốn ngang 30 nghìn token mới. Bộ đệm hết hạn sau 1 giờ không dùng, khi đó phải ghi lại toàn bộ với giá cao hơn giá thường. Cần để hiểu vì sao phiên dài tốn.</li>
+      <li><b>Nén hội thoại (compact)</b> thay hội thoại cũ bằng bản tóm tắt ngắn. Claude Code tự nén khi gần đầy cửa sổ context; với model có cửa sổ 1 triệu token, việc đó đến rất muộn. Ví dụ: phiên này được nén vài lần nhưng vẫn trung bình 299 nghìn token mỗi lần gọi. Cần để hiểu phương án nén sớm.</li>
+      <li><b>Đơn vị chi phí</b> trên trang này là cách mình quy đổi token về cùng một thước, vì không có số tiền thật của gói thuê bao. Token vào tính 1, đọc bộ đệm 0,1, ghi bộ đệm 1,25, token ra 5. Đây là tỉ lệ giá công bố của Anthropic. Hạn mức gói Max có thể tính hơi khác, nên các phần trăm là ước tính. Cần để đọc bảng số liệu.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>§0</dt><dd>Mục "Đang ở đâu, việc tiếp theo" đầu file <code>PLAN.md</code>; hook đọc và nhắc cập nhật nó.</dd>
+        <dt>done-gate</dt><dd>Quy trình chốt việc của agent-stack: chấm mức rủi ro của thay đổi (thấp, vừa, cao theo loại file và dòng code đụng tới), chạy kiểm chứng có biên nhận, giao review.</dd>
+        <dt>install.sh</dt><dd>Script duy nhất được phép đổi cấu hình toàn cục của Claude Code trên máy bạn; chỉ chạy khi bạn duyệt.</dd>
+        <dt>autoCompactWindow</dt><dd>Tên một cài đặt của Claude Code về ngưỡng tự nén hội thoại.</dd>
+        <dt>review kép</dt><dd>Hai người review chạy song song, một Opus một Sonnet, dùng khi thay đổi có rủi ro cao.</dd>
+        <dt>vòng theo dõi</dt><dd>Lệnh hẹn giờ trong phiên (ví dụ mỗi giờ kiểm job trên máy đo) đánh thức chính phiên đó dậy để làm việc.</dd>
+        <dt>bench</dt><dd>Đợt đo tự động so Claude Code trơn với Claude Code có agent-stack trên 94 việc lập trình.</dd>
+      </dl>
+    </div>
+    <h3>Hạn mức 14 ngày qua đi đâu</h3>
+    <p class="note">Tổng 88,6 triệu đơn vị chi phí, 21 phiên chính và các subagent của chúng.</p>
+    <div class="bar"><span class="lbl">Một phiên rất dài (phiên đo bench)</span><span class="fill warn" style="width:47%"></span><span>47%</span></div>
+    <div class="bar"><span class="lbl">20 phiên chính khác</span><span class="fill" style="width:18%"></span><span>18%</span></div>
+    <div class="bar"><span class="lbl">Subagent làm việc (dựng code)</span><span class="fill" style="width:20%"></span><span>20%</span></div>
+    <div class="bar"><span class="lbl">Subagent review</span><span class="fill" style="width:14%"></span><span>14%</span></div>
+    <div class="bar"><span class="lbl">Subagent khác</span><span class="fill" style="width:1%"></span><span>1%</span></div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: phiên đo bench kéo dài nhiều ngày</h3>
+        <p>Tình huống: phiên dựng và theo dõi bench chạy từ 06/11 tới 10/11, gồm cả các vòng theo dõi mỗi giờ để kiểm job trên máy đo.</p>
+        <pre><code>1.101 lần gọi model · trung bình 298.914 token mỗi lần
+= 47% tổng hạn mức 14 ngày (không tính subagent của nó)</code></pre>
+        <p>Hôm nay: mỗi lần kiểm "job còn chạy không" đọc lại gần 300 nghìn token, dù câu trả lời chỉ cần vài dòng log. Đây là việc thật của bạn, không phải phần của bench: phiên này điều khiển và theo dõi máy đo. Các phiên dài khác cũng ở mức cao: ba phiên kế tiếp trung bình 183, 280 và 289 nghìn token mỗi lần gọi. Vì sao quan trọng: mình tính lại nhật ký với giả định mỗi lần gọi không vượt 200 nghìn token, tổng hạn mức 14 ngày giảm khoảng 20%; không vượt 150 nghìn thì giảm khoảng 29%. Đó là mức tối đa: nén cũng tốn một lần gọi và làm mất chi tiết, nên thực tế sẽ thấp hơn.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: luật nạp sẵn trong việc ngắn</h3>
+        <p>Tình huống: trong bench, mỗi việc chỉ khoảng 10 lần gọi model.</p>
+        <pre><code>context lần gọi đầu: trơn 18.054 token · có luật agent-stack 33.594 token
+bản chỉ luật (không hook): đạt 78,1% (trơn 78,3%), tốn hơn trơn 27%
+bản đầy đủ: đạt 86,0%, tốn hơn trơn khoảng 110%</code></pre>
+        <p>Hôm nay: luật chung và mô tả skill thêm khoảng 15 nghìn token vào mọi lần gọi. Riêng chúng không làm Claude giải việc tốt hơn trong bench, nhưng chúng tạo ra những thứ bạn dùng: trả lời tiếng Việt, dòng "việc tiếp theo" cuối mỗi câu trả lời, quy trình kiểm chứng. Vì sao quan trọng: trong phiên dài thật, phần này chỉ khoảng 1–2% hạn mức (vì đọc lại từ bộ đệm rẻ, và hội thoại cũ lớn hơn nhiều); trong việc ngắn và subagent thì tới khoảng một phần tư. Rút luật còn một nửa bớt khoảng 5–6 nghìn token mỗi lần gọi; chỉ rút mô tả skill bớt khoảng 2–3 nghìn.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Phản ví dụ: review tốn nhưng đáng</h3>
+        <p>Tình huống: trong bench, bản đầy đủ gọi người review ở 6 trên 146 lần chạy; nhật ký review của agent-stack ghi 72 lần review thật từ trước tới nay.</p>
+        <pre><code>lần chạy có review: trung bình 0,79 USD theo giá công bố · không có: 0,17 USD
+lỗi thật mức cao: chỉ Opus thấy 2 · chỉ Sonnet thấy 2 · cả hai thấy 7 (tổng 11)</code></pre>
+        <p>Hôm nay: review chiếm 14% hạn mức thật. Nếu chỉ còn một người review ở mức rủi ro cao, giữ Opus hay Sonnet thì cũng bỏ sót 2 trong 11 lỗi mức cao mà người kia thấy. Vì sao quan trọng: phần làm bản đầy đủ đạt hơn trong bench là hook buộc kiểm chứng (bản đầy đủ chạy script biên nhận ở 141/146 lần chạy, bản chỉ luật 18/145), nên cắt phần này là cắt đúng chỗ đem lại chất lượng.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Ca nhỏ: hook cuối lượt chặn</h3>
+        <p>Tình huống: 14 ngày qua, hook cuối lượt chặn 28 lần.</p>
+        <pre><code>5 lần: đã chạy done-gate nhưng thiếu biên nhận kiểm chứng
+6 lần: đã đổi file nhưng §0 của PLAN.md chưa đổi
+4 lần: đổi code mức rủi ro vừa hoặc cao mà chưa chốt việc
+13 lần: lý do bị cắt trong nhật ký, chưa phân loại</code></pre>
+        <p>Hôm nay: mỗi lần chặn buộc thêm ít nhất một lần gọi model, và trong phiên dài thì lần gọi đó đọc lại cả hội thoại. Vì sao quan trọng: những lần đọc được lý do đều là thiếu thật (thiếu kiểm chứng, quên cập nhật trạng thái), nên chỉ đáng tối ưu nếu có lần chặn thừa; 13 lần còn lại chưa biết.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · Giữ phiên ngắn, giữ kiểm chứng <span class="chip">khuyên</span></h3>
+        <p>Đánh vào chỗ tốn nhất (phiên dài), giữ nguyên phần làm chất lượng tốt hơn (hook kiểm chứng, review).</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>(1) Không hạ ngưỡng tự nén của Claude Code: ngưỡng cứng nén bất kể đang ở đâu, kể cả giữa lúc debug, làm mất nguyên văn lỗi và các giả thuyết đã loại. Giữ mặc định làm lưới an toàn. (2) Hook chạy lúc bạn gửi tin nhắn đã đọc sẵn kích thước context từ nhật ký phiên (con số đang hiện trong gợi ý chọn model); thêm nhánh: trên 200 nghìn token mà tin nhắn là việc mới thì nhắc rõ nên mở phiên mới hay nén. (3) Thêm luật: vòng theo dõi định kỳ không chạy trong phiên chính dài. Thay vào đó, một script chạy nền trên máy kiểm job mỗi vài phút và chỉ in một dòng khi trạng thái đổi; công cụ theo dõi nền của Claude Code đánh thức phiên đúng lúc dòng đó xuất hiện, các lần "vẫn đang chạy" không gọi model. (4) Rút gọn luật chung còn khoảng một nửa: dời bảng chọn model chi tiết vào skill chọn model, dời chi tiết trang HTML vào skill trang; rút danh sách từ khóa trong mô tả skill. (5) Kiểm luật gọn không làm tụt điểm: chạy lại bench chỉ hai bản (trơn và đầy đủ) trên 19 việc mà các bản từng cho kết quả khác nhau (các việc còn lại thì bản nào cũng đạt hết hoặc trượt hết, không cho thông tin); khoảng 76 lần chạy, tốn hạn mức nên hỏi bạn trước. (6) Sau 2 tuần chạy lại script đếm hạn mức để so.</dd>
+          <dt>Được</dt><dd>Phần lớn khoản 47% của ví dụ 1 là các lần theo dõi mỗi giờ, giảm được mà không cần nén; mở phiên mới ở ranh giới việc cắt phần còn lại khi bạn làm theo lời nhắc. Chưa có con số chắc, sẽ đo lại sau 2 tuần. Rút luật thêm khoảng 1–2% trong phiên dài, nhiều hơn với việc ngắn và subagent.</dd>
+          <dt>Mất</dt><dd>Lời nhắc chỉ có tác dụng khi bạn làm theo. Luật rút gọn có thể bị làm theo kém hơn ở các phần đã dời vào skill.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Một nhánh trong hook nhận tin nhắn, một script theo dõi nền, một script đếm; bộ test hiện có kiểm được hook.</dd>
+          <dt>Đảo ngược</dt><dd>Được: khôi phục từ git; không đổi cấu hình toàn cục nào.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · A cộng cắt review</h3>
+        <p>Làm như A, thêm: rủi ro cao chỉ một người review (khác model người viết) thay vì hai.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Như A; sửa bảng review trong skill done-gate và <code>risk.py</code>.</dd>
+          <dt>Được</dt><dd>Thêm khoảng 3–5% hạn mức (review kép chiếm một phần của 14% review).</dd>
+          <dt>Mất</dt><dd>Theo nhật ký review, bỏ sót khoảng 2 trên 11 lỗi mức cao; trái quyết định của bạn ngày 04/11 dùng reviewer khác model và hai reviewer ở mức cao.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Lỗi mức cao lọt qua sửa sau tốn hơn phần đã tiết kiệm.</dd>
+          <dt>Đảo ngược</dt><dd>Được, sửa lại bảng.</dd>
+        </dl>
+        <p class="violation" data-vi-pham>Vi phạm luật chọn theo chất lượng (đổi tiết kiệm nhỏ lấy lỗi mức cao bị bỏ sót) và quyết định review của bạn ngày 04/11: không khuyên.</p>
+      </article>
+      <article class="option" data-phuong-an="C">
+        <h3>C · Chỉ đổi thói quen, không sửa agent-stack</h3>
+        <p>Bạn tự dùng phiên mới hay lệnh nén khi sang việc khác; không đổi cấu hình, hook hay luật.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Không có việc code; gợi ý mở phiên mới đã có sẵn trong dòng gợi ý chọn model.</dd>
+          <dt>Được</dt><dd>Không tốn công, không rủi ro hỏng gì.</dd>
+          <dt>Mất</dt><dd>Phụ thuộc vào việc bạn nhớ. Ví dụ 1 xảy ra dù gợi ý đó đã hiện trong chính phiên ấy (ngày 10/11 nó ghi context khoảng 178 nghìn token và đề nghị mở phiên mới khi sang việc khác). Vòng theo dõi tự chạy vẫn đánh thức phiên dài.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Không có.</dd>
+          <dt>Đảo ngược</dt><dd>Không có gì để đảo ngược.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Phiên đo bench dài</th>
+            <td data-cho="A">Vòng theo dõi mỗi giờ chạy bằng script nền, chỉ đánh thức phiên khi job đổi trạng thái; khi bạn chuyển sang việc khác, hook nhắc mở phiên mới. Không nén giữa lúc đang sửa lỗi.</td>
+            <td data-cho="B">Như A.</td>
+            <td data-cho="C">Không đổi, trừ khi bạn tự mở phiên mới; vòng theo dõi vẫn đọc 300 nghìn token mỗi giờ.</td></tr>
+          <tr><th>2 · Luật nạp sẵn trong việc ngắn</th>
+            <td data-cho="A">Context lượt đầu giảm khoảng 6–8 nghìn token; tiếng Việt, dòng việc tiếp theo, kiểm chứng vẫn giữ trong luật gọn.</td>
+            <td data-cho="B">Như A.</td>
+            <td data-cho="C">Không đổi: vẫn thêm khoảng 15 nghìn token mỗi lần gọi.</td></tr>
+          <tr><th>3 · Review</th>
+            <td data-cho="A">Giữ nguyên: rủi ro cao vẫn hai người review.</td>
+            <td data-cho="B">Một người review; theo nhật ký sẽ bỏ sót khoảng 2 trên 11 lỗi mức cao.</td>
+            <td data-cho="C">Giữ nguyên.</td></tr>
+          <tr><th>4 · Hook cuối lượt chặn</th>
+            <td data-cho="A">Giữ nguyên; lần chặn rẻ hơn vì phiên ngắn hơn. Đọc từng lần chặn khi đo lại sau 2 tuần.</td>
+            <td data-cho="B">Như A.</td>
+            <td data-cho="C">Giữ nguyên, mỗi lần chặn vẫn đọc lại cả phiên dài.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của repo, luật chung <code>global/SHARED.global.md</code> và skill done-gate.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:9">
+            <th>Mọi kích hoạt toàn cục đi qua <code>install.sh</code>, chỉ chạy khi bạn duyệt <span class="src">CLAUDE.md:9</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: không đổi cấu hình toàn cục; luật mới đi vào máy bạn theo đường cài plugin và luật chung sẵn có.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt, như A.</td>
+            <td data-cho="C" data-ket-qua="khong-lien-quan">Không đổi cấu hình.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:18">
+            <th>Hook phải nhanh, không làm kẹt phiên <span class="src">CLAUDE.md:18</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: nhánh mới chỉ so số token đã có sẵn trong hook nhận tin nhắn, không gọi gì thêm.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt, như A.</td>
+            <td data-cho="C" data-ket-qua="khong-lien-quan">Không sửa hook.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:21">
+            <th>Chọn theo chất lượng, không theo công làm <span class="src">global/SHARED.global.md:21</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: giữ phần đo được là làm kết quả tốt hơn; chỉ cắt phần đọc lại hội thoại cũ.</td>
+            <td data-cho="B" data-ket-qua="vi-pham">Vi phạm: đổi lấy khoảng 3–5% hạn mức bằng cách bỏ sót lỗi mức cao đo được.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: không giảm chất lượng.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="plugin/skills/done-gate/SKILL.md:27">
+            <th>Reviewer khác model người viết, hai reviewer ở mức cao (bạn chốt 04/11/2026) <span class="src">plugin/skills/done-gate/SKILL.md:27</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: không đổi.</td>
+            <td data-cho="B" data-ket-qua="vi-pham">Vi phạm quyết định của bạn; muốn chọn thì phải đổi quyết định đó trước.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: không đổi.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:78">
+            <th>Thay đổi hứa làm agent tốt hơn cần số liệu trước khi bật lâu dài <span class="src">global/SHARED.global.md:78</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: đã có số liệu 14 ngày; bước (5) đo lại sau 2 tuần bằng cùng script.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: số liệu nhật ký review có sẵn (nhưng chính nó cho thấy B mất lỗi).</td>
+            <td data-cho="C" data-ket-qua="khong-lien-quan">Không bật gì mới.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> không thấy. Phương án A không giữ bảng chọn model dài trong luật chỉ vì nó đã ở đó; nó dời vào skill nơi đã có bảng đầy đủ.</li>
+      <li><b>Chiều theo người dùng:</b> bạn nói "tiết kiệm hơn"; trang vẫn khuyên giữ review kép dù nó tốn 14%, vì số liệu cho thấy nó bắt lỗi thật.</li>
+      <li><b>Chọn vì ít công:</b> C ít công nhất nhưng không được khuyên, vì ví dụ 1 xảy ra dù gợi ý mở phiên mới đã có.</li>
+      <li><b>Phương án bù nhìn:</b> B là lựa chọn tự nhiên khi muốn tiết kiệm (review là khoản lớn thứ hai), nên giữ để nói rõ vì sao không khuyên.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> nêu rõ rằng nén sớm làm mất chi tiết, phần trăm tiết kiệm là cận trên và dựa trên tỉ lệ giá công bố chứ không phải cách gói Max tính.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy; A không bỏ hook kiểm chứng hay review.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Các câu đã chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Làm theo phương án nào? (đã chốt 10/11: theo khuyến nghị)</h3>
+      <p>Lựa chọn: A, B, C. Khuyên A: đánh vào phần tốn nhất, giữ phần làm kết quả tốt hơn. Chọn B thì tiết kiệm thêm khoảng 3–5% nhưng phải đổi quyết định review ngày 04/11. Chọn C thì không tốn công, nhưng tiết kiệm phụ thuộc thói quen.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: Có hạ ngưỡng tự nén hội thoại không? (đã chốt)</h3>
+      <p>Đã chốt (10/11): không hạ, giữ mặc định làm lưới an toàn; thay bằng lời nhắc mở phiên mới ở ranh giới việc. Lý do đổi so với khuyến nghị ban đầu (200 nghìn token): ngưỡng cứng nén cả giữa lúc đang sửa lỗi, làm mất nguyên văn lỗi và các giả thuyết đã loại; còn ở ranh giới việc thì việc cũ đã xong và đã ghi vào §0, gần như không mất gì. Context quá dài cũng làm model suy luận kém đi, nên phiên ngắn ở ranh giới việc có lợi cho cả chất lượng.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Vòng theo dõi định kỳ chạy ở đâu? (đã chốt 10/11: theo khuyến nghị)</h3>
+      <p>Lựa chọn: script nền chỉ đánh thức phiên khi có thay đổi; một phiên nhỏ riêng chạy Sonnet; hay giữ như cũ. Khuyên script nền: rẻ nhất, không cần model cho những lần "vẫn đang chạy". Chọn phiên riêng thì dễ đọc lịch sử hơn nhưng vẫn tốn mỗi giờ.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 4: Rút gọn luật chung tới đâu? (đã chốt 10/11: theo khuyến nghị)</h3>
+      <p>Lựa chọn: khoảng một nửa (dời bảng chọn model, chi tiết trang HTML, cây kế hoạch vào skill; bớt 5–6 nghìn token mỗi lần gọi), hay chỉ rút mô tả skill (bớt 2–3 nghìn). Khuyên một nửa, rồi kiểm bằng bench nhỏ ở bước (5) của A để chắc không tụt điểm. Chọn chỉ rút mô tả skill thì an toàn hơn, không cần bench, nhưng giảm ít.</p>
+    </div>
+    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Nhật ký phiên 14 ngày: <code>~/.claude/projects/*/*.jsonl</code> và <code>*/subagents/*.jsonl</code>, đếm bằng script trong thư mục tạm của phiên (<code>realuse.py</code>); chỉ đếm token, lần gọi, hook, không đọc nội dung.</li>
+      <li>Bench: <code>.tmp/harbor-jobs/jobs/main</code>, 598 lượt; phân rã bằng <code>costparts.py</code>; kết quả đạt và chi phí từ <code>evals/harbor/harbor_bench.py compare</code>.</li>
+      <li>Nhật ký review: <code>python3 plugin/skills/done-gate/scripts/review_log.py summary</code> (72 lần review, 258 lỗi thật).</li>
+      <li>Cài đặt tự nén: tên <code>autoCompactWindow</code> và <code>CLAUDE_CODE_AUTO_COMPACT_WINDOW</code> thấy trong binary Claude Code 2.1.317 của app; chưa đọc tài liệu chính thức về ý nghĩa chính xác.</li>
+      <li>Kích thước luật: <code>wc -c global/SHARED.global.md global/CLAUDE.global.md</code> (15.216 và 8.413 ký tự); mô tả skill 8.969 ký tự.</li>
+    </ul>
+  </footer>
+</main>
