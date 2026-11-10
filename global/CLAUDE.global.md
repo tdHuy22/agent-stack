@@ -12,7 +12,7 @@ Model: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.2), `claude-ha
 | Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite rẻ hơn) | – |
 | Tính năng, lỗi có traceback rõ; refactor | có test: claude-haiku-5-5·low, trượt thì sonnet·high; refactor, không có test hay đụng ranh giới tin cậy: sonnet·high | test-runner | reuse-best nếu không tầm thường; threat-model trước khi code nếu đụng ranh giới tin cậy |
 | Debug nhiều file, race, lỗi lúc được lúc không | opus·high, chưa ra thì xhigh | – | – |
-| Kiểm trước khi báo xong hay commit | sonnet·high | reviewer khác model người viết khi rủi ro từ vừa (`risk.py --writer` chọn sẵn) | done-gate |
+| Kiểm trước khi báo xong hay commit | sonnet·high | reviewer khác model người viết theo mức rủi ro (`risk.py --writer` chọn sẵn) | done-gate |
 | Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
 | Kế hoạch việc vừa, văn bản dài; kiến trúc; quyết định khó đảo ngược | sonnet·high; opus·high; opus·xhigh | Plan | reuse-best; reader-page khi ra file |
 | Review PR lớn, bảo mật (phần nhạy cảm: xhigh) | opus·high | reviewer | differential-review* |

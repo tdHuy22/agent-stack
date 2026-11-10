@@ -186,52 +186,102 @@ class ReviewPlan(unittest.TestCase):
         return [(r["model"], r["effort"]) for r in risk.review_plan(level, writer, **kw)["reviewers"]]
 
     def test_each_cell_of_the_table(self):
-        cases = [
-            (("vua", "opus"), {}, [("sonnet", "high")]),
-            (("vua", "sonnet"), {}, [("opus", "medium")]),
-            (("cao", "opus"), {}, [("opus", "high"), ("sonnet", "high")]),
-            (("cao", "sonnet"), {}, [("opus", "high")]),
-            (("cao", "sonnet"), {"security": True}, [("opus", "high"), ("sonnet", "high")]),
-            (("cao", "opus"), {"security": True, "crypto": True}, [("opus", "xhigh"), ("sonnet", "high")]),
-            (("cao", "sonnet"), {"security": True, "crypto": True}, [("opus", "xhigh"), ("sonnet", "high")]),
-            (("thap", "opus"), {}, []),
+        """Bảng bạn chốt 10/11/2026, theo dữ liệu: (người viết) → reviewer, đủ 4 người viết cho từng hàng."""
+        O, F, S, H = "opus", "fable", "sonnet", "haiku"
+        xh = [("opus", "xhigh"), ("sonnet", "xhigh")]
+        rows = [
+            # (tên hàng, mức, cờ, {người viết: reviewer})
+            ("thấp, chỉ tài liệu hay test", "thap", {"code": False}, {w: [] for w in (O, F, S, H)}),
+            ("thấp, có đổi code", "thap", {"code": True},
+             {O: [("sonnet", "medium")], F: [("sonnet", "medium")], S: [("opus", "low")], H: [("opus", "low")]}),
+            ("vừa", "vua", {},
+             {O: [("sonnet", "high")], F: [("sonnet", "high")], S: [("opus", "high")], H: [("opus", "high")]}),
+            ("vừa, bảo mật không đổi ô", "vua", {"security": True},
+             {O: [("sonnet", "high")], F: [("sonnet", "high")], S: [("opus", "high")], H: [("opus", "high")]}),
+            ("vừa, mã hóa không đổi ô", "vua", {"crypto": True},
+             {O: [("sonnet", "high")], F: [("sonnet", "high")], S: [("opus", "high")], H: [("opus", "high")]}),
+            ("cao, không đụng bảo mật", "cao", {},
+             {O: [("fable", "high"), ("sonnet", "high")], F: [("opus", "high"), ("sonnet", "high")],
+              S: [("opus", "high")], H: [("opus", "high")]}),
+            ("cao, bảo mật", "cao", {"security": True}, {w: xh for w in (O, F, S, H)}),
+            ("cao, mã hóa, token, thanh toán, sandbox", "cao", {"crypto": True}, {w: xh for w in (O, F, S, H)}),
+            ("cao, cả hai cờ", "cao", {"security": True, "crypto": True}, {w: xh for w in (O, F, S, H)}),
+            ("review lại, phần sửa vừa", "vua", {"rereview": True}, {w: [("sonnet", "high")] for w in (O, F, S, H)}),
+            ("review lại, phần sửa vừa, bảo mật", "vua", {"rereview": True, "security": True},
+             {w: [("sonnet", "high")] for w in (O, F, S, H)}),
+            ("review lại, phần sửa cao", "cao", {"rereview": True},
+             {O: [("fable", "high")], F: [("opus", "high")], S: [("opus", "high")], H: [("opus", "high")]}),
+            ("review lại, phần sửa cao, bảo mật", "cao", {"rereview": True, "security": True},
+             {w: [("opus", "xhigh")] for w in (O, F, S, H)}),
+            ("review lại, phần sửa cao, mã hóa", "cao", {"rereview": True, "crypto": True},
+             {w: [("opus", "xhigh")] for w in (O, F, S, H)}),
+            ("review lại, phần sửa thấp", "thap", {"rereview": True, "code": True}, {w: [] for w in (O, F, S, H)}),
         ]
-        for (level, writer), kw, want in cases:
-            with self.subTest(level=level, writer=writer, **kw):
-                self.assertEqual(self.plan(level, writer, **kw), want)
+        for name, level, kw, per_writer in rows:
+            for writer, want in per_writer.items():
+                with self.subTest(row=name, writer=writer):
+                    self.assertEqual(risk.reviewers_for(level, writer, **kw), want)
+                    # review_plan (qua code_lines cho cờ code) ra cùng ô.
+                    plan_kw = dict(kw)
+                    code = plan_kw.pop("code", True)
+                    self.assertEqual(self.plan(level, writer, code_lines=10 if code else 0, **plan_kw), want)
 
-    def test_rereview_of_a_fix_is_one_sonnet_unless_the_fix_itself_is_high(self):
-        for writer in ("opus", "sonnet"):
-            self.assertEqual(self.plan("vua", writer, rereview=True), [("sonnet", "high")])
-            self.assertEqual(self.plan("cao", writer, rereview=True, security=True), [("opus", "high")])
-        self.assertEqual(self.plan("thap", "opus", rereview=True), [])
+    def test_rereview_of_a_fix_follows_the_level_of_the_fix(self):
+        self.assertEqual(self.plan("cao", "opus", rereview=True, security=True), [("opus", "xhigh")])
+        self.assertEqual(self.plan("cao", "opus", rereview=True), [("fable", "high")])
+        self.assertEqual(self.plan("thap", "opus", rereview=True, code_lines=10), [])
 
     def test_writer_from_model_id_and_other_families(self):
         self.assertEqual(self.plan("vua", "claude-opus-5-5"), [("sonnet", "high")])
-        self.assertEqual(self.plan("vua", "claude-sonnet-5-5"), [("opus", "medium")])
+        self.assertEqual(self.plan("vua", "claude-sonnet-5-5"), [("opus", "high")])
         self.assertEqual(self.plan("vua", "claude-fable-5-1"), [("sonnet", "high")])
-        self.assertEqual(self.plan("vua", "claude-haiku-5-5"), [("opus", "medium")])
+        self.assertEqual(self.plan("vua", "claude-haiku-5-5"), [("opus", "high")])
+        self.assertEqual([risk.writer_side(w) for w in ("opus", "claude-fable-5-2", "Sonnet", "claude-haiku-5-5", "gpt", None)],
+                         ["opus", "fable", "sonnet", "haiku", "", ""])
+        # Cao: Opus viết thì Fable review, Fable viết thì Opus review (phân biệt họ, không gộp).
+        self.assertEqual(self.plan("cao", "claude-opus-5-5")[0], ("fable", "high"))
+        self.assertEqual(self.plan("cao", "claude-fable-5-2")[0], ("opus", "high"))
 
-    def test_unknown_writer_names_both_cases(self):
+    def test_unknown_writer_names_each_case(self):
         r = risk.review_plan("vua", None)
         self.assertEqual(r["reviewers"], [])
-        self.assertIn("Opus viết: giao `agent-stack:reviewer` trong context mới, model sonnet, effort high", r["review"])
-        self.assertIn("Sonnet viết: giao `agent-stack:reviewer` trong context mới, model opus, effort medium",
+        self.assertIn("Opus hay Fable viết: giao `agent-stack:reviewer` trong context mới, model sonnet, effort high",
                       r["review"])
+        self.assertIn("Sonnet hay Haiku viết: giao `agent-stack:reviewer` trong context mới, model opus, effort high",
+                      r["review"])
+        cao = risk.review_plan("cao", None)["review"]
+        self.assertIn("Opus viết: giao song song 2", cao)
+        self.assertIn("fable·high và sonnet·high", cao)
+        self.assertIn("Fable viết: giao song song 2", cao)
+        self.assertIn("Sonnet hay Haiku viết: giao `agent-stack:reviewer` trong context mới, model opus, effort high", cao)
+        # Bảo mật thì mọi người viết cùng một ô: câu đề nghị không phải tách trường hợp.
+        sec = risk.review_plan("cao", None, security=True)
+        self.assertEqual(sec["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "xhigh"}])
+        self.assertNotIn("viết:", sec["review"])
+        # Mức thấp có code, chưa rõ người viết: hai trường hợp, và không có code thì không reviewer.
+        low = risk.review_plan("thap", None, code_lines=5)
+        self.assertEqual(low["reviewers"], [])
+        self.assertIn("Opus hay Fable viết: giao `agent-stack:reviewer` trong context mới, model sonnet, effort medium",
+                      low["review"])
+        self.assertIn("model opus, effort low", low["review"])
+        self.assertIn("tự rà", risk.review_plan("thap", None, code_lines=0)["review"])
 
     def test_dual_review_text_asks_for_parallel_and_log(self):
         text = risk.review_plan("cao", "opus")["review"]
         self.assertIn("giao song song 2 `agent-stack:reviewer`", text)
-        self.assertIn("opus·high và sonnet·high", text)
+        self.assertIn("fable·high và sonnet·high", text)
         self.assertIn("review_log.py add", text)
+        self.assertIn("effort", text)
+        # Review một reviewer cũng nhắc ghi log.
+        self.assertIn("review_log.py add", risk.review_plan("vua", "opus")["review"])
 
     def test_assess_marks_security_and_crypto_from_paths(self):
         auth = risk.assess([change("app/auth/login.py", 40)], writer="sonnet")
         self.assertEqual(auth["level"], "cao", auth)
-        self.assertEqual([(r["model"], r["effort"]) for r in auth["reviewers"]], [("opus", "high"), ("sonnet", "high")])
+        self.assertEqual([(r["model"], r["effort"]) for r in auth["reviewers"]], [("opus", "xhigh"), ("sonnet", "xhigh")])
         self.assertIn("differential-review", auth["review"])
         pay = risk.assess([change("src/payments/charge.py", 40)], writer="sonnet")
-        self.assertEqual(pay["reviewers"][0], {"model": "opus", "effort": "xhigh"})
+        self.assertEqual(pay["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "xhigh"}])
         # Mức cao vì hook và xóa file, không đụng bảo mật: Sonnet viết thì một Opus.
         plain = risk.assess([change("plugin/hooks/clean.py", 10, 0, "shutil.rmtree(p)\n")], writer="sonnet")
         self.assertEqual(plain["level"], "cao", plain)
@@ -246,13 +296,16 @@ class ReviewPlan(unittest.TestCase):
             windows["five_hour"] = {"used_percentage": five, "resets_at": now + reset_in}
         return {"rate_limits": windows}, now
 
-    def test_budget_asks_before_opus_or_dual_review(self):
+    def test_budget_asks_before_opus_fable_or_dual_review(self):
         limits, now = self.limits(week=84)
-        self.assertEqual(risk.budget_asks([("opus", "medium")], "vua", 10, limits, now),
+        self.assertEqual(risk.budget_asks([("opus", "high")], "vua", 10, limits, now),
                          ["hạn mức tuần đã dùng 84% (từ 80%)"])
-        self.assertEqual(len(risk.budget_asks([("opus", "high"), ("sonnet", "high")], "cao", 10, limits, now)), 1)
-        # Chỉ một Sonnet: rẻ, không hỏi.
+        self.assertEqual(len(risk.budget_asks([("fable", "high"), ("sonnet", "high")], "cao", 10, limits, now)), 1)
+        # Fable một mình cũng hỏi (cấu hình có fable); chỉ một Sonnet thì rẻ, không hỏi.
+        self.assertEqual(len(risk.budget_asks([("fable", "high")], "cao", 10, limits, now)), 1)
         self.assertEqual(risk.budget_asks([("sonnet", "high")], "vua", 10, limits, now), [])
+        # Mức thấp không bao giờ hỏi (hạn mức chạm ngưỡng thì bỏ reviewer: budget_drops).
+        self.assertEqual(risk.budget_asks([("opus", "low")], "thap", 10, limits, now), [])
         limits, now = self.limits(week=79, five=90)
         self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 10, limits, now),
                          ["hạn mức 5 giờ đã dùng 90% (từ 90%)"])
@@ -260,6 +313,53 @@ class ReviewPlan(unittest.TestCase):
         self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 801, limits, now),
                          ["diff lớn (801 dòng code, trên 800)"])
         self.assertEqual(risk.budget_asks([("opus", "high")], "cao", 800, limits, now), [])
+
+    def test_low_level_with_code_drops_the_reviewer_over_the_limit_without_asking(self):
+        limits, now = self.limits(week=80)
+        self.assertEqual(risk.budget_drops("thap", limits, now), ["hạn mức tuần đã dùng 80% (từ 80%)"])
+        self.assertEqual(risk.budget_drops("vua", limits, now), [])
+        limits, now = self.limits(week=79, five=89)
+        self.assertEqual(risk.budget_drops("thap", limits, now), [])
+        limits, now = self.limits(five=90)
+        self.assertEqual(risk.budget_drops("thap", limits, now), ["hạn mức 5 giờ đã dùng 90% (từ 90%)"])
+        over = {"rate_limits": {"seven_day": {"used_percentage": 85, "resets_at": 4_000_000_000}}}
+        under = {"rate_limits": {"seven_day": {"used_percentage": 79, "resets_at": 4_000_000_000}}}
+        for writer, want in (("opus", ("sonnet", "medium")), ("sonnet", ("opus", "low"))):
+            dropped = risk.review_plan("thap", writer, code_lines=5, limits=over)
+            self.assertEqual((dropped["reviewers"], dropped["ask"], dropped["choices"]), ([], [], []))
+            self.assertEqual(dropped["dropped"], ["hạn mức tuần đã dùng 85% (từ 80%)"])
+            self.assertIn("đã bỏ reviewer vì hạn mức tuần đã dùng 85%", dropped["review"])
+            normal = risk.review_plan("thap", writer, code_lines=5, limits=under)
+            self.assertEqual(normal["reviewers"], [{"model": want[0], "effort": want[1]}])
+            self.assertEqual((normal["ask"], normal["dropped"]), ([], []))
+        # Mức thấp chỉ tài liệu hay test: không reviewer, nên không có gì để bỏ.
+        docs = risk.review_plan("thap", "opus", code_lines=0, limits=over)
+        self.assertEqual((docs["reviewers"], docs["dropped"]), ([], []))
+        # Chưa rõ người viết cũng bỏ vì hạn mức.
+        self.assertEqual(risk.review_plan("thap", None, code_lines=5, limits=over)["dropped"],
+                         ["hạn mức tuần đã dùng 85% (từ 80%)"])
+        # Qua assess: diff chỉ đổi dòng code nhỏ ở mức thấp.
+        low = risk.assess([change("src/a.py", 5), change("tests/test_a.py", 5)], writer="opus", limits=over)
+        self.assertEqual((low["level"], low["reviewers"], low["dropped"]), ("thap", [], ["hạn mức tuần đã dùng 85% (từ 80%)"]))
+        fine = risk.assess([change("src/a.py", 5), change("tests/test_a.py", 5)], writer="opus", limits=under)
+        self.assertEqual((fine["level"], fine["reviewers"]), ("thap", [{"model": "sonnet", "effort": "medium"}]))
+        docs_only = risk.assess([change("README.md", 5), change("tests/test_a.py", 5)], writer="opus")
+        self.assertEqual((docs_only["level"], docs_only["reviewers"]), ("thap", []))
+
+    def test_ask_choices_offer_swapping_fable_for_opus_only_when_fable_is_in_the_plan(self):
+        limits = {"rate_limits": {"seven_day": {"used_percentage": 90, "resets_at": 4_000_000_000}}}
+        with_fable = risk.review_plan("cao", "opus", limits=limits)
+        self.assertEqual(with_fable["choices"], ["cấu hình đầy đủ", "đổi fable thành opus (cùng effort)",
+                                                 "chỉ một reviewer sonnet·high (rẻ hơn)"])
+        no_fable = risk.review_plan("cao", "fable", limits=limits)
+        self.assertEqual(no_fable["choices"], ["cấu hình đầy đủ", "chỉ một reviewer sonnet·high (rẻ hơn)"])
+        self.assertEqual(risk.review_plan("cao", "sonnet", limits=limits)["choices"], no_fable["choices"])
+        self.assertEqual(risk.review_plan("vua", "opus", limits=limits)["ask"], [], "chỉ một sonnet: rẻ, không hỏi")
+        out = risk.render(risk.assess([change("plugin/hooks/clean.py", 10, 0, "shutil.rmtree(p)\n")], writer="opus",
+                                      limits=limits))
+        self.assertIn("Hỏi người dùng trước khi giao review này: hạn mức tuần đã dùng 90% (từ 80%)", out)
+        self.assertIn("Cho họ chọn: cấu hình đầy đủ, đổi fable thành opus (cùng effort) hay chỉ một reviewer sonnet·high",
+                      out)
 
     def test_window_past_reset_is_ignored(self):
         limits, now = self.limits(week=95, five=99, reset_in=-1)
@@ -285,9 +385,9 @@ class ReviewPlan(unittest.TestCase):
         self.assertEqual(len(called["reviewers"]), 1, called)
         ran = risk.assess([change("plugin/hooks/sync.py", 200, 0, body + "subprocess.run(cmd)\n")], writer="sonnet")
         self.assertEqual((ran["level"], len(ran["reviewers"])), ("cao", 2), ran)
-        # Đường dẫn ký, jwt chỉ có trong CRYPTO_RE: vẫn là bảo mật, nên Sonnet viết thì hai reviewer, Opus xhigh.
+        # Đường dẫn ký, jwt chỉ có trong CRYPTO_RE: vẫn là bảo mật, nên hai reviewer xhigh dù ai viết.
         signing = risk.assess([change("plugin/hooks/signing.py", 200, 0, body)], writer="sonnet")
-        self.assertEqual(signing["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "high"}])
+        self.assertEqual(signing["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "xhigh"}])
         self.assertIn("differential-review", signing["review"])
 
     def test_render_shows_ask_line(self):
@@ -476,7 +576,7 @@ class Collect(TempDirTestCase):
 
         first = run("--writer", "opus")
         self.assertEqual(first["level"], "cao")
-        self.assertEqual(first["reviewers"], [{"model": "opus", "effort": "high"}, {"model": "sonnet", "effort": "high"}])
+        self.assertEqual(first["reviewers"], [{"model": "opus", "effort": "xhigh"}, {"model": "sonnet", "effort": "xhigh"}])
         self.assertEqual(first["ask"], ["hạn mức tuần đã dùng 85% (từ 80%)"])
         self.assertIn("(người viết: Opus)", first["review"])
         # Không truyền --writer: lấy model trong limits.json và nói rõ là suy đoán.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Chấm mức rủi ro của thay đổi chưa commit, để quyết review sâu tới đâu.
 
-  python3 risk.py [thư mục] [--base REF] [--new] [--writer opus|sonnet] [--json]
+  python3 risk.py [thư mục] [--base REF] [--new] [--writer opus|sonnet|fable|haiku] [--json]
 
 Chỉ đọc. In mức (thấp, vừa, cao), lý do, file nên đọc kỹ và cách review đề nghị: reviewer nào (model, effort) theo
 mức rủi ro và model người viết, và có phải hỏi người dùng trước vì hạn mức hay diff lớn không.
@@ -84,11 +84,15 @@ SKIP_RE = re.compile(r"^\s*(@(unittest\.)?skip(If|Unless)?\b|@pytest\.mark\.(ski
                      r"pytest\.(skip|xfail)\(|(it|test|describe)\.(skip|todo)\(|x(it|test|describe)\(|"
                      r"t\.Skip(Now|f)?\(|#\[ignore\])")
 
-# Cấu hình review (bạn chốt 04/11/2026): reviewer khác model người viết, để giảm điểm mù chung của một model.
-# Fable mạnh hơn Opus nên xếp như Opus viết; Haiku yếu hơn Sonnet nên xếp như Sonnet viết (reviewer là Opus).
-WRITER_SIDE = {"opus": "opus", "fable": "opus", "sonnet": "sonnet", "haiku": "sonnet"}
-WRITER_NAMES = {"opus": "Opus", "sonnet": "Sonnet"}
-# Phần nhạy cảm cần Opus effort xhigh khi review mức cao (bảng router: mã hóa, token, thanh toán, sandbox).
+# Cấu hình review (bạn chốt 04/11/2026, bảng mới 10/11/2026): reviewer khác model người viết, để giảm điểm mù chung
+# của một model. Họ model người viết: Opus và Fable là phía mạnh (reviewer vừa và thấp là Sonnet), Sonnet và Haiku là
+# phía yếu hơn (reviewer là Opus). Mức cao phân biệt Opus với Fable: Opus viết thì Fable review (cùng model Opus review
+# thì mất ý nghĩa "khác model"), Fable viết thì giữ Opus. Code bảo mật giữ Opus, vì bộ lọc an ninh mạng của Fable có
+# thể tự chuyển model giữa chừng.
+WRITER_FAMILIES = ("opus", "fable", "sonnet", "haiku")
+WRITER_NAMES = {"opus": "Opus", "fable": "Fable", "sonnet": "Sonnet", "haiku": "Haiku"}
+STRONG_WRITERS = ("opus", "fable")
+# Phần nhạy cảm theo đường dẫn (mã hóa, token, thanh toán, sandbox): cùng ô với bảo mật, mức cao thì hai reviewer xhigh.
 CRYPTO_RE = re.compile(r"(^|[/_.-])(crypto\w*|encrypt\w*|decrypt\w*|cipher|signing|signatures?|tokens?|jwt|"
                        r"payments?|billing|sandbox)([/_.-]|$)")
 # Trước review kép hay review có Opus: hỏi người dùng khi hạn mức tuần, 5 giờ chạm ngưỡng, hay diff mức cao quá lớn.
@@ -315,24 +319,39 @@ def weakening(changes: list, hit) -> None:
 
 
 def writer_side(writer) -> str:
-    """Họ model người viết ("opus", "sonnet") từ tên ngắn hay id model ("claude-opus-5-5"); chưa rõ thì chuỗi rỗng."""
+    """Họ model người viết ("opus", "fable", "sonnet", "haiku") từ tên ngắn hay id model ("claude-opus-5-5"); chưa rõ
+    thì chuỗi rỗng."""
     text = str(writer or "").lower()
-    return next((side for name, side in WRITER_SIDE.items() if name in text), "")
+    return next((name for name in WRITER_FAMILIES if name in text), "")
 
 
-def reviewers_for(level: str, side: str, security=False, crypto=False, rereview=False) -> list:
-    """[(model, effort)] cho một mức rủi ro và họ model người viết, theo cấu hình bạn chốt 04/11/2026:
-    vừa: Opus viết → sonnet·high, Sonnet viết → opus·medium; cao: Opus viết → opus·high và sonnet·high, Sonnet viết →
-    opus·high; cao và đụng bảo mật → cả hai; mã hóa, token, thanh toán, sandbox → opus·xhigh. Review lại phần sửa
-    (`--new`): một sonnet·high bất kể ai viết, lên opus khi chính phần sửa ở mức cao."""
+def reviewers_for(level: str, side: str, security=False, crypto=False, rereview=False, code=True) -> list:
+    """[(model, effort)] cho một mức rủi ro và họ model người viết (`side`, xem writer_side), theo bảng bạn chốt
+    10/11/2026. `code`: diff có đổi code (không chỉ tài liệu hay test).
+    thấp: không đổi code → không reviewer; có đổi code → Opus/Fable viết: sonnet·medium, Sonnet/Haiku viết: opus·low.
+    vừa: Opus/Fable viết: sonnet·high, Sonnet/Haiku viết: opus·high (cờ bảo mật, mã hóa không đổi ô).
+    cao: đụng bảo mật hay mã hóa/token/thanh toán/sandbox → opus·xhigh và sonnet·xhigh (sonnet·xhigh là bản thử có đo);
+    không thì Opus viết: fable·high và sonnet·high, Fable viết: opus·high và sonnet·high, Sonnet/Haiku viết: opus·high.
+    Review lại phần sửa (`--new`): mức vừa → sonnet·high; mức cao → Opus viết: fable·high, Fable/Sonnet/Haiku viết:
+    opus·high, đụng bảo mật → opus·xhigh. Mức thấp không review lại."""
+    strong = side in STRONG_WRITERS
     if level == "thap":
-        return []
-    opus = ("opus", "xhigh" if crypto else "high")
+        if rereview or not code:
+            return []
+        return [("sonnet", "medium")] if strong else [("opus", "low")]
     if rereview:
-        return [opus] if level == "cao" else [("sonnet", "high")]
+        if level == "vua":
+            return [("sonnet", "high")]
+        if security or crypto:
+            return [("opus", "xhigh")]
+        return [("fable", "high")] if side == "opus" else [("opus", "high")]
     if level == "vua":
-        return [("sonnet", "high")] if side == "opus" else [("opus", "medium")]
-    return [opus, ("sonnet", "high")] if side == "opus" or security else [opus]
+        return [("sonnet", "high")] if strong else [("opus", "high")]
+    if security or crypto:
+        return [("opus", "xhigh"), ("sonnet", "xhigh")]
+    if side == "opus":
+        return [("fable", "high"), ("sonnet", "high")]
+    return [("opus", "high"), ("sonnet", "high")] if side == "fable" else [("opus", "high")]
 
 
 def window_pct(limits, window: str, now: float):
@@ -350,21 +369,37 @@ def window_pct(limits, window: str, now: float):
     return float(pct)
 
 
-def budget_asks(reviewers: list, level: str, code_lines: int, limits, now=None) -> list:
-    """Lý do phải hỏi người dùng trước khi giao review kép hay review có Opus (đề xuất b, 04/11/2026)."""
+def over_limits(limits, now=None) -> list:
+    """Lý do hạn mức đã chạm ngưỡng (tuần từ ASK_WEEK%, 5 giờ từ ASK_FIVE_HOUR%); rỗng khi dưới ngưỡng hay không biết."""
     import time
-    if len(reviewers) < 2 and not any(model == "opus" for model, _ in reviewers):
-        return []
     now = time.time() if now is None else now
-    asks = []
+    reasons = []
     week, five = window_pct(limits, "seven_day", now), window_pct(limits, "five_hour", now)
     if week is not None and week >= ASK_WEEK:
-        asks.append(f"hạn mức tuần đã dùng {week:.0f}% (từ {ASK_WEEK}%)")
+        reasons.append(f"hạn mức tuần đã dùng {week:.0f}% (từ {ASK_WEEK}%)")
     if five is not None and five >= ASK_FIVE_HOUR:
-        asks.append(f"hạn mức 5 giờ đã dùng {five:.0f}% (từ {ASK_FIVE_HOUR}%)")
+        reasons.append(f"hạn mức 5 giờ đã dùng {five:.0f}% (từ {ASK_FIVE_HOUR}%)")
+    return reasons
+
+
+def budget_asks(reviewers: list, level: str, code_lines: int, limits, now=None) -> list:
+    """Lý do phải hỏi người dùng trước khi giao review kép hay review có Opus hoặc Fable (đề xuất b, 04/11/2026; thêm
+    Fable 10/11/2026). Mức thấp không bao giờ hỏi: hạn mức chạm ngưỡng thì bỏ reviewer (budget_drops)."""
+    if level == "thap" or (len(reviewers) < 2 and not any(model in ("opus", "fable") for model, _ in reviewers)):
+        return []
+    asks = over_limits(limits, now)
     if level == "cao" and code_lines > ASK_CODE_LINES:
         asks.append(f"diff lớn ({code_lines} dòng code, trên {ASK_CODE_LINES})")
     return asks
+
+
+def budget_drops(level: str, limits, now=None) -> list:
+    """Lý do tự bỏ reviewer của mức thấp có đổi code: hạn mức tuần từ 80% hay 5 giờ từ 90%. Không hỏi người dùng."""
+    return over_limits(limits, now) if level == "thap" else []
+
+
+LOG_NOTE = ("ghi mỗi lần review bằng `review_log.py add` (--reviewers kèm effort, vd opus:xhigh,sonnet:xhigh; "
+            "--found cho từng lỗi)")
 
 
 def describe(reviewers: list) -> str:
@@ -372,38 +407,71 @@ def describe(reviewers: list) -> str:
     if len(names) == 1:
         return f"giao `agent-stack:reviewer` trong context mới, model {reviewers[0][0]}, effort {reviewers[0][1]}"
     return (f"giao song song {len(names)} `agent-stack:reviewer` trong context mới, cùng một prompt: "
-            f"{' và '.join(names)}; gộp lỗi trùng rồi ghi lỗi nào do reviewer nào tìm bằng `review_log.py add`")
+            f"{' và '.join(names)}; gộp lỗi trùng")
+
+
+def ask_choices(plans) -> list:
+    """Các lựa chọn đưa người dùng khi phải hỏi về hạn mức: cấu hình đầy đủ, đổi fable thành opus (khi có fable),
+    hay chỉ một sonnet·high."""
+    choices = ["cấu hình đầy đủ"]
+    if any(model == "fable" for reviewers in plans for model, _ in reviewers):
+        choices.append("đổi fable thành opus (cùng effort)")
+    choices.append("chỉ một reviewer sonnet·high (rẻ hơn)")
+    return choices
 
 
 def review_plan(level: str, writer=None, security=False, crypto=False, rereview=False, code_lines=0,
                 limits=None, writer_guessed=False) -> dict:
-    """{review: câu đề nghị, reviewers: [{model, effort}] (rỗng khi chưa rõ người viết hay mức thấp), ask: [lý do hỏi
-    người dùng trước]}. Chưa rõ người viết thì câu đề nghị nêu cả hai trường hợp. writer_guessed: người viết suy từ
-    state/limits.json (có thể của phiên khác), nên câu đề nghị nói rõ."""
+    """{review: câu đề nghị, reviewers: [{model, effort}] (rỗng khi chưa rõ người viết, mức thấp, hay không có code),
+    ask: [lý do hỏi người dùng trước], choices: [lựa chọn khi hỏi], dropped: [lý do tự bỏ reviewer vì hạn mức]}.
+    Chưa rõ người viết thì câu đề nghị nêu từng trường hợp. writer_guessed: người viết suy từ state/limits.json
+    (có thể của phiên khác), nên câu đề nghị nói rõ. code_lines: số dòng code của diff (by_kind["code"]); mức thấp
+    chỉ có reviewer khi > 0."""
+    result = {"review": "", "reviewers": [], "ask": [], "choices": [], "dropped": []}
     if level == "thap":
-        return {"review": "tự rà `git diff` một lượt, không cần subagent; người dùng không cần đọc diff.",
-                "reviewers": [], "ask": []}
+        own = "tự rà `git diff` một lượt, không cần subagent; người dùng không cần đọc diff."
+        if rereview or code_lines <= 0:
+            result["review"] = own
+            return result
+        drops = budget_drops(level, limits)
+        if drops:
+            result.update(review=f"đã bỏ reviewer vì {'; '.join(drops)} (mức thấp có đổi code); {own}", dropped=drops)
+            return result
     side = writer_side(writer)
-    tail = ("người dùng nên đọc kỹ các file nên đọc kỹ trước khi commit." if level == "cao" and not rereview
+    tail = ("người dùng không cần đọc diff." if level == "thap"
+            else "người dùng nên đọc kỹ các file nên đọc kỹ trước khi commit." if level == "cao" and not rereview
             else "người dùng đọc lướt các file nên đọc kỹ.")
     if level == "cao" and security and not rereview:
         tail = "chạy differential-review trước nếu có (bước 5); " + tail
-    sides = [side] if side else ["opus", "sonnet"]
-    plans = {s: reviewers_for(level, s, security, crypto, rereview) for s in sides}
+    sides = [side] if side else list(WRITER_FAMILIES)
+    plans = {s: reviewers_for(level, s, security, crypto, rereview, code_lines > 0) for s in sides}
+    asks = []
+    for plan in plans.values():
+        asks += [a for a in budget_asks(plan, level, code_lines, limits) if a not in asks]
     if side:
         reviewers = plans[side]
         source = ", suy từ state/limits.json, có thể của phiên khác: truyền --writer cho chắc" if writer_guessed else ""
-        text = f"{describe(reviewers)} (người viết: {WRITER_NAMES[side]}{source}); {tail}"
-        asks = budget_asks(reviewers, level, code_lines, limits)
+        text = f"{describe(reviewers)} (người viết: {WRITER_NAMES[side]}{source}); {LOG_NOTE}; {tail}"
     else:
-        if plans["opus"] == plans["sonnet"]:
-            text = f"{describe(plans['opus'])}; {tail}"
+        groups = []  # [(tên các họ model người viết, reviewer)], gộp họ có cùng ô
+        for name, plan in plans.items():
+            for names, known in groups:
+                if known == plan:
+                    names.append(WRITER_NAMES[name])
+                    break
+            else:
+                groups.append(([WRITER_NAMES[name]], plan))
+        if len(groups) == 1:
+            reviewers = groups[0][1]
+            text = f"{describe(reviewers)}; {LOG_NOTE}; {tail}"
         else:
-            text = (f"Opus viết: {describe(plans['opus'])}. Sonnet viết: {describe(plans['sonnet'])}. "
-                    f"Truyền --writer opus|sonnet để chọn sẵn; {tail}")
-        reviewers = plans["opus"] if plans["opus"] == plans["sonnet"] else []
-        asks = budget_asks(plans["opus"] + plans["sonnet"], level, code_lines, limits)
-    return {"review": text, "reviewers": [{"model": m, "effort": e} for m, e in reviewers], "ask": asks}
+            reviewers = []
+            text = (" ".join(f"{' hay '.join(names)} viết: {describe(plan)}." for names, plan in groups)
+                    + f" Truyền --writer opus|sonnet|fable|haiku để chọn sẵn; {LOG_NOTE}; {tail}")
+    result.update(review=text, reviewers=[{"model": m, "effort": e} for m, e in reviewers], ask=asks)
+    if asks:
+        result["choices"] = ask_choices(plans.values())
+    return result
 
 
 def review_hint(level: str, writer=None) -> str:
@@ -552,8 +620,10 @@ def render(r: dict, base: str = "HEAD") -> str:
                      + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
     lines.append(f"Review đề nghị: {r['review']}")
     if r.get("ask"):
+        choices = r.get("choices") or ["chỉ một reviewer sonnet·high (rẻ hơn)"]
         lines.append("Hỏi người dùng trước khi giao review này: " + "; ".join(r["ask"])
-                     + ". Cho họ chọn chỉ một reviewer sonnet·high (rẻ hơn), trừ khi họ đã chọn cho việc này.")
+                     + f". Cho họ chọn: {', '.join(choices[:-1]) + ' hay ' if len(choices) > 1 else ''}{choices[-1]}; "
+                     "trừ khi họ đã chọn cho việc này.")
     return "\n".join(lines)
 
 

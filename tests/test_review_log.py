@@ -47,15 +47,16 @@ class ReviewLog(TempDirTestCase):
         self.assertIn("chỉ Opus tìm 1, chỉ Sonnet tìm 1, cả hai 1", text)
         self.assertIn("chưa đủ để kết luận", text)
 
-    def test_fable_counts_as_opus_and_hoi_counts_as_real_and_days_filter(self):
+    def test_hoi_counts_as_real_and_days_filter_and_writer_family_is_strict(self):
         self.run_log("add", "--writer", "claude-fable-5-1", "--level", "cao", "--reviewers", "opus,sonnet",
                      "--found", "sonnet:vua:hoi:đụng ý định", "--found", "opus:thap:sua:x")
         self.run_log("add", "--writer", "claude-haiku-5-5", "--level", "cao", "--reviewers", "opus,sonnet",
                      "--found", "opus:vua:sua:y")
         s = json.loads(self.run_log("summary", "--json").stdout)
         self.assertEqual(s["real"], {"opus": 2, "sonnet": 1, "both": 0})
-        # Fable viết (như Opus): lỗi chỉ Sonnet tìm là khác model; Haiku viết (như Sonnet): lỗi chỉ Opus tìm là khác model.
-        self.assertEqual((s["other_only"], s["same_only"], s["unknown_writer"]), (2, 1, 0))
+        # Bảng 10/11/2026 tách Fable khỏi Opus: Fable viết thì Opus và Sonnet đều là reviewer khác model; Haiku viết
+        # thì lỗi chỉ Opus tìm cũng vậy.
+        self.assertEqual((s["other_only"], s["same_only"], s["unknown_writer"]), (3, 0, 0))
         path = self.tmp / "state" / "review-log.jsonl"
         old = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
         old["ts"] -= 10 * 86400
@@ -63,6 +64,49 @@ class ReviewLog(TempDirTestCase):
                         encoding="utf-8")
         recent = json.loads(self.run_log("summary", "--days", "7", "--json").stdout)
         self.assertEqual((recent["runs"], recent["real"]["opus"]), (1, 1))
+
+    def test_efforts_are_recorded_and_old_form_still_works(self):
+        out = self.run_log("add", "--writer", "opus", "--level", "cao", "--reviewers", "fable:high,sonnet:high",
+                           "--found", "fable:vua:sua:a", "--found", "both:cao:sua:b", "--found", "sonnet:thap:bac-bo:c")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.run_log("add", "--writer", "sonnet", "--level", "thap", "--reviewers", "opus:low",
+                                      "--found", "opus:thap:sua:d").returncode, 0)
+        self.assertEqual(self.run_log("add", "--writer", "opus", "--level", "cao", "--reviewers", "opus,sonnet",
+                                      "--found", "opus:vua:sua:e").returncode, 0)
+        a, b, old = self.records()
+        self.assertEqual((a["reviewers"], a["configs"]), (["fable", "sonnet"], ["fable:high", "sonnet:high"]))
+        self.assertEqual((b["reviewers"], b["configs"]), (["opus"], ["opus:low"]))
+        self.assertEqual((old["reviewers"], "configs" in old), (["opus", "sonnet"], False))
+        s = json.loads(self.run_log("summary", "--json").stdout)
+        self.assertEqual((s["runs"], s["dual_runs"]), (3, 2))
+        # Review kép Fable và Sonnet đếm vào so sánh, Fable viết ra khóa riêng.
+        self.assertEqual(s["real"]["fable"], 1)
+        self.assertEqual(s["by_config"]["fable:high"], {"runs": 1, "real": 2, "real_only": 1, "false": 0, "high": 1})
+        self.assertEqual(s["by_config"]["sonnet:high"], {"runs": 1, "real": 1, "real_only": 0, "false": 1, "high": 1})
+        self.assertEqual(s["by_config"]["opus:low"], {"runs": 1, "real": 1, "real_only": 0, "false": 0, "high": 0})
+        self.assertEqual(s["by_cell"]["cao/opus → fable:high+sonnet:high"], {"runs": 1, "real": 2, "false": 1})
+        self.assertEqual(s["by_cell"]["thap/sonnet → opus:low"], {"runs": 1, "real": 1, "false": 0})
+        # Bản ghi cũ không effort không vào by_config.
+        self.assertEqual(len(s["by_config"]), 3)
+        text = self.run_log("summary").stdout
+        self.assertIn("Theo model·effort", text)
+        self.assertIn("- fable·high: 1 lần, lỗi thật 2 (một mình tìm 1, mức cao 1), dương tính giả 0", text)
+        self.assertIn("- cao/opus → fable·high+sonnet·high: 1 lần, lỗi thật 2, dương tính giả 1", text)
+
+    def test_single_reviewer_runs_are_logged_and_summary_without_dual_still_shows_configs(self):
+        self.assertEqual(self.run_log("add", "--writer", "haiku", "--level", "vua", "--reviewers", "opus:high",
+                                      "--found", "opus:thap:sua:x").returncode, 0)
+        out = self.run_log("summary")
+        self.assertIn("Chưa có lần review kép", out.stdout)
+        self.assertIn("- opus·high: 1 lần, lỗi thật 1", out.stdout)
+
+    def test_bad_reviewers_are_rejected(self):
+        for bad in ("opus:xhigh,sonnet", "opus:vo-cuc", ",", ""):
+            with self.subTest(bad=bad):
+                out = self.run_log("add", "--writer", "opus", "--level", "vua", "--reviewers", bad)
+                self.assertEqual(out.returncode, 2, bad)
+                self.assertIn("Không ghi", out.stderr)
+        self.assertEqual(self.records(), [])
 
     def test_bad_found_is_rejected_and_nothing_written(self):
         for bad in ("gpt:vua:sua:x", "opus:rat-cao:sua:x", "opus:vua:ok:x", "opus:vua"):
