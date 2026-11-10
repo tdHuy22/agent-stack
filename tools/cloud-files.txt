@@ -47,6 +47,8 @@ plugin/hooks/pre_compact.py
 plugin/hooks/pretool_client.py
 plugin/hooks/pretool_guard.py
 plugin/hooks/prompt_submit.py
+plugin/hooks/prompt_submit.py
+plugin/hooks/prompt_submit.py
 plugin/hooks/session_end.py
 plugin/hooks/session_start.py
 plugin/hooks/stop.py
@@ -80,6 +82,7 @@ plugin/skills/session-keeper/SKILL.md
 plugin/skills/session-keeper/scripts/fails_before.py
 plugin/skills/session-keeper/scripts/receipt.py
 plugin/skills/session-keeper/scripts/state.py
+plugin/skills/session-keeper/scripts/watch_change.py
 plugin/skills/session-keeper/templates/HANDOFF.md
 plugin/skills/session-keeper/templates/PLAN-0.md
 plugin/skills/task-router/SKILL.md

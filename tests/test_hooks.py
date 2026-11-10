@@ -361,6 +361,50 @@ class HookTests(TempDirTestCase):
                 (folder / f"j{i}.json").write_text(junk, encoding="utf-8")
                 self.assertEqual(self.cp_pretool(t, f"j{i}"), "")
                 self.assertIn("điện thoại", self.cp_turn(t, f"iPhone {i}", "ios", f"j{i}"))
+    # ---------------------------------------------------------------- phiên dài: nhắc mở phiên mới
+
+    def long_transcript(self, name, context):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + ".000Z"
+        usage = {"input_tokens": 2, "cache_creation_input_tokens": 500, "cache_read_input_tokens": context}
+        path = self.tmp / f"{name}.jsonl"
+        path.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {
+            "model": "claude-sonnet-5-5", "usage": usage, "content": [{"type": "text", "text": "x"}]}}) + "\n")
+        return str(path)
+
+    def long_note(self, sid, context, prompt, **extra):
+        payload = {"session_id": sid, "prompt": prompt, "transcript_path": self.long_transcript(sid, context)}
+        payload.update(extra)
+        return self.run_hook("prompt_submit.py", payload) or {}
+
+    def test_prompt_submit_reminds_about_a_long_session_once_per_hour(self):
+        out = self.long_note("ls1", 250000, "sửa lỗi ở bước tiếp theo")
+        self.assertIn("📏 phiên ≈250K token", out["systemMessage"])
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("mở phiên mới", ctx)
+        self.assertIn("đừng nén giữa chừng", ctx)
+        again = self.long_note("ls1", 250000, "câu khác hẳn lần trước")
+        self.assertNotIn("📏", again.get("systemMessage", ""))
+
+    def test_prompt_submit_stays_quiet_for_a_short_session(self):
+        out = self.long_note("ls2", 150000, "sửa lỗi ở bước tiếp theo")
+        self.assertNotIn("📏", out.get("systemMessage", ""))
+
+    def test_prompt_submit_long_session_note_skips_commands_automated_and_headless_messages(self):
+        cases = {"lệnh": ("/compact", {}),
+                 "tin tự động": ("<task-notification>\n<task-id>x</task-id>\n</task-notification>", {}),
+                 "phiên -p": ("sửa lỗi trong chế độ không tương tác", {"interactive": False})}
+        for label, (prompt, extra) in cases.items():
+            with self.subTest(label):
+                out = self.long_note("ls3", 250000, prompt, **extra)
+                self.assertNotIn("📏", out.get("systemMessage", ""))
+        # các tin trên không được "ăn" lần nhắc: tin thật đầu tiên vẫn nhận lời nhắc
+        self.assertIn("📏", self.long_note("ls3", 250000, "sửa lỗi ở bước tiếp theo")["systemMessage"])
+
+    def test_prompt_submit_long_session_note_skips_other_hosts(self):
+        payload = {"session_id": "ls4", "prompt": "sửa lỗi ở bước tiếp theo",
+                   "transcript_path": self.long_transcript("ls4", 250000)}
+        out = self.run_hook("prompt_submit.py", payload, env_extra={"AGENT_STACK_HOST": "pi"})
+        self.assertNotIn("📏", (out or {}).get("systemMessage", ""))
 
     # ---------------------------------------------------------------- Stop ghi lượt cuối, nhờ cập nhật §0
 

@@ -19,6 +19,8 @@ Khi router thấy việc là chức năng đụng ranh giới tin cậy, lượt
 
 Phiên Desktop: hook đánh dấu lượt mới để hook PreToolUse kiểm nơi người dùng gõ (Mac hay điện thoại) và nhắc Claude
 viết câu hỏi bằng chữ khi người dùng sang điện thoại (xem plugin/lib/client_place.py).
+Phiên có context từ 200K token thì nhắc (tối đa một lần mỗi giờ): mỗi lần gọi model đọc lại cả hội thoại, nên việc mới
+không cần hội thoại cũ nên mở phiên mới ở ranh giới việc. Hook không tự nén: nén giữa chừng làm mất chi tiết.
 """
 import hashlib
 import os
@@ -33,6 +35,10 @@ import client_place  # noqa: E402
 WARN_5H = float(os.environ.get("AGENT_STACK_WARN_5H", "90"))
 WARN_7D = float(os.environ.get("AGENT_STACK_WARN_7D", "80"))
 MAX_AGE_SECONDS = 30 * 60
+LONG_CONTEXT_TOKENS = 200_000  # từ cỡ này nhắc mở phiên mới ở ranh giới việc
+LONG_SESSION_REMIND_SECONDS = 3600
+
+
 def limit_notes(sid: str):
     data = A.read_json(A.state_dir() / "limits.json", {}) or {}
     if time.time() - float(data.get("ts", 0)) > MAX_AGE_SECONDS:
@@ -58,6 +64,23 @@ def limit_notes(sid: str):
         else:
             context.append(f"Hạn mức 5 giờ đã dùng {pct:.0f}%. Ghi checkpoint vào §0 trước khi bắt đầu bước dài tiếp theo.")
     return context, user
+
+
+def long_session_note(sid: str, data: dict, prompt: str):
+    """(context, dòng cho người dùng) khi phiên đã dài: context từ LONG_CONTEXT_TOKENS token, nhắc một lần mỗi giờ.
+    Chỉ với tin thật của người dùng (không phải tin tự động, lệnh, phiên -p). Số token lấy như router."""
+    if (not sid or not prompt.strip() or A.is_automated_prompt(prompt) or A.is_command_prompt(prompt)
+            or A.non_interactive(data)):
+        return "", ""
+    usage = A.mod_session_usage(sid) or (A.session_usage(data["transcript_path"]) if data.get("transcript_path") else {})
+    tokens = int(usage.get("context") or 0)
+    if tokens < LONG_CONTEXT_TOKENS or not A.once(f"long-session-{sid}", LONG_SESSION_REMIND_SECONDS):
+        return "", ""
+    k = tokens // 1000
+    return (f"[agent-stack] Phiên đã ≈{k}K token context: mỗi lần gọi model đọc lại cả hội thoại. Nếu tin này là việc "
+            "mới không cần hội thoại cũ: cập nhật §0 rồi đề nghị người dùng mở phiên mới (hoặc /compact) trước khi "
+            "làm. Đang dở việc thì làm tiếp, đừng nén giữa chừng (mất nguyên văn lỗi, giả thuyết đã loại).",
+            f"📏 phiên ≈{k}K token: việc mới thì nên mở phiên mới")
 
 
 def remember_request(sid, cwd, prompt):
@@ -103,6 +126,13 @@ def main():
             client_place.mark_pending(data)
         except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)
             A.log_event("hook-error", {"hook": "client-place", "error": repr(exc)[:300]})
+        try:  # phiên dài: nhắc mở phiên mới (lỗi không được làm mất cảnh báo hạn mức hay router)
+            long_ctx, long_user = long_session_note(sid, data, prompt) if claude_code else ("", "")
+            if long_ctx:
+                context.append(long_ctx)
+                user.append(long_user)
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "long-session", "error": repr(exc)[:300]})
         try:  # router (GĐ5): gợi ý skill, model, effort, subagent
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
             import route  # noqa: E402
