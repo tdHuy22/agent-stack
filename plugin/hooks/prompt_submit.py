@@ -78,8 +78,9 @@ def long_session_note(sid: str, data: dict, prompt: str):
         return "", ""
     k = tokens // 1000
     return (f"[agent-stack] Phiên đã ≈{k}K token context: mỗi lần gọi model đọc lại cả hội thoại. Nếu tin này là việc "
-            "mới không cần hội thoại cũ: cập nhật §0 rồi đề nghị người dùng mở phiên mới (hoặc /compact) trước khi "
-            "làm. Đang dở việc thì làm tiếp, đừng nén giữa chừng (mất nguyên văn lỗi, giả thuyết đã loại).",
+            "mới không cần hội thoại cũ: cập nhật §0 và đề nghị người dùng (một câu, không dừng chờ) mở phiên mới hay "
+            "/compact cho việc này. Đang dở việc thì làm tiếp, đừng nén giữa chừng (mất nguyên văn lỗi, giả thuyết đã "
+            "loại).",
             f"📏 phiên ≈{k}K token: việc mới thì nên mở phiên mới")
 
 

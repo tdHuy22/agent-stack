@@ -2092,7 +2092,8 @@ def session_usage(transcript_path, tail_bytes: int = 2_000_000) -> dict:
     """Từ phần cuối transcript của phiên chính: model đang chạy, cỡ context (token vào của lần gọi gần nhất), lúc gọi,
     TTL của cache (3600 hay 300 giây; không thấy thì coi là 3600 cho chắc), và `switched` khi người dùng vừa đổi
     /model sau lần gọi đó (cache của model mới chưa có). Chỉ lấy tên model đúng mẫu và con số, không lấy chữ nào khác.
-    Lỗi đọc thì trả các trường rỗng."""
+    Gặp mốc nén (compact_boundary) trước lần gọi nào thì context là 0 và `compacted` True: số trước mốc là của hội
+    thoại đã bị thay bằng bản tóm tắt. Lỗi đọc thì trả các trường rỗng."""
     out = {"model": None, "context": 0, "ts": None, "ttl": None, "switched": False}
     try:
         lines = _transcript_tail(transcript_path, tail_bytes)
@@ -2100,6 +2101,14 @@ def session_usage(transcript_path, tail_bytes: int = 2_000_000) -> dict:
         lines = []
     looked = 0
     for line in reversed(lines):
+        if out["ts"] is None and '"compact_boundary"' in line:
+            try:
+                mark = json.loads(line)
+            except ValueError:
+                mark = None
+            if isinstance(mark, dict) and mark.get("subtype") == "compact_boundary" and not mark.get("isSidechain"):
+                out["compacted"] = True
+                break
         is_model_note = '"attachment"' in line and '"model"' in line and out["model"] is None
         if not is_model_note and ('"usage"' not in line or '"assistant"' not in line):
             continue

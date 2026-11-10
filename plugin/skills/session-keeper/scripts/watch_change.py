@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Theo dõi một lệnh theo chu kỳ và chỉ báo khi kết quả đổi.
 
-Dùng với công cụ theo dõi nền của Claude Code (Monitor, hay Bash chạy nền) để theo dõi job, CI, máy đo, thay cho vòng
+Dùng với công cụ theo dõi nền (Monitor của Claude Code đánh thức phiên ở mỗi dòng in ra; Bash chạy nền chỉ báo khi
+script thoát, nên khi đó bắt buộc có --until hay --max-hours) để theo dõi job, CI, máy đo, thay cho vòng
 hẹn giờ đánh thức phiên: mỗi lần đánh thức, phiên dài đọc lại cả hội thoại (hàng trăm nghìn token) chỉ để thấy "chưa
 có gì mới". Script này chạy ngoài phiên, im lặng khi kết quả không đổi, và chỉ in khi đổi (lần đầu luôn in).
 
+Lệnh kiểm phải ra kết quả ổn định khi trạng thái không đổi: lệnh có đồng hồ chạy (như cột ELAPSED của `gh run list`)
+đổi mỗi lần và đánh thức phiên mỗi chu kỳ. Chọn trường trạng thái, như ví dụ dưới.
+
 Ví dụ:
-  python3 watch_change.py --every 300 -- gh run list --limit 1
-  python3 watch_change.py --every 600 --until 'completed|failed' --max-hours 6 -- kaggle kernels status user/job
+  python3 watch_change.py --every 300 --until completed --max-hours 6 -- gh run view 123 --json status,conclusion -q '.status+" "+.conclusion'
+  python3 watch_change.py --every 600 --until 'COMPLETE|ERROR' --max-hours 6 -- kaggle kernels status user/job
   python3 watch_change.py --every 60 -- sh -c 'tail -n 3 train.log'
 
 Mỗi lần in: một dòng `HH:MM [mã thoát N]` rồi vài dòng kết quả đã cắt gọn (stdout và stderr gộp; khóa sk-ant-... và
@@ -18,6 +22,8 @@ Thoát: `--until REGEX` khớp kết quả thì in rồi thoát 0; `--max-hours`
 êm (0). Mỗi lần chạy lệnh bị giới hạn `--run-timeout` giây (mặc định 120); quá hạn tính là kết quả "hết giờ chạy".
 """
 import argparse
+import signal
+import os
 import re
 import subprocess
 import sys
@@ -47,14 +53,23 @@ def redact(text: str) -> str:
 
 
 def run_once(cmd, timeout):
-    """(mã thoát, kết quả gộp stdout+stderr). Không chạy được hay quá hạn thì mã 127 hay 124 kèm lời nói rõ."""
+    """(mã thoát, kết quả gộp stdout+stderr). Không chạy được hay quá hạn thì mã 127 hay 124 kèm lời nói rõ. Lệnh chạy
+    trong nhóm tiến trình riêng để khi quá hạn giết cả tiến trình cháu (`sh -c 'a | b'`), không để lại tiến trình mồ côi."""
     try:
-        done = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return 124, f"hết giờ chạy lệnh sau {timeout:g} giây"
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+                                start_new_session=True)
     except OSError as exc:
         return 127, f"không chạy được lệnh: {exc}"
-    return done.returncode, (done.stdout or "") + (done.stderr or "")
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            proc.kill()
+        proc.communicate()
+        return 124, f"hết giờ chạy lệnh sau {timeout:g} giây"
+    return proc.returncode, (out or "") + (err or "")
 
 
 def normalize(text: str) -> str:
@@ -92,7 +107,10 @@ def main(argv=None) -> int:
     cmd = args.cmd[1:] if args.cmd and args.cmd[0] == "--" else args.cmd
     if not cmd or args.every <= 0:
         ap.error("cần --every > 0 và lệnh sau dấu --")
-    until = re.compile(args.until) if args.until else None
+    try:
+        until = re.compile(args.until) if args.until else None
+    except re.error as exc:
+        ap.error(f"--until không phải regex hợp lệ: {exc}")
     deadline = time.monotonic() + args.max_hours * 3600 if args.max_hours else None
     last = None
     try:

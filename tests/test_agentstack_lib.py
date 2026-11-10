@@ -944,6 +944,19 @@ class TranscriptUsage(TempDirTestCase):
         usage = A.session_usage(path)
         self.assertEqual((usage["model"], usage["switched"]), ("claude-opus-5-5", False))
 
+    def test_usage_after_a_compact_boundary_is_empty(self):
+        """Sau /compact chưa có lần gọi nào: số của hội thoại cũ không còn đúng (hook phiên dài nhắc nhầm)."""
+        now = time.time()
+        boundary = json.dumps({"type": "system", "subtype": "compact_boundary", "content": "Conversation compacted"}) + "\n"
+        summary = json.dumps({"type": "user", "message": {"role": "user", "content": "tóm tắt"}}) + "\n"
+        usage = A.session_usage(self.transcript(self.entry(now - 600, ctx=(1, 10, 518000)), boundary, summary))
+        self.assertEqual((usage["context"], usage.get("compacted")), (0, True))
+        # có lần gọi sau mốc nén thì lấy số của lần đó như thường
+        usage = A.session_usage(self.transcript(self.entry(now - 600, ctx=(1, 10, 518000)), boundary,
+                                                self.entry(now - 60, ctx=(1, 10, 40000))))
+        self.assertEqual(usage["context"], 40011)
+        self.assertNotIn("compacted", usage)
+
     def test_usage_detects_short_ttl_and_survives_bad_input(self):
         path = self.transcript("không phải json\n", '["usage", "assistant"]\n', self.entry(time.time(), ttl="5m"))
         self.assertEqual(A.session_usage(path)["ttl"], 300)

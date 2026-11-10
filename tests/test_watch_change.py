@@ -1,5 +1,7 @@
+import os
 import subprocess
 import sys
+import time
 
 from tests._util import PLUGIN, TempDirTestCase
 
@@ -81,3 +83,27 @@ class WatchChange(TempDirTestCase):
     def test_requires_a_command(self):
         out = subprocess.run([sys.executable, str(WATCH), "--every", "1"], capture_output=True, text=True, timeout=20)
         self.assertNotEqual(out.returncode, 0)
+
+    def test_run_timeout_kills_the_whole_process_group(self):
+        pidfile = self.tmp / "pid"
+        out = subprocess.run([sys.executable, str(WATCH), "--every", "0.05", "--run-timeout", "0.5", "--until", "hết giờ",
+                              "--", "sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"],
+                             capture_output=True, text=True, timeout=20)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("[mã thoát 124]", out.stdout)
+        pid = int(pidfile.read_text().strip())
+        for _ in range(50):  # tiến trình cháu phải chết cùng nhóm, không mồ côi
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(pid, 9)
+            self.fail("tiến trình cháu còn sống sau khi lệnh quá hạn")
+
+    def test_bad_until_regex_is_a_usage_error_not_a_traceback(self):
+        out = subprocess.run([sys.executable, str(WATCH), "--every", "1", "--until", "(", "--", "true"],
+                             capture_output=True, text=True, timeout=20)
+        self.assertEqual(out.returncode, 2)
+        self.assertNotIn("Traceback", out.stderr)
