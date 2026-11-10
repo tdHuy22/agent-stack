@@ -91,6 +91,14 @@ class Assess(unittest.TestCase):
                          change("tests/test_pager.py", 6)])
         self.assertEqual(r["level"], "thap")
 
+    def test_low_level_agent_instructions_count_as_code_for_review(self):
+        # 10/11/2026: SKILL.md, CLAUDE.md đổi hành vi của agent nên mức thấp vẫn có reviewer như code
+        r = risk.assess([change("plugin/skills/x/SKILL.md", 30)], writer="opus")
+        self.assertEqual(r["level"], "thap", r["reasons"])
+        self.assertEqual(r["reviewers"], [{"model": "sonnet", "effort": "medium"}])
+        r = risk.assess([change("README.md", 30)], writer="opus")
+        self.assertEqual(r["reviewers"], [], "chỉ tài liệu: không reviewer")
+
     def test_code_without_test_is_flagged(self):
         r = risk.assess([change("src/pager.py", 30, 2)])
         self.assertTrue(any("không đổi test" in x for x in r["reasons"]), r["reasons"])

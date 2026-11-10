@@ -285,7 +285,8 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
               if c["path"] not in reviewed and change_kind(c) != "test" and CRYPTO_RE.search(c["path"].lower())]
     secure = bool(security or crypto or any(name in SECURITY_BOUNDARIES for name, _ in crossed))
     result.update(review_plan(level, writer, security=secure, crypto=bool(crypto), rereview=rereview,
-                              code_lines=code_lines, limits=limits, writer_guessed=writer_guessed))
+                              code_lines=code_lines, limits=limits, writer_guessed=writer_guessed,
+                              instr_lines=result["by_kind"].get("instr", 0)))
     result.update(level=level, score=score, reasons=reasons,
                   hotspots=[(p, v[1]) for p, v in sorted(hot.items(), key=lambda kv: (-kv[1][0], kv[0]))])
     return result
@@ -421,16 +422,18 @@ def ask_choices(plans) -> list:
 
 
 def review_plan(level: str, writer=None, security=False, crypto=False, rereview=False, code_lines=0,
-                limits=None, writer_guessed=False) -> dict:
+                limits=None, writer_guessed=False, instr_lines=0) -> dict:
     """{review: câu đề nghị, reviewers: [{model, effort}] (rỗng khi chưa rõ người viết, mức thấp, hay không có code),
     ask: [lý do hỏi người dùng trước], choices: [lựa chọn khi hỏi], dropped: [lý do tự bỏ reviewer vì hạn mức]}.
     Chưa rõ người viết thì câu đề nghị nêu từng trường hợp. writer_guessed: người viết suy từ state/limits.json
     (có thể của phiên khác), nên câu đề nghị nói rõ. code_lines: số dòng code của diff (by_kind["code"]); mức thấp
-    chỉ có reviewer khi > 0."""
+    chỉ có reviewer khi code_lines + instr_lines > 0: file chỉ dẫn cho agent (SKILL.md, CLAUDE.md, agents/*.md) đổi
+    hành vi của agent nên tính như code (bạn chọn 10/11/2026)."""
+    has_code = code_lines + instr_lines > 0
     result = {"review": "", "reviewers": [], "ask": [], "choices": [], "dropped": []}
     if level == "thap":
         own = "tự rà `git diff` một lượt, không cần subagent; người dùng không cần đọc diff."
-        if rereview or code_lines <= 0:
+        if rereview or not has_code:
             result["review"] = own
             return result
         drops = budget_drops(level, limits)
@@ -444,7 +447,7 @@ def review_plan(level: str, writer=None, security=False, crypto=False, rereview=
     if level == "cao" and security and not rereview:
         tail = "chạy differential-review trước nếu có (bước 5); " + tail
     sides = [side] if side else list(WRITER_FAMILIES)
-    plans = {s: reviewers_for(level, s, security, crypto, rereview, code_lines > 0) for s in sides}
+    plans = {s: reviewers_for(level, s, security, crypto, rereview, has_code) for s in sides}
     asks = []
     for plan in plans.values():
         asks += [a for a in budget_asks(plan, level, code_lines, limits) if a not in asks]
