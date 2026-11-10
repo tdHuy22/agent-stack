@@ -25,6 +25,7 @@ class PriceTests(unittest.TestCase):
     def test_longest_prefix_with_date_suffix(self):
         self.assertEqual(us.price_for("claude-haiku-4-5-20251001")[0], 1.0)
         self.assertEqual(us.price_for("claude-opus-5-5")[0], 4.0)
+        self.assertEqual(tuple(us.price_for("claude-fable-5-2")), (8.0, 40.0, 0.20))  # không rơi về giá Fable 5
         self.assertEqual(us.price_for("claude-opus-5")[0], 5.0)
         self.assertIsNone(us.price_for("gpt-oss"))
 

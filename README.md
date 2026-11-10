@@ -248,7 +248,7 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
    ➡️ Tiếp: viết test cho parser · Model: giữ opus · Effort: medium · Subagent: general-purpose (claude-haiku-5-5·low) · Skill: không
    ```
 
-   Effort đổi giữa phiên thoải mái: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 giữ prompt cache khi đổi effort. Đổi model thì phải ghi lại cả context vào cache của model mới (context 250K token tốn khoảng 1 USD giá niêm yết), nên dòng ➡️ ghi `giữ <model>` khi đổi không rẻ, và phần việc hợp model khác giao cho subagent. Việc dài, sửa nhiều file: subagent trong worktree riêng, xong chạy `merge_back.py` để tự gộp khi test đạt.
+   Effort đổi giữa phiên thoải mái: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 trở lên giữ prompt cache khi đổi effort. Đổi model thì phải ghi lại cả context vào cache của model mới (context 250K token tốn khoảng 1 USD giá niêm yết), nên dòng ➡️ ghi `giữ <model>` khi đổi không rẻ, và phần việc hợp model khác giao cho subagent. Việc dài, sửa nhiều file: subagent trong worktree riêng, xong chạy `merge_back.py` để tự gộp khi test đạt.
 5. **Chạy kiểm tra** qua `receipt.py` để có biên nhận:
 
    ```bash

@@ -23,9 +23,10 @@ from pathlib import Path
 
 # Giá niêm yết API, USD trên 1 triệu token: (input, output, cache_read).
 # Nguồn: bảng model trong skill claude-api (cập nhật 2026-09-25; Haiku 5.5 theo bảng 2026-10-06, giá cho prompt
-# tới 100K token, dài hơn thì 0,5/2,5).
+# tới 100K token, dài hơn thì 0,5/2,5; Fable 5.2 theo bảng giá chính thức 2026-11-10).
 # cache_read = None nghĩa là dùng mặc định 0,1 x giá input.
 PRICES = {
+    "claude-fable-5-2": (8.0, 40.0, 0.20),
     "claude-fable-5-1": (10.0, 50.0, 0.25),
     "claude-fable-5": (10.0, 50.0, None),
     "claude-mythos-5-1": (10.0, 50.0, None),

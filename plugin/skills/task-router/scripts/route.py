@@ -375,7 +375,7 @@ def needs_model_switch(wanted: str, now: str) -> bool:
 
 
 def effort_keeps_cache(model: str) -> bool:
-    """Đổi effort giữa phiên giữ prompt cache với model này (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1)."""
+    """Đổi effort giữa phiên giữ prompt cache với model này (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 trở lên)."""
     return any((model or "").startswith(m) for m in (rules().get("switch") or {}).get("effort_keeps_cache") or [])
 
 

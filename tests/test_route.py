@@ -83,7 +83,7 @@ class RouterRules(TempDirTestCase):
         self.assertNotIn("None", route.describe(hit))
 
     def test_model_ids_point_to_newest(self):
-        # Alias haiku của CLI còn trỏ Haiku 4.5 (không có effort), nên router ghi ID đầy đủ.
+        # Alias haiku ra Haiku 5.5 từ CLI 2.1.293; router vẫn ghi ID đầy đủ để đúng cả trên bản cũ (Haiku 4.5 không có effort).
         self.assertEqual(route.model_name("haiku"), "claude-haiku-5-5")
         self.assertEqual(route.model_name("sonnet"), "sonnet")
         self.assertEqual(route.model_effort({"model": "haiku", "effort": "low"}), "claude-haiku-5-5 · low")
@@ -93,14 +93,16 @@ class RouterRules(TempDirTestCase):
         self.assertTrue(route.needs_model_switch("sonnet", "claude-haiku-5-5"))
         self.assertFalse(route.needs_model_switch("sonnet", "claude-sonnet-5-5"))
         self.assertFalse(route.needs_model_switch("opus", ""))
+        self.assertTrue(route.effort_keeps_cache("claude-fable-5-2"))  # Fable 5.1 trở lên giữ cache khi đổi effort
+        self.assertFalse(route.effort_keeps_cache("claude-fable-5"))
 
     def test_cheaper_model_only_when_project_has_tests(self):
         text = "Thêm tính năng xuất CSV cho báo cáo, viết hàm mới"
         plain = route.suggest_for(text, {"kinds": ["python"], "markers": []})
         tested = route.suggest_for(text, {"kinds": ["python"], "markers": ["tests"]})
-        self.assertEqual((plain["model"], plain["effort"]), ("sonnet", "medium"))
+        self.assertEqual((plain["model"], plain["effort"]), ("sonnet", "high"))
         self.assertEqual((tested["model_id"], tested["effort"]), ("claude-haiku-5-5", "low"))
-        self.assertEqual(tested["fallback"], "sonnet · medium")  # có đường lên bậc khi test trượt
+        self.assertEqual(tested["fallback"], "sonnet · high")  # có đường lên bậc khi test trượt
         self.assertNotIn("test trượt", tested["note"])  # đường lên bậc chỉ có một nguồn (fallback)
         small = route.suggest_for("Sửa lỗi chính tả trong thông báo lỗi này", {"kinds": [], "markers": ["tests"]})
         self.assertEqual((small["rule"], small["model"], small["effort"]), ("small-fix", "sonnet", "low"))
@@ -168,7 +170,7 @@ class HookSuggestion(TempDirTestCase):
         self.assertIsNone(route.hook_suggestion("Review bảo mật thêm file khác nữa nhé", data))
 
     def test_no_noise_when_already_matching_and_nothing_to_add(self):
-        data = {"session_id": "s2", "effort": {"level": "medium"}}
+        data = {"session_id": "s2", "effort": {"level": "high"}}  # refactor: sonnet · high từ 10/11/2026
         sessions = self.tmp / "state" / "sessions"
         sessions.mkdir(parents=True)
         import hashlib
@@ -188,7 +190,7 @@ class HookSuggestion(TempDirTestCase):
 
     # ---------------------------------------------------------------- GĐ24: đổi model chỉ khi rẻ, effort thoải mái
 
-    DEBUG = "Test cứ lúc pass lúc fail, hình như race condition, debug giúp"  # luật debug-hard: opus · medium
+    DEBUG = "Test cứ lúc pass lúc fail, hình như race condition, debug giúp"  # luật debug-hard: opus · high
 
     def transcript(self, name, model, ctx, age, ttl="1h"):
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - age)) + ".000Z"
@@ -205,9 +207,9 @@ class HookSuggestion(TempDirTestCase):
         hit = route.hook_suggestion(self.DEBUG, data)
         self.assertNotIn("/model", hit["user"])
         self.assertIn("giữ sonnet · medium (đổi tốn ≈2,00 USD)", hit["user"])  # effort đang dùng; 250K token × 4 USD/M × 2 (cache 1 giờ)
-        self.assertIn("subagent opus · medium", hit["user"])
+        self.assertIn("subagent opus · high", hit["user"])
         self.assertIn("Đừng đổi /model lúc này: context ≈250K token", hit["context"])
-        self.assertIn('Agent với model "opus", effort "medium"', hit["context"])
+        self.assertIn('Agent với model "opus", effort "high"', hit["context"])
         self.assertIn("merge_back.py", hit["context"])
         self.assertIn("`Model: giữ sonnet`", hit["context"])
 
@@ -227,7 +229,7 @@ class HookSuggestion(TempDirTestCase):
         data = {"session_id": "e1", "effort": {"level": "low"},
                 "transcript_path": self.transcript("e1", "claude-opus-5-5", 400000, age=60)}
         hit = route.hook_suggestion(self.DEBUG, data)
-        self.assertIn("/effort medium", hit["user"])
+        self.assertIn("/effort high", hit["user"])
         self.assertNotIn("/model", hit["user"])
         old = {"session_id": "e2", "effort": {"level": "low"},
                "transcript_path": self.transcript("e2", "claude-opus-4-1", 400000, age=60)}
@@ -443,7 +445,7 @@ class ProjectAware(ProjectFixtures):
         self.assertIn("Python", hint["context"])
         self.assertIn("agent-stack:test-runner", hint["context"])
         # Project có test nên dùng cấu hình rẻ, kèm đường lên bậc.
-        self.assertIn("→ claude-haiku-5-5 · low (test trượt thì sonnet · medium) · skill reuse-best", hint["context"])
+        self.assertIn("→ claude-haiku-5-5 · low (test trượt thì sonnet · high) · skill reuse-best", hint["context"])
         self.assertIn("dòng ➡️", hint["context"])
         self.assertIn("🧭 Python", hint["user"])
 

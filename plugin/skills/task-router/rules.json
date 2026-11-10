@@ -1,19 +1,19 @@
 {
   "version": 2,
-  "status": "đối chiếu tài liệu chính thức 04/10/2026; model mới nhất kiểm 08/10/2026 (Haiku 5.5 có effort); số liệu eval 02–08/10/2026; skill vendor tắt mặc định 08/10/2026 (A/B không hơn A); dòng không có số đo là phán đoán, xem routing-table.md",
+  "status": "đối chiếu tài liệu chính thức 04/10/2026; model mới nhất kiểm 08/10/2026 (Haiku 5.5 có effort) và 10/11/2026 (Fable 5.2, alias haiku và best, giá); code và debug không có test mặc định high (người dùng chốt 10/11/2026); số liệu eval 02–08/10/2026; skill vendor tắt mặc định 08/10/2026 (A/B không hơn A); dòng không có số đo là phán đoán, xem routing-table.md",
   "min_words": 4,
   "switch": {
-    "_note": "Đổi /model giữa phiên phải ghi lại cả context vào cache của model mới: giá ghi = giá token vào × hệ số theo TTL (2 với cache 1 giờ, 1,25 với 5 phút). Giá USD mỗi triệu token vào, đọc từ skill claude-api ngày 06/10/2026 (routing-table.md). Đổi effort giữ cache trên các model trong effort_keeps_cache (code.claude.com/docs/en/prompt-caching, kiểm 12/10/2026). Rẻ khi: đầu phiên, context dưới free_tokens, hoặc đã nghỉ quá TTL.",
+    "_note": "Đổi /model giữa phiên phải ghi lại cả context vào cache của model mới: giá ghi = giá token vào × hệ số theo TTL (2 với cache 1 giờ, 1,25 với 5 phút). Giá USD mỗi triệu token vào, đọc từ skill claude-api ngày 06/10/2026; Fable 5.2 là 8, theo bảng giá chính thức ngày 10/11/2026 (routing-table.md). Đổi effort giữ cache trên các model trong effort_keeps_cache (code.claude.com/docs/en/prompt-caching, kiểm 12/10/2026; Fable 5.1 trở lên, kiểm 10/11/2026). Rẻ khi: đầu phiên, context dưới free_tokens, hoặc đã nghỉ quá TTL.",
     "free_tokens": 40000,
     "cache_write": {"3600": 2.0, "300": 1.25},
-    "price_in": {"fable": 10, "opus": 4, "sonnet": 2, "haiku": 0.1},
+    "price_in": {"fable": 8, "opus": 4, "sonnet": 2, "haiku": 0.1},
     "price_in_long": {"haiku": 0.5},
     "long_from": 100000,
-    "effort_keeps_cache": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+    "effort_keeps_cache": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-fable-5-2"],
     "agents_doing_the_work": ["agent-stack:reviewer", "agent-stack:researcher"]
   },
   "model_ids": {
-    "_note": "Alias còn trỏ bản cũ thì ghi ID đầy đủ. Kiểm 08/10/2026 bằng claude 2.1.285: sonnet → claude-sonnet-5-5, opus → claude-opus-5-5, fable → claude-fable-5-1, nhưng haiku → claude-haiku-4-5 (không có effort).",
+    "_note": "Alias còn trỏ bản cũ thì ghi ID đầy đủ. Kiểm 10/11/2026: sonnet → claude-sonnet-5-5, opus → claude-opus-5-5, fable → claude-fable-5-2 (theo tài liệu), haiku → claude-haiku-5-5 từ CLI 2.1.293 (gọi thử bằng claude 2.1.311); giữ ID đầy đủ cho haiku vì CLI cũ hơn còn ra claude-haiku-4-5 (không có effort).",
     "haiku": "claude-haiku-5-5"
   },
   "profiles": {
@@ -271,7 +271,7 @@
     {
       "id": "debug-simple",
       "model": "sonnet",
-      "effort": "medium",
+      "effort": "high",
       "agent": "agent-stack:test-runner",
       "match": [
         "stack trace",
@@ -295,7 +295,7 @@
     {
       "id": "debug-hard",
       "model": "opus",
-      "effort": "medium",
+      "effort": "high",
       "match": [
         "debug",
         "khong hieu sao",
@@ -449,7 +449,7 @@
       "agent": "agent-stack:test-runner",
       "skills": [],
       "model": "sonnet",
-      "effort": "medium",
+      "effort": "high",
       "match": [
         "chay test",
         "run test",
@@ -623,7 +623,7 @@
     {
       "id": "refactor",
       "model": "sonnet",
-      "effort": "medium",
+      "effort": "high",
       "match": [
         "refactor",
         "tai cau truc",
@@ -641,7 +641,7 @@
       ],
       "note": "chỉ khi việc không tầm thường; sửa nhỏ hay hàm vài dòng thì bỏ qua",
       "model": "sonnet",
-      "effort": "medium",
+      "effort": "high",
       "match": [
         "them tinh nang",
         "implement",
