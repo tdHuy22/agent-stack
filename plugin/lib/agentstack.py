@@ -1025,6 +1025,7 @@ _CONSENT_TAIL = {"đi", "luôn", "lên", "nhé", "nha", "nhá", "giúp", "giùm"
                  "--force", "-f", "ghi", "đè", "all", "hết", "cả", "and", "và", "thư", "mục", "folder", "file", "files",
                  "dir", "directory", "head", "này", "đó", "đấy", "this", "that", "--amend", "-i", "-fd", "-fdx",
                  "--force-with-lease", "nữa", "rồi", "push", "rebase", "reset", "amend", "clean", "commit"}
+_PUSH_TAIL = {"github", "gitlab", "repo"}  # chỉ cho push ("push claude-remote lên github")
 _CONSENT_REF = re.compile(r"(?:origin|upstream)/[a-z0-9_./-]+|head~?\d*|head\^+")
 _CONSENT_STRIP = "\"'`“”‘’()[]{}<>*_:"
 
@@ -1054,7 +1055,7 @@ def _names_target(word: str, path: str) -> bool:
 def text_consents(text: str, verb: str, targets=()) -> bool:
     """Tin `text` có bảo làm việc `verb` (khóa của CONSENT_VERBS, nối bằng + khi cần đủ mọi việc) không: có một mệnh đề
     (tách ở . ! ? ; , xuống dòng; không kết bằng ?) gồm tên việc và chỉ những từ trong _CONSENT_LEAD trước nó,
-    _CONSENT_TAIL sau nó. Với `rm`, mọi đích phải được nêu trong chính mệnh đề đó: đúng đường dẫn, hay đúng tên cuối khi
+    _CONSENT_TAIL hay tên trong `targets` sau nó. Với `rm`, mọi đích phải được nêu trong chính mệnh đề đó: đúng đường dẫn, hay đúng tên cuối khi
     tin chỉ ghi tên; đích có biến, ~, ký tự đại diện thì không tính."""
     import unicodedata
     if isinstance(verb, str) and "+" in verb:
@@ -1086,8 +1087,11 @@ def text_consents(text: str, verb: str, targets=()) -> bool:
                 continue
             if any(w not in _CONSENT_TAIL and not any(_names_target(s, p) for p in paths) for w, s in zip(tail, said)):
                 continue
-        elif any(w not in _CONSENT_TAIL and w not in names and not _CONSENT_REF.fullmatch(w) for w in tail):
-            continue
+        elif any(w not in _CONSENT_TAIL and w not in names and not _CONSENT_REF.fullmatch(w)
+                 and not (verb in ("push", "force") and w in _PUSH_TAIL)
+                 and not any(_names_target(_norm_path(w), unicodedata.normalize("NFC", p).lower().strip(_CONSENT_STRIP))
+                             for p in paths) for w in tail):
+            continue  # ngoài việc rm, đích chỉ là tên được phép nêu (repo, nhánh), không bắt buộc
         return True
     return False
 

@@ -401,7 +401,19 @@ def push_consent(args: list, rewrite: bool, where: Path = None):
         return None  # URL, đường dẫn, user@host, remote chưa có
     if any(":" in w or not re.fullmatch(r"\+?[A-Za-z0-9_./-]+", w) for w in words[1:]):
         return None
-    return ("push+force" if rewrite else "push", ())
+    return ("push+force" if rewrite else "push", push_names(words, where))
+
+
+def push_names(words: list, where: Path = None) -> tuple:
+    """Tên mà tin của người dùng được nêu kèm "push" ("Push claude-remote", "push nhánh feature-x"): tên repo, remote,
+    nhánh trong lệnh, hay nhánh hiện tại khi lệnh không ghi nhánh. Tên lạ (repo khác) vẫn làm tin không được tính."""
+    where = where or Path(".")
+    top = (lib().git_out(where, "rev-parse", "--show-toplevel", timeout=1.5) or "").strip()
+    names = [top] if top else []
+    names += [w.lstrip("+") for w in words]
+    if len(words) < 2:
+        names.append((lib().git_out(where, "rev-parse", "--abbrev-ref", "HEAD", timeout=1.5) or "").strip())
+    return tuple(dict.fromkeys(n for n in names if n and n != "HEAD" and not re.search(r"[$`~*?\[]", n)))
 
 
 def check_git_irreversible(verb: str, args: list, where: Path):
