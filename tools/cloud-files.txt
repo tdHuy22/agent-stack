@@ -47,8 +47,6 @@ plugin/hooks/pre_compact.py
 plugin/hooks/pretool_client.py
 plugin/hooks/pretool_guard.py
 plugin/hooks/prompt_submit.py
-plugin/hooks/prompt_submit.py
-plugin/hooks/prompt_submit.py
 plugin/hooks/session_end.py
 plugin/hooks/session_start.py
 plugin/hooks/stop.py
