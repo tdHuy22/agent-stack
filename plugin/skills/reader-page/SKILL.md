@@ -15,7 +15,23 @@ Khuôn: `${CLAUDE_SKILL_DIR}/mau.html`. Script kiểm: `${CLAUDE_SKILL_DIR}/scri
 ## Khi nào dùng
 
 - Mọi file để người đọc: so sánh phương án, kế hoạch, báo cáo, kết quả đo, review, giải thích một hệ thống, hướng dẫn, trang tương tác. Cả khi sửa một trang cũ: đưa nó về khuôn này luôn.
-- Bỏ qua: file bắt buộc Markdown (danh sách trong luật chung), app, dashboard, game. Trang dựng từ Artifact type (Docs, Slides): theo nội dung của skill này, bỏ bước chạy script.
+- Bỏ qua: file bắt buộc Markdown (mục dưới), app, dashboard, game. Trang dựng từ Artifact type (Docs, Slides): theo nội dung của skill này, bỏ bước chạy script.
+- Trang là một file `.html` tự chứa: CSS, JS, hình SVG nằm sẵn trong file, mở thẳng bằng trình duyệt, đọc được trên điện thoại (căn cứ: bài "The unreasonable effectiveness of HTML" của đội Claude Code, 05/2026).
+
+### File vẫn giữ Markdown
+
+Chỉ giữ `.md` khi file bắt buộc là Markdown:
+
+- agent hay công cụ đọc nó: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `SKILL.md` và mọi file trong thư mục skill, file định nghĩa subagent hay lệnh, file nhớ; file trạng thái `PLAN.md`, `PROGRESS.md`, `TODO.md`, `.agent/*.md` (HANDOFF, LAST-TURN, NHAT-KY, threat-model);
+- nền tảng ngoài đòi Markdown: `README`, `CHANGELOG`, `CONTRIBUTING`, `SECURITY`, `LICENSE`, mẫu trong `.github/`, mô tả PR và issue, commit; tài liệu của site dựng từ Markdown (MkDocs, Docusaurus) hay project đã quy ước Markdown trong `CLAUDE.md`, `AGENTS.md`;
+- script hay test của project đọc nó như Markdown;
+- người dùng gọi đúng tên file `.md` hay xin Markdown.
+
+Thêm:
+
+- Skill hay plugin, kể cả của bên thứ ba, dặn xuất báo cáo hay bản phân tích cho người đọc bằng `.md`: vẫn viết `.html`. File trung gian mà agent hay script của skill đọc lại (như bản nháp `analysis.md` của paper-anatomy) giữ đúng định dạng skill cần.
+- Script tự sinh báo cáo cho người đọc thì sinh `.html` (vẫn in tóm tắt chữ ra terminal). Chữ lấy từ nguồn không tin cậy (repo lạ, log, web) phải qua `html.escape` hay cách làm sạch tương đương trước khi vào trang.
+- File `.md` cũ cho người đọc chưa đổi thì cứ để; khi sửa lớn file đó thì hỏi người dùng có chuyển sang HTML không.
 
 ## Bốn loại trang
 
@@ -34,6 +50,17 @@ Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn n�
 
 Đã qua `vet-skill`; chỉ dùng khi đã cài (`claude plugin list`). Nội dung vẫn theo các mục "Cách viết" của skill này.
 
+| Việc | Dùng |
+|---|---|
+| Trang chỉnh bằng nút rồi chép kết quả thành prompt: chỉnh thiết kế, duyệt diff từng dòng, bản đồ code, góp ý văn bản, dựng truy vấn | `playground`, trang khai `data-loai="cong-cu"` |
+| Kế hoạch triển khai một hướng, đụng hơn vài file, cần mockup, sơ đồ trạng thái, cây lời gọi | `html-plan` (`/html-plan`) |
+| Trang tổng quan project nhiều nhánh việc để gửi người khác, làm mới cùng link | `project-artifact` |
+| Giao diện sản phẩm thật (landing, màn hình app, poster) | `frontend-design` |
+| Tài liệu nhiều người cùng sửa, bình luận | Claude Docs (skill `docs`) khi phiên có |
+| Cây kế hoạch, tiến độ | `progress` (widget, pane Kế hoạch) |
+
+Chi tiết từng skill:
+
 - **Trang công cụ:** skill `playground` có 6 khuôn (chỉnh thiết kế, dựng truy vấn, bản đồ khái niệm, góp ý văn bản, duyệt diff từng dòng, bản đồ code). Lấy khuôn hợp nhất, khai `data-loai="cong-cu"`, gắn `data-xuat` vào nút chép prompt, giữ sáng tối theo `artifact-design` (khuôn của nó mặc định tối).
 - **Kế hoạch triển khai một hướng, đụng hơn vài file:** `/html-plan`. Trang của nó dùng runtime riêng; kiểm bằng `node <skill html-plan>/runtime/pack.mjs <trang> --lint-only` thay cho `check_page.py`, rồi `pack.mjs` để gói thành một file. Kế hoạch có từ hai phương án thì vẫn dùng khuôn của skill này.
 - **Trang tổng quan project gửi người khác, làm mới cùng link:** `project-artifact`.
@@ -42,7 +69,8 @@ Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn n�
 ## Đặt file và đưa cho người dùng
 
 - Trang của phiên cần giữ: `.agent/trang/<tên>.html` trong project. Không cần giữ: thư mục scratchpad hay thư mục tạm. Tài liệu của project (hướng dẫn, giải thích kiến trúc): đúng chỗ file `.md` lẽ ra nằm.
-- Đưa cho người dùng: `SendUserFile` với `display: "render"`, hay mở ở pane trình duyệt của app. Đăng Artifact khi luật Trang HTML và Artifact yêu cầu hay người dùng cần link.
+- Đưa cho người dùng: `SendUserFile` với `display: "render"`, hay mở ở pane trình duyệt của app.
+- Đăng Artifact khi người dùng cần link hay đọc trên máy khác, và khi kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng trang Artifact riêng tư đặt phương án cạnh nhau và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay phiên không có công cụ Artifact, thì không đăng: ngắn thì giữ trong chat, dài thì viết file HTML (hay `html-plan`).
 
 ## Các bước
 
@@ -53,7 +81,7 @@ Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn n�
    Bước 2, 3 và 6 chỉ bắt buộc với trang đề xuất; trang khác làm bước 6 khi trang dài hay gửi người khác.
 5. **Chạy script**: `python3 ${CLAUDE_SKILL_DIR}/scripts/check_page.py <file>`. Mã thoát 1 thì sửa từng LỖI rồi chạy lại tới khi ra "Đạt". NHẮC thì cân nhắc. Script chỉ đếm và so được phần cấu trúc; nó không chứng minh trang dễ hiểu.
 6. **Đọc thử bằng người lạ, một lần.** Giao file cho subagent `agent-stack:cold-reader` với prompt chỉ gồm đường dẫn tuyệt đối của file trang: không kể bối cảnh, không nói trang muốn gì, vì người đọc thật cũng không được nghe. Hook SubagentStart của agent-stack không đưa bối cảnh phiên cho subagent này. Chưa có subagent đó (plugin chưa nạp lại) thì dùng `general-purpose`, model `sonnet`, với chỉ dẫn trong `${CLAUDE_SKILL_DIR}/../../agents/cold-reader.md`; khi đó hook vẫn chèn yêu cầu của người dùng vào đầu context, nên con số "hiểu bao nhiêu phần trăm" có thể cao hơn thật, và báo cáo phải nói vậy. Sửa theo kết quả một lượt, chạy lại script, không lặp tiếp.
-7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Kế hoạch có phương án thì đọc bình luận bằng `ArtifactComments` rồi mới làm (luật toàn cục).
+7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Kế hoạch có phương án thì đọc bình luận bằng `ArtifactComments` rồi mới làm (mục "Đặt file và đưa cho người dùng").
 8. **Sau khi bạn chốt**, sửa trang ngay trên từng câu: ghi lựa chọn đã chốt, nói lý do nếu khác khuyến nghị, bỏ chữ "cần chốt" khỏi câu đó. Không để khuyến nghị cũ đứng cạnh quyết định ngược với nó: người đọc sau không biết câu nào còn mở.
 
 ## Khuôn trang
