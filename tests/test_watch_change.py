@@ -37,7 +37,9 @@ class WatchChange(TempDirTestCase):
         self.assertEqual(out.stdout.count("[mã thoát 0]"), 2)
         self.assertEqual(out.stdout.count("đang chạy"), 1)
         self.assertIn("xong", out.stdout)
-        self.assertRegex(out.stdout.splitlines()[0], r"^\d\d:\d\d \[mã thoát 0\]$")
+        # mỗi lần đổi đúng một dòng: Monitor coi mỗi dòng là một sự kiện
+        self.assertEqual(len(out.stdout.splitlines()), 2)
+        self.assertRegex(out.stdout.splitlines()[0], r"^\d\d:\d\d \[mã thoát 0\] đang chạy$")
 
     def test_until_exits_zero_even_on_first_match(self):
         out = self.watch(["0|completed"], "--until", "complete")
@@ -68,6 +70,7 @@ class WatchChange(TempDirTestCase):
         self.assertIn("dòng 0", out.stdout)
         self.assertNotIn("dòng 39", out.stdout)
         self.assertIn("(+", out.stdout)
+        self.assertEqual(len(out.stdout.splitlines()), 1)
 
     def test_command_that_cannot_run_is_reported_not_raised(self):
         out = subprocess.run([sys.executable, str(WATCH), "--every", "0.05", "--max-hours", "0.00003", "--",

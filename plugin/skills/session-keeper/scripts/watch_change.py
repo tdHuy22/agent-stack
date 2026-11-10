@@ -62,19 +62,19 @@ def normalize(text: str) -> str:
 
 
 def trim(text: str) -> str:
-    """Vài dòng đầu (bỏ dòng trống), mỗi dòng và cả khối đều bị cắt."""
+    """Vài dòng đầu (bỏ dòng trống) nối thành MỘT dòng bằng " ⏎ " (Monitor coi mỗi dòng in ra là một sự kiện),
+    mỗi đoạn và cả khối đều bị cắt."""
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     out = [ln[:MAX_LINE_CHARS] + ("…" if len(ln) > MAX_LINE_CHARS else "") for ln in lines[:MAX_LINES]]
     if len(lines) > MAX_LINES:
         out.append(f"… (+{len(lines) - MAX_LINES} dòng)")
-    body = "\n".join(out)
+    body = " ⏎ ".join(out)
     return body[:MAX_TOTAL_CHARS] + ("…" if len(body) > MAX_TOTAL_CHARS else "")
 
 
 def emit(header: str, body: str = "") -> None:
-    print(header, flush=True)
-    if body:
-        print(body, flush=True)
+    """Một lần đổi in đúng một dòng, để công cụ theo dõi nền đánh thức phiên một lần."""
+    print(f"{header} {body}" if body else header, flush=True)
 
 
 def stamp() -> str:
