@@ -21,7 +21,6 @@
 - **Việc tiếp theo, theo thứ tự:**
   (Câu 4: cấu hình review mới đã làm; `review_log.py summary` gom số liệu, sau 2 lần review kép: chỉ Opus 5, chỉ Sonnet 10, cả hai 4; cần khoảng 5 lần mới kết luận. Mã hóa, token, thanh toán sửa nhỏ ở mức vừa: giữ ô của bảng, không nâng Opus xhigh (bạn chốt 04/11/2026).)
   1. Tùy chọn, không cài cũng không hỏng gì: `brew install gitleaks osv-scanner` (không code nào gọi).
-  2. Push lên origin (bạn: "làm T.2 đi", 10/11/2026).
 - **Ghi nhớ (đã xong, không phải việc):**
   - Bỏ bench agent-stack và pi-agent trên Harbor/TBLite (02/11/2026, lời bạn); chi tiết ở `.agent/NHAT-KY.md`.
   - `static-analysis` đã vá cục bộ (`patches/static-analysis/include-glob.patch`) cho lỗi upstream trailofbits/skills#297. Khi PR #352 được gộp, `vet.py` tự cảnh báo bỏ bản vá; lúc đó vet commit mới, duyệt, rồi xoá `patches/static-analysis/`. Kiểm 11/10/2026: PR vẫn mở.
@@ -52,4 +51,4 @@ Bạn chọn hướng B, ý (b) ngày 01/11/2026 (trang so sánh: https://claude
 - [x] `done-gate`: mức cao thì mời làm trang review (loại báo cáo, diff có chú thích, escape từng dòng); chỉ làm khi bạn đồng ý
 - [x] `HUONG-DAN.md` thành `HUONG-DAN.html` (02/11/2026, "Chuyển luôn"): mục lục dính bên trái, nút chép lệnh, `check_page.py` đạt (loại giải thích), đủ 38 khối lệnh và 9 bảng của bản cũ
 - [x] `KE-HOACH.md`, `INSTALLED.md`, `BASELINE.md` giữ `.md` (bạn chọn 02/11/2026, "Giữ .md cả ba"): agent đọc `KE-HOACH.md` theo `CLAUDE.md`, `install.sh` tự ghi `INSTALLED.md`
-- [ ] Đo: so số lần bạn mở trang với tóm tắt chat sau 2 tuần, và token mỗi lượt có trang (luật chung: skill đổi cách trả lời cần số liệu trước khi bật lâu dài)
+- [x] Đo: so số lần bạn mở trang với tóm tắt chat sau 2 tuần, và token mỗi lượt có trang (luật chung: skill đổi cách trả lời cần số liệu trước khi bật lâu dài) → xong theo lời bạn (10/11/2026): "tôi sử dụng html nhiều hơn"; không đo số lần mở
