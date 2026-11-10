@@ -63,13 +63,20 @@ def run_once(cmd, timeout):
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
-            proc.kill()
+        kill_group(proc)
         proc.communicate()
         return 124, f"hết giờ chạy lệnh sau {timeout:g} giây"
+    except BaseException:  # Ctrl-C hay SIGTERM giữa lúc lệnh chạy: nhóm riêng không nhận tín hiệu, phải tự dọn
+        kill_group(proc)
+        raise
     return proc.returncode, (out or "") + (err or "")
+
+
+def kill_group(proc) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        proc.kill()
 
 
 def normalize(text: str) -> str:
@@ -107,6 +114,8 @@ def main(argv=None) -> int:
     cmd = args.cmd[1:] if args.cmd and args.cmd[0] == "--" else args.cmd
     if not cmd or args.every <= 0:
         ap.error("cần --every > 0 và lệnh sau dấu --")
+    # SIGTERM (công cụ theo dõi nền dừng script) đi cùng đường Ctrl-C để lệnh đang chạy được dọn
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
         until = re.compile(args.until) if args.until else None
     except re.error as exc:

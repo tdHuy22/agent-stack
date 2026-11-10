@@ -107,3 +107,26 @@ class WatchChange(TempDirTestCase):
                              capture_output=True, text=True, timeout=20)
         self.assertEqual(out.returncode, 2)
         self.assertNotIn("Traceback", out.stderr)
+
+    def test_stopping_the_watcher_kills_the_running_command(self):
+        pidfile = self.tmp / "pid"
+        watcher = subprocess.Popen([sys.executable, str(WATCH), "--every", "1", "--", "sh", "-c",
+                                    f"sleep 30 & echo $! > {pidfile}; wait"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for _ in range(100):
+            if pidfile.exists() and pidfile.read_text().strip():
+                break
+            time.sleep(0.05)
+        pid = int(pidfile.read_text().strip())
+        watcher.terminate()  # SIGTERM như khi công cụ theo dõi nền dừng script
+        self.assertEqual(watcher.wait(timeout=10), 0)
+        watcher.communicate()
+        for _ in range(50):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(pid, 9)
+            self.fail("lệnh kiểm còn sống sau khi script bị dừng")
