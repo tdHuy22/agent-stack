@@ -31,7 +31,8 @@ sys.path.insert(0, str(HERE.parents[2] / "lib"))
 import agentstack as A  # noqa: E402
 
 # Model cho phép, đều qua provider claude-code (gói Claude Max), để dữ liệu không đi tới hãng khác (TM-90).
-ALLOWED_MODELS = ("claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1")
+ALLOWED_MODELS = ("claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2",
+                  "claude-fable-5-1")
 TIERS = {"vua": ("claude-sonnet-5-5", "medium"), "kho": ("claude-opus-5-5", "high")}
 EFFORTS = ("low", "medium", "high")  # xhigh, max, ultrabrowse tốn hạn mức nhiều, không cho (TM-93)
 DEFAULT_TIMEOUT_MIN, MAX_TIMEOUT_MIN = 10, 30

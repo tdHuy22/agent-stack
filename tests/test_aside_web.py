@@ -185,9 +185,9 @@ class Exec(Base):
         self.assertFalse(any(c["args"][:1] == ["exec"] for c in self.calls()))
 
     def test_allowed_model_override(self):
-        self.run_main("exec", "--model", "claude-code/claude-fable-5-1", "--effort", "high", "x")
+        self.run_main("exec", "--model", "claude-code/claude-fable-5-2", "--effort", "high", "x")
         args = self.exec_call()
-        self.assertEqual(args[args.index("-m") + 1], "claude-code/claude-fable-5-1")
+        self.assertEqual(args[args.index("-m") + 1], "claude-code/claude-fable-5-2")
 
     def test_expensive_effort_and_raw_flags_refused(self):
         for argv in (("exec", "--effort", "max", "x"), ("exec", "--effort", "ultrabrowse", "x"),

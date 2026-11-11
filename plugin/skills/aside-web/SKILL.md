@@ -24,7 +24,7 @@ Aside là trình duyệt của người dùng, có sẵn phiên đăng nhập, l
 | 4 | Việc dài: nhiều trang, nhiều lần bấm, tìm rồi so sánh | `exec "<việc>"` (Sonnet 5.5 medium) | một phiên agent Aside, ≈0,09 USD giá niêm yết cho việc nhỏ khi cache nguội |
 | 5 | Hỏi tiếp việc vừa giao, trong vòng 1 giờ | `exec --resume <id> "<việc>"` | ≈0,014 USD, rẻ hơn mở phiên mới khoảng 6 lần |
 | 6 | Việc khó, nhiều nhánh, dễ sai, hay bậc 4 trượt | `exec --tier kho "<việc>"` (Opus 5.5 high) | đắt hơn Sonnet nhiều lần; dùng khi cần đúng |
-| 7 | Opus vẫn trượt | `exec --model claude-fable-5-1 --effort high "<việc>"` | đắt nhất |
+| 7 | Opus vẫn trượt | `exec --model claude-fable-5-2 --effort high "<việc>"` | đắt nhất |
 
 Số đo thật (09/11/2026, đọc example.com): `exec` Sonnet 5.5 medium tốn 3 lượt gọi model, ghi cache ≈22K token (lời dặn hệ thống của Aside) lần đầu, ≈0,094 USD; nối tiếp cùng phiên ≈0,014 USD; `repl` và `memory` không gọi model của Aside.
 
