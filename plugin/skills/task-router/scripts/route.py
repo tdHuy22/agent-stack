@@ -4,7 +4,7 @@
 Lệnh:
   route.py "mô tả việc" [--project DIR]     in gợi ý dạng JSON; --project thêm skill theo loại project
   route.py --session [DIR]                  in hồ sơ project, gợi ý skill và lượt cuối (.agent/LAST-TURN.md),
-                                            như hook SessionStart của Claude Code; dùng trong OpenCode và
+                                            như hook SessionStart của Claude Code; dùng trong
                                             công cụ không có hook
   route.py --eval FILE.jsonl [--min 0.85]   đo độ chính xác trên bộ prompt có nhãn
 
@@ -460,7 +460,7 @@ def hook_suggestion(prompt: str, data: dict):
         return None
     localize(hit, root)
     sid = data.get("session_id", "")
-    # Số chính thức do mod giao diện ghi (Claude Code có mod); không có hay đã cũ (OpenCode, phiên -p) thì đọc transcript.
+    # Số chính thức do mod giao diện ghi (Claude Code có mod); không có hay đã cũ (phiên -p) thì đọc transcript.
     usage = A.mod_session_usage(sid) or (A.session_usage(data["transcript_path"]) if data.get("transcript_path") else {})
     now_model = (usage.get("model") or current_model(sid) or "").lower()
     now_effort = (data.get("effort") or {}).get("level")

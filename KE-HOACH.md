@@ -1,5 +1,7 @@
 # Kế hoạch: hệ thống làm việc Claude Code + OpenCode
 
+> **Lưu ý (11/11/2026):** OpenCode đã bỏ khỏi agent-stack từ 22/10/2026 (commit `19347c1`, plugin 0.16.0) và gỡ khỏi máy. Các phần nói về OpenCode, `oc-worker`, `~/.config/opencode` dưới đây là lịch sử thiết kế, không còn áp dụng.
+
 > Lập ngày 2026-10-01. Trạng thái: **bản kế hoạch, chưa triển khai gì**.
 > Bổ sung cùng ngày: yêu cầu **#7**, theo dõi tiến độ project, việc cần làm tiếp và việc dang dở (mục 7.8, GĐ2b).
 > Cập nhật lần 2 (2026-10-01): bỏ Jev; bắt đầu triển khai. Tiến độ thực hiện theo dõi ở [`PLAN.md`](PLAN.md).

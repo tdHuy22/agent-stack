@@ -56,7 +56,7 @@ ALLOWED_TOOLS = "Read Write Edit Grep Glob Bash(python3 *) Bash(git diff*) Bash(
 TIMEOUT_S = 900
 # Giữ tối đa chừng này ký tự kết quả của mỗi lần gọi skill, đủ để soi mà không làm phình file kết quả.
 SKILL_OUTPUT_CHARS = 8000
-# File chỉ dẫn mà Claude Code và OpenCode tự đọc khi đi ngược lên từ thư mục làm việc.
+# File chỉ dẫn mà Claude Code (và công cụ đọc AGENTS.md) tự đọc khi đi ngược lên từ thư mục làm việc.
 CONTEXT_FILES = ("CLAUDE.md", "CLAUDE.local.md", "AGENTS.md")
 FREEZE_EXCLUDE = ":(exclude,glob)**/__pycache__/**"
 # Dấu hiệu lỗi do môi trường (không phải do model) trong thông báo lỗi của CLI.

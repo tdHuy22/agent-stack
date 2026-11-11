@@ -13,8 +13,8 @@ plugin/agents/reviewer.md
 plugin/agents/test-runner.md
 plugin/evals/finish-gate/graders/skill-fired.md
 plugin/evals/finish-gate/prompt.md
-plugin/evals/handoff-opencode/graders/skill-fired.md
-plugin/evals/handoff-opencode/prompt.md
+plugin/evals/handoff-cross-tool/graders/skill-fired.md
+plugin/evals/handoff-cross-tool/prompt.md
 plugin/evals/no-trigger-code/graders/not-fired.md
 plugin/evals/no-trigger-code/graders/reuse-not-fired.md
 plugin/evals/no-trigger-code/prompt.md

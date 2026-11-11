@@ -284,7 +284,7 @@ class HookSuggestion(TempDirTestCase):
     def test_router_falls_back_to_the_transcript_without_fresh_mod_figures(self):
         warm = lambda sid: {"session_id": sid,
                             "transcript_path": self.transcript(sid, "claude-sonnet-5-5", 250000, age=120)}
-        # Không có file (OpenCode, phiên -p): đọc transcript như cũ.
+        # Không có file (phiên -p): đọc transcript như cũ.
         self.assertIn("giữ sonnet", route.hook_suggestion(self.DEBUG, warm("f1"))["user"])
         # File cũ hơn 5 phút, hay của phiên khác: bỏ, đọc transcript (TM-34).
         self.mod_usage("f2", "claude-sonnet-5-5", 250000, age=2 * 3600, updated_age=400)

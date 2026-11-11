@@ -2158,7 +2158,7 @@ def session_usage(transcript_path, tail_bytes: int = 2_000_000) -> dict:
 
 
 # Số liệu phiên do mod giao diện (plugin/hooks/ui.tsx) ghi qua ui_status.py: số chính thức của engine thay cho việc
-# đọc transcript (định dạng nội bộ, có thể đổi). OpenCode và phiên `-p` không có mod nên vẫn đọc transcript.
+# đọc transcript (định dạng nội bộ, có thể đổi). Phiên `-p` không có mod nên vẫn đọc transcript.
 MOD_USAGE_MAX_AGE = 300
 # Như MODEL_ID_RE, thêm ngoặc vuông cho hậu tố kiểu `[1m]`; tên lạ (không tiền tố claude-) thì bỏ (TM-34).
 MOD_MODEL_RE = re.compile(r"claude-[a-z0-9.\-\[\]]{1,72}")
