@@ -1,0 +1,372 @@
+<title>Bench harness lập trình</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 10/11/2026</div>
+    <h1>Đo harness lập trình nào đạt ngang Claude Code mà rẻ và nhanh hơn, khi giữ nguyên model</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="Claude Code, TUF, agent-stack, pi">
+    <h2>Tóm tắt</h2>
+    <p>Chưa có bảng công khai nào so đúng bảy công cụ bạn nêu khi dùng chung một model, nên trang này thiết kế một bộ đo riêng. Bộ đo dùng lại khung đo bạn đã dựng cho Claude Code trên TUF. Nghiên cứu năm 2026 cho thấy cùng một model, đổi công cụ chỉ làm tỉ lệ giải được lệch 0–8 điểm phần trăm, nhưng lượng chữ gửi cho model có thể lệch tới 40 lần. Vì vậy bộ đo xem chi phí và thời gian là kết quả chính. Khuyên giữ cố định một model mở giá rẻ gọi qua OpenRouter, chạy 30 việc × 7 công cụ × 2 lần. LFM3-1.7B trên TUF (máy Linux ở nhà của bạn) chạy được, nhưng chỉ nên dùng ở bước thử máy móc, không dùng để xếp hạng. Bạn cần chốt ba điều: model cố định, mức chi tối đa, máy chạy việc đo.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>Một <dfn>harness</dfn> (công cụ agent lập trình) là phần mềm bọc quanh model: nó viết lời nhắn hệ thống, khai các công cụ đọc file, sửa file, chạy lệnh, rồi lặp vòng "model đề xuất, harness thực hiện, gửi kết quả lại". Claude Code, opencode, goose, pi đều là harness. pi là harness tối giản của Mario Zechner, đang chạy model tại nhà cho bạn. jcode là harness viết bằng Rust của một người làm. deepseek-harness là harness của DeepSeek, mới ở bản xem trước. claw-code là bản viết lại Claude Code từ đầu, do cộng đồng làm. Cùng một model, harness quyết định gửi bao nhiêu chữ mỗi lượt, giữ hay cắt lịch sử, gọi công cụ kiểu gì, nên quyết định cả tiền lẫn thời gian.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  V[Việc đo: repo + lệnh chấm] --> H[Harness đang đo]
+  H -->|lời nhắn + công cụ| P[Cổng ghi số liệu]
+  P --> M[Model cố định]
+  M --> P --> H
+  H --> C[Lệnh chấm: đạt hay trượt]
+  P --> S[Bảng token, tiền, thời gian]
+    </pre></div>
+    <p>Ý chính của thiết kế: mọi harness đi qua cùng một <dfn>cổng ghi số liệu</dfn>, một điểm trung gian ghi lại từng lần gọi model. Nhờ đó số token và tiền do cổng đếm, không tin con số harness tự báo, vì ba trong bảy harness không xuất được con số đó.</p>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Bạn muốn biết có harness mở nào làm việc ngang Claude Code mà rẻ hơn, nhanh hơn. Bảng xếp hạng công khai so cặp model với harness, nên không tách được phần của harness. Hai bài nghiên cứu gần đây có tách, nhưng dùng goose, opencode, OpenHands, không có pi, jcode, claw-code, deepseek-harness. Phía bạn đã có số đo Claude Code ngày 09–10/11, với model Claude qua gói Max: trên 80 việc mà cả bốn cấu hình đều chạy xong (trong 97 việc đã chọn), cấu hình trơn (Claude Code không gắn bộ công cụ agent-stack của bạn) đạt 78,3%, chi phí quy theo giá API $11,76. Lần đo đó làm TUF treo cứng 3 lần khi dựng nhiều container cùng lúc.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Token</b>: đơn vị chữ mà model đọc và viết, khoảng 3–4 ký tự một token. Tiền gọi model tính theo token. Ví dụ: lời nhắn hệ thống 20.000 token gửi lại ở 40 lượt là 800.000 token đầu vào. Cần cho phần chỉ số đo.</li>
+      <li><b>Bộ đệm lời nhắn</b>: nhà cung cấp nhớ phần đầu lời nhắn đã gửi và tính rẻ hơn khi gửi lại. Ví dụ: harness giữ phần đầu không đổi thì lượt sau chủ yếu là token đọc từ bộ đệm. Cần để hiểu vì sao phải tách token mới và token từ bộ đệm.</li>
+      <li><b>Giữ model cố định</b>: mọi harness dùng cùng model, cùng cách lấy mẫu, cùng giới hạn thời gian. Chỉ như vậy khác biệt mới thuộc về harness. Cần cho cả bốn phương án.</li>
+      <li><b>Chỉ đo agent chính</b>: tắt subagent ở mọi harness, theo triết lý của bạn. Ví dụ: Claude Code chạy với <code>--disallowedTools Task</code>, opencode tắt công cụ <code>task</code>. Bộ đo này không trả lời được agent chính điều phối subagent giỏi đến đâu. Đó là một kỹ năng riêng, việc chạy tốt một mình không chứng minh được nó.</li>
+      <li><b>So theo cặp trên cùng việc</b>: so hai harness trên từng việc rồi đếm số việc bên này hơn, bên kia hơn. Ví dụ: lần đo trước, Claude Code gắn đủ agent-stack hơn bản trơn ở 9 việc và kém ở 1 việc trên 80 việc, mà vẫn chưa đủ chắc để kết luận. Cần để hiểu vì sao 30 việc đủ thấy chênh token gấp vài lần nhưng không đủ thấy chênh tỉ lệ đạt vài điểm.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>TUF</dt><dd>Laptop Linux ở nhà của bạn, chạy model tại nhà và chạy việc đo qua ssh.</dd>
+        <dt>container</dt><dd>Môi trường cô lập dựng từ một image cố định, mỗi lượt đo một container mới, xong thì xóa.</dd>
+        <dt>adapter</dt><dd>Đoạn code nhỏ dạy Harbor cách cài, chạy một harness và đọc số token của nó.</dd>
+        <dt>việc giải được</dt><dd>Lượt mà lệnh chấm báo đạt. Tiền cho mỗi việc giải được là tổng tiền mọi lượt chia số lượt đạt; harness không đạt lượt nào thì ghi "không tính được".</dd>
+        <dt>Harbor</dt><dd>Khung đo chính thức của Terminal-Bench 2.0. Nó dựng container cho từng việc, cài harness vào, chạy, rồi chấm. Bản 0.25.0 có sẵn claude-code, opencode, goose, pi. Ba harness còn lại phải viết bộ chuyển (adapter).</dd>
+        <dt>TBLite</dt><dd>Terminal-Bench là bộ việc đo agent làm việc trong dòng lệnh (dựng, sửa, cấu hình phần mềm), bản 2.0 và 2.1 là hai đợt cập nhật. TBLite là bản rút gọn 100 việc. Khung đo cũ của bạn chọn 72 việc vừa và khó.</dd>
+        <dt>SWE-rebench</dt><dd>Bộ việc sửa lỗi trong repo GitHub thật, có test chấm. Bạn đã chọn 25 việc tháng 04/2026, mới hơn dữ liệu huấn luyện của nhiều model.</dd>
+        <dt>OpenRouter</dt><dd>Dịch vụ trung gian gọi nhiều model qua một khóa, nhận cả kiểu gọi OpenAI lẫn kiểu Anthropic. Trang của nó ghi token và tiền cho từng lần gọi, theo từng khóa.</dd>
+        <dt>ATIF</dt><dd>Định dạng nhật ký lượt chạy của Harbor. Harbor đọc được token từ nhật ký này với opencode, goose, pi.</dd>
+        <dt>LFM3, LFM3-1.7B</dt><dd>Model 1,7 tỉ tham số của Liquid AI, ra ngày 27/10/2026, đang chạy trên TUF ở bản Q8_0 (lượng tử 8 bit).</dd>
+        <dt>qwopus36-35b</dt><dd>Model mặc định của pi trên TUF, một bản tinh chỉnh của Qwen3.6-35B-A3B. Đây là model MoE, tức là mỗi token chỉ kích hoạt khoảng 3 tỉ trong 35 tỉ tham số.</dd>
+        <dt>GPU, VRAM, RAM</dt><dd>Card đồ họa, bộ nhớ của card, bộ nhớ chính. TUF có card đồ họa 4 GB VRAM, 15 GB RAM, 16 luồng.</dd>
+        <dt>Pareto</dt><dd>Tập harness mà không harness nào khác vừa rẻ hơn vừa đạt nhiều hơn.</dd>
+        <dt>MCP</dt><dd>Giao thức nối thêm công cụ ngoài vào harness. Tắt hết để mọi harness chỉ có bộ công cụ gốc.</dd>
+        <dt>headless</dt><dd>Chạy không cần giao diện, nhận việc và in kết quả rồi thoát, dùng được trong script.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Thiết kế bộ đo (dùng cho mọi phương án)</h2>
+    <h3>Bảy harness, ghim phiên bản</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Harness</th><th>Bản (10/11)</th><th>Chạy headless</th><th>Trong Harbor</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td>Claude Code</td><td>đang dùng</td><td><code>claude -p</code></td><td>có sẵn</td><td>Với model không phải Claude: trỏ <code>ANTHROPIC_BASE_URL</code>. Anthropic không hỗ trợ cách này, nhưng nó chạy được.</td></tr>
+        <tr><td>opencode</td><td>1.19.5</td><td><code>opencode run</code></td><td>có sẵn</td><td>Ghi ATIF</td></tr>
+        <tr><td>goose</td><td>1.58.0</td><td><code>goose run</code></td><td>có sẵn</td><td>Repo chuyển sang <code>aaif-goose/goose</code></td></tr>
+        <tr><td>pi</td><td>1.5.1</td><td><code>pi -p --mode json</code></td><td>có sẵn</td><td>Không có subagent theo thiết kế. Đo bản gốc, không gắn phần mở rộng của bạn.</td></tr>
+        <tr><td>jcode</td><td>0.99.1</td><td><code>jcode run --ndjson</code></td><td>tự viết adapter</td><td>Có sự kiện token trong luồng JSON</td></tr>
+        <tr><td>deepseek-harness</td><td>chưa có bản phát hành</td><td><code>dsh headless</code></td><td>tự viết adapter</td><td>README tự nhận là bản xem trước, còn đổi lớn. Ghim commit.</td></tr>
+        <tr><td>claw-code</td><td>0.1.13</td><td><code>claw prompt --output-format json</code></td><td>tự viết adapter</td><td>README tự nhận không phải dự án dùng thật</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Biến giữ cố định</h3>
+    <ul>
+      <li>Model, nhiệt độ lấy mẫu, độ dài ngữ cảnh, số token tối đa mỗi câu trả lời.</li>
+      <li>Hạn 20 phút mỗi việc và trần 3 triệu token đầu vào mỗi lượt. Chạm trần thì tính là trượt, vẫn ghi số token.</li>
+      <li>Quyền tự chạy mọi lệnh trong container. Không máy chủ công cụ ngoài (MCP), không skill, không file luật (<code>CLAUDE.md</code>, <code>AGENTS.md</code>), subagent tắt.</li>
+      <li>Cùng image container và cùng đề bài cho mỗi việc. Chạy lần lượt tối đa 2 lượt song song, vì TUF đã treo khi dựng nhiều container cùng lúc.</li>
+    </ul>
+    <h3>Bộ việc, ba tầng</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Tầng</th><th>Việc</th><th>Số lượt</th><th>Đo để làm gì</th></tr></thead>
+      <tbody>
+        <tr><td>0 · Thử máy</td><td>3 việc rất nhỏ: trả lời "ok", đọc một file rồi trả lời, sửa một dòng</td><td>3 × 7 × 3 = 63</td><td>Chạy bằng chính model đã chốt (có thể chạy trước một lượt bằng LFM3 để thử adapter mà không tốn tiền). Kiểm adapter chạy đúng; phần token cố định của mỗi harness (lời nhắn hệ thống cộng mô tả công cụ ở lần gọi đầu)</td></tr>
+        <tr><td>1 · Chính</td><td>20 việc TBLite vừa, khó + 10 việc SWE-rebench, rút ngẫu nhiên có hạt giống từ danh sách cũ, chọn trước khi chạy</td><td>30 × 7 × 2 = 420</td><td>Tỉ lệ đạt, tiền và phút cho mỗi việc giải được</td></tr>
+        <tr><td>2 · Xác nhận</td><td>Cùng 30 việc, chỉ Claude Code và 2 harness đứng đầu, model khác</td><td>30 × 3 × 1 = 90</td><td>Xếp hạng có giữ khi đổi model không</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Chỉ số và cách kết luận</h3>
+    <ul>
+      <li>Mỗi lượt ghi: đạt hay trượt; token đầu vào mới, token đọc từ bộ đệm, token đầu ra; tiền theo bảng giá của cổng; số lần gọi model; số lời gọi công cụ; thời gian từ lúc bắt đầu đến lúc xong. Lượt hỏng vì hạ tầng (container không dựng được) để riêng, không tính cho harness nào.</li>
+      <li>Kết luận chính là tiền và phút, với tỉ lệ đạt làm điều kiện: harness nào làm tỉ lệ đạt tụt rõ thì rẻ cũng không tính. Cụ thể, một harness "ngang Claude Code" khi tỉ lệ đạt không kém quá 5 điểm phần trăm, xét theo khoảng tin cậy 95% bootstrap ghép cặp theo việc. Nó "rẻ hơn" hay "nhanh hơn" khi tiền hay phút cho mỗi việc giải được thấp hơn ít nhất 30%.</li>
+      <li>Vẽ biểu đồ Pareto: trục ngang là tiền cho mỗi việc giải được, trục dọc là tỉ lệ đạt. Ba mươi việc đủ thấy khác biệt token cỡ vài lần. Nếu tỉ lệ đạt chỉ lệch 3–5 điểm thì bộ đo này không tách được, và trang kết quả phải nói vậy.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: một việc sửa lỗi SWE-rebench</h3>
+        <p>Tình huống: repo Python thật, đề bài là issue GitHub, chấm bằng test của PR gốc. Harness phải tìm file, sửa, chạy test. Danh sách 25 việc đã chọn nằm ở <code>agent-stack/evals/harbor/tasks-swerebench.txt</code>.</p>
+        <pre><code>harbor run -a claude-code   -m &lt;model&gt; --task-list tasks-harness.txt -n 2
+harbor run -a opencode      -m &lt;model&gt; ...
+harbor run -a harness_bench.agents:Jcode -m &lt;model&gt; ...</code></pre>
+        <p>Hôm nay: chưa đo với harness nào ngoài Claude Code. Kết quả sẽ là một hàng cho mỗi harness: đạt hay trượt, token, tiền, phút. Khoảng 0,4–3 triệu token đầu vào và 5–20 phút mỗi lượt là ước đoán của tôi, chưa đo. Vì sao quan trọng: đây là kiểu việc bạn giao hằng ngày, nên tiền và phút ở đây là con số quyết định.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: việc "trả lời đúng một từ: ok"</h3>
+        <p>Tình huống: thư mục trống, model chỉ cần trả "ok". Toàn bộ token ở đây là phần cố định của harness: lời nhắn hệ thống và mô tả công cụ. Mốc kiểm tra của pi-agent đang dùng đúng câu này: <code>pi -p --no-session "Trả lời đúng một từ: ok"</code> mất 40–107 giây trên TUF, phần lớn là thời gian nạp model.</p>
+        <p>Hôm nay: chưa đo token cố định của từng harness. Vì sao quan trọng: phần cố định này được gửi lại ở mọi lượt. Harness có phần cố định 20.000 token mà không dùng bộ đệm sẽ đắt gấp nhiều lần harness 3.000 token ở việc dài 40 lượt. Phần token cố định đo được bằng bất kỳ model nào, kể cả LFM3; còn thời gian thì phụ thuộc model.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: harness kẹt vòng gọi công cụ</h3>
+        <p>Tình huống có thật trong bench model ngày 31/10 của pi-agent: <code>qwopus36-35b</code> trả lời đúng rồi gọi công cụ <code>todo</code> 365 lần đến hết giờ. Một lần khác gọi <code>bash</code> y hệt 119 lần. Mỗi harness chặn vòng lặp khác nhau, có harness không chặn.</p>
+        <p>Hôm nay: bộ đo cũ tính lượt đó là trượt nhưng không có trần token. Vì sao quan trọng: nếu không có trần 3 triệu token và hạn 20 phút, một lượt kẹt có thể tốn hơn cả 50 lượt thường và làm sai trung bình chi phí. Bộ đo mới ghi riêng số lượt chạm trần cho mỗi harness, vì đó chính là một điểm yếu của harness.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án: chọn model giữ cố định</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · Model mở giá rẻ qua OpenRouter <span class="chip">khuyên</span></h3>
+        <p>Mọi harness gọi cùng một model mở trả phí qua OpenRouter. Ứng viên đầu là DeepSeek-V4.1-Flash: DeepSeek tự báo 90,6 điểm Terminal-Bench 2.1, chưa có kiểm độc lập, giá chưa kiểm. Lượt thử 7 lượt cho giá thật; nếu model này không chạy được với cả bảy harness thì chọn model khác trước khi đo. Mỗi harness có một khóa riêng để trang của OpenRouter tách token và tiền.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Harbor chạy container trên TUF, tối đa 2 lượt song song. Model chạy ở OpenRouter nên TUF không phải gánh model.</dd>
+          <dt>Được</dt><dd>Model đủ mạnh để tỉ lệ đạt nằm giữa, không sát 0 hay 100%. Cả bảy harness đều gọi được OpenRouter, kể cả Claude Code qua kiểu Anthropic. Số token và tiền do bên thứ ba đếm. Nhanh: TUF chỉ dựng container.</dd>
+          <dt>Mất</dt><dd>Tốn tiền. Tầng 0 và tầng chính là 63 + 420 = 483 lượt với model này; mỗi lượt có thể tốn $0,02–0,15 (ước theo giá model mở rẻ thường thấy, chưa kiểm), tức $10–70. Tầng xác nhận 90 lượt dùng model khác, tính riêng. Lượt thử 7 lượt sẽ cho con số thật. Đề bài và code của bộ việc công khai được gửi ra ngoài, không có dữ liệu riêng. Không trả lời được Claude Code có hơn khi chạy với Claude không.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Phải duy trì 3 adapter, mỗi adapter khoảng 60–100 dòng. Ghim phiên bản harness để đo lại được.</dd>
+          <dt>Đảo ngược</dt><dd>Được. Thu hồi khóa và xóa thư mục đo trên TUF.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · Claude Sonnet 5.5 qua khóa API</h3>
+        <p>Mọi harness dùng Claude Sonnet 5.5, đúng model bạn dùng hằng ngày, gọi bằng khóa API của Anthropic.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Như A, nhưng dùng khóa API Anthropic. Không dùng được đăng nhập gói Max, vì điều khoản cấm dùng đăng nhập gói thuê bao trong harness bên thứ ba.</dd>
+          <dt>Được</dt><dd>Trả lời thẳng câu "bỏ Claude Code, vẫn dùng Claude, có rẻ hơn không". Ghép được với số đo Claude Code ngày 09–10/11 nếu dùng cùng việc.</dd>
+          <dt>Mất</dt><dd>Đắt hơn A nhiều lần. Riêng Claude Code trơn ở lần đo trước đã ra $11,76 quy theo giá API cho 80 việc. Bảy harness × 30 việc × 2 lần là 420 lượt, gấp khoảng 5 lần số lượt đó, nên cỡ $60 trở lên nếu harness khác tốn như Claude Code, nhiều hơn nếu tốn hơn. Claude Code được tinh chỉnh cùng Claude, nên có lợi thế mà model khác không cho.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Như A.</dd>
+          <dt>Đảo ngược</dt><dd>Được, nhưng tiền đã tiêu không lấy lại được.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="C">
+        <h3>C · qwopus36-35b trên TUF</h3>
+        <p>Mọi harness gọi model mặc định của pi qua router llama.cpp trên TUF.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Container chạy trên Mac hay máy khác; TUF chỉ chạy model, một lượt một lúc. Router llama.cpp nhận cả kiểu gọi OpenAI lẫn Anthropic (<code>/v1/messages</code>, cần cờ <code>--jinja</code>).</dd>
+          <dt>Được</dt><dd>Không tốn tiền. Đúng hướng mục tiêu tự chạy model của bạn: biết harness nào hợp với model nhỏ chạy tại nhà.</dd>
+          <dt>Mất</dt><dd>Chậm: sinh 10–22 token mỗi giây, 420 lượt có thể mất vài ngày. Không chạy chung Docker trên TUF được vì model đã chiếm phần lớn 15 GB RAM. Harness có lời nhắn hệ thống dài bị phạt nặng hơn thực tế dùng API vì phải xử lý đầu vào chậm. Không có tiền thật, chỉ quy đổi theo giá giả định.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Phải giữ TUF chạy liên tục nhiều ngày; máy đã treo cứng 3 lần dưới tải.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="D">
+        <h3>D · LFM3-1.7B trên TUF</h3>
+        <p>Mọi harness gọi LFM3-1.7B. Model này nằm gọn trong GPU 4 GB và đã chạy trong pi.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Như C, đổi model.</dd>
+          <dt>Được</dt><dd>Không tốn tiền, nhanh hơn C. Đủ cho tầng 0: kiểm adapter và đo phần token cố định.</dd>
+          <dt>Mất</dt><dd>Chính Liquid ghi model này "không khuyến nghị cho agentic coding". Điểm Liquid tự báo: Terminal-Bench 2.1 là 12,92%, nên trên 30 việc chỉ khoảng 4 việc đạt và mọi harness gần như bằng nhau. Model gọi công cụ theo kiểu XML, harness có thể hỏng vì không đọc được kiểu này chứ không phải vì harness kém. Model yếu cũng gọi nhiều lượt hơn, nên số token đo được không suy ra được cho model mạnh. Phiên trước cũng đã khuyên không dùng nó cho bench.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Thấp.</dd>
+          <dt>Đảo ngược</dt><dd>Được.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Ví dụ</th><th>A · model mở qua OpenRouter</th><th>B · Sonnet 5.5</th><th>C · qwopus36-35b</th><th>D · LFM3-1.7B</th></tr></thead>
+      <tbody>
+        <tr><th>1 · Sửa lỗi SWE-rebench</th>
+          <td data-cho="A">Chạy 5–20 phút. Tỉ lệ đạt dự kiến ở giữa nên phân biệt được harness. Tiền đọc từ OpenRouter theo từng khóa.</td>
+          <td data-cho="B">Phân biệt tốt nhất. Mỗi lượt đắt hơn A nhiều lần.</td>
+          <td data-cho="C">Có thể đạt (model này qua 88/90 bộ việc nhỏ cũ), nhưng mỗi lượt 20–60 phút. Tiền chỉ quy đổi.</td>
+          <td data-cho="D">Hầu hết trượt. Không tách được harness tốt với harness kém.</td></tr>
+        <tr><th>2 · Trả lời "ok"</th>
+          <td data-cho="A">Đo đúng phần token cố định, vài giây mỗi lượt.</td>
+          <td data-cho="B">Đo đúng, tốn tiền không cần thiết cho việc này.</td>
+          <td data-cho="C">Đo đúng số token, nhưng thời gian bị chi phối bởi việc nạp model (40–107 giây).</td>
+          <td data-cho="D">Đo đúng số token với chi phí 0. Đây là chỗ LFM3 hợp nhất.</td></tr>
+        <tr><th>3 · Kẹt vòng gọi công cụ</th>
+          <td data-cho="A">Ít gặp với model mạnh. Gặp thì trần 3 triệu token cắt lượt, tốn tối đa vài chục cent.</td>
+          <td data-cho="B">Hiếm. Nếu gặp thì một lượt chạm trần có thể tốn vài đô.</td>
+          <td data-cho="C">Đã từng gặp (365 lần gọi <code>todo</code>). Hạn 20 phút cắt lượt, không mất tiền nhưng mất giờ máy.</td>
+          <td data-cho="D">Gặp thường xuyên. Số lượt kẹt phản ánh model yếu nhiều hơn harness.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Các file dẫn nguồn đều nằm trên Mac của bạn, trong <code>~/Documents/Claude/</code>; <code>memory/</code> là bộ nhớ dài hạn của Claude Code. Gói Max là gói thuê bao Claude bạn đang dùng; gói Go là gói trả phí của OpenCode. Luật lấy từ luật chung (<code>agent-stack/global/SHARED.global.md</code>), §0 của <code>agent-stack/PLAN.md</code> và <code>pi-agent/PLAN.md</code>, ghi nhớ về cài đặt trên TUF.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th><th>C</th><th>D</th></tr></thead>
+      <tbody>
+        <tr data-rang-buoc data-nguon="agent-stack/global/SHARED.global.md:31">
+          <th>Tốn tiền (gọi API tính tiền, nạp tiền) phải hỏi trước <span class="src">SHARED.global.md:31</span></th>
+          <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: nạp tiền OpenRouter và chọn trần chi.</td>
+          <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: khóa API Anthropic tính tiền, mức chi cao hơn A.</td>
+          <td data-cho="C" data-ket-qua="dat">Đạt: không tốn tiền.</td>
+          <td data-cho="D" data-ket-qua="dat">Đạt: không tốn tiền.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="agent-stack/global/SHARED.global.md:29">
+          <th>Thêm dependency hay dịch vụ ngoài phải hỏi <span class="src">SHARED.global.md:29</span></th>
+          <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: cài 6 harness bên thứ ba trong container, dùng OpenRouter.</td>
+          <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: cài 6 harness trong container.</td>
+          <td data-cho="C" data-ket-qua="can-duyet">Cần duyệt: cài 6 harness trong container.</td>
+          <td data-cho="D" data-ket-qua="can-duyet">Cần duyệt: cài 6 harness trong container.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="agent-stack/global/SHARED.global.md:69">
+          <th>Không gửi secret, dữ liệu cá nhân, mã riêng tư cho model từ xa <span class="src">SHARED.global.md:69</span></th>
+          <td data-cho="A" data-ket-qua="dat">Đạt: chỉ gửi việc công khai của TBLite và SWE-rebench. Khóa nằm trong <code>.env</code> quyền 600 như lần đo trước.</td>
+          <td data-cho="B" data-ket-qua="dat">Đạt: như A.</td>
+          <td data-cho="C" data-ket-qua="khong-lien-quan">Không liên quan: model chạy tại nhà.</td>
+          <td data-cho="D" data-ket-qua="khong-lien-quan">Không liên quan: model chạy tại nhà.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="agent-stack/PLAN.md:32">
+          <th>Eval OpenCode qua OpenRouter đang gác lại, cần quyết nạp tiền <span class="src">agent-stack/PLAN.md:32</span></th>
+          <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: phương án này mở lại đúng việc đã gác, với model trả phí thay vì model miễn phí.</td>
+          <td data-cho="B" data-ket-qua="khong-lien-quan">Không liên quan: không qua OpenRouter.</td>
+          <td data-cho="C" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+          <td data-cho="D" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="pi-agent/PLAN.md:13">
+          <th>OpenCode chỉ dùng bản miễn phí, không mua gói Go, không nạp tiền vào OpenCode <span class="src">pi-agent/PLAN.md:13</span></th>
+          <td data-cho="A" data-ket-qua="dat">Đạt: chạy harness opencode với model OpenRouter, không nạp tiền vào OpenCode.</td>
+          <td data-cho="B" data-ket-qua="dat">Đạt: như A.</td>
+          <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          <td data-cho="D" data-ket-qua="dat">Đạt.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="memory/record-installs.md:20">
+          <th>Cài gì trên TUF phải ghi vào <code>~/tuf-config/CHECKPOINT.md</code> kèm cách gỡ <span class="src">memory/record-installs.md:20</span></th>
+          <td data-cho="A" data-ket-qua="dat">Đạt khi ghi mục mới cho Harbor và các harness, gỡ bằng xóa thư mục đo và image.</td>
+          <td data-cho="B" data-ket-qua="dat">Đạt, như A.</td>
+          <td data-cho="C" data-ket-qua="dat">Đạt, như A.</td>
+          <td data-cho="D" data-ket-qua="dat">Đạt, như A.</td>
+        </tr>
+        <tr data-rang-buoc data-nguon="code.claude.com/docs/en/legal-and-compliance">
+          <th>Đăng nhập gói Claude chỉ dùng cho Claude Code và app của Anthropic <span class="src">Anthropic, Legal and compliance</span></th>
+          <td data-cho="A" data-ket-qua="khong-lien-quan">Không liên quan: không dùng model Claude.</td>
+          <td data-cho="B" data-ket-qua="dat">Đạt chỉ khi dùng khóa API cho mọi harness, kể cả Claude Code, để so cùng cách tính tiền.</td>
+          <td data-cho="C" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+          <td data-cho="D" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> dùng lại khung Harbor cũ vì nó đã chấm đúng việc và đã qua threat model, không phải vì nó có sẵn. Riêng mức song song được hạ xuống 2, vì cách chạy cũ đã làm TUF treo.</li>
+      <li><b>Chiều theo người dùng:</b> bạn hỏi dùng LFM3 được không. Trang trả lời thẳng: chạy được, nhưng chỉ hợp tầng 0. Triết lý "agent chính tốt thì subagent cũng tốt" được giữ để thu hẹp bộ đo, kèm ghi rõ phần nó không chứng minh được.</li>
+      <li><b>Chọn vì ít công:</b> không bỏ jcode, deepseek-harness, claw-code dù phải tự viết adapter. Cả ba nằm trong yêu cầu.</li>
+      <li><b>Phương án bù nhìn:</b> D là câu bạn hỏi, không phải thêm vào cho đẹp. C là lựa chọn hợp lý cho mục tiêu tự chạy model.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> đã ghi rằng 30 việc không tách được chênh tỉ lệ đạt dưới khoảng 5 điểm, và bộ đo không đo khả năng điều phối subagent.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. Harness bên thứ ba chỉ chạy trong container, phiên bản được ghim, và khóa được che trong nhật ký như lần đo trước.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần bạn chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Giữ cố định model nào cho tầng chính?</h3>
+      <p>Lựa chọn: A (model mở qua OpenRouter), B (Sonnet 5.5 qua khóa API), C (qwopus36-35b tại nhà). Khuyên A: model đủ mạnh, rẻ, nhanh, và số liệu do bên thứ ba đếm. Chọn B nếu câu bạn thật sự muốn trả lời là "vẫn dùng Claude thì harness nào rẻ hơn"; tốn nhiều hơn. Chọn C nếu không muốn chi tiền và chấp nhận đo vài ngày, chạy container ngoài TUF.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: Trần chi tiền cho cả đợt là bao nhiêu?</h3>
+      <p>Khuyên: chạy thử 7 lượt (1 việc × 7 harness) trước, chi dưới $1, rồi báo lại ước tính thật. Trần đề xuất cho A là $40, khớp giữa khoảng ước $10–70. Chạm trần thì bộ đo dừng và hỏi bạn, không tự chạy tiếp. Nếu chọn trần thấp hơn, giảm tầng chính xuống 1 lần lặp (210 lượt).</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Chạy container ở đâu?</h3>
+      <p>Lựa chọn: TUF với tối đa 2 lượt song song (khuyên, vì khung đo đã cài ở đó và model chạy ngoài), hay một máy thuê trên Google Cloud (không lo treo, tốn thêm tiền). Nếu chọn C thì container không thể chạy trên TUF.</p>
+    </div>
+    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Harbor, agent có sẵn và cách viết agent riêng: <a href="https://docs.harborframework.com/agents/pre-integrated-agents">docs.harborframework.com/agents/pre-integrated-agents</a>, <a href="https://docs.harborframework.com/agents/custom-agents">custom-agents</a>; trường token trong <code>src/harbor/models/agent/context.py</code>.</li>
+      <li>The Scaffold Effect in Coding Agents, arXiv 2607.22585 (06/2026): cùng model, tỉ lệ đạt lệch 0–8 điểm, token cho mỗi việc giải được lệch tới 40 lần.</li>
+      <li>Harness or Model?, arXiv 2609.11987 (09/2026): Opus 4.8 đạt 48,8% với harness gốc và 50,0% với harness trung tính; harness trung tính đắt hơn 1,3–1,6 lần mỗi việc giải được. Tác giả tự nhận phần chi phí còn bất định.</li>
+      <li>Repo các harness, đọc qua GitHub API ngày 10/11/2026: anomalyco/opencode, aaif-goose/goose, earendil-works/pi, 1jehuang/jcode, deepseek-ai/deepseek-harness, ultraworkers/claw-code.</li>
+      <li>LFM3: <a href="https://www.liquid.ai/blog/lfm3">liquid.ai/blog/lfm3</a>, <a href="https://huggingface.co/LiquidAI/LFM3-1.7B">huggingface.co/LiquidAI/LFM3-1.7B</a> (điểm do Liquid tự báo).</li>
+      <li>Claude Code với gateway khác: <a href="https://code.claude.com/docs/en/llm-gateway">code.claude.com/docs/en/llm-gateway</a>; điều khoản đăng nhập gói: <a href="https://code.claude.com/docs/en/legal-and-compliance">legal-and-compliance</a>; llama.cpp <code>/v1/messages</code>: <code>tools/server/README.md</code> của ggml-org/llama.cpp.</li>
+      <li>Số đo Claude Code ngày 09–10/11 và ba lần TUF treo: <code>agent-stack/PLAN.md</code> §0. Khung đo: <code>agent-stack/evals/harbor/</code>. Bench model của pi-agent: <code>pi-agent/.agent/NHAT-KY.md</code> dòng 52.</li>
+      <li>Phần cứng TUF: <code>ssh tuf nvidia-smi; free -g; nproc</code> chạy ngày 10/11/2026.</li>
+      <li>Chưa kiểm: số sao của deepseek-harness, endpoint kiểu Anthropic của DeepSeek trên OpenRouter, mức giá model ở phương án A.</li>
+    </ul>
+  </footer>
+</main>

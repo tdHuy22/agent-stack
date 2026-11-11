@@ -1,0 +1,338 @@
+<title>Lệnh gạch chéo mặc định</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.grp { gap: 8px }
+.grp td:first-child { white-space: nowrap }
+.grp td:nth-child(2) { font-size: .85rem }
+#q { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); width: 100%; max-width: 420px }
+.hide { display: none }
+</style>
+
+<main data-loai="giai-thich">
+  <header>
+    <div class="eyebrow">Claude Code 2.1.317 · 09/11/2026</div>
+    <h1>Gõ dấu / trong Claude Code thì có những lệnh gì sẵn?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="Claude Code, Claude, Anthropic, Opus, Sonnet, Haiku, Fable">
+    <h2>Tóm tắt</h2>
+    <p>Bản Claude Code đang cài trên máy (2.1.317, đi kèm app Claude Desktop) có sẵn khoảng 121 lệnh bắt đầu bằng dấu gạch chéo, không tính thứ bạn tự thêm. Chúng chia hai kiểu: lệnh điều khiển chương trình (dọn hội thoại, đổi model, xem chi phí, cài đặt) và lệnh nhờ Claude làm một việc soạn sẵn (review code, viết commit, dựng file hướng dẫn cho project). Không phải lệnh nào cũng hiện với mọi người: một số chỉ hiện khi đăng nhập bằng tài khoản claude.ai, khi dùng đúng nền tảng, hay khi tính năng được bật cho tài khoản. Danh sách rút thẳng từ bản đi kèm app desktop (2.1.317); lệnh <code>claude</code> gõ trong terminal là bản 2.1.311, có thể lệch vài lệnh. Con số trên chưa tính 10 lệnh ẩn hay tắt sẵn ở bảng cuối. Ô tìm kiếm giúp lọc nhanh.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Lệnh gạch chéo là gì</h3>
+    <p>Khi bạn gõ <code>/</code> ở đầu khung chat, Claude Code mở một menu. Chọn một mục, ví dụ <code>/clear</code>, thì chính chương trình thực hiện việc đó ngay, không gửi câu nào cho model. Một số mục khác, như <code>/init</code>, thật ra là một đoạn chỉ dẫn soạn sẵn: chương trình gửi đoạn đó cho Claude, và Claude làm việc như khi bạn tự viết yêu cầu dài. Menu này còn trộn thêm lệnh do bạn hay plugin thêm vào; trang này bỏ hết phần đó và chỉ giữ thứ có sẵn khi mới cài.</p>
+    <h3>Vì sao danh sách mỗi người thấy một khác</h3>
+    <p>Mỗi lệnh trong chương trình kèm một điều kiện bật. Ví dụ <code>/upgrade</code> chỉ hiện với tài khoản claude.ai, <code>/setup-bedrock</code> chỉ hiện khi bạn chạy Claude qua Amazon Bedrock, <code>/stop</code> chỉ hiện trong phiên chạy nền. Vài lệnh có trong mã nhưng bị tắt sẵn ở bản này. Thêm nữa, trong tab Code của app desktop, các lệnh mở bảng tương tác trong terminal (như <code>/config</code>, <code>/permissions</code>, <code>/hooks</code>) không dùng được; muốn dùng thì chạy <code>claude</code> trong terminal. Vì thế cột "Ghi chú" trong bảng (điều kiện hiện, lệnh thuộc kiểu nào) quan trọng ngang cột mô tả.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Ngữ cảnh</b>: toàn bộ chữ model đang "nhìn" trong một lượt, gồm luật, công cụ và hội thoại. Nó có giới hạn, đo bằng token (mẩu chữ, khoảng 3–4 ký tự tiếng Anh). Ví dụ: hội thoại dài làm ngữ cảnh đầy, khi đó <code>/compact</code> nén nó lại. Cần để hiểu nhóm "Phiên và hội thoại".</li>
+      <li><b>Skill</b>: một gói chỉ dẫn soạn sẵn cho một loại việc, Claude đọc khi cần. Ví dụ: <code>/code-review</code> nạp cách review code. Skill có sẵn là skill đi kèm chương trình; bạn gõ tên nó như một lệnh, hoặc Claude tự gọi. Cần để hiểu nhóm "Lệnh nhờ Claude làm việc".</li>
+      <li><b>Trợ lý phụ</b> (subagent): một phiên Claude con được giao một việc riêng rồi báo kết quả về. Ví dụ: <code>/subtask</code> gửi một trợ lý phụ đi kèm toàn bộ ngữ cảnh. Cần để hiểu <code>/subtask</code>, <code>/list-agents</code>, <code>/workflows</code>.</li>
+      <li><b>Plugin và máy chủ <dfn>MCP</dfn></b> (Model Context Protocol, chuẩn nối Claude với công cụ ngoài): cách thêm năng lực từ bên ngoài. Plugin gói sẵn skill, hook, lệnh; máy chủ MCP cho Claude thêm công cụ (đọc Gmail, tìm web…). Cần để hiểu nhóm "Mở rộng".</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+                <dt>CLI</dt><dd>Chương trình chạy bằng dòng lệnh trong terminal; ở đây là lệnh <code>claude</code>.</dd>
+        <dt>IDE</dt><dd>Trình soạn code như Visual Studio Code, JetBrains.</dd>
+        <dt>QR</dt><dd>Mã vạch vuông quét bằng camera điện thoại.</dd>
+        <dt>hook</dt><dd>Lệnh do bạn cấu hình, tự chạy khi có sự kiện (trước khi Claude dùng công cụ, khi lượt kết thúc…).</dd>
+        <dt>worktree</dt><dd>Một bản checkout riêng của repo git trong thư mục khác, để làm song song mà không đụng nhau.</dd>
+        <dt>cron</dt><dd>Cách viết lịch lặp (mỗi sáng 8 giờ, mỗi thứ Hai…).</dd>
+        <dt>alias</dt><dd>Tên khác của cùng một lệnh: gõ <code>/cost</code> chạy đúng <code>/usage</code>.</dd>
+        <dt>Bedrock, Vertex</dt><dd>Dịch vụ AI của Amazon và Google, nơi doanh nghiệp có thể chạy Claude.</dd>
+        <dt>Artifact</dt><dd>Trang web riêng tư Claude đăng trên claude.ai.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: hội thoại đã dài</h3>
+        <p>Bạn làm một việc suốt hai giờ, Claude bắt đầu quên chi tiết đầu phiên. Gõ <code>/context</code> để thấy hội thoại chiếm bao nhiêu phần ngữ cảnh. Nếu muốn giữ mạch thì <code>/compact giữ lại danh sách file đã sửa</code>; nếu sang việc khác hẳn thì <code>/clear</code> (phiên cũ vẫn mở lại được bằng <code>/resume</code>).</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: một lệnh, nhiều tên</h3>
+        <p>Bạn quen gõ <code>/cost</code> từ bản cũ. Ở bản 2.1.317, <code>/cost</code> và <code>/stats</code> chỉ còn là tên khác của <code>/usage</code>, nên cả ba mở cùng một màn hình chi phí và hạn mức. Tương tự <code>/review</code> giờ chạy <code>/code-review</code>, còn <code>/ultrareview</code> được thay bằng <code>/code-review ultra</code>.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: lệnh có trong danh sách mà gõ không ra</h3>
+        <p>Bạn gõ <code>/permissions</code> trong tab Code của app Claude Desktop và không thấy bảng quyền hiện ra, vì lệnh đó vẽ bảng tương tác trong terminal. Tương tự, <code>/version</code> có trong mã nhưng bị tắt sẵn ở bản này; xem phiên bản bằng <code>/status</code> hay <code>claude --version</code>. Bảng dưới ghi các trường hợp đã biết kiểu này ở cột "Ghi chú"; danh sách lệnh không chạy trong app desktop chưa đầy đủ, nên gặp lệnh im lặng thì thử lại trong terminal.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Danh sách theo nhóm</h2>
+    <input id="q" type="search" placeholder="Lọc: gõ tên lệnh hay việc, ví dụ 'model', 'git', 'cloud'" aria-label="Lọc lệnh">
+    <section class="grp">
+    <h3>Phiên và hội thoại <span class="chip">25</span></h3>
+    <p class="note">Quản lý cuộc trò chuyện đang mở: dọn, nén, quay lại, tách nhánh.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="clear new, reset mở phiên mới với hội thoại trống; phiên cũ vẫn nằm trên đĩa, mở lại được bằng /resume. "><td><code>/clear</code></td><td><code>/new</code>, <code>/reset</code></td><td>Mở phiên mới với hội thoại trống; phiên cũ vẫn nằm trên đĩa, mở lại được bằng /resume.</td><td class="note"></td></tr>
+<tr data-q="compact  nén hội thoại thành bản tóm tắt để giải phóng chỗ trong cửa sổ ngữ cảnh. thêm chữ sau lệnh để dặn nên giữ gì. tắt khi đặt biến disable_compact."><td><code>/compact</code></td><td></td><td>Nén hội thoại thành bản tóm tắt để giải phóng chỗ trong cửa sổ ngữ cảnh. Thêm chữ sau lệnh để dặn nên giữ gì.</td><td class="note">Tắt khi đặt biến DISABLE_COMPACT.</td></tr>
+<tr data-q="autocompact  đặt mức đầy của ngữ cảnh mà tới đó claude tự nén (auto hay một số token). "><td><code>/autocompact</code></td><td></td><td>Đặt mức đầy của ngữ cảnh mà tới đó Claude tự nén (<code>auto</code> hay một số token).</td><td class="note"></td></tr>
+<tr data-q="context  vẽ lưới màu cho thấy ngữ cảnh đang bị chiếm bởi gì (luật, công cụ, hội thoại…). /context all xem đủ. "><td><code>/context</code></td><td></td><td>Vẽ lưới màu cho thấy ngữ cảnh đang bị chiếm bởi gì (luật, công cụ, hội thoại…). <code>/context all</code> xem đủ.</td><td class="note"></td></tr>
+<tr data-q="resume continue mở lại một cuộc trò chuyện cũ, theo mã phiên hay từ khóa. "><td><code>/resume</code></td><td><code>/continue</code></td><td>Mở lại một cuộc trò chuyện cũ, theo mã phiên hay từ khóa.</td><td class="note"></td></tr>
+<tr data-q="rewind checkpoint, undo đưa code và/hoặc hội thoại về một mốc trước đó. "><td><code>/rewind</code></td><td><code>/checkpoint</code>, <code>/undo</code></td><td>Đưa code và/hoặc hội thoại về một mốc trước đó.</td><td class="note"></td></tr>
+<tr data-q="branch  tách một nhánh hội thoại tại điểm này (giữ bản gốc). "><td><code>/branch</code></td><td></td><td>Tách một nhánh hội thoại tại điểm này (giữ bản gốc).</td><td class="note"></td></tr>
+<tr data-q="fork  chép hội thoại sang một phiên chạy nền mới, còn bạn vẫn làm tiếp ở đây. "><td><code>/fork</code></td><td></td><td>Chép hội thoại sang một phiên chạy nền mới, còn bạn vẫn làm tiếp ở đây.</td><td class="note"></td></tr>
+<tr data-q="btw  hỏi chen một câu nhanh mà không làm gián đoạn việc chính. "><td><code>/btw</code></td><td></td><td>Hỏi chen một câu nhanh mà không làm gián đoạn việc chính.</td><td class="note"></td></tr>
+<tr data-q="subtask  giao một việc cho trợ lý phụ mang theo toàn bộ ngữ cảnh; kết quả quay về phiên này. "><td><code>/subtask</code></td><td></td><td>Giao một việc cho trợ lý phụ mang theo toàn bộ ngữ cảnh; kết quả quay về phiên này.</td><td class="note"></td></tr>
+<tr data-q="rename name đặt tên cho cuộc trò chuyện. "><td><code>/rename</code></td><td><code>/name</code></td><td>Đặt tên cho cuộc trò chuyện.</td><td class="note"></td></tr>
+<tr data-q="export  xuất hội thoại ra file hay bộ nhớ tạm. "><td><code>/export</code></td><td></td><td>Xuất hội thoại ra file hay bộ nhớ tạm.</td><td class="note"></td></tr>
+<tr data-q="copy  chép câu trả lời cuối của claude (/copy 2 là câu áp chót). "><td><code>/copy</code></td><td></td><td>Chép câu trả lời cuối của Claude (<code>/copy 2</code> là câu áp chót).</td><td class="note"></td></tr>
+<tr data-q="recap  tạo ngay một dòng tóm tắt phiên. "><td><code>/recap</code></td><td></td><td>Tạo ngay một dòng tóm tắt phiên.</td><td class="note"></td></tr>
+<tr data-q="goal  đặt mục tiêu: claude làm tiếp cho tới khi điều kiện đạt. /goal clear để bỏ. "><td><code>/goal</code></td><td></td><td>Đặt mục tiêu: Claude làm tiếp cho tới khi điều kiện đạt. <code>/goal clear</code> để bỏ.</td><td class="note"></td></tr>
+<tr data-q="plan  bật chế độ lập kế hoạch (chỉ đọc và đề xuất, chưa sửa) hay xem kế hoạch của phiên. "><td><code>/plan</code></td><td></td><td>Bật chế độ lập kế hoạch (chỉ đọc và đề xuất, chưa sửa) hay xem kế hoạch của phiên.</td><td class="note"></td></tr>
+<tr data-q="background bg đẩy phiên chạy nền để giải phóng terminal. "><td><code>/background</code></td><td><code>/bg</code></td><td>Đẩy phiên chạy nền để giải phóng terminal.</td><td class="note"></td></tr>
+<tr data-q="stop  dừng phiên chạy nền; giữ lại hội thoại và worktree. chỉ hiện trong phiên nền."><td><code>/stop</code></td><td></td><td>Dừng phiên chạy nền; giữ lại hội thoại và worktree.</td><td class="note">Chỉ hiện trong phiên nền.</td></tr>
+<tr data-q="tasks bashes xem và dừng mọi thứ đang chạy nền (lệnh shell, trợ lý phụ…). "><td><code>/tasks</code></td><td><code>/bashes</code></td><td>Xem và dừng mọi thứ đang chạy nền (lệnh shell, trợ lý phụ…).</td><td class="note"></td></tr>
+<tr data-q="cd  chuyển phiên sang thư mục làm việc khác. "><td><code>/cd</code></td><td></td><td>Chuyển phiên sang thư mục làm việc khác.</td><td class="note"></td></tr>
+<tr data-q="add-dir  thêm một thư mục làm việc nữa cho phiên. "><td><code>/add-dir</code></td><td></td><td>Thêm một thư mục làm việc nữa cho phiên.</td><td class="note"></td></tr>
+<tr data-q="diff  xem thay đổi chưa commit và diff theo từng lượt. "><td><code>/diff</code></td><td></td><td>Xem thay đổi chưa commit và diff theo từng lượt.</td><td class="note"></td></tr>
+<tr data-q="focus  chế độ gọn: chỉ hiện câu bạn hỏi, tóm tắt và câu trả lời. "><td><code>/focus</code></td><td></td><td>Chế độ gọn: chỉ hiện câu bạn hỏi, tóm tắt và câu trả lời.</td><td class="note"></td></tr>
+<tr data-q="brief  bật tắt chế độ chỉ trả lời ngắn. chỉ hiện khi cấu hình cho phép."><td><code>/brief</code></td><td></td><td>Bật tắt chế độ chỉ trả lời ngắn.</td><td class="note">Chỉ hiện khi cấu hình cho phép.</td></tr>
+<tr data-q="exit quit thoát (trong phiên nền thì tách ra, phiên vẫn chạy). "><td><code>/exit</code></td><td><code>/quit</code></td><td>Thoát (trong phiên nền thì tách ra, phiên vẫn chạy).</td><td class="note"></td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Model, mức suy nghĩ, chi phí <span class="chip">10</span></h3>
+    <p class="note">Chọn model và xem hạn mức đã dùng.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="model  chọn model (opus, sonnet, haiku, fable…). "><td><code>/model</code></td><td></td><td>Chọn model (Opus, Sonnet, Haiku, Fable…).</td><td class="note"></td></tr>
+<tr data-q="effort  chọn mức suy nghĩ của model (low tới max). "><td><code>/effort</code></td><td></td><td>Chọn mức suy nghĩ của model (low tới max).</td><td class="note"></td></tr>
+<tr data-q="fast  bật tắt chế độ nhanh (opus trả lời nhanh hơn, tốn hơn). chỉ hiện khi tài khoản dùng được."><td><code>/fast</code></td><td></td><td>Bật tắt chế độ nhanh (Opus trả lời nhanh hơn, tốn hơn).</td><td class="note">Chỉ hiện khi tài khoản dùng được.</td></tr>
+<tr data-q="usage cost, stats xem chi phí phiên, hạn mức của gói và thống kê hoạt động. "><td><code>/usage</code></td><td><code>/cost</code>, <code>/stats</code></td><td>Xem chi phí phiên, hạn mức của gói và thống kê hoạt động.</td><td class="note"></td></tr>
+<tr data-q="usage-credits  cấu hình tín dụng dùng thêm, hay xin quản trị viên khi chạm hạn mức. thay tên cũ /extra-usage."><td><code>/usage-credits</code></td><td></td><td>Cấu hình tín dụng dùng thêm, hay xin quản trị viên khi chạm hạn mức.</td><td class="note">Thay tên cũ /extra-usage.</td></tr>
+<tr data-q="rate-limit-options  các lựa chọn khi chạm giới hạn: chờ, mua thêm, nâng gói. "><td><code>/rate-limit-options</code></td><td></td><td>Các lựa chọn khi chạm giới hạn: chờ, mua thêm, nâng gói.</td><td class="note"></td></tr>
+<tr data-q="upgrade  nâng gói để có hạn mức cao hơn. tài khoản claude.ai."><td><code>/upgrade</code></td><td></td><td>Nâng gói để có hạn mức cao hơn.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="advisor  cho claude hỏi ý một model mạnh hơn ở các bước then chốt. chỉ hiện khi tính năng được bật."><td><code>/advisor</code></td><td></td><td>Cho Claude hỏi ý một model mạnh hơn ở các bước then chốt.</td><td class="note">Chỉ hiện khi tính năng được bật.</td></tr>
+<tr data-q="skill-doctor  chỉ ra skill nào đã nạp mà không dùng, đang tốn chỗ ngữ cảnh. "><td><code>/skill-doctor</code></td><td></td><td>Chỉ ra skill nào đã nạp mà không dùng, đang tốn chỗ ngữ cảnh.</td><td class="note"></td></tr>
+<tr data-q="passes  tặng bạn bè một tuần dùng thử claude code. chỉ hiện khi tài khoản đủ điều kiện."><td><code>/passes</code></td><td></td><td>Tặng bạn bè một tuần dùng thử Claude Code.</td><td class="note">Chỉ hiện khi tài khoản đủ điều kiện.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Cấu hình và giao diện <span class="chip">16</span></h3>
+    <p class="note">Đổi cài đặt của chính Claude Code.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="config settings mở bảng cài đặt, hay đặt nhanh /config key=value. bảng không mở được trong tab code của app desktop."><td><code>/config</code></td><td><code>/settings</code></td><td>Mở bảng cài đặt, hay đặt nhanh <code>/config key=value</code>.</td><td class="note">Bảng không mở được trong tab Code của app desktop.</td></tr>
+<tr data-q="permissions allowed-tools quản lý luật cho phép và chặn công cụ. không dùng được trong tab code của app desktop."><td><code>/permissions</code></td><td><code>/allowed-tools</code></td><td>Quản lý luật cho phép và chặn công cụ.</td><td class="note">Không dùng được trong tab Code của app desktop.</td></tr>
+<tr data-q="hooks  xem các hook (lệnh tự chạy khi có sự kiện công cụ) đang cấu hình. không dùng được trong tab code của app desktop."><td><code>/hooks</code></td><td></td><td>Xem các hook (lệnh tự chạy khi có sự kiện công cụ) đang cấu hình.</td><td class="note">Không dùng được trong tab Code của app desktop.</td></tr>
+<tr data-q="memory  sửa các file claude.md và cài đặt bộ nhớ. "><td><code>/memory</code></td><td></td><td>Sửa các file CLAUDE.md và cài đặt bộ nhớ.</td><td class="note"></td></tr>
+<tr data-q="keybindings  mở file phím tắt ~/.claude/keybindings.json. "><td><code>/keybindings</code></td><td></td><td>Mở file phím tắt <code>~/.claude/keybindings.json</code>.</td><td class="note"></td></tr>
+<tr data-q="theme  đổi giao diện màu. "><td><code>/theme</code></td><td></td><td>Đổi giao diện màu.</td><td class="note"></td></tr>
+<tr data-q="tui  chọn cách vẽ giao diện terminal: default hay fullscreen. "><td><code>/tui</code></td><td></td><td>Chọn cách vẽ giao diện terminal: <code>default</code> hay <code>fullscreen</code>.</td><td class="note"></td></tr>
+<tr data-q="scroll-speed  chỉnh tốc độ cuộn chuột. chỉ ở chế độ toàn màn hình, một số terminal."><td><code>/scroll-speed</code></td><td></td><td>Chỉnh tốc độ cuộn chuột.</td><td class="note">Chỉ ở chế độ toàn màn hình, một số terminal.</td></tr>
+<tr data-q="terminal-setup  cài phím xuống dòng (shift+enter hay option+enter) cho terminal đang dùng. "><td><code>/terminal-setup</code></td><td></td><td>Cài phím xuống dòng (Shift+Enter hay Option+Enter) cho terminal đang dùng.</td><td class="note"></td></tr>
+<tr data-q="statusline  nhờ claude dựng dòng trạng thái dưới khung gõ. lệnh dạng prompt."><td><code>/statusline</code></td><td></td><td>Nhờ Claude dựng dòng trạng thái dưới khung gõ.</td><td class="note">Lệnh dạng prompt.</td></tr>
+<tr data-q="output-style  liệt kê hay đổi kiểu trả lời (ví dụ kiểu giải thích, kiểu học). có thể ẩn tùy bản."><td><code>/output-style</code></td><td></td><td>Liệt kê hay đổi kiểu trả lời (ví dụ kiểu giải thích, kiểu học).</td><td class="note">Có thể ẩn tùy bản.</td></tr>
+<tr data-q="sandbox  bật tắt chạy lệnh shell trong hộp cát, xem trạng thái hộp cát. có thể ẩn tùy máy."><td><code>/sandbox</code></td><td></td><td>Bật tắt chạy lệnh shell trong hộp cát, xem trạng thái hộp cát.</td><td class="note">Có thể ẩn tùy máy.</td></tr>
+<tr data-q="privacy-settings  xem và đổi cài đặt quyền riêng tư (dùng dữ liệu để huấn luyện…). tài khoản claude.ai."><td><code>/privacy-settings</code></td><td></td><td>Xem và đổi cài đặt quyền riêng tư (dùng dữ liệu để huấn luyện…).</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="auto-mode-setup  dạy chế độ tự động về môi trường của bạn, thêm luật riêng. "><td><code>/auto-mode-setup</code></td><td></td><td>Dạy chế độ tự động về môi trường của bạn, thêm luật riêng.</td><td class="note"></td></tr>
+<tr data-q="color  đổi màu khung gõ của phiên. ẩn ở terminal."><td><code>/color</code></td><td></td><td>Đổi màu khung gõ của phiên.</td><td class="note">Ẩn ở terminal.</td></tr>
+<tr data-q="voice  bật tắt nhập bằng giọng nói (giữ phím hay chạm). tài khoản claude.ai."><td><code>/voice</code></td><td></td><td>Bật tắt nhập bằng giọng nói (giữ phím hay chạm).</td><td class="note">Tài khoản claude.ai.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Mở rộng: plugin, skill, MCP, trợ lý phụ <span class="chip">10</span></h3>
+    <p class="note">Thêm hay xem các thứ mở rộng năng lực.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="mcp  quản lý máy chủ mcp: xem, nối lại, bật, tắt. "><td><code>/mcp</code></td><td></td><td>Quản lý máy chủ MCP: xem, nối lại, bật, tắt.</td><td class="note"></td></tr>
+<tr data-q="plugin plugins, marketplace cài, gỡ, bật, tắt plugin và chợ plugin. "><td><code>/plugin</code></td><td><code>/plugins</code>, <code>/marketplace</code></td><td>Cài, gỡ, bật, tắt plugin và chợ plugin.</td><td class="note"></td></tr>
+<tr data-q="reload-plugins  áp dụng thay đổi plugin ngay trong phiên đang chạy. "><td><code>/reload-plugins</code></td><td></td><td>Áp dụng thay đổi plugin ngay trong phiên đang chạy.</td><td class="note"></td></tr>
+<tr data-q="skills  liệt kê skill đang có. "><td><code>/skills</code></td><td></td><td>Liệt kê skill đang có.</td><td class="note"></td></tr>
+<tr data-q="reload-skills  nạp lại skill vừa thêm hay sửa trên đĩa. "><td><code>/reload-skills</code></td><td></td><td>Nạp lại skill vừa thêm hay sửa trên đĩa.</td><td class="note"></td></tr>
+<tr data-q="cloud-plugins  chọn phiên trên cloud có dùng plugin của máy này không. "><td><code>/cloud-plugins</code></td><td></td><td>Chọn phiên trên cloud có dùng plugin của máy này không.</td><td class="note"></td></tr>
+<tr data-q="list-agents peers liệt kê trợ lý phụ, đồng đội và phiên claude khác mà phiên này nhắn được. chỉ hiện khi bật tính năng nhắn giữa phiên."><td><code>/list-agents</code></td><td><code>/peers</code></td><td>Liệt kê trợ lý phụ, đồng đội và phiên Claude khác mà phiên này nhắn được.</td><td class="note">Chỉ hiện khi bật tính năng nhắn giữa phiên.</td></tr>
+<tr data-q="workflows  xem các workflow (chuỗi trợ lý phụ) đang chạy và đã xong. "><td><code>/workflows</code></td><td></td><td>Xem các workflow (chuỗi trợ lý phụ) đang chạy và đã xong.</td><td class="note"></td></tr>
+<tr data-q="daemon  quản lý dịch vụ nền và routine. "><td><code>/daemon</code></td><td></td><td>Quản lý dịch vụ nền và routine.</td><td class="note"></td></tr>
+<tr data-q="import  nhập cấu hình từ công cụ khác (codex, gemini, cursor). ẩn ở terminal."><td><code>/import</code></td><td></td><td>Nhập cấu hình từ công cụ khác (Codex, Gemini, Cursor).</td><td class="note">Ẩn ở terminal.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Kết nối, tài khoản, cài đặt <span class="chip">21</span></h3>
+    <p class="note">Đăng nhập, nối với app khác, kiểm tra cài đặt.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="login  đăng nhập hay đổi tài khoản anthropic. "><td><code>/login</code></td><td></td><td>Đăng nhập hay đổi tài khoản Anthropic.</td><td class="note"></td></tr>
+<tr data-q="logout  đăng xuất. "><td><code>/logout</code></td><td></td><td>Đăng xuất.</td><td class="note"></td></tr>
+<tr data-q="status  xem phiên bản, model, tài khoản, kết nối api và trạng thái công cụ. "><td><code>/status</code></td><td></td><td>Xem phiên bản, model, tài khoản, kết nối API và trạng thái công cụ.</td><td class="note"></td></tr>
+<tr data-q="doctor checkup kiểm sức khỏe cài đặt và sửa: bản cài, phần mở rộng không dùng, file nhớ trùng hay phình, hook chậm, cập nhật, quyền. /doctor prompt-audit soát file nhớ. skill có sẵn."><td><code>/doctor</code></td><td><code>/checkup</code></td><td>Kiểm sức khỏe cài đặt và sửa: bản cài, phần mở rộng không dùng, file nhớ trùng hay phình, hook chậm, cập nhật, quyền. <code>/doctor prompt-audit</code> soát file nhớ.</td><td class="note">Skill có sẵn.</td></tr>
+<tr data-q="install  cài bản native của claude code. "><td><code>/install</code></td><td></td><td>Cài bản native của Claude Code.</td><td class="note"></td></tr>
+<tr data-q="restart update khởi động lại (lên bản mới nếu có) mà giữ phiên. chỉ hiện khi có bản khác để chuyển."><td><code>/restart</code></td><td><code>/update</code></td><td>Khởi động lại (lên bản mới nếu có) mà giữ phiên.</td><td class="note">Chỉ hiện khi có bản khác để chuyển.</td></tr>
+<tr data-q="ide  nối với visual studio code, jetbrains… và xem trạng thái. "><td><code>/ide</code></td><td></td><td>Nối với Visual Studio Code, JetBrains… và xem trạng thái.</td><td class="note"></td></tr>
+<tr data-q="chrome  mở cài đặt claude in chrome. tài khoản claude.ai."><td><code>/chrome</code></td><td></td><td>Mở cài đặt Claude in Chrome.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="desktop app chuyển phiên đang chạy sang claude desktop. tài khoản claude.ai."><td><code>/desktop</code></td><td><code>/app</code></td><td>Chuyển phiên đang chạy sang Claude Desktop.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="mobile ios, android hiện mã qr tải app claude cho điện thoại. "><td><code>/mobile</code></td><td><code>/ios</code>, <code>/android</code></td><td>Hiện mã QR tải app Claude cho điện thoại.</td><td class="note"></td></tr>
+<tr data-q="remote-control rc điều khiển phiên này từ điện thoại hay claude.ai/code. "><td><code>/remote-control</code></td><td><code>/rc</code></td><td>Điều khiển phiên này từ điện thoại hay claude.ai/code.</td><td class="note"></td></tr>
+<tr data-q="teleport tp đẩy phiên lên cloud, hay kéo một phiên từ claude.ai về. "><td><code>/teleport</code></td><td><code>/tp</code></td><td>Đẩy phiên lên cloud, hay kéo một phiên từ claude.ai về.</td><td class="note"></td></tr>
+<tr data-q="session remote hiện link và mã qr của phiên trên cloud. chỉ trong phiên cloud."><td><code>/session</code></td><td><code>/remote</code></td><td>Hiện link và mã QR của phiên trên cloud.</td><td class="note">Chỉ trong phiên cloud.</td></tr>
+<tr data-q="remote-env  chọn môi trường mặc định cho trợ lý chạy trên cloud. "><td><code>/remote-env</code></td><td></td><td>Chọn môi trường mặc định cho trợ lý chạy trên cloud.</td><td class="note"></td></tr>
+<tr data-q="web-setup  nối tài khoản github để dùng phiên trên cloud. tài khoản claude.ai."><td><code>/web-setup</code></td><td></td><td>Nối tài khoản GitHub để dùng phiên trên cloud.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="install-github-app  cài github actions của claude cho một repo. "><td><code>/install-github-app</code></td><td></td><td>Cài GitHub Actions của Claude cho một repo.</td><td class="note"></td></tr>
+<tr data-q="install-slack-app  cài app claude cho slack. tài khoản claude.ai."><td><code>/install-slack-app</code></td><td></td><td>Cài app Claude cho Slack.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="setup-bedrock  cấu hình lại amazon bedrock (xác thực, vùng, model). chỉ khi dùng bedrock."><td><code>/setup-bedrock</code></td><td></td><td>Cấu hình lại Amazon Bedrock (xác thực, vùng, model).</td><td class="note">Chỉ khi dùng Bedrock.</td></tr>
+<tr data-q="setup-vertex  cấu hình lại google vertex ai. chỉ khi dùng vertex."><td><code>/setup-vertex</code></td><td></td><td>Cấu hình lại Google Vertex AI.</td><td class="note">Chỉ khi dùng Vertex.</td></tr>
+<tr data-q="artifacts  duyệt các trang artifact đã đăng và được chia sẻ. "><td><code>/artifacts</code></td><td></td><td>Duyệt các trang Artifact đã đăng và được chia sẻ.</td><td class="note"></td></tr>
+<tr data-q="design-login  cho /design-sync quyền vào hệ thống thiết kế trên claude.ai. chỉ khi có claude design."><td><code>/design-login</code></td><td></td><td>Cho /design-sync quyền vào hệ thống thiết kế trên claude.ai.</td><td class="note">Chỉ khi có Claude Design.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Việc chạy trên cloud <span class="chip">5</span></h3>
+    <p class="note">Giao việc dài cho phiên Claude chạy trên máy của Anthropic.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="ultraplan  một phiên cloud soạn kế hoạch, bạn sửa và duyệt. tài khoản claude.ai."><td><code>/ultraplan</code></td><td></td><td>Một phiên cloud soạn kế hoạch, bạn sửa và duyệt.</td><td class="note">Tài khoản claude.ai.</td></tr>
+<tr data-q="ultrareview  phiên cloud tìm và kiểm chứng lỗi trong nhánh của bạn (tính phí riêng). tên cũ, vẫn gõ được; tên mới là &lt;code&gt;/code-review ultra&lt;/code&gt;."><td><code>/ultrareview</code></td><td></td><td>Phiên cloud tìm và kiểm chứng lỗi trong nhánh của bạn (tính phí riêng).</td><td class="note">Tên cũ, vẫn gõ được; tên mới là <code>/code-review ultra</code>.</td></tr>
+<tr data-q="schedule routines tạo, sửa, chạy trợ lý cloud theo lịch cron. skill có sẵn."><td><code>/schedule</code></td><td><code>/routines</code></td><td>Tạo, sửa, chạy trợ lý cloud theo lịch cron.</td><td class="note">Skill có sẵn.</td></tr>
+<tr data-q="autofix-pr  theo dõi pr hiện tại và tự sửa lỗi ci, góp ý. ẩn trong một số bản."><td><code>/autofix-pr</code></td><td></td><td>Theo dõi PR hiện tại và tự sửa lỗi CI, góp ý.</td><td class="note">Ẩn trong một số bản.</td></tr>
+<tr data-q="batch  lập kế hoạch thay đổi lớn; nhiều trợ lý nền, mỗi cái mở một pr. skill có sẵn."><td><code>/batch</code></td><td></td><td>Lập kế hoạch thay đổi lớn; nhiều trợ lý nền, mỗi cái mở một PR.</td><td class="note">Skill có sẵn.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Lệnh nhờ Claude làm việc (prompt và skill có sẵn) <span class="chip">26</span></h3>
+    <p class="note">Gõ lệnh là đưa cho Claude một chỉ dẫn soạn sẵn; Claude cũng có thể tự gọi phần lớn các skill này.</p>
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="init  đọc codebase rồi viết claude.md. lệnh dạng prompt."><td><code>/init</code></td><td></td><td>Đọc codebase rồi viết CLAUDE.md.</td><td class="note">Lệnh dạng prompt.</td></tr>
+<tr data-q="insights  báo cáo phân tích các phiên claude code của bạn. lệnh dạng prompt."><td><code>/insights</code></td><td></td><td>Báo cáo phân tích các phiên Claude Code của bạn.</td><td class="note">Lệnh dạng prompt.</td></tr>
+<tr data-q="team-onboarding  soạn hướng dẫn cho đồng đội mới, dựa trên cách bạn dùng. lệnh dạng prompt."><td><code>/team-onboarding</code></td><td></td><td>Soạn hướng dẫn cho đồng đội mới, dựa trên cách bạn dùng.</td><td class="note">Lệnh dạng prompt.</td></tr>
+<tr data-q="code-review review review diff hiện tại hay một pr tìm lỗi; chọn mức low tới max, ultra chạy trên cloud. "><td><code>/code-review</code></td><td><code>/review</code></td><td>Review diff hiện tại hay một PR tìm lỗi; chọn mức <code>low</code> tới <code>max</code>, <code>ultra</code> chạy trên cloud.</td><td class="note"></td></tr>
+<tr data-q="simplify  soát code vừa đổi để dùng lại, rút gọn, chạy nhanh hơn, rồi sửa luôn. không săn lỗi. "><td><code>/simplify</code></td><td></td><td>Soát code vừa đổi để dùng lại, rút gọn, chạy nhanh hơn, rồi sửa luôn. Không săn lỗi.</td><td class="note"></td></tr>
+<tr data-q="security-review  review bảo mật các thay đổi chưa gộp của nhánh. cần repo git."><td><code>/security-review</code></td><td></td><td>Review bảo mật các thay đổi chưa gộp của nhánh.</td><td class="note">Cần repo git.</td></tr>
+<tr data-q="verify  chạy thử thay đổi và báo nó có chạy đúng không. "><td><code>/verify</code></td><td></td><td>Chạy thử thay đổi và báo nó có chạy đúng không.</td><td class="note"></td></tr>
+<tr data-q="commit  tạo commit theo quy trình chuẩn (gom bối cảnh git, viết thông điệp). "><td><code>/commit</code></td><td></td><td>Tạo commit theo quy trình chuẩn (gom bối cảnh git, viết thông điệp).</td><td class="note"></td></tr>
+<tr data-q="pr  mở pull request trên github theo quy trình chuẩn. "><td><code>/pr</code></td><td></td><td>Mở pull request trên GitHub theo quy trình chuẩn.</td><td class="note"></td></tr>
+<tr data-q="commit-push-pr  commit, push và mở pr một lèo. "><td><code>/commit-push-pr</code></td><td></td><td>Commit, push và mở PR một lèo.</td><td class="note"></td></tr>
+<tr data-q="debug  bật log gỡ lỗi cho phiên và cùng điều tra sự cố. "><td><code>/debug</code></td><td></td><td>Bật log gỡ lỗi cho phiên và cùng điều tra sự cố.</td><td class="note"></td></tr>
+<tr data-q="loop  chạy một prompt hay lệnh lặp lại theo chu kỳ (/loop 5m /foo). "><td><code>/loop</code></td><td></td><td>Chạy một prompt hay lệnh lặp lại theo chu kỳ (<code>/loop 5m /foo</code>).</td><td class="note"></td></tr>
+<tr data-q="run  chạy app của project để thấy thay đổi hoạt động. "><td><code>/run</code></td><td></td><td>Chạy app của project để thấy thay đổi hoạt động.</td><td class="note"></td></tr>
+<tr data-q="run-skill-generator  tạo một skill biết cách chạy app của project. "><td><code>/run-skill-generator</code></td><td></td><td>Tạo một skill biết cách chạy app của project.</td><td class="note"></td></tr>
+<tr data-q="fewer-permission-prompts  đọc lịch sử, đề xuất danh sách lệnh chỉ đọc nên cho phép sẵn. "><td><code>/fewer-permission-prompts</code></td><td></td><td>Đọc lịch sử, đề xuất danh sách lệnh chỉ đọc nên cho phép sẵn.</td><td class="note"></td></tr>
+<tr data-q="update-config  đổi settings.json: hook, quyền, biến môi trường. "><td><code>/update-config</code></td><td></td><td>Đổi settings.json: hook, quyền, biến môi trường.</td><td class="note"></td></tr>
+<tr data-q="claude-api  tra cứu và gỡ lỗi app dùng claude api. "><td><code>/claude-api</code></td><td></td><td>Tra cứu và gỡ lỗi app dùng Claude API.</td><td class="note"></td></tr>
+<tr data-q="claude-in-chrome  cho claude duyệt và thao tác trang trong chrome của bạn. khi đã nối extension."><td><code>/claude-in-chrome</code></td><td></td><td>Cho Claude duyệt và thao tác trang trong Chrome của bạn.</td><td class="note">Khi đã nối extension.</td></tr>
+<tr data-q="dataviz  hướng dẫn vẽ biểu đồ, dashboard nhất quán. "><td><code>/dataviz</code></td><td></td><td>Hướng dẫn vẽ biểu đồ, dashboard nhất quán.</td><td class="note"></td></tr>
+<tr data-q="artifact-diagramming  hướng dẫn vẽ sơ đồ trong trang artifact. "><td><code>/artifact-diagramming</code></td><td></td><td>Hướng dẫn vẽ sơ đồ trong trang Artifact.</td><td class="note"></td></tr>
+<tr data-q="plugin-authoring  viết mod: pane, dòng trạng thái, hook đổi giao diện claude code. "><td><code>/plugin-authoring</code></td><td></td><td>Viết mod: pane, dòng trạng thái, hook đổi giao diện Claude Code.</td><td class="note"></td></tr>
+<tr data-q="workflow-authoring  tài liệu viết script workflow nhiều trợ lý phụ. "><td><code>/workflow-authoring</code></td><td></td><td>Tài liệu viết script workflow nhiều trợ lý phụ.</td><td class="note"></td></tr>
+<tr data-q="explain-usage  giải thích token của phiên đã đi đâu. chỉ trong một số app."><td><code>/explain-usage</code></td><td></td><td>Giải thích token của phiên đã đi đâu.</td><td class="note">Chỉ trong một số app.</td></tr>
+<tr data-q="setup-claude setup-cowork thiết lập có hướng dẫn: chọn vai trò, cài plugin, thử skill. chỉ trong một số app."><td><code>/setup-claude</code></td><td><code>/setup-cowork</code></td><td>Thiết lập có hướng dẫn: chọn vai trò, cài plugin, thử skill.</td><td class="note">Chỉ trong một số app.</td></tr>
+<tr data-q="design  làm việc với claude design. chỉ khi có claude design."><td><code>/design</code></td><td></td><td>Làm việc với Claude Design.</td><td class="note">Chỉ khi có Claude Design.</td></tr>
+<tr data-q="design-sync  đẩy thành phần hệ thống thiết kế lên claude.ai/design. chỉ khi có claude design."><td><code>/design-sync</code></td><td></td><td>Đẩy thành phần hệ thống thiết kế lên claude.ai/design.</td><td class="note">Chỉ khi có Claude Design.</td></tr></tbody></table></div></section>
+<section class="grp">
+    <h3>Trợ giúp và linh tinh <span class="chip">8</span></h3>
+    
+    <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Tên khác</th><th>Làm gì</th><th>Ghi chú</th></tr></thead>
+    <tbody><tr data-q="help  xem trợ giúp và danh sách lệnh. "><td><code>/help</code></td><td></td><td>Xem trợ giúp và danh sách lệnh.</td><td class="note"></td></tr>
+<tr data-q="powerup  học tính năng qua bài tập tương tác ngắn. "><td><code>/powerup</code></td><td></td><td>Học tính năng qua bài tập tương tác ngắn.</td><td class="note"></td></tr>
+<tr data-q="release-notes  xem ghi chú phát hành. "><td><code>/release-notes</code></td><td></td><td>Xem ghi chú phát hành.</td><td class="note"></td></tr>
+<tr data-q="feedback  gửi góp ý hay báo lỗi cho anthropic. "><td><code>/feedback</code></td><td></td><td>Gửi góp ý hay báo lỗi cho Anthropic.</td><td class="note"></td></tr>
+<tr data-q="bug share báo lỗi hay chia sẻ hội thoại. "><td><code>/bug</code></td><td><code>/share</code></td><td>Báo lỗi hay chia sẻ hội thoại.</td><td class="note"></td></tr>
+<tr data-q="stickers  đặt sticker claude code. "><td><code>/stickers</code></td><td></td><td>Đặt sticker Claude Code.</td><td class="note"></td></tr>
+<tr data-q="radio  nghe kênh nhạc lo-fi của claude. "><td><code>/radio</code></td><td></td><td>Nghe kênh nhạc lo-fi của Claude.</td><td class="note"></td></tr>
+<tr data-q="use-case  chọn lĩnh vực life sciences cho yêu cầu. ẩn, chỉ một số tài khoản."><td><code>/use-case</code></td><td></td><td>Chọn lĩnh vực Life Sciences cho yêu cầu.</td><td class="note">Ẩn, chỉ một số tài khoản.</td></tr></tbody></table></div></section>
+    <section class="grp">
+      <h3>Có trong mã nhưng ẩn hay tắt sẵn</h3>
+      <p class="note">Gõ thường không thấy trong menu ở bản này.</p>
+      <div class="scroll"><table><thead><tr><th>Lệnh</th><th>Để làm gì</th><th>Tình trạng</th></tr></thead>
+      <tbody><tr data-q="loops liệt kê, tạo, xóa vòng lặp"><td><code>/loops</code></td><td>Liệt kê, tạo, xóa vòng lặp</td><td class="note">tắt sẵn trong bản này</td></tr>
+<tr data-q="version in phiên bản đang chạy"><td><code>/version</code></td><td>In phiên bản đang chạy</td><td class="note">tắt sẵn; dùng /status</td></tr>
+<tr data-q="wellbeing nhắc nghỉ giải lao, giờ yên tĩnh (alias breaks, downtime)"><td><code>/wellbeing</code></td><td>Nhắc nghỉ giải lao, giờ yên tĩnh (alias breaks, downtime)</td><td class="note">tắt sẵn</td></tr>
+<tr data-q="pause-memory tạm dừng bộ nhớ tự động"><td><code>/pause-memory</code></td><td>Tạm dừng bộ nhớ tự động</td><td class="note">tắt sẵn</td></tr>
+<tr data-q="agents đã bỏ; giờ chỉ in lời nhắn: nhờ claude tạo trợ lý phụ hay sửa .claude/agents/"><td><code>/agents</code></td><td>Đã bỏ; giờ chỉ in lời nhắn: nhờ Claude tạo trợ lý phụ hay sửa .claude/agents/</td><td class="note">ẩn</td></tr>
+<tr data-q="extra-usage tên cũ của /usage-credits"><td><code>/extra-usage</code></td><td>Tên cũ của /usage-credits</td><td class="note">ẩn</td></tr>
+<tr data-q="heapdump ghi bộ nhớ js ra file để gỡ lỗi"><td><code>/heapdump</code></td><td>Ghi bộ nhớ JS ra file để gỡ lỗi</td><td class="note">ẩn, cho kỹ sư</td></tr>
+<tr data-q="design-consent, design-revoke cấp, thu quyền claude vào dự án design"><td><code>/design-consent, /design-revoke</code></td><td>Cấp, thu quyền Claude vào dự án Design</td><td class="note">ẩn, gọi từ luồng khác</td></tr>
+<tr data-q="pro-trial-expired màn hình khi hết dùng thử gói pro"><td><code>/pro-trial-expired</code></td><td>Màn hình khi hết dùng thử gói Pro</td><td class="note">ẩn, tự hiện</td></tr>
+<tr data-q="workflow-launch-exec chạy workflow do máy chủ khởi động"><td><code>/workflow-launch-exec</code></td><td>Chạy workflow do máy chủ khởi động</td><td class="note">ẩn, nội bộ</td></tr></tbody></table></div>
+    </section>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Rút từ chương trình đã cài: <code>~/Library/Application Support/Claude/claude-code/2.1.317/…/claude</code> (đường dẫn lấy bằng <code>python3 tools/claude_app.py</code> trong repo agent-stack). Đọc chuỗi bằng <code>strings</code>, tìm các khai báo lệnh có tên, mô tả, tên khác và điều kiện bật.</li>
+      <li>Bản <code>claude</code> gõ trong terminal (cài bằng Homebrew) là 2.1.311, cũ hơn app vài bản; danh sách có thể lệch đôi chút nếu bạn chạy bản đó.</li>
+      <li>Mô tả tiếng Việt dịch từ mô tả gốc trong chương trình; lệnh có mô tả thay đổi theo hoàn cảnh (như <code>/terminal-setup</code>) được tóm lại.</li>
+      <li>Mô tả gốc trong chương trình là tiếng Anh. Không kiểm được cờ tính năng phía máy chủ, nên "có hiện với bạn không" ở vài lệnh vẫn phải thử trực tiếp.</li>
+    </ul>
+  </footer>
+</main>
+<script>
+(() => {
+  const q = document.getElementById('q');
+  q.addEventListener('input', () => {
+    const v = q.value.trim().toLowerCase();
+    document.querySelectorAll('.grp').forEach(g => {
+      let shown = 0;
+      g.querySelectorAll('tbody tr').forEach(tr => {
+        const ok = !v || tr.dataset.q.includes(v) || tr.textContent.toLowerCase().includes(v);
+        tr.classList.toggle('hide', !ok); if (ok) shown++;
+      });
+      g.classList.toggle('hide', shown === 0);
+    });
+  });
+})();
+</script>
