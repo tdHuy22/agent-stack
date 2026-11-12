@@ -1,0 +1,293 @@
+<title>Kiểm tĩnh cho project</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<!--
+  Khuôn của skill reader-page. Chép file này, thay mọi chữ "…" bằng nội dung thật, rồi chạy check_page.py.
+  Giữ các thuộc tính data-*: script kiểm dựa vào chúng. Đổi màu và chữ cho hợp chủ đề theo skill artifact-design.
+  Thứ tự: tóm tắt → nền tảng (bối cảnh, vấn đề, khái niệm, thuật ngữ) → ví dụ → phương án → ví dụ × phương án
+  → ràng buộc → pattern xấu → câu cần chốt → nguồn. Kế hoạch một hướng vẫn giữ đúng một thẻ phương án.
+  Trang không có đề xuất: bỏ từ "Các phương án" tới "Câu cần chốt" và khai loại trên <main>:
+  data-loai="giai-thich" (giải thích), "bao-cao" (báo cáo, kết quả đo, review; cần phần nguồn),
+  "cong-cu" (trang tương tác; cần nút data-xuat chép kết quả về chat).
+-->
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · 12/11/2026</div>
+    <h1>agent-stack nên kiểm code của các project khác bằng máy thế nào, và rút gọn luật chung ra sao?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, matcha-latte, my-pet, SCEE, archctl, applecleaner, free-yr-sense">
+    <h2>Tóm tắt</h2>
+    <p>agent-stack là bộ công cụ chung mà Claude dùng ở mọi project của bạn trong thư mục <code>~/Documents/Claude</code>. Hiện nay khi Claude chốt việc ở một project, nó chỉ chạy những lệnh mà project tự ghi trong mục "Mốc kiểm tra" của file kế hoạch <code>PLAN.md</code> hay <code>CLAUDE.md</code> của project đó. Project nào không ghi lệnh kiểm lỗi hay kiểm kiểu thì những bước này không bao giờ chạy. Tôi đề nghị agent-stack có một bộ chạy kiểm nhỏ: tự nhận ra ngôn ngữ, ưu tiên lệnh mà project đã cấu hình sẵn, nếu không có thì dùng công cụ gốc của ngôn ngữ đó, và chỉ báo lỗi ở những dòng vừa đổi. Song song, rút gọn bộ luật chung mà mọi phiên đều phải đọc, kèm một test chứng minh không luật nào bị mất. Phần cho các project khác chưa làm gì; riêng agent-stack đã có test kiểm tĩnh cho chính nó từ 12/11. Bạn đã chốt 5 câu ngày 12/11 (cuối trang), còn chờ xác nhận tiêu chí xong.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack là bộ công cụ dùng chung cho mọi project trong <code>~/Documents/Claude</code>. Các project của bạn (matcha-latte, my-pet, SCEE, archctl…) đều nằm trong thư mục đó. Khi Claude sửa xong code ở một project, bước "chốt việc" (skill <code>done-gate</code>: quy trình Claude bắt buộc theo trước khi báo xong hay commit) chạy kiểm chứng rồi mới cho báo xong. Lệnh kiểm chứng lấy từ mục "Mốc kiểm tra" do chính project ghi. Hình tháp trong ảnh bạn gửi hôm 11/11 (bài đăng về kỹ thuật phần mềm cho AI) xếp các tầng kiểm theo thứ tự: mã nguồn tốt, phân tích tĩnh (linter, kiểm kiểu, biên dịch), xác minh (test), luật bằng lời, rồi người duyệt. Ý của hình: tầng càng cao càng chắc chắn, vì máy kiểm thì lần nào cũng như nhau; và càng rẻ, vì luật đã có máy kiểm thì không cần viết thành chữ cho Claude đọc ở mỗi phiên. Hai yêu cầu của bạn bám theo hình này: thêm máy kiểm cho project (phần lớn trang), và rút gọn phần luật bằng chữ (câu 5).</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  A[Claude sửa code trong project] --> B[Bộ chạy kiểm mới: nhận ngôn ngữ]
+  B --> C[Lệnh project đã cấu hình]
+  B --> D[Công cụ gốc khi project chưa cấu hình]
+  C --> E[Chỉ lỗi ở dòng vừa đổi]
+  D --> E
+  E --> F[Chốt việc: test của project, review, người duyệt]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Ví dụ my-pet: project này có sẵn lệnh <code>npm run typecheck</code>, nhưng mục "Mốc kiểm tra" chỉ ghi <code>npm test</code> và <code>cargo test</code>. Vì vậy lúc chốt việc, chưa lần nào kiểm kiểu TypeScript hay chạy clippy cho phần Rust. Các project của bạn dùng 6 ngôn ngữ: Python (SCEE, free-yr-sense, pdf-translator, paper-graph), TypeScript (matcha-latte, my-pet, coding-agents), Swift (applecleaner, SenKey), Rust (archctl, my-pet), Shell, C/C++ (applerar). Trên máy hiện chưa có ruff, pyright, shellcheck, swiftlint; đã có node, cargo kèm clippy, swift, go, semgrep.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Linter</b>: công cụ đọc code mà không chạy nó, để bắt lỗi chắc chắn như biến chưa định nghĩa hay import thừa. Ví dụ: <code>ruff check app.py</code> cho Python, <code>shellcheck build.sh</code> cho Shell. Cần để hiểu các phương án.</li>
+      <li><b>Kiểm kiểu và biên dịch</b>: bắt lỗi sai kiểu dữ liệu trước khi chạy. Ví dụ: <code>tsc --noEmit</code>, <code>cargo clippy</code>, <code>swift build</code>. Tầng này bắt những lỗi làm chương trình hỏng khi chạy, không chỉ lỗi phong cách. Qlty không làm phần này.</li>
+      <li><b>Chỉ báo dòng vừa đổi</b>: project cũ có thể có hàng trăm cảnh báo sẵn. Nếu báo hết, Claude sẽ ngập trong lỗi không liên quan. Vì vậy chỉ báo lỗi nằm ở những dòng mà <code>git diff</code> cho thấy vừa sửa. Cần cho câu 4.</li>
+      <li><b>Luật chung</b>: file <code>global/SHARED.global.md</code> (khoảng 10.400 ký tự) và <code>global/CLAUDE.global.md</code> (khoảng 3.800 ký tự), được nạp vào mọi phiên ở mọi project. Cần cho câu 5.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>Trunk, MegaLinter</dt><dd>Hai công cụ khác cùng loại với Qlty: gom nhiều linter vào một lệnh.</dd>
+        <dt>PHP</dt><dd>Ngôn ngữ lập trình web phía máy chủ.</dd>
+        <dt>CLI</dt><dd>Chương trình chạy bằng lệnh trong terminal.</dd>
+        <dt>LSP</dt><dd>Giao thức để trình soạn thảo, hay Claude Code, nhận báo lỗi tức thì sau mỗi lần sửa file. Claude Code có plugin chính thức cho pyright, TypeScript, rust-analyzer, Swift, clangd.</dd>
+        <dt>Qlty</dt><dd>Một CLI mã nguồn mở miễn phí, gom hơn 60 linter vào một lệnh và tự tải từng linter về khi cần.</dd>
+        <dt>Hook</dt><dd>Script mà Claude Code tự chạy ở một thời điểm cố định, ví dụ ngay sau khi sửa file.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: my-pet (TypeScript và Rust)</h3>
+        <p>Tình huống: Claude sửa <code>src/pet.ts</code> và <code>src-tauri/src/main.rs</code>. File <code>package.json</code> đã có script <code>typecheck</code>, còn phần Rust có Cargo.</p>
+        <pre><code>Mốc kiểm tra hiện có: npm test (148 test), cargo test (45 test)
+Lệnh có sẵn mà chưa ai chạy: npm run typecheck, cargo clippy</code></pre>
+        <p>Hôm nay: lỗi sai kiểu chỉ lộ ra khi build, hoặc khi bạn chạy app. Vì sao quan trọng: đây là kiểu project phổ biến nhất của bạn.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: archctl đã kiểm đủ</h3>
+        <p>"Mốc kiểm tra" của archctl đã ghi <code>cargo clippy --workspace --all-targets -- -D warnings</code> và <code>cargo test --workspace</code>. Dù chọn phương án nào, cũng không được chạy clippy lần hai với bộ luật khác, hay báo khác với lệnh của project. Vì sao quan trọng: project đã tự cấu hình thì cấu hình của nó thắng.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng: SCEE (Python, không có cấu hình lint, máy chưa có ruff)</h3>
+        <p>Tình huống: Claude sửa một file trong <code>scee/</code>, có 201 file Python. Không có <code>[tool.ruff]</code>, trên máy cũng không có ruff. Nếu bật một linter đầy đủ cho cả repo, số cảnh báo cũ chưa biết (chưa đo vì máy chưa có ruff), nhưng với 201 file viết khi chưa có linter thì khó là con số nhỏ. Nếu lặng lẽ bỏ qua vì thiếu công cụ, bạn lại tưởng là đã kiểm. Vì sao quan trọng: thiếu công cụ phải được nói rõ, và chỉ báo lỗi ở dòng vừa đổi.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · Bộ chạy kiểm mỏng, dùng công cụ gốc <span class="chip">khuyên</span></h3>
+        <p>Một script Python dùng thư viện chuẩn, đặt trong agent-stack. Script nhận ra ngôn ngữ, chọn lệnh, chạy rồi chỉ trả về lỗi ở các dòng vừa đổi.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Thứ tự ưu tiên: (1) lệnh trong "Mốc kiểm tra"; (2) script có sẵn của project (<code>lint</code>, <code>typecheck</code> trong <code>package.json</code>; ruff hay mypy khai trong <code>pyproject.toml</code>; Makefile; <code>.pre-commit-config.yaml</code>); (3) công cụ gốc theo ngôn ngữ: Python dùng <code>ruff</code>, nếu không có thì <code>python -m compileall</code>; TypeScript dùng <code>tsc --noEmit</code>, và eslint hay biome nếu project có cấu hình; Rust dùng <code>cargo clippy</code>; Swift dùng <code>swift build</code>, <code>xcodebuild</code> hay script build của project, và swiftlint nếu có; Shell dùng <code>shellcheck</code>; C/C++ dùng lệnh build của project. Chạy ở bước chốt việc. Không có test nào được tìm thấy thì đề nghị bạn ghi lệnh test vào "Mốc kiểm tra" của project.</dd>
+          <dt>Được</dt><dd>Có cả kiểm kiểu và biên dịch, là tầng bắt nhiều lỗi thật nhất. Không ghi file cấu hình mới vào project nào. Không cần thêm đồ bên thứ ba ngoài chính các linter.</dd>
+          <dt>Mất</dt><dd>Phải tự viết và giữ phần nhận ngôn ngữ cho 6 ngôn ngữ, cùng phần lọc lỗi theo dòng đổi (đọc output của từng công cụ). Ước lượng thô 400–600 dòng kèm test, theo cỡ các script tương tự trong agent-stack; chưa tính kỹ.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Mỗi công cụ đổi định dạng output là phải sửa bộ lọc. Ngôn ngữ mới phải thêm tay.</dd>
+          <dt>Đảo ngược</dt><dd>Dễ: bỏ một bước trong done-gate là xong.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · Dùng Qlty cho linter, tự chạy phần kiểm kiểu</h3>
+        <p>Cài Qlty, chạy <code>qlty init</code> ở từng project. Qlty lo linter và mặc định chỉ kiểm file vừa đổi. Phần kiểm kiểu và biên dịch vẫn phải tự chạy như phương án A.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd><code>qlty check</code> ở bước chốt việc, cộng thêm <code>tsc</code>, <code>cargo check</code>, <code>swift build</code>.</dd>
+          <dt>Được</dt><dd>Hơn 60 linter có sẵn, tự tải đúng phiên bản. Không phải tự viết bộ đọc output cho từng linter.</dd>
+          <dt>Mất</dt><dd>Mỗi project phải có thêm file <code>.qlty/qlty.toml</code>. Qlty tự tải và chạy nhiều chương trình từ mạng, nên bề mặt chuỗi cung ứng lớn hơn. Theo tài liệu, Qlty mặc định chọn file vừa đổi; tôi chưa thấy tùy chọn chỉ báo dòng vừa đổi như Trunk có. Không có phần kiểm kiểu, nên vẫn phải tự viết phần nhận ngôn ngữ và chạy tsc, cargo, swift của phương án A; chỉ bớt được phần đọc output linter.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Phải theo dõi phiên bản Qlty và các linter nó tải; mỗi project tự giữ cấu hình riêng.</dd>
+          <dt>Đảo ngược</dt><dd>Phải xóa thư mục <code>.qlty</code> trong từng project.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A · Bộ chạy mỏng</th><th>B · Qlty</th></tr></thead>
+        <tbody>
+          <tr><th>1 · my-pet</th><td data-cho="A">Chạy <code>npm run typecheck</code> có sẵn, rồi <code>cargo clippy</code>; chỉ báo lỗi ở <code>pet.ts</code> và <code>main.rs</code>.</td><td data-cho="B">Qlty chạy eslint (nếu bật) và clippy trên 2 file; <code>npm run typecheck</code> vẫn phải gọi riêng; cần thêm <code>.qlty/qlty.toml</code> vào my-pet.</td></tr>
+          <tr><th>2 · archctl</th><td data-cho="A">Thấy clippy đã có trong "Mốc kiểm tra" nên chỉ chạy lệnh đó, không thêm gì.</td><td data-cho="B">Clippy của Qlty dùng bộ luật riêng, có thể báo khác lệnh <code>-D warnings</code> của project. Phải tắt clippy trong Qlty cho project này.</td></tr>
+          <tr><th>3 · SCEE</th><td data-cho="A">Không có ruff: chạy <code>compileall</code> rồi báo "thiếu ruff, cài bằng …"; có ruff thì chạy bộ luật tối thiểu, chỉ trên dòng vừa đổi.</td><td data-cho="B">Qlty tự tải ruff về; báo mọi lỗi trong file vừa đổi, kể cả lỗi cũ ở dòng không sửa.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của agent-stack và luật chung <code>global/SHARED.global.md</code>.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15">
+            <th>Python chỉ dùng thư viện chuẩn <span class="src">CLAUDE.md:15</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: script chỉ gọi chương trình ngoài qua <code>subprocess</code>; ruff cài bằng brew là chương trình độc lập viết bằng Rust, script không import nó.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: Qlty là chương trình riêng, không phải gói Python.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:9">
+            <th>Cài toàn cục chỉ qua install.sh khi bạn duyệt <span class="src">CLAUDE.md:9</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: <code>brew install ruff shellcheck</code> (câu 3).</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: cài Qlty; Qlty còn tự tải thêm linter vào thư mục riêng của nó.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:29">
+            <th>Thêm dependency phải hỏi <span class="src">global/SHARED.global.md:29</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: chỉ thêm các linter quen thuộc.</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: thêm Qlty cùng mọi linter nó tải về.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:18">
+            <th>Hook phải nhanh, không làm kẹt phiên <span class="src">CLAUDE.md:18</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: hook sau mỗi lần sửa (câu 2) chỉ chạy ruff hay shellcheck trên đúng một file, có giới hạn thời gian; tsc và clippy chỉ chạy lúc chốt việc.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt nếu Qlty chỉ chạy lúc chốt việc; lần chạy đầu tải linter nên chậm, không hợp với hook.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:61">
+            <th>Tìm thứ có sẵn trước khi tự làm <span class="src">global/SHARED.global.md:61</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: đã xét Qlty, Trunk, MegaLinter (nguồn bên dưới). Phương án A dùng lại linter gốc và cấu hình sẵn của project, chỉ tự viết phần chọn lệnh và lọc dòng.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: dùng lại Qlty.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:21">
+            <th>Chọn theo chất lượng, không theo công làm <span class="src">global/SHARED.global.md:21</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: có kiểm kiểu và biên dịch; báo theo dòng.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt nếu vẫn tự chạy kiểm kiểu; Qlty chỉ lọc theo file.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:30">
+            <th>Đổi phạm vi hay hành vi người dùng thấy phải hỏi <span class="src">global/SHARED.global.md:30</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: không ghi gì vào project; đề nghị thêm dòng vào "Mốc kiểm tra" thì hỏi bạn trước.</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: thêm <code>.qlty/qlty.toml</code> vào từng project.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> không thấy. Bài test kiểm tĩnh đã viết cho riêng agent-stack hôm 12/11 không được chép sang project khác; bộ chạy mới làm từ đầu theo ngôn ngữ.</li>
+      <li><b>Chiều theo người dùng:</b> bạn muốn kiểm "vài ngôn ngữ phổ biến". Tôi chọn 6 ngôn ngữ theo số file thật trong các project của bạn, không theo bảng xếp hạng chung; Go có trên máy nhưng không project nào dùng nên để sau.</li>
+      <li><b>Chọn vì ít công:</b> phương án B ít code hơn ở phần linter nhưng vẫn thiếu kiểm kiểu. Khuyên A không vì A ít công (A nhiều công hơn) mà vì A có kiểm kiểu và lọc theo dòng.</li>
+      <li><b>Phương án bù nhìn:</b> B là lựa chọn thật, nhiều đội dùng. Trunk và MegaLinter không đưa thành phương án: MegaLinter chạy qua Docker, mỗi lần mất vài phút; Trunk chạy daemon nền và gắn với dịch vụ của hãng.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> thiếu công cụ thì phải báo "chưa kiểm X vì thiếu Y", không được coi là đạt. C/C++ chỉ kiểm qua lệnh build của project, không có linter riêng; điều này được ghi rõ ở đây.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không cài gì khi chưa có câu trả lời của bạn; cài toàn cục chỉ qua install.sh.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần bạn chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1 (đã chốt 12/11): phương án A, làm sâu và rộng nhất có thể</h3>
+      <p>Bạn chọn: "A nhưng phải sâu hơn nữa, bao quát được càng nhiều càng tốt". Nghĩa là thêm ngôn ngữ ngoài 6 ngôn ngữ chính (Go, Java, Kotlin, C#, Ruby, PHP (ngôn ngữ web), Dart, Lua) và thêm loại kiểm ngoài linter: kiểm định dạng, quét bảo mật bằng semgrep, tìm khóa lộ bằng gitleaks, tìm thư viện có lỗ hổng bằng osv-scanner, file cấu hình (Dockerfile, GitHub Actions, YAML).</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2 (đã chốt 12/11): kiểm cả ngay sau mỗi lần sửa file</h3>
+      <p>Bạn chọn (b): một hook chạy linter nhanh trên đúng file vừa sửa, giới hạn 2 giây; kiểm chậm (kiểu, biên dịch, test) để lúc chốt việc.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3 (đã chốt 12/11): cài ruff và shellcheck; công cụ khác do router đề xuất theo project</h3>
+      <p>Bạn chọn: "cài đi, cái nào project cần thì router đề xuất". ruff và shellcheck cài qua install.sh; pyright, swiftlint và các công cụ khác được router gợi ý khi mở phiên ở project cần chúng.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 4 (đã chốt 12/11, khác khuyến nghị): bộ luật đầy đủ</h3>
+      <p>Bạn chọn bộ đầy đủ thay cho bộ tối thiểu, vẫn chỉ trên dòng vừa đổi. Luật phong cách (độ dài dòng, cách đặt tên, thứ tự import, kiểu dấu nháy) được báo nhưng không chặn chốt việc, trừ khi project tự cấu hình bắt buộc; luật bắt lỗi thật thì chặn. Cách chia này đang chờ bạn xác nhận.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 5 (đã chốt 12/11): rút gọn hai file luật chung, kèm test chứng minh đủ luật</h3>
+      <p>Khuyên rút gọn luật chung (<code>global/SHARED.global.md</code> và <code>global/CLAUDE.global.md</code>), vì hai file này được nạp ở mọi phiên mọi project. Cách làm: luật nào đã có hook hay script đảm nhận thì chỉ giữ một dòng trỏ tới đó; chi tiết các bước dời vào skill tương ứng. Ví dụ: luật "hỏi trước khi <code>git push</code>" hiện dài vài dòng, mà hook đã chặn sẵn, nên chỉ giữ một dòng. Mục tiêu khoảng một nửa, từ 14.200 xuống khoảng 7.000 ký tự. Thêm một test liệt kê từng luật hiện có và nơi luật đó nằm sau khi rút gọn; luật nào không còn chỗ nào thì test trượt. Việc này độc lập với bốn câu trên, chung trang vì bạn hỏi cùng lúc. Nếu bạn muốn rút gọn cả <code>CLAUDE.md</code> của agent-stack, làm theo cùng cách đó.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Yêu cầu thêm (12/11): project lạ thì gợi ý cài hay dựng quy trình theo hình tháp</h3>
+      <p>Lời bạn: "Nhớ agent-stack nếu gặp project nào lạ hoặc ngoài những project quen thuộc thì phải gợi ý cài thêm hoặc xây dựng qui trình theo pattern tôi gửi". Khi mở phiên ở project có ngôn ngữ chưa có công cụ kiểm, hay thiếu một tầng của hình tháp (không linter, không test, không "Mốc kiểm tra", không file luật), agent-stack liệt kê tầng còn thiếu và gợi ý cài công cụ hay dựng tầng đó.</p>
+    </div>
+    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat, ví dụ "1A 2b 3 đồng ý 4 tối thiểu 5 cả hai".</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Đếm ngôn ngữ: <code>git ls-files</code> trong từng project dưới <code>~/Documents/Claude</code> (chỉ đọc, 12/11/2026).</li>
+      <li>"Mốc kiểm tra" và script: <code>my-pet/PLAN.md:25</code>, <code>my-pet/package.json</code>, <code>archctl/PLAN.md:77</code>, <code>SCEE/PLAN.md:55</code>, <code>matcha-latte/package.json</code>.</li>
+      <li>Bước kiểm chứng hiện nay: <code>plugin/skills/done-gate/SKILL.md:19-26</code>.</li>
+      <li>Qlty: <a href="https://github.com/qltysh/qlty/">github.com/qltysh/qlty</a> (miễn phí, không cần Docker), <a href="https://docs.qlty.sh/cli/commands/check">docs.qlty.sh/cli/commands/check</a> (mặc định chỉ kiểm file vừa đổi).</li>
+      <li>Trunk: <a href="https://docs.trunk.io/code-quality/overview">docs.trunk.io/code-quality/overview</a> (lọc theo dòng). MegaLinter: <a href="https://megalinter.io/latest/">megalinter.io</a>.</li>
+      <li>Plugin LSP chính thức: <code>~/.claude/plugins/marketplaces/claude-plugins-official/plugins</code> (pyright-lsp, typescript-lsp, rust-analyzer-lsp, swift-lsp, clangd-lsp…).</li>
+    </ul>
+  </footer>
+</main>
