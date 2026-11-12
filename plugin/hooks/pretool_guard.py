@@ -110,7 +110,7 @@ def approved_plugins(A) -> set:
 
 def simple_commands(command: str, depth: int = 0) -> list:
     """Tách chuỗi lệnh shell thành các lệnh đơn (danh sách argv): bỏ thân heredoc, tách ở ; && || | & ( ) và xuống
-    dòng, nối dòng kết thúc bằng `\`, bỏ gán biến và tiền tố như sudo, env; mở `bash -c "..."` (cả `-lc`, `-ec`) và
+    dòng, nối dòng kết thúc bằng `\\`, bỏ gán biến và tiền tố như sudo, env; mở `bash -c "..."` (cả `-lc`, `-ec`) và
     `eval '...'` thêm một tầng. Chuỗi trích dẫn (thông điệp commit, echo) nằm trong argv của lệnh khác nên không bị hiểu
     nhầm là lệnh. Không phân tích được thì trả rỗng."""
     text = CONTINUATION_RE.sub(r"\1 ", HEREDOC_RE.sub("\n", command))

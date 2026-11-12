@@ -4,6 +4,7 @@
 
 ## 0. Đang ở đâu, việc tiếp theo (cập nhật mỗi lần dừng phiên)
 
+- **Xong (12/11/2026): ba luật bằng lời thành test** (`tests/test_static.py`): `plugin/`, `tools/` chỉ import stdlib hay module của chính nó; mọi file `.py` git theo dõi compile được, cảnh báo tính là lỗi (bắt và sửa escape sai ở `pretool_guard.py:112`); 9 hook gặp stdin hỏng vẫn thoát 0. Review sonnet·high: 2 lỗi thấp đã sửa. Còn có thể thêm ruff, pyright (dependency mới, cần bạn duyệt).
 - **Xong (11/11/2026): hook push nhận tên repo/nhánh** (`c9029d2`): "Push <tên repo/nhánh>" tính là lời đồng ý; test phủ định của `PreConsentGuard` kiểm thật.
 - **Xong (10–11/11/2026): bảng reviewer mới đã cài** (`822b549`, `00697e4`): mức cao khi Opus viết → fable·high + sonnet·high; cao đụng bảo mật → opus·xhigh + sonnet·xhigh; mức thấp có code → sonnet·medium (Opus/Fable viết) hay opus·low (Sonnet/Haiku viết), tự bỏ khi hạn mức tuần ≥80%; Sonnet viết mức vừa → opus·high; file chỉ dẫn agent tính như code; `review_log.py` ghi effort. Đo lại ở việc 3 bên dưới. `~/.claude/CLAUDE.md` đã có câu mới (nạp lại 11/11).
 - **Xong (11/11/2026): Aside nhận Fable 5.2** (`a020a6b`; `aside models` liệt kê `claude-code/claude-fable-5-2`, 39 test aside đạt). Hai trang `.agent/trang/` còn sót đã commit (`ddaa6c7`); §0 rút 18K → 4K ký tự, lịch sử sang `.agent/NHAT-KY.md` (đợt 11/11).
@@ -16,7 +17,7 @@
 - **Ghi nhớ (đã xong, không phải việc):** bỏ bench agent-stack/pi-agent trên Harbor/TBLite (02/11, lời bạn); `static-analysis` vá cục bộ `patches/static-analysis/` cho upstream #297, xoá khi PR #352 gộp; `writing-voice` có mẫu mặc định, mẫu riêng làm trong project viết luận. Chi tiết: `.agent/NHAT-KY.md`.
 - **Đã quyết:** bạn xác nhận 11/10: 3 skill Trail of Bits còn lại và `cloudflare/security-audit-skill` chỉ vet khi cần; bộ duyệt web A2, B1 (Exa cài, Parallel và DeepWiki qua `remote-mcp`). paper-anatomy (17/10): giữ v4.4, bỏ v4.3, commit `6504f8d`, claude.ai vẫn v3. Chi tiết: `.agent/NHAT-KY.md`.
 - **Mốc kiểm tra:** chạy qua `python3 plugin/skills/session-keeper/scripts/receipt.py run -- <lệnh>` để có biên nhận.
-  - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `OK`, 1239 test (10/11/2026); `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
+  - `python3 -m unittest discover -s tests -t .` (chỉ Python 3.11) → `OK`, 1267 test (12/11/2026); `python3` có PyMuPDF nên test của paper-anatomy chạy luôn (máy thiếu PyMuPDF thì bỏ qua 1 test, chạy riêng bằng `.venv/bin/python -m unittest tests.test_paper_anatomy`)
   - `"$(python3 tools/claude_app.py)" plugin validate plugin` → `Validation passed` (binary của app; `claude` brew 2.1.292 cũng đạt)
   - `"$(python3 tools/claude_app.py)" plugin test plugin` → 24 pass (04/11/2026)
   - `python3 evals/run_eval.py --self-test` → 24 dấu ✓ (12/10/2026)
