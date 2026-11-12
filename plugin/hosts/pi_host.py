@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """agent-stack cho pi: kiểm hợp đồng hosts/pi.json và sinh subagent dạng pi.
 
-Hợp đồng ghi những gì pi (project pi-agent) dựa vào ở agent-stack: hook nào chạy ở sự kiện pi nào, trường vào ra,
+Hợp đồng ghi những gì pi (project coding-agents, trước là pi-agent) dựa vào ở agent-stack: hook nào chạy ở sự kiện pi nào, trường vào ra,
 subagent và skill nào pi dùng hay bỏ kèm lý do. `check` trả về danh sách chỗ lệch giữa hợp đồng và thư mục plugin
 (test, install.py và hook SessionStart khi chạy trong pi gọi); `sync_agents` sinh subagent cho extension subagent
 của pi từ agents/ của plugin, chỉ ghi file đổi.
