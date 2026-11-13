@@ -52,6 +52,9 @@
       "pi_event": "session_shutdown",
       "payload": ["reason"]
     },
+    "PostToolUse": {
+      "skip": "cầu nối agent-stack-bridge.ts của pi chưa nghe sự kiện sau công cụ (tool_result); thêm thì sửa cầu nối bên coding-agents. Trong pi, kiểm tĩnh vẫn chạy ở done-gate bước 4 (checks.py)"
+    },
     "SubagentStart": {
       "skip": "subagent của pi là một tiến trình pi riêng (PI_SUBAGENT=1); cầu nối không chèn bối cảnh phiên chính cho nó"
     },

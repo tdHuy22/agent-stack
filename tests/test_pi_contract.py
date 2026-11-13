@@ -64,10 +64,11 @@ class ContractTests(TempDirTestCase):
         plugin = self.plugin()
         path = plugin / "hooks" / "hooks.json"
         data = json.loads(path.read_text())
-        data["hooks"]["PostToolUse"] = [{"hooks": [{"type": "command", "command": "python3",
-                                                    "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post_tool.py"]}]}]
+        # Sự kiện chưa dùng (PostToolUse đã có thật từ 13/11/2026, post_edit.py).
+        data["hooks"]["Notification"] = [{"hooks": [{"type": "command", "command": "python3",
+                                                     "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/notify.py"]}]}]
         path.write_text(json.dumps(data))
-        self.assert_problem(plugin, "hook PostToolUse có trong hooks.json mà chưa có mục")
+        self.assert_problem(plugin, "hook Notification có trong hooks.json mà chưa có mục")
 
     def test_renamed_hook_script_is_caught(self):
         plugin = self.plugin()

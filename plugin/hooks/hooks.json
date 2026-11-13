@@ -30,6 +30,14 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post_edit.py"], "timeout": 3}
+        ]
+      }
+    ],
     "SubagentStart": [
       {
         "hooks": [

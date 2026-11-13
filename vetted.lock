@@ -621,6 +621,38 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
+    "brew:ruff": {
+      "kind": "brew-tool",
+      "source": "brew:ruff",
+      "license": "MIT",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13",
+      "redflags": {},
+      "reviews": [],
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "human_review": {
+        "status": "approved",
+        "at": "2026-11-12T22:30:00Z",
+        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply"
+      }
+    },
+    "brew:shellcheck": {
+      "kind": "brew-tool",
+      "source": "brew:shellcheck",
+      "license": "GPL-3.0",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13",
+      "redflags": {},
+      "reviews": [],
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "human_review": {
+        "status": "approved",
+        "at": "2026-11-12T22:30:00Z",
+        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply"
+      }
+    },
     "mcp:mcp.deepwiki.com/mcp": {
       "human_review": {
         "at": "2026-10-11T02:37:14Z",

@@ -21,7 +21,7 @@ Server ở đây đã qua `vet-skill` và được bạn duyệt, nhưng không 
 | Tìm web, cần trích đoạn sát mục tiêu | `parallel` | `web_search` | `{"objective": "...", "search_queries": ["...", "..."]}` |
 | Đọc trang theo mục tiêu | `parallel` | `web_fetch` | `{"urls": ["https://..."], "objective": "..."}` |
 
-Tìm web thông thường thì dùng MCP `exa` đã cài trước; chỉ gọi Parallel khi Exa chưa đủ. Xem danh sách hiện có: `python3 "${CLAUDE_SKILL_DIR}/scripts/call.py" list`.
+Tìm web thông thường thì dùng MCP `exa` đã cài trước, Tavily cho crawl, WebSearch khi hai cái kia lỗi; chỉ gọi Parallel khi Exa chưa đủ. Câu tìm và URL đi tới hãng thứ ba: không đưa secret, mã riêng tư, dữ liệu cá nhân vào. Xem danh sách hiện có: `python3 "${CLAUDE_SKILL_DIR}/scripts/call.py" list`.
 
 ## Gọi
 

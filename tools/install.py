@@ -512,6 +512,9 @@ class Installer:
             if item["kind"] == "mcp-remote":
                 self.install_mcp(item, entry)
                 continue
+            if item["kind"] == "brew-tool":  # công cụ dòng lệnh: bước tools cài theo khóa brew
+                self.say(f"  · công cụ dòng lệnh, bước tools cài: {key}")
+                continue
             if item["kind"] in ("vendor-skill", "vendor-plugin"):
                 vendored.append((item, entry))
                 continue

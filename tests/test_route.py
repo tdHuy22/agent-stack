@@ -516,9 +516,13 @@ class ProjectAware(ProjectFixtures):
         shared = (REPO / "global" / "SHARED.global.md").read_text(encoding="utf-8")
         self.assertIn("Cuối mọi câu trả lời, kể cả câu trả lời ngắn", shared)
         self.assertIn("· Skill: <tên|không>", shared)
+        # Bảng chọn dời từ luật chung sang task-router khi rút gọn (12/11/2026); luật chung chỉ còn dòng trỏ.
         claude = (REPO / "global" / "CLAUDE.global.md").read_text(encoding="utf-8")
-        self.assertIn("| Việc | Model·Effort | Subagent | Skill |", claude)
-        self.assertNotIn("Bỏ qua dòng này với câu hỏi nhanh", claude)
+        self.assertIn('"Bảng mặc định cho dòng ➡️" trong `~/Documents/Claude/agent-stack/plugin/skills/task-router/SKILL.md`',
+                      claude)
+        router = (PLUGIN / "skills" / "task-router" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("| Việc | Model·Effort | Subagent | Skill |", router)
+        self.assertNotIn("Bỏ qua dòng này với câu hỏi nhanh", claude + router)
 
 
 class SessionCliForToolsWithoutHooks(ProjectFixtures):

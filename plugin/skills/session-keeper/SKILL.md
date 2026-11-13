@@ -11,7 +11,7 @@ Nguyên tắc: **trạng thái nằm trên đĩa, không nằm trong context.** 
 
 Ngoài §0, hook của agent-stack tự ghi `.agent/LAST-TURN.md` của thư mục làm việc: lúc bạn gửi tin (trạng thái đang chạy), khi lượt xong (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi), và khi lỗi API kết thúc lượt (hook StopFailure). Thư mục không phải project cũng được ghi; thư mục chung như home hay thư mục gom nhiều project thì ghi vào `state/last-turn/`. Hook SessionStart nạp bản ghi vào phiên mới, kể cả khi lượt cuối chưa xong (kèm file đã đổi từ lúc đó) và một dòng cho mỗi phiên khác trong 24 giờ; bản không mang chữ ký HMAC của máy này thì bỏ qua. Đây là bản máy ghi, không thay §0: đừng sửa tay, đừng chép nó vào §0. Khi lượt có đổi file mà §0 chưa đổi, hook Stop nhờ cập nhật §0 trước khi kết thúc lượt; lúc đó chỉ sửa §0 cho khớp việc vừa làm, ngắn gọn, rồi dừng.
 
-Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ; sửa tài liệu sau bước kiểm (§0, README) không làm cũ (`receipt.py show` để xem; `forget <tên>` xoá một biên nhận, `prune` xoá biên nhận trượt của test đã bị xoá khỏi project; `fails-before -- <lệnh test>` chứng minh test mới của một bản sửa lỗi trượt trên code trước bản sửa và đạt sau đó). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py`.
+Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --project <thư mục>`. Chạy mốc kiểm tra qua `python3 "${CLAUDE_SKILL_DIR}/scripts/receipt.py" run --project <thư mục> -- <lệnh>`: script ghi biên nhận gắn với nội dung code, để phiên sau biết kết quả còn đúng hay đã cũ; sửa tài liệu sau bước kiểm (§0, README) không làm cũ (`receipt.py show` để xem; `forget <tên>` xoá một biên nhận, `prune` xoá biên nhận trượt của test đã bị xoá khỏi project; `fails-before -- <lệnh test>` chứng minh test mới của một bản sửa lỗi trượt trên code trước bản sửa và đạt sau đó). Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/state.py` (và `receipt.py`, `watch_change.py` cùng thư mục `scripts/`).
 
 Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời người dùng.
 
@@ -22,7 +22,7 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
    - **Cập nhật** = ngày hôm nay, dạng `*Cập nhật DD/MM/YYYY.*`
    - **Xong:** kết quả kèm bằng chứng (commit, kết quả test), vài dòng mỗi mục, ngày ở dòng đầu (`Xong (29/10/2026): …`) để `state.py trim` biết mục nào mới nhất; chi tiết để ở commit.
    - **Đang dở:** việc gì, ở file nào, nhánh nào, còn thiếu gì.
-   - **Tiêu chí xong** (việc, ngày, nguồn: lời bạn, bạn xác nhận hay agent tự ghi): 2–4 tiêu chí của việc đang làm, ghi trước khi code, mỗi tiêu chí là một lệnh phải đạt hay một cặp đầu vào và đầu ra. Skill done-gate so kết quả với chính các tiêu chí này; xong việc thì chuyển vào mục Xong (đạt n/n) và xóa dòng này.
+   - **Tiêu chí xong** (việc, ngày, nguồn: lời bạn, bạn xác nhận hay agent tự ghi): 2–4 tiêu chí của việc đang làm, ghi trước khi code, mỗi tiêu chí là một lệnh phải đạt hay một cặp đầu vào và đầu ra. Skill done-gate so kết quả với chính các tiêu chí này; xong việc thì chuyển vào mục Xong (đạt n/n) và xóa dòng này. Lấy nguyên lời người dùng khi có. Việc từ mức vừa mà tiêu chí do agent tự suy thì hỏi người dùng xác nhận rồi mới code. Đổi tiêu chí giữa chừng thì hỏi; không sửa tiêu chí cho khớp cái đã làm.
    - **Việc tiếp theo, theo thứ tự:** danh sách đánh số; mỗi bước bắt đầu bằng một động từ.
    - **Quyết định còn treo:** điều cần người dùng chốt.
    - **Mốc kiểm tra:** lệnh và kết quả mong đợi, đúng với lần chạy gần nhất. Chạy lệnh đó qua `receipt.py run` để có biên nhận.
@@ -47,6 +47,10 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 
 1. Chạy `state.py init`. Script tạo `.agent/PLAN.md` từ mẫu và từ chối nếu project đã có file kế hoạch.
 2. Điền §0 dựa trên những gì đã biết trong cuộc trò chuyện. Hỏi người dùng nếu chưa rõ mục tiêu hay mốc kiểm tra.
+
+## Theo dõi việc chạy lâu
+
+Việc chạy lâu (job, CI, máy đo): không dùng vòng hẹn giờ đánh thức phiên chính. Chạy nền `python3 ~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/watch_change.py --every 300 --until <xong> --max-hours <giờ> -- <lệnh kiểm>`: script chỉ in khi trạng thái đổi; lệnh kiểm phải ra kết quả ổn định (không có đồng hồ chạy). Claude Code: chạy script bằng Monitor để phiên thức ở mỗi dòng mới; Bash chạy nền chỉ báo khi script thoát.
 
 ## Không làm
 

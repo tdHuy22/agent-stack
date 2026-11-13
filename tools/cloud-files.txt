@@ -43,6 +43,7 @@ plugin/evals/writing-rewrite/graders/skill-fired.md
 plugin/evals/writing-rewrite/prompt.md
 plugin/hooks/cloud_update.py
 plugin/hooks/hooks.json
+plugin/hooks/post_edit.py
 plugin/hooks/pre_compact.py
 plugin/hooks/pretool_client.py
 plugin/hooks/pretool_guard.py
@@ -61,6 +62,7 @@ plugin/lib/client_place.py
 plugin/skills/aside-web/SKILL.md
 plugin/skills/aside-web/scripts/aside_web.py
 plugin/skills/done-gate/SKILL.md
+plugin/skills/done-gate/scripts/checks.py
 plugin/skills/done-gate/scripts/review_log.py
 plugin/skills/done-gate/scripts/risk.py
 plugin/skills/kaggle-gpu/SKILL.md

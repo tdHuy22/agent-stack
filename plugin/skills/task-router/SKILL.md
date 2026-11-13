@@ -28,11 +28,12 @@ Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:
 2. **Hạ effort trước, hạ model sau.** Model mạnh ở effort thấp thường giữ chất lượng tốt hơn model yếu ở effort cao.
 3. **Việc có rủi ro cao** (review bảo mật, mất dữ liệu, kiến trúc, migration) thì dùng opus · high, kể cả khi trông có vẻ nhỏ. Viết tính năng đụng ranh giới tin cậy (đăng nhập, upload, webhook, thanh toán) thì sonnet · high, chạy threat-model trước; bước review sau đó mới lên opus. Phần nhạy cảm nhất (mã hóa, token, thanh toán, sandbox, quyết định khó đảo ngược) và việc agent tự chạy trên 30 phút thì opus · xhigh. `max` chỉ cho đợt audit bảo mật tự chạy tới cùng, bài toán biên giới, hoặc khi người dùng nói rõ muốn nghĩ kỹ nhất: lợi ích giảm dần và dễ nghĩ quá đà.
 4. **Việc nhiều phần độc lập** (đọc nhiều file, chạy test, việc cơ học hàng loạt) thì giao cho subagent, để output dài không làm đầy context chính.
-5. **Effort đổi thoải mái, model chỉ đổi khi rẻ.** Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 trở lên giữ prompt cache khi đổi effort giữa phiên (tài liệu prompt caching của Claude Code). Đổi model thì phải ghi lại cả context vào cache của model mới: phiên có 250K token context tốn khoảng 1 USD giá niêm yết mỗi lần. Chỉ khuyên `/model` khi rẻ: đầu phiên, sau `/clear` hay `/compact`, context dưới 40K token, hoặc đã nghỉ quá 1 giờ (cache hết hạn). Còn lại khuyên giữ model và giao phần việc cho subagent với `model`, `effort` hợp việc; việc dài trên 30 phút, sửa nhiều file thì thêm `isolation: "worktree"` rồi gộp bằng `merge_back.py` (xem dưới). Việc cần model mạnh hơn mới làm đúng thì vẫn đổi: chất lượng trước chi phí.
+5. **Effort đổi thoải mái, model chỉ đổi khi rẻ.** Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 trở lên giữ prompt cache khi đổi effort giữa phiên (tài liệu prompt caching của Claude Code). Đổi model thì phải ghi lại cả context vào cache của model mới: phiên có 250K token context tốn khoảng 1 USD giá niêm yết mỗi lần. Chỉ khuyên `/model` khi rẻ: đầu phiên, sau `/clear` hay `/compact`, context dưới 40K token, hoặc đã nghỉ quá 1 giờ (cache hết hạn). Còn lại khuyên giữ model và giao phần việc cho subagent với `model`, `effort` hợp việc; việc dài trên 30 phút, sửa nhiều file thì thêm `isolation: "worktree"` rồi gộp bằng `merge_back.py` (xem dưới). Việc cần model mạnh hơn mới làm đúng thì vẫn đổi: chất lượng trước chi phí. Claude Code cho phép đặt `effort` cho subagent khi gọi Agent.
 6. **Leo thang theo thang trong `routing-table.md`:** sonnet · low → medium → high → opus · medium → high → xhigh → fable · high → opus · max hoặc fable · xhigh → fable · max. Hỏng vì bỏ sót thì tăng effort; đủ ngữ cảnh mà vẫn sai thì đổi model lớn hơn. Code và debug không có test bắt đầu ở `high` (sonnet · high; việc mơ hồ hay nhiều file thì opus · high; người dùng chốt 10/11/2026); việc có test, hỏi nhanh, việc tri thức giữ mức trong bảng.
 7. Fable chỉ dành cho việc mà Opus ở effort cao vẫn chưa đạt: Opus 5.5 mặc định giải ngang Fable 5.1 mặc định với khoảng 1/5 chi phí (Fable 5.2, từ 09/11/2026, rẻ hơn 20% nhưng mỗi token vẫn gấp đôi Opus; chưa có số so sánh mới). Fable hợp nhất với việc dài tự chạy và bài mơ hồ; việc bảo mật giữ ở Opus, vì bộ lọc an toàn của Fable hay tự chuyển sang model khác. Tùy gói, Fable có thể bị tính vào usage credits.
 8. **Luôn dùng model mới nhất**: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.2), và `claude-haiku-5-5` (alias `haiku` cũng ra Haiku 5.5 từ CLI 2.1.293, kiểm 10/11/2026; ghi ID đầy đủ để đúng cả trên bản cũ). Haiku 5.5 có effort `low` tới `max`, mặc định `medium`. Eval 08/10/2026: ở `low` nó đạt 9/9 việc code, debug có test (18/18 lượt, kể cả việc rất khó) với khoảng 1/10 chi phí sonnet · medium, effort cao hơn không đạt thêm; nhưng viết văn tiếng Việt yếu. Nên khuyên `claude-haiku-5-5 · low` cho việc có test hay kiểm tra tự động, kèm đường lên `sonnet · high` khi test trượt; việc không có cách kiểm tự động, viết văn, review, kiến trúc thì giữ sonnet hay opus. Chỉ cần nghĩ sâu cho một lượt thì khuyên thêm `ultrathink` vào prompt thay vì đổi effort cả phiên.
 9. **Skill vendor** (`tdd`, `diagnosing-bugs`, `humanizer`, `handoff`, `grill-me`) đã xoá khỏi danh mục ngày 09/10/2026, sau khi A/B 20 lượt cho thấy chúng không giúp đạt thêm việc nào và không được gọi lần nào. Đừng gợi ý chúng.
+10. **Skill có `model:` trong frontmatter phải có `context: fork`.** Thiếu `context: fork` thì mỗi lần gọi skill là một lần đổi model của cả phiên (tốn cache như mục 5). Đừng thêm skill như vậy, kể cả skill bên thứ ba.
 
 ## Giao việc dài cho subagent trên nhánh riêng
 
@@ -47,6 +48,23 @@ Khi việc dài, tách bạch, cần model khác model của phiên chính:
 
    Script ghim commit đầu nhánh, rồi chỉ tự gộp đúng commit đó khi test đạt trong worktree, gộp được bằng fast-forward, nhánh không dời commit trong lúc test, diff không đụng file nhạy cảm (`.claude/`, `.github/`, hook, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`, file kế hoạch, `.agent/`, symlink, submodule...) và không trùng file chưa commit của phiên chính; gộp xong xoá worktree và nhánh. Chạy script là chạy toàn bộ mã của nhánh (test, `conftest.py`) dưới quyền người dùng, ngoài vòng duyệt từng lệnh: chỉ dùng cho nhánh do subagent của chính phiên tạo. Mã thoát 2 nghĩa là cần người dùng quyết: báo lại lý do script in ra, đừng tự gộp bằng tay. Không bao giờ push.
 3. Gộp xong, chạy lại mốc kiểm tra của project ở cây làm việc chính (qua `receipt.py` nếu project dùng nó).
+
+## Bảng mặc định cho dòng ➡️
+
+Dùng khi không có gợi ý `[agent-stack]` hay `[router]` (luật chung, mục dòng ➡️). Model: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.2), `claude-haiku-5-5` (Haiku 5.5); effort `low` tới `max`. Trong bảng, – là `không`, * là chỉ khi đã cài:
+
+| Việc | Model·Effort | Subagent | Skill |
+|---|---|---|---|
+| Hỏi nhanh, sửa vài dòng, tin nhắn ngắn | sonnet·low | – | – (writing-voice khi viết tin nhắn) |
+| Tìm, đọc nhiều file | giữ nguyên | Explore (explore-lite rẻ hơn) | – |
+| Tính năng, lỗi có traceback rõ; refactor | có test: claude-haiku-5-5·low, trượt thì sonnet·high; refactor, không có test hay đụng ranh giới tin cậy: sonnet·high | test-runner | reuse-best nếu không tầm thường; threat-model trước khi code nếu đụng ranh giới tin cậy |
+| Debug nhiều file, race, lỗi lúc được lúc không | opus·high, chưa ra thì xhigh | – | – |
+| Kiểm trước khi báo xong hay commit | sonnet·high | reviewer khác model người viết theo mức rủi ro (`risk.py --writer` chọn sẵn) | done-gate |
+| Nghiên cứu web, so sánh công cụ | sonnet·medium | researcher | reuse-best |
+| Kế hoạch việc vừa, văn bản dài; kiến trúc; quyết định khó đảo ngược | sonnet·high; opus·high; opus·xhigh | Plan | reuse-best; reader-page khi ra file |
+| Review PR lớn, bảo mật (phần nhạy cảm: xhigh) | opus·high | reviewer | differential-review* |
+
+Việc khác (Aside, bài báo, audit, Fable, cài skill) và căn cứ: `~/Documents/Claude/agent-stack/routing-table.md`. Chưa đạt thì lên bậc theo mục 6 ở trên: hỏng vì bỏ sót thì tăng effort; đủ ngữ cảnh mà vẫn sai thì đổi model lớn hơn. Chỉ cần nghĩ sâu một lượt thì thêm `ultrathink` vào prompt (mục 8).
 
 ## Kết quả trả về
 

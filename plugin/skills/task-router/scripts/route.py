@@ -271,6 +271,18 @@ def lsp_suggestions(root: Path, profile: dict) -> list:
     return out
 
 
+def pyramid_gaps(root: Path):
+    """(câu cho agent, dòng ngắn) khi project thiếu công cụ kiểm cho ngôn ngữ của nó, có ngôn ngữ agent-stack chưa
+    phủ, hay thiếu tầng của hình tháp kiểm (linter, test, Mốc kiểm tra, file luật); None nếu đủ hay có lỗi.
+    Phần nhận ngôn ngữ và công cụ nằm ở checks.py của done-gate. Chỉ gợi ý, không cài gì."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "done-gate" / "scripts"))
+        import checks  # noqa: E402
+        return checks.gaps_text(checks.project_gaps(root, A.project_files(root)))
+    except Exception:  # noqa: BLE001 (gợi ý phụ: lỗi ở đây không được làm mất gợi ý khác)
+        return None
+
+
 def next_task(root) -> str:
     """Việc tiếp theo đầu tiên trong §0, hoặc việc đang dở; chuỗi rỗng nếu không có."""
     found = A.read_plan(Path(root))
@@ -317,7 +329,8 @@ def session_hint(root):
     hit = suggest_for(task, profile) if task else None
     if hit:
         localize(hit, root)
-    if not (labels or ready or hit):
+    gaps = pyramid_gaps(root)
+    if not (labels or ready or hit or gaps):
         return None
     ctx = [f"[agent-stack] Hồ sơ project `{root.name}`: {', '.join(labels) or 'chưa rõ loại'}."]
     if ready:
@@ -331,6 +344,8 @@ def session_hint(root):
         ctx.append(f"Nên bật LSP {s['plugin']} riêng cho project này ({s['reason']}): nhảy tới định nghĩa, tìm chỗ dùng, "
                    "báo lỗi ngay sau khi sửa. Chưa bật. Đề xuất với người dùng khi việc cần đọc hay sửa nhiều code, "
                    "đừng tự cài: " + " rồi ".join(f"`{x}`" for x in s["steps"]) + ".")
+    if gaps:
+        ctx.append(gaps[0])
     if hit:
         ctx.append(f"Việc tiếp theo trong §0 («{A.clip(task, 100)}») → {describe(hit)}.")
     ctx.append("Dùng các gợi ý này để chọn skill cho từng việc, và cho dòng ➡️ ở cuối mỗi câu trả lời.")
@@ -339,6 +354,8 @@ def session_hint(root):
         user += " · skill: " + ", ".join(ready[:3])
     if lsps:
         user += " · nên bật " + ", ".join(s["plugin"] for s in lsps)
+    if gaps:
+        user += " · " + gaps[1]
     if hit:
         user += " · việc tiếp theo → " + describe(hit)
     return {"context": " ".join(ctx), "user": A.clip(user, 180)}
