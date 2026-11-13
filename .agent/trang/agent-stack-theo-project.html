@@ -78,13 +78,13 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 
 <main>
   <header>
-    <div class="eyebrow">agent-stack · kế hoạch · 13/11/2026</div>
+    <div class="eyebrow">agent-stack · kế hoạch · 13/11/2026 · đã chốt, thêm ý 5 và 6</div>
     <h1>Làm sao để agent-stack hợp với từng project, và vẫn tin được code khi bạn không còn tự viết code?</h1>
   </header>
 
   <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, SCEE, archctl, pi">
     <h2>Tóm tắt</h2>
-    <p>Trang này đánh giá bốn ý bạn gửi cho agent-stack, bộ công cụ chạy kèm Claude Code ở mọi project của bạn: (1) mỗi project có cấu hình riêng; (2) khi nào dùng Fable, model mạnh và đắt nhất của Anthropic; (3) làm sao tin code chạy đúng khi bạn không đọc code; (4) nối archctl, công cụ kiểm kiến trúc do bạn viết, vào agent-stack. Cả bốn đáng làm và nên ghép thành một vòng, nhưng hai chỗ ở ý 3 cần chỉnh. "Mọi luật đều có test" nên thành "mọi luật có một cách kiểm được ghi rõ", vì test chỉ kiểm câu chữ không chứng minh luật được tuân theo. "Hoàn thiện hết trước khi code" nên thành "hoàn thiện phần sắp làm, khóa test, chỉ cho siết thêm; nới phải bạn duyệt". Chưa sửa gì; bạn cần chốt bảy câu ở cuối trang.</p>
+    <p>Trang này đánh giá các ý bạn gửi cho agent-stack, bộ công cụ chạy kèm Claude Code ở mọi project của bạn: (1) cấu hình riêng cho từng project; (2) khi nào dùng Fable, model mạnh và đắt nhất; (3) tin code chạy đúng khi bạn không đọc code; (4) nối archctl, công cụ kiểm kiến trúc do bạn viết. Ngày 13/11 bạn chốt phương án A và cả bảy câu, rồi thêm hai ý: (5) router có thêm một model đánh giá; (6) mở phiên bằng plan mode. Cả hai đáng làm và đã vào kế hoạch, kèm chỉnh. Thứ tự: giai đoạn 2 (khóa test) trước, mỗi giai đoạn một phiên mới.</p>
   </section>
 
   <section data-phan="nen-tang">
@@ -279,6 +279,55 @@ flowchart TD
           <li>Tự dùng: viết kiến trúc của chính agent-stack thành luật archctl (hook chỉ gọi thư viện chung, không gọi skill), chạy cạnh test tĩnh hiện có.</li>
         </ol>
       </article>
+      <article class="idea">
+        <h3>Ý 5 · Router có thêm một model đánh giá <span class="chip">thêm 13/11</span></h3>
+        <h4>Bạn đề xuất</h4>
+        <p>Router phải có thêm model đánh giá, kết hợp với cách so từ khóa hiện tại, vì luật tĩnh rất hẹp.</p>
+        <h4>Đánh giá</h4>
+        <p class="verdict">Đúng, và có số đo. Bộ đo router đạt 109 trên 109 câu, nhưng các câu đó được viết sẵn cho khớp từ khóa. Chạy router trên việc tiếp theo ghi trong §0 của các project thật ngày 13/11:</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Project</th><th>Việc tiếp theo trong §0</th><th>Router hôm nay</th></tr></thead>
+          <tbody>
+            <tr><td>SCEE</td><td>"PR 8-h: test đầu-cuối trên graph thật cho đủ bốn tiêu chí xong của bước 8…"</td><td>không gợi ý gì</td></tr>
+            <tr><td>agent-stack</td><td>"Bạn chốt 7 câu ở trang kế hoạch… rồi làm theo giai đoạn đã chọn…"</td><td>Sonnet <code>low</code>, loại "hỏi tiến độ" (khớp chữ "đang dở"); thật ra là việc code nhiều giai đoạn</td></tr>
+            <tr><td>archctl, paper-graph</td><td>§0 không có việc tiếp theo</td><td>không gợi ý gì</td></tr>
+          </tbody>
+        </table></div>
+        <h4>Một ràng buộc từ tài liệu Claude Code</h4>
+        <p>Claude Code có sẵn hook kiểu "prompt" chạy một model, nhưng nó chỉ trả lời cho qua hay chặn, không đưa được gợi ý cho model của phiên. Hook chạy nền thì kết quả chỉ tới model ở lượt sau. Vậy lớp model phải là hook thường của agent-stack tự gọi Haiku qua lệnh <code>claude -p</code> (có sẵn trên máy, không thêm phụ thuộc), và phải chọn: chờ kết quả, hay chạy nền.</p>
+        <h4>Thiết kế đề xuất: ba lớp</h4>
+        <ol>
+          <li><b>Lớp từ khóa</b> (đã có, vài mili giây, không tốn token), cộng từ khóa riêng của project ở ý 1.</li>
+          <li><b>Lớp model nhỏ</b>: Haiku 5.5 ở <code>low</code> đọc câu, hồ sơ project, từ khóa miền của project, bảng chọn model rút gọn và gợi ý của lớp 1, rồi trả loại việc, độ khó, model, effort, lý do, độ tin. Chạy ở ba lúc:
+            <ul>
+              <li>Lúc mở phiên, chạy nền trên việc tiếp theo trong §0: không ai phải chờ; kết quả tới model ở tin đầu tiên của bạn và hiện ở dải gợi ý trên ô nhập (giao diện agent-stack đã có dải này).</li>
+              <li>Mỗi tin bạn gõ, chỉ khi lớp 1 không chắc: không khớp gì, chỉ khớp từ project đánh dấu bỏ qua (như "schema" ở SCEE), hay câu dài và mơ hồ. Có giới hạn thời gian cứng; quá giờ thì dùng lớp 1, không bao giờ làm kẹt phiên.</li>
+              <li>Ngay sau khi bạn duyệt kế hoạch phiên (ý 6): chấm model cho từng bước của kế hoạch.</li>
+            </ul>
+          </li>
+          <li><b>Model của phiên</b> có quyền cuối: nó thấy code và bối cảnh; nếu thấy việc cần mức khác hẳn gợi ý thì nói một dòng trước khi làm, không đợi tới dòng ➡️ cuối câu trả lời.</li>
+        </ol>
+        <p><b>Kết hợp hai lớp:</b> ở việc rủi ro cao lấy mức cao hơn của hai lớp; lớp model chỉ được hạ mức so với lớp 1 khi lớp 1 khớp vào từ khóa mà project đánh dấu bỏ qua. <b>Học:</b> mỗi lần ghi gợi ý của hai lớp và mức thật đã cần (leo thang vì test trượt, bạn đổi <code>/effort</code>, review tìm ra lỗi). Một kiểu lệch lặp từ ba lần thì thành đề xuất thêm hay bỏ từ khóa trong cấu hình project, bạn duyệt. Lớp từ khóa rộng dần, lớp model chạy ít dần.</p>
+        <p><b>Chi phí:</b> Haiku 5.5 giá 0,10 USD mỗi triệu token vào. Một lần chấm khoảng 3.000 token vào và 200 token ra, tức khoảng 0,0004 USD; 200 lần một ngày khoảng 0,08 USD. Đo độ chính xác trên khoảng 200 câu thật cũng chỉ khoảng 0,1 USD, nên khác với Fable (câu 6), lớp này đo bằng bộ câu được.</p>
+        <p><b>Chưa biết, đo đầu giai đoạn 5:</b> gọi <code>claude -p</code> với Haiku từ trong hook mất bao lâu (khởi động chương trình cộng một lần gọi model). Đề xuất giới hạn chờ 3 giây; nếu chậm hơn thì lớp model chỉ chạy nền và tới ở lượt sau, và phiên giai đoạn 5 hỏi bạn trước khi chọn. Phải chặn lặp vô hạn: phiên <code>claude -p</code> con không được chạy lại hook router của agent-stack.</p>
+      </article>
+
+      <article class="idea">
+        <h3>Ý 6 · Mở phiên bằng plan mode <span class="chip">thêm 13/11</span></h3>
+        <h4>Bạn hỏi</h4>
+        <p>Lúc mở phiên router chưa chạy nên không gợi ý được; vậy dùng plan mode để lập kế hoạch làm gì trong một phiên cho tối ưu với project, rồi mới bắt đầu làm, thì sao?</p>
+        <h4>Một chỗ cần sửa trong giả định</h4>
+        <p>Router có chạy lúc mở phiên: hook mở phiên đưa việc tiếp theo trong §0 qua router và in một dòng 🧭 cho bạn. Nhưng như bảng ở ý 5, nó gần như không ra gợi ý dùng được, và lúc đó model của phiên đã được chọn. Nên ý của bạn vẫn đúng ở điểm chính.</p>
+        <h4>Đánh giá</h4>
+        <p class="verdict">Đồng ý, và nó khớp với ý 3 ở cấp phiên. Plan mode không cho sửa file tới khi bạn duyệt, nên duyệt kế hoạch phiên chính là duyệt tiêu chí xong trước khi code (luật chung đã đòi việc này, hôm nay là một lần hỏi riêng). Đầu phiên context còn nhỏ, nên đổi model hay effort ngay sau khi duyệt vẫn rẻ. Sau khi bạn duyệt, app đã tự đề xuất tách các bước độc lập sang phiên riêng.</p>
+        <h4>Ba chỉnh</h4>
+        <ul>
+          <li><b>Chỉ cho phiên làm một việc cỡ vừa trở lên</b> (một giai đoạn, một tính năng, một lỗi khó), không cho câu hỏi nhanh. Không đặt plan mode làm mặc định cố định: Claude Code cho đặt theo project, nhưng việc nhỏ sẽ chậm, và bản tích hợp vào trình soạn code <code>VS Code</code> bỏ qua cài đặt này. Thay vào đó, dòng 🧭 lúc mở phiên gợi ý "vào plan mode (Shift+Tab hay gõ /plan)" khi việc tiếp theo trong §0 là việc cỡ vừa trở lên. Project nào bạn muốn luôn mở bằng plan mode thì cấu hình project ở ý 1 bật riêng.</li>
+          <li><b>Kế hoạch phiên có khuôn cố định, dài một màn hình</b>: việc của phiên; tiêu chí xong (lấy từ §0 hay đề xuất); các bước, mỗi bước kèm model, effort, subagent (router chấm); lệnh kiểm chứng; phần ngoài phạm vi; điểm dừng (cập nhật §0, commit). Có máy kiểm: Claude Code cho hook đọc kế hoạch vừa được duyệt, nên hook kiểm kế hoạch có tiêu chí xong và lệnh kiểm chứng, chấm model cho từng bước, ghi tiêu chí vào §0; done-gate cuối phiên so kết quả với kế hoạch.</li>
+          <li><b>Model lập kế hoạch là model của phiên</b> (Opus mặc định). Phiên thiết kế dùng Fable (ý 2) và dừng ở spec, không làm tiếp. Không dùng chế độ có sẵn <code>opusplan</code> (Opus lập kế hoạch, Sonnet làm): nó đổi model giữa phiên, phải ghi lại cache, và Sonnet làm thì ngược bảng mặc định cho code. Bước cần model khác thì giao subagent.</li>
+        </ul>
+        <p><b>Chi phí:</b> một lượt lập kế hoạch đọc §0 và các file liên quan, vài chục nghìn token. Đổi lại, phiên ít đi sai hướng, và bạn chỉ duyệt một lần. pi không có plan mode: khuôn kế hoạch chạy như bước đầu bình thường và chờ bạn trả lời.</p>
+      </article>
     </div>
   </section>
 
@@ -287,7 +336,7 @@ flowchart TD
     <p class="note">Ý 2 (Fable) giống nhau ở cả ba phương án; chúng khác nhau ở cách làm ý 3 và mức ghép các ý.</p>
     <div class="options">
       <article class="option rec" data-phuong-an="A" data-khuyen>
-        <h3>A · Một vòng, xây nền kiểm chứng trước <span class="chip">khuyên</span></h3>
+        <h3>A · Một vòng, xây nền kiểm chứng trước <span class="chip">đã chọn</span></h3>
         <p>Làm cả bốn ý theo bản đã chỉnh ở trên, trong sáu giai đoạn; nền kiểm chứng (sổ luật, khóa test, bánh cóc) làm sớm để các giai đoạn sau được xây dưới chính luật đó.</p>
         <dl class="facts">
           <dt>Cách chạy</dt><dd>Theo bảng "Kế hoạch theo giai đoạn" bên dưới; mỗi giai đoạn một phiên mới, một commit.</dd>
@@ -393,7 +442,7 @@ flowchart TD
           </tr>
           <tr data-rang-buoc data-nguon="CLAUDE.md:18">
             <th>Hook nhanh, không làm kẹt phiên <span class="src">CLAUDE.md:18</span></th>
-            <td data-cho="A" data-ket-qua="dat">Đạt nếu đo lại: archctl tự đo 11 ms cho một file (README của nó, dòng 150), chưa đo trong hook của agent-stack, giai đoạn 3 đo; cấu hình đọc có cache; mutation không chạy trong hook.</td>
+            <td data-cho="A" data-ket-qua="dat">Đạt nếu đo lại: archctl tự đo 11 ms cho một file (README của nó, dòng 150), chưa đo trong hook của agent-stack, giai đoạn 3 đo; cấu hình đọc có cache; mutation không chạy trong hook; lớp model của router (ý 5) có giới hạn chờ cứng, quá giờ dùng lớp từ khóa, đo độ trễ ở giai đoạn 5.</td>
             <td data-cho="B" data-ket-qua="dat">Đạt.</td>
             <td data-cho="C" data-ket-qua="dat">Đạt.</td>
           </tr>
@@ -469,17 +518,18 @@ flowchart TD
   </section>
 
   <section>
-    <h2>Kế hoạch theo giai đoạn (phương án A)</h2>
-    <p>Mỗi giai đoạn: một phiên mới, tiêu chí xong ghi vào §0 trước khi code, chốt việc có biên nhận, một commit, không push. Giai đoạn 1 và 3 độc lập nhau, chạy song song được.</p>
+    <h2>Kế hoạch theo giai đoạn (phương án A, đã chốt)</h2>
+    <p>Mỗi giai đoạn: một phiên mới, mở đầu bằng kế hoạch phiên (ý 6), tiêu chí xong ghi vào §0 trước khi code, chốt việc có biên nhận, một commit, không push. Thứ tự (câu 7): giai đoạn 2 trước; rồi 1 và 3 song song; rồi 4, 5, 6; giai đoạn 7 sau hai tuần dùng.</p>
     <div class="scroll"><table>
       <thead><tr><th>Giai đoạn</th><th>Làm gì</th><th>Tiêu chí xong</th><th>Model · effort</th></tr></thead>
       <tbody>
-        <tr><td>1 · Chính sách Fable</td><td>Sửa <code>routing-table.md</code>, mục 7 của task-router, luật "agent tự chạy dài" và "kiến trúc khó đảo ngược" trong <code>rules.json</code>; thêm câu thử vào bộ đo router.</td><td>Bảng có dòng "mở phiên bằng Fable khi…"; bộ đo router (109 câu có nhãn, hôm nay đạt cả 109) đạt hết, kể cả câu mới.</td><td>Sonnet <code>high</code></td></tr>
-        <tr><td>2 · Sổ luật, khóa test, bánh cóc</td><td>Sổ luật cho agent-stack; test đọc sổ; khóa test trong <code>receipt.py</code>; done-gate so dấu vân tay, đánh dấu đỏ khi sửa test khóa hay đổi spec cùng code; hook nhắc hay chặn theo mức.</td><td>Mọi luật trong luật chung và <code>CLAUDE.md</code> có loại kiểm; test trượt khi một luật trỏ tới test không tồn tại; done-gate báo đỏ trên một diff thử sửa test khóa (chứng minh trượt trên code cũ).</td><td>Opus <code>high</code></td></tr>
-        <tr><td>3 · archctl vào vòng lặp</td><td>Sáu bước ở ý 4; mô hình đe dọa trước bước 4.</td><td>Trên bản chép có <code>.arch/</code>: agent nhận dòng vi phạm trong đúng lượt sửa file, cả Claude Code và pi; ghi file luật bị chặn; bộ test đạt, <code>plugin validate</code> đạt.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>2 · Sổ luật, khóa test, bánh cóc (làm đầu tiên)</td><td>Sổ luật cho agent-stack; test đọc sổ; khóa test trong <code>receipt.py</code>; done-gate so dấu vân tay, đánh dấu đỏ khi sửa test khóa hay đổi spec cùng code; hook nhắc ở mức vừa, chặn ở mức cao (câu 3).</td><td>Mọi luật trong luật chung và <code>CLAUDE.md</code> có loại kiểm; test trượt khi một luật trỏ tới test không tồn tại; done-gate báo đỏ trên một diff thử sửa test khóa (chứng minh trượt trên code cũ).</td><td>Opus <code>high</code></td></tr>
+        <tr><td>1 · Chính sách Fable, phiên mở bằng kế hoạch</td><td>Sửa <code>routing-table.md</code> (bảng ở ý 2, kèm điều kiện câu 6: Fable chỉ đo bằng dùng thật), mục 7 của task-router, <code>rules.json</code>; khuôn kế hoạch phiên và gợi ý plan mode lúc mở phiên (ý 6).</td><td>Bảng có dòng "mở phiên bằng Fable khi…" và câu "không đo Fable bằng benchmark"; lúc mở phiên ở SCEE và agent-stack, dòng 🧭 gợi ý plan mode cho việc tiếp theo trong §0; bộ đo router (109 câu có nhãn) đạt hết, kể cả câu mới.</td><td>Sonnet <code>high</code></td></tr>
+        <tr><td>3 · archctl vào vòng lặp (song song với 1)</td><td>Sáu bước ở ý 4; mô hình đe dọa trước bước 4.</td><td>Trên bản chép có <code>.arch/</code>: agent nhận dòng vi phạm trong đúng lượt sửa file, cả Claude Code và pi; ghi file luật bị chặn; bộ test đạt, <code>plugin validate</code> đạt.</td><td>Opus <code>high</code></td></tr>
         <tr><td>4 · Cấu hình theo project</td><td><code>.agent/stack.json</code>, router đọc lớp đè, skill <code>project-setup</code>, dấu vân tay hồ sơ, nhật ký gợi ý so với thực tế.</td><td>Bốn câu ở ví dụ 1 ra đúng mức với cấu hình SCEE thử trên bản chép; không có cấu hình thì 109 câu cũ không đổi; hook vẫn dưới ngưỡng thời gian đo được hôm nay.</td><td>Opus <code>high</code></td></tr>
-        <tr><td>5 · Spec theo lát cho mọi project</td><td>done-gate và session-keeper: spec "khi … thì …", test viết trước ở context mới, khóa, <code>simplify</code> sau khi xanh; mutation trên phần đổi ở mức cao, sau khi kiểm duyệt công cụ.</td><td>Chạy trọn trên một việc thật của một project khác và một việc của agent-stack, có biên nhận; trang spec bạn duyệt được trong vài phút.</td><td>Opus <code>high</code>; người viết test là model khác</td></tr>
-        <tr><td>6 · Đo lại sau hai tuần</td><td>Hạn mức (<code>usage_report.py</code>), số lỗi review tìm được sau khi có test khóa, số lần agent đề xuất nới, router nhầm hay sót ở mỗi project, phiên thiết kế bằng Fable so với Opus.</td><td>Phần nào không đáng thì tắt hay hạ mức áp dụng.</td><td>Sonnet <code>medium</code></td></tr>
+        <tr><td>5 · Router có model (ý 5)</td><td>Đo độ trễ trước; lớp model nhỏ có giới hạn thời gian; ghi gợi ý của hai lớp và mức thật đã cần; lệch lặp lại thành đề xuất cho <code>stack.json</code>.</td><td>Trên bộ câu thật lấy từ các phiên đã qua (gắn nhãn bằng mức cuối cùng đã cần): hai lớp đúng nhiều hơn lớp tĩnh, không làm câu nào tệ đi ở việc rủi ro cao; việc tiếp theo trong §0 của SCEE và agent-stack được gợi ý đúng lúc mở phiên; hook không bao giờ bắt bạn chờ quá giới hạn đã chốt.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>6 · Spec theo lát cho mọi project</td><td>done-gate và session-keeper: spec "khi … thì …", test viết trước ở context mới, khóa, <code>simplify</code> sau khi xanh; mutation trên phần đổi ở mức cao (công cụ của câu 5, sau kiểm duyệt).</td><td>Chạy trọn trên một việc thật của một project khác và một việc của agent-stack, có biên nhận; trang spec bạn duyệt được trong vài phút.</td><td>Opus <code>high</code>; người viết test là model khác</td></tr>
+        <tr><td>7 · Đo lại sau hai tuần dùng</td><td>Hạn mức (<code>usage_report.py</code>), số lỗi review tìm được sau khi có test khóa, số lần agent đề xuất nới, router hai lớp nhầm hay sót ở mỗi project, phiên mở bằng kế hoạch so với phiên không, Fable từ các lần dùng thật.</td><td>Phần nào không đáng thì tắt hay hạ mức áp dụng.</td><td>Sonnet <code>medium</code></td></tr>
       </tbody>
     </table></div>
   </section>
@@ -497,36 +547,36 @@ flowchart TD
   </section>
 
   <section>
-    <h2>Câu cần bạn chốt</h2>
+    <h2>Các câu đã chốt (13/11/2026)</h2>
+    <p class="note">Bạn trả lời trong chat ngày 13/11. Mọi câu chọn đúng khuyến nghị, trừ câu 6 có thêm điều kiện.</p>
     <div class="question" data-cau-hoi>
-      <h3>Câu 1: Làm theo phương án nào?</h3>
-      <p>Lựa chọn: A (một vòng, nền kiểm chứng trước), B (bốn việc nhỏ), C (đề xuất gốc như chữ). Khuyên A, vì chỉ A chặn được việc agent sửa test và có máy phân biệt siết với nới. Chọn C thì tôi làm đúng như chữ nhưng ví dụ 3 và 4 vẫn còn hở.</p>
+      <h3>Câu 1: Làm theo phương án nào? <span class="chip">đã chốt: A</span></h3>
+      <p>Phương án A: một vòng, xây nền kiểm chứng trước. B và C giữ trên trang để thấy vì sao không chọn.</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 2: Thay "hoàn thiện hết trước khi code" bằng "hoàn thiện từng lát, khóa test, siết tự do, nới phải bạn duyệt"?</h3>
-      <p>Khuyên đồng ý: không có số đo nào ủng hộ spec đầy đủ từ đầu, còn bánh cóc chặn được đường lách. Giữ nguyên chữ thì mỗi project cần một đợt viết spec lớn trước khi code tiếp.</p>
+      <h3>Câu 2: Thay "hoàn thiện hết trước khi code" bằng "hoàn thiện từng lát"? <span class="chip">đã chốt: đồng ý</span></h3>
+      <p>Hoàn thiện spec của phần sắp làm, khóa test của phần đó; siết thì agent tự làm, nới thì bạn duyệt.</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 3: Khóa test chặt tới đâu?</h3>
-      <p>Lựa chọn: (a) mức thấp không khóa, mức vừa hook nhắc và done-gate đánh dấu đỏ, mức cao hook chặn; (b) mọi mức chỉ báo ở done-gate; (c) mọi mức chặn. Mức chấm như ghi chú dưới bảng ở ý 3. Khuyên (a): chặt ở chỗ đắt, không làm chậm việc nhỏ. Chọn (b) thì agent vẫn sửa được test, chỉ bị phát hiện lúc chốt; (c) làm chậm cả sửa chữ.</p>
+      <h3>Câu 3: Khóa test chặt tới đâu? <span class="chip">đã chốt: (a)</span></h3>
+      <p>Mức thấp không khóa; mức vừa hook nhắc và done-gate đánh dấu đỏ; mức cao hook chặn. Mức chấm như ghi chú dưới bảng ở ý 3.</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 4: Cấu hình riêng của project để ở đâu?</h3>
-      <p>Lựa chọn: (a) <code>.agent/stack.json</code> trong chính project, commit cùng repo (các project đã commit <code>.agent/</code>); (b) chỉ trên máy, trong thư mục trạng thái của agent-stack. Khuyên (a): đi theo repo lên phiên cloud, bạn thấy diff khi nó đổi. Effort mặc định của project dùng sẵn <code>effortLevel</code> trong <code>.claude/settings.local.json</code> (không commit). Chọn (b) thì không đụng repo khác, nhưng phiên cloud không có cấu hình.</p>
+      <h3>Câu 4: Cấu hình riêng của project để ở đâu? <span class="chip">đã chốt: (a)</span></h3>
+      <p><code>.agent/stack.json</code> trong chính project, commit cùng repo. Effort mặc định của project dùng <code>effortLevel</code> trong <code>.claude/settings.local.json</code> (không commit).</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 5: Cho cài những công cụ nào?</h3>
-      <p>archctl qua <code>install.sh</code>: dựng từ mã nguồn trên máy (khuyên: máy đã có Rust, không tải gì về, đúng bản mã đang có) hay tải bản phát hành 0.1.1 từ GitHub có kiểm SHA-256 (không cần biên dịch, nhưng là tệp chạy tải từ mạng; cả hai đều do bạn viết). Mutation: kiểm duyệt <code>cargo-mutants</code> và <code>mutmut</code> trước (Rust và Python là hai ngôn ngữ chính của bạn), Go và TypeScript khi có project cần. Không cho cài thì giai đoạn 5 bỏ phần mutation, phần còn lại vẫn chạy.</p>
+      <h3>Câu 5: Cho cài những công cụ nào? <span class="chip">đã chốt: cho hết</span></h3>
+      <p>archctl dựng từ mã nguồn qua <code>install.sh</code>; công cụ mutation cho Rust (<code>cargo-mutants</code>), Python (<code>mutmut</code>), Go (<code>gremlins</code>) và TypeScript (Stryker). Mỗi công cụ vẫn phải qua kiểm duyệt (<code>vet-skill</code>) và có dòng trong <code>vetted.lock</code> trước khi cài: cái nào trượt kiểm duyệt thì báo lại, không cài.</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 6: Duyệt chính sách Fable ở ý 2, và cho đo trên việc thật?</h3>
-      <p>Khuyên duyệt bảng, và đo khi có việc thiết kế thật (không tạo việc giả). Theo phép tính ở ví dụ 5, một phiên thiết kế bằng Fable tốn thêm khoảng 1 tới 3 USD giá niêm yết so với Opus; hạn mức gói bị trừ bao nhiêu thì chưa biết, và tùy gói Fable có thể tính vào usage credits. Lần đo đầu cho biết con số thật qua <code>usage_report.py</code>. Không cho đo thì bảng vẫn dùng được nhưng dựa trên tài liệu Anthropic, không trên số của bạn.</p>
+      <h3>Câu 6: Duyệt chính sách Fable ở ý 2? <span class="chip">đã chốt: duyệt, đo bằng dùng thật</span></h3>
+      <p>Bạn duyệt bảng, với điều kiện: Fable chỉ được đo từ những lần dùng thật (phiên thiết kế, việc tự chạy dài, lần leo thang), qua <code>usage_report.py</code> và nhật ký review; không chạy bộ đo hay benchmark riêng cho Fable, vì Fable đắt. Điều kiện này ghi vào <code>routing-table.md</code> ở giai đoạn 1.</p>
     </div>
     <div class="question" data-cau-hoi>
-      <h3>Câu 7: Chạy các giai đoạn thế nào?</h3>
-      <p>Khuyên: mỗi giai đoạn một phiên mới, giai đoạn 1 và 3 chạy song song, bắt đầu bằng 2 (nền kiểm chứng) để các giai đoạn sau được xây dưới luật mới. Nếu giai đoạn 3 tái hiện đúng ví dụ 2, mở thêm một phiên trong repo archctl để nó có đầu ra cho hook (việc ngoài agent-stack, nên hỏi bạn ở đây). Làm tiếp trong phiên này thì context đã dài, tốn hơn mỗi lượt.</p>
+      <h3>Câu 7: Chạy các giai đoạn thế nào? <span class="chip">đã chốt: theo khuyến nghị</span></h3>
+      <p>Mỗi giai đoạn một phiên mới; bắt đầu bằng giai đoạn 2 (nền kiểm chứng); sau đó giai đoạn 1 và 3 chạy song song. Nếu giai đoạn 3 tái hiện đúng ví dụ 2, mở thêm một phiên trong repo archctl để nó có đầu ra cho hook.</p>
     </div>
-    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat.</p>
   </section>
 
   <footer data-phan="nguon">
@@ -541,6 +591,8 @@ flowchart TD
       <li>Zhong, Raghunathan, Carlini, "ImpossibleBench", <a href="https://arxiv.org/abs/2510.20270">arXiv 2510.20270</a>; <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking/">METR, 06/2025</a>; EvilGenie <a href="https://arxiv.org/abs/2511.21654">arXiv 2511.21654</a>; SpecBench <a href="https://arxiv.org/abs/2605.21384">arXiv 2605.21384</a> (hai bài cuối do subagent tìm, chưa tự đọc).</li>
       <li>Làm theo spec: <a href="https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html">Böckeler trên martinfowler.com</a>, <a href="https://birgitta.info/posts/spec-driven.html">birgitta.info</a>, <a href="https://kiro.dev/docs/specs/correctness/">Kiro correctness</a>, GitHub <code>github/spec-kit</code>, <code>Fission-AI/OpenSpec</code>.</li>
       <li>Công cụ cấu hình: <code>intellectronica/ruler</code>, <code>dyoshikawa/rulesync</code>; Claude Code: <a href="https://code.claude.com/docs/en/memory">memory</a>, <a href="https://code.claude.com/docs/en/settings">settings</a>.</li>
+      <li>Router lúc mở phiên: <code>route.session_hint</code> và <code>route.next_task</code> chạy ngày 13/11 trên SCEE, agent-stack, archctl, paper-graph (bảng ở ý 5).</li>
+      <li>Tài liệu Claude Code, đọc 13/11 qua subagent: <a href="https://code.claude.com/docs/en/hooks">hooks</a> (hook kiểu prompt chỉ trả cho qua hay chặn; hook nền tới lượt sau; hook đọc được kế hoạch vừa duyệt), <a href="https://code.claude.com/docs/en/permission-modes">permission modes</a> (plan mode mặc định theo project), <a href="https://code.claude.com/docs/en/model-config">model config</a> (<code>opusplan</code>).</li>
       <li>Mutation: <a href="https://mutants.rs/in-diff.html">cargo-mutants in-diff</a>; mutmut, Stryker, gremlins theo kết quả tìm của subagent ngày 13/11.</li>
     </ul>
   </footer>
