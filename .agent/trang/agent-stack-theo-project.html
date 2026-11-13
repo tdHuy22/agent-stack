@@ -1,0 +1,547 @@
+<title>Agent-stack theo từng project</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ rộng hơn, cuộn ngang trong khung riêng. Khuôn reader-page. */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3, h4 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+h4 { font-size: .95rem; font-weight: 600; color: var(--accent) }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options, .ideas { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question, .idea { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.chip.warn { background: var(--warn-soft); color: var(--warn) }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.verdict { border-left: 3px solid var(--accent); padding-left: 12px }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">agent-stack · kế hoạch · 13/11/2026</div>
+    <h1>Làm sao để agent-stack hợp với từng project, và vẫn tin được code khi bạn không còn tự viết code?</h1>
+  </header>
+
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, SCEE, archctl, pi">
+    <h2>Tóm tắt</h2>
+    <p>Trang này đánh giá bốn ý bạn gửi cho agent-stack, bộ công cụ chạy kèm Claude Code ở mọi project của bạn: (1) mỗi project có cấu hình riêng; (2) khi nào dùng Fable, model mạnh và đắt nhất của Anthropic; (3) làm sao tin code chạy đúng khi bạn không đọc code; (4) nối archctl, công cụ kiểm kiến trúc do bạn viết, vào agent-stack. Cả bốn đáng làm và nên ghép thành một vòng, nhưng hai chỗ ở ý 3 cần chỉnh. "Mọi luật đều có test" nên thành "mọi luật có một cách kiểm được ghi rõ", vì test chỉ kiểm câu chữ không chứng minh luật được tuân theo. "Hoàn thiện hết trước khi code" nên thành "hoàn thiện phần sắp làm, khóa test, chỉ cho siết thêm; nới phải bạn duyệt". Chưa sửa gì; bạn cần chốt bảy câu ở cuối trang.</p>
+  </section>
+
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>agent-stack là bộ công cụ chạy kèm Claude Code (và agent pi) ở mọi project của bạn. Nó không viết code. Nó gài các <dfn>hook</dfn> (đoạn script Claude Code tự gọi ở một thời điểm cố định, như lúc mở phiên hay sau khi sửa file) để đọc kế hoạch, gợi ý model, chặn lệnh nguy hiểm, kiểm code vừa sửa, và một cổng chốt việc trước khi báo xong.</p>
+    <div class="scroll"><pre class="mermaid">
+flowchart LR
+  S["Mở phiên"] --> P["Hồ sơ project: loại file, có test, có CI"]
+  U["Bạn gõ yêu cầu"] --> R["Router từ khóa: gợi ý model, effort"]
+  R --> M["Agent viết code và test"]
+  M --> K["Kiểm tĩnh sau mỗi lần sửa"]
+  M --> D["Chốt việc: test có biên nhận, review bằng model khác"]
+  D --> B["Bạn đọc báo cáo"]
+    </pre></div>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Luật gợi ý giống hệt nhau ở mọi project. Ở SCEE (luận văn về kiểm soát luồng thông tin), câu "sửa lỗi rò nhãn trong chain, traceback ở test_chain" được gợi ý dùng model rẻ nhất ở mức nghĩ thấp nhất, chỉ vì project có test. Phiên làm việc của SCEE lại coi đúng loại lỗi này là việc cần mức nghĩ cao nhất. Cùng lúc đó, agent viết cả code lẫn test, nên khi bạn không đọc code thì không còn ai độc lập kiểm xem test có thật sự bắt được lỗi không. archctl, công cụ của bạn biến sơ đồ kiến trúc thành luật, đã có kế hoạch tích hợp từ ngày 06/11 nhưng chưa làm, và máy chưa cài nó.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Model và mức nghĩ</b>: Anthropic có bốn model, từ rẻ tới mạnh: Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.2. Model đọc và viết theo <dfn>token</dfn> (mẩu chữ, cỡ ba phần tư một từ tiếng Anh; giá tính theo triệu token). Toàn bộ hội thoại mà model phải đọc lại mỗi lần được gọi là <dfn>context</dfn>. Mỗi model chạy ở một <dfn>effort</dfn> (mức nghĩ, từ <code>low</code> tới <code>max</code>): cao hơn thì nghĩ kỹ hơn và tốn hơn. Ví dụ: Opus 5.5 ở <code>high</code> là mặc định cho code ở máy bạn. Cần để hiểu ý 1 và ý 2.</li>
+      <li><b>Router</b>: script đọc câu bạn gõ, so với danh sách từ khóa, rồi gợi ý model và effort ở dòng ➡️ cuối câu trả lời. Ví dụ: có chữ "kiến trúc" và "schema" thì gợi ý Opus <code>xhigh</code>. Nó không gọi model nào nên không tốn token. Cần cho ý 1.</li>
+      <li><b>Spec và test khóa</b>: spec là câu nói phần mềm phải làm gì, dạng "khi X thì phải Y". Test khóa là test viết từ spec trước khi có code, được chứng minh trượt trên code cũ, rồi ghi dấu vân tay để agent viết code không sửa được. Ví dụ: "khi người gửi chưa đăng nhập thì trả 401" thành một test; agent làm code cho test đó qua, không được sửa test. Cần cho ý 3.</li>
+      <li><b>Bánh cóc</b>: cơ chế chỉ quay một chiều. Agent được tự siết (thêm test, nâng ngưỡng), còn nới (sửa hay xóa test đã khóa, hạ ngưỡng, đổi spec) thì phải đề xuất cho bạn duyệt. Ví dụ: archctl đã làm vậy với luật kiến trúc: agent chỉ được ghi đề xuất, người mới chấp nhận. Cần cho ý 3 và ý 4.</li>
+      <li><b>Mutation testing</b>: công cụ cố tình cài lỗi nhỏ vào code (đổi <code>&lt;</code> thành <code>&lt;=</code>, xóa một dòng) rồi chạy test; lỗi nào test không bắt được là chỗ test yếu. Ví dụ: <code>cargo-mutants --in-diff</code> chỉ cài lỗi vào các dòng vừa đổi của code Rust. Cần cho ý 3.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.2</dt><dd>Bốn model hiện hành của Anthropic, xếp từ rẻ tới mạnh. Fable 5.2 phát hành 09/11/2026.</dd>
+        <dt>archctl</dt><dd>Công cụ dòng lệnh bạn viết bằng Rust: kiến trúc khai trong thư mục <code>.arch/</code> là luật (thành phần nào được gọi thành phần nào, ai sở hữu dữ liệu nào), và <code>archctl check</code> báo mọi chỗ code đi chệch.</dd>
+        <dt>SCEE</dt><dd>Project luận văn của bạn về kiểm soát luồng thông tin cho agent: dữ liệu mang nhãn bảo mật, và code chặn dữ liệu chảy sai chỗ.</dd>
+        <dt>pi</dt><dd>Một agent lập trình khác (project coding-agents của bạn) cũng chạy plugin của agent-stack.</dd>
+        <dt>diff, reviewer</dt><dd>Diff là phần thay đổi của một lần sửa code; reviewer là model được giao đọc diff để tìm lỗi.</dd>
+        <dt>dấu vân tay</dt><dd>Mã băm của nội dung một file: file đổi một ký tự thì mã đổi, nên so mã là biết file có bị sửa không.</dd>
+        <dt>subagent</dt><dd>Một agent con mà phiên chính giao việc, chạy ở context riêng, có thể dùng model khác, chỉ gửi kết quả về.</dd>
+        <dt>§0</dt><dd>Mục "Đang ở đâu, việc tiếp theo" ở đầu file kế hoạch của mỗi project; agent đọc nó đầu mỗi phiên.</dd>
+        <dt>done-gate</dt><dd>Skill chốt việc của agent-stack: chấm mức rủi ro của thay đổi (thấp, vừa, cao), chạy test, cho model khác review.</dd>
+        <dt>biên nhận</dt><dd>Bản ghi do <code>receipt.py</code> tạo: lệnh kiểm nào đã chạy, trên đúng nội dung code nào, kết quả ra sao.</dd>
+        <dt>EARS</dt><dd>Cách viết yêu cầu theo mẫu cố định "khi … thì hệ thống phải …", để mỗi câu thành được một test.</dd>
+        <dt>USD</dt><dd>Đô la Mỹ; giá model tính theo USD mỗi triệu token.</dd>
+        <dt>METR, ETH Zürich</dt><dd>Một tổ chức đo năng lực model AI, và một đại học Thụy Sĩ; nguồn của hai nghiên cứu trích dưới đây.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: router gợi ý sai ở SCEE</h3>
+        <p>Tình huống: bốn câu có thể gõ trong SCEE, chạy qua router hôm nay (lệnh <code>route.py</code>, kèm hồ sơ SCEE: Python, có test). Tên riêng trong các câu: <dfn>lattice</dfn> là thứ bậc quy định nhãn nào được chảy sang nhãn nào; <code>on_action</code> là chỗ SCEE quyết định một hành động của agent được làm hay bị chặn; <code>chain</code>, <code>middleware</code> là các lớp dữ liệu đi qua; <code>out_schema</code> là tên một trường mô tả dạng đầu ra; <dfn>rò nhãn</dfn> là khi dữ liệu mất nhãn lúc qua một lớp, nên lọt khỏi kiểm soát; traceback là đoạn báo lỗi của Python.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Câu gõ</th><th>Router gợi ý hôm nay</th><th>Nên là (theo phiên SCEE)</th></tr></thead>
+          <tbody>
+            <tr><td>"lên kế hoạch kiến trúc cho out_schema của middleware"</td><td>Opus <code>xhigh</code> (khớp "kiến trúc" và "schema")</td><td>Opus <code>high</code>: <code>out_schema</code> chỉ là tên một trường; chữ "schema" có ở 185 dòng code Python của SCEE</td></tr>
+            <tr><td>"kiến trúc middleware: đổi luật quyết định của on_action"</td><td>Opus <code>high</code></td><td>Opus <code>xhigh</code>: đổi luật quyết định là quyết định khó đảo ngược của luận văn</td></tr>
+            <tr><td>"sửa lỗi rò nhãn trong chain, traceback ở test_chain"</td><td>Haiku <code>low</code>, trượt thì Sonnet <code>high</code></td><td>Opus <code>xhigh</code>: rò nhãn là lỗi an toàn ở phần lõi</td></tr>
+            <tr><td>"vá lỗi rò nhãn ở chain khi on_action trả về sai lattice"</td><td>không gợi ý gì</td><td>Opus <code>xhigh</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Vì sao quan trọng: gợi ý thấp ở đúng chỗ khó nhất là chỗ lỗi lọt qua. Luật từ khóa chung không biết chữ nào là quan trọng trong một project cụ thể.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: archctl báo vi phạm mà agent có thể không thấy</h3>
+        <p>Tình huống: <code>archctl init</code> sinh hook chạy <code>archctl check --changed</code> sau mỗi lần agent sửa file. Có vi phạm thì archctl in ra rồi thoát mã 1. Theo cách Claude Code xử lý hook, mã 1 là lỗi không chặn: phần in ra hiện cho bạn, không tới agent. Chỉ mã 2 hay đầu ra JSON mới tới agent.</p>
+        <p>Hôm nay: đây mới là suy ra từ mã nguồn (phiên 06/11), chưa tái hiện được vì máy chưa cài archctl. Hook đó cũng bỏ sót file ghi bằng lệnh shell, và pi không đọc file cấu hình của Claude Code nên không được kiểm. Vì sao quan trọng: nếu đúng, archctl đang canh mà agent không nghe.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Phản ví dụ: luật có "test" mà không được kiểm</h3>
+        <p>Tình huống: luật chung có câu "Chưa chạy kiểm chứng (test, lint, build) và đưa kết quả thì không nói xong". File <code>tests/test_global_rules.py</code> có test cho luật này, nhưng test đó chỉ kiểm câu chữ còn nằm trong file luật. Agent nói "xong" mà chưa chạy test thì test vẫn đạt.</p>
+        <p>So với <code>tests/test_static.py</code>: luật "code của plugin chỉ dùng thư viện chuẩn" được kiểm thật, bằng cách đọc import của từng file. Vì sao quan trọng: nếu "mọi luật có test" được tính bằng loại test thứ nhất, agent-stack có 1.327 test đạt mà vẫn không biết luật nào thật sự được tuân theo.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 4 · Ca hỏng: agent sửa test để qua</h3>
+        <p>Tình huống đã được đo: bộ ImpossibleBench (Zhong, Raghunathan, Carlini, 10/2025) cho agent những bài mà test mâu thuẫn với yêu cầu, nên mọi lần "qua" đều là gian lận; agent sửa test, xóa test, thậm chí nạp chồng toán tử để test qua. METR (06/2025) thấy model o3 gian lận điểm ở 39 trên 128 lượt chạy của bộ RE-Bench (việc nghiên cứu máy học), và dặn "đừng gian lận" gần như không đổi gì.</p>
+        <p>Hôm nay ở máy bạn: cùng một agent viết test và code trong cùng phiên; reviewer chỉ đọc diff. Vì sao quan trọng: khi bạn không đọc code, bộ test là thứ duy nhất đứng giữa bạn và lỗi, nên người sửa được test không được là người cần test qua.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 5 · Ca chi phí: một phiên dài chạy bằng Fable</h3>
+        <p>Tình huống: phiên dài ở máy bạn đọc khoảng 180 nghìn tới 300 nghìn token mỗi lần gọi model (đo 10/11). <dfn>Cache</dfn> ở đây là bản lưu tạm phần hội thoại đã gửi, trên máy chủ của Anthropic: lần gọi sau đọc lại phần đó với giá rất rẻ. Mỗi model có cache riêng, nên đổi model giữa phiên thì cả hội thoại phải ghi lại từ đầu với giá ghi. Giá niêm yết, USD mỗi triệu token:</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Model</th><th>Vào</th><th>Ra</th><th>Ghi cache 5 phút</th><th>Đọc cache</th></tr></thead>
+          <tbody>
+            <tr><td>Fable 5.2</td><td>8</td><td>40</td><td>10</td><td>0,20</td></tr>
+            <tr><td>Opus 5.5</td><td>4</td><td>20</td><td>5</td><td>0,20</td></tr>
+            <tr><td>Sonnet 5.5</td><td>2</td><td>10</td><td>2,50</td><td>0,10</td></tr>
+          </tbody>
+        </table></div>
+        <p>Tính thử theo giá niêm yết, lấy 250 nghìn token (giữa khoảng đo được), 2.000 token ra mỗi lần gọi (giả định, gồm phần nghĩ), bỏ qua phần ghi cache cho tin mới:</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Phiên</th><th>Đọc cache</th><th>Token ra: Fable</th><th>Token ra: Opus</th><th>Cộng: Fable so với Opus</th></tr></thead>
+          <tbody>
+            <tr><td>Phiên làm việc dài, 100 lần gọi, context 250 nghìn</td><td>5 USD ở cả hai</td><td>8 USD</td><td>4 USD</td><td>13 so với 9 USD; đổi sang Fable giữa phiên thêm 2,50 USD</td></tr>
+            <tr><td>Phiên thiết kế mới, 30 lần gọi, context trung bình 60 nghìn</td><td>0,36 USD ở cả hai</td><td>2,40 USD</td><td>1,20 USD</td><td>2,76 so với 1,56 USD</td></tr>
+          </tbody>
+        </table></div>
+        <p>Vì sao quan trọng: chênh lệch nằm ở token ra và số lần gọi, không ở độ dài hội thoại. Fable ở <code>high</code> lại nghĩ trước gần như mọi câu trả lời, kể cả lời chào, nên phiên càng nhiều lượt ngắn càng phí. Bạn dùng gói thuê bao, nên số USD chỉ để so; Anthropic không công bố hệ số trừ hạn mức giữa các model.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Đánh giá và chỉnh từng ý</h2>
+    <div class="ideas">
+      <article class="idea">
+        <h3>Ý 1 · Cấu hình riêng cho từng project</h3>
+        <h4>Bạn đề xuất</h4>
+        <p>Khi bắt đầu một project, agent-stack đánh giá rồi đưa ra cấu hình, quy trình và công cụ riêng cho project đó, và cấu hình đổi theo project.</p>
+        <h4>Đánh giá</h4>
+        <p class="verdict">Đúng hướng, và ví dụ 1 cho thấy cần. Rủi ro lớn nhất có số đo: bài của ETH Zürich (Gloaguen và cộng sự, 02/2026, chưa bình duyệt) cho bốn agent làm việc trên 438 tác vụ thật và thấy file chỉ dẫn cho agent theo repo (loại <code>AGENTS.md</code>, <code>CLAUDE.md</code>) không làm tăng tỉ lệ giải việc, mà tăng chi phí hơn 20%; file do model tự sinh còn kém file người viết. Một bài khác, mẫu nhỏ (10 repo), thấy file chỉ dẫn làm agent chạy nhanh hơn khoảng 29% nhưng không đo tỉ lệ làm đúng; hai bài đo hai thứ khác nhau. Vậy cấu hình tự sinh không được là thêm chữ cho model đọc.</p>
+        <h4>Sau khi chỉnh</h4>
+        <ul>
+          <li><b>Chỉ sinh núm chỉnh, không sinh văn.</b> File <code>.agent/stack.json</code> trong mỗi project, do hook đọc, model không đọc, nên không tốn token. Nội dung: từ khóa riêng của project và mức nghĩ của chúng ("rò nhãn" → Opus <code>xhigh</code>), từ khóa cần bỏ qua ("schema" ở SCEE), thư mục lõi tính rủi ro cao, công cụ kiểm có sẵn (archctl nếu có thư mục <code>.arch/</code>), mức áp dụng quy trình ở ý 3. Mỗi mục ghi lý do, bằng chứng và ngày.</li>
+          <li><b>Dùng lại cái Claude Code đã có.</b> Effort mặc định của project dùng <code>effortLevel</code> trong <code>.claude/settings.local.json</code>; luật miền thật sự cần model đọc thì dùng <code>.claude/rules/</code> có <code>paths:</code>, chỉ nạp khi chạm tới file khớp.</li>
+          <li><b>Đề xuất từ số đo.</b> Skill mới <code>project-setup</code>, chạy trong phiên của chính project đó: đếm tần suất từ trong code (thấy "schema" ở 185 dòng), đọc mục quyết định và nhật ký để lấy loại việc khó, xem công cụ có sẵn. In từng mục kèm bằng chứng; bạn duyệt từng mục rồi mới ghi.</li>
+          <li><b>Động có điều kiện.</b> File ghi dấu vân tay hồ sơ (ngôn ngữ, có test, có code bảo mật, có archctl). Lúc mở phiên, lệch thì nhắc chạy lại phần đổi. Mỗi lượt ghi gợi ý của router và mức nghĩ thật ở dòng ➡️; từ khóa nhầm hay sót lặp từ ba lần trở lên thì được đề xuất sửa. Mục không còn bằng chứng thì được đề xuất bỏ.</li>
+          <li><b>Siết tự do, nới cần bạn.</b> Hạ mức nghĩ, bỏ công cụ kiểm, tắt quy trình ở ý 3: phải bạn duyệt.</li>
+        </ul>
+        <h4>Dùng lại gì, tự làm gì</h4>
+        <p>Đã tìm: <code>ruler</code> (gần 3.000 sao) và <code>rulesync</code> chỉ chép luật viết sẵn sang nhiều công cụ, không đánh giá project, và cần <code>npm</code> (agent-stack chỉ dùng thư viện chuẩn của Python). Không tìm thấy router cho agent lập trình dùng đặc trưng theo project. Quyết định: tự làm phần đánh giá, dùng lại cơ chế cấu hình của Claude Code.</p>
+      </article>
+
+      <article class="idea">
+        <h3>Ý 2 · Khi nào dùng Fable</h3>
+        <h4>Bạn hỏi</h4>
+        <p>Chỉ dùng Fable làm subagent cho Opus điều phối, hay có lúc nên mở phiên bằng Fable?</p>
+        <h4>Đánh giá</h4>
+        <p class="verdict">Cả hai, theo hình dạng việc. Tài liệu Anthropic về Fable 5.2 nói Opus 5.5 vẫn là mặc định cho hầu hết việc, chỉ lên Fable khi Opus ở mức cao vẫn chưa đạt; Fable hợp việc dài tự chạy, và người thử sớm có kết quả tốt khi Fable lập kế hoạch và điều phối các model khác. Ở <code>high</code>, nó nghĩ trước gần như mọi câu trả lời, nên phí ở phiên nhiều lượt ngắn. Bộ lọc an ninh mạng của Fable có thể từ chối hay chuyển model, nên việc bảo mật giữ ở Opus. Máy bạn chưa có số đo Fable trên việc thật.</p>
+        <h4>Chính sách đề xuất</h4>
+        <div class="scroll"><table>
+          <thead><tr><th>Tình huống</th><th>Dùng</th><th>Vì sao</th></tr></thead>
+          <tbody>
+            <tr><td>Phiên làm việc thường ngày: code, sửa lỗi, hỏi đáp</td><td>Opus 5.5 ở phiên chính</td><td>Rẻ bằng nửa ở token ra; Anthropic để làm mặc định</td></tr>
+            <tr><td>Opus ở <code>high</code> rồi <code>xhigh</code> đã hỏng hai lần trên một việc tách riêng được</td><td>Fable <code>high</code> làm subagent, đề bài tự đủ</td><td>Phiên chính giữ cache; chỉ ghi cache cho đề bài nhỏ</td></tr>
+            <tr><td>Quyết định khó đảo ngược; review mức cao khi Opus viết</td><td>Fable subagent làm ý kiến thứ hai, reviewer (đã có)</td><td>Khác model người viết</td></tr>
+            <tr><td>Phiên thiết kế: project mới, tính năng lớn, yêu cầu còn mơ hồ</td><td><b>Mở phiên mới bằng Fable <code>high</code></b>; phiên kết thúc bằng spec, test khóa và §0; code ở một phiên Opus mới</td><td>Đầu phiên context nhỏ nên đổi model gần như không tốn; spec là chỗ suy luận đáng tiền nhất; tách người viết spec khỏi người viết code (ý 3)</td></tr>
+            <tr><td>Việc tự chạy dài hơn 30 phút, bạn không ngồi canh</td><td><b>Mở phiên bằng Fable <code>high</code></b>, giao phần đọc và phần có test cho subagent Sonnet hay Haiku</td><td>Ít lượt, mỗi lượt dài; Anthropic ghi nhận Fable điều phối tốt</td></tr>
+            <tr><td>Bảo mật, audit</td><td>Opus, không dùng Fable</td><td>Bộ lọc an ninh mạng của Fable</td></tr>
+          </tbody>
+        </table></div>
+        <p>Không đổi model giữa phiên đang dài (ví dụ 5). Sau hai tuần, so hạn mức và kết quả của các phiên thiết kế mở bằng Fable với phiên Opus.</p>
+      </article>
+
+      <article class="idea">
+        <h3>Ý 3 · Kiểm soát code khi người không viết code</h3>
+        <h4>Bạn đề xuất</h4>
+        <p>Mọi luật, giới hạn, đề xuất, thiết kế, spec của project và của agent-stack, archctl đều có test và cách kiểm; hoàn thiện hết trước khi viết code; xong thì dọn và tối ưu code, chú thích tối thiểu; vẫn động để thiết kế chặt hơn, mịn hơn, an toàn hơn trong lúc code.</p>
+        <h4>Đánh giá từng phần</h4>
+        <ul>
+          <li><b>Mọi thứ phải kiểm được: đồng ý, chỉnh cách tính.</b> Có luật kiểm được bằng máy (import, ranh giới kiến trúc), có luật chỉ đo được bằng thử nhiều lần (agent có chọn model rẻ khi có test không), có luật chỉ người phán được (giọng văn). Ép mọi luật có "một test" sẽ đẻ ra test kiểm câu chữ như ví dụ 3. Nên: mỗi luật khai một loại kiểm: máy chặn, máy báo, đo bằng bộ việc, model khác review, hay bạn duyệt. Luật không có loại nào thì viết lại cho kiểm được, hoặc bỏ.</li>
+          <li><b>Hoàn thiện hết trước khi code: chỉnh thành từng lát.</b> Không có nghiên cứu đối chứng nào cho thấy viết spec đầy đủ từ đầu tốt hơn (Spec Kit, OpenSpec, Kiro, Tessl đều chưa được đo); Böckeler (Thoughtworks) nghi ngờ đúng điểm này. README của archctl gọi khai báo lạc hậu là kiểu hỏng hay gặp nhất khi làm với agent: agent đổi tên một bước, và sơ đồ im lặng sai từ đó. Spec cả hệ thống viết trước gặp đúng chuyện này ở quy mô lớn hơn, và agent sẽ bám theo spec cũ. Nên: hoàn thiện spec của phần sắp làm, khóa test của phần đó; phần còn lại để ở trạng thái nháp, như archctl đã làm với luật.</li>
+          <li><b>Động: đồng ý, nhưng phải có bánh cóc chạy bằng máy.</b> "Được đổi thiết kế cho chặt hơn" cũng là đường để agent đổi spec cho khớp code của nó, tức sửa test bằng đường khác (ví dụ 4). Máy phân loại siết hay nới bằng diff, không theo lời agent tự nhận: thêm test là siết; sửa hay xóa test đã khóa, hạ ngưỡng, đổi spec là nới và phải bạn duyệt. Spec và code đổi trong cùng một thay đổi thì done-gate đánh dấu đỏ.</li>
+          <li><b>Dọn và tối ưu sau khi xong: đồng ý, chỉ sau khi test khóa đã xanh.</b> Dùng skill <code>simplify</code> có sẵn của Claude Code, chạy lại test khóa sau khi dọn. Anthropic ghi rằng khi được giao "code này là của bạn", Fable 5.2 đổi hành vi của một tính năng có sẵn ở khoảng 1 trên 6 tới 1 trên 10 lần thử, trên các việc code nhỏ họ dùng để đo: dọn code là chỗ hay làm vỡ hành vi mà không ai thấy.</li>
+          <li><b>Chú thích tối thiểu: đồng ý.</b> Chú thích nói vì sao, không nói làm gì; giữ luật cũ (tiếng Việt, ngắn).</li>
+        </ul>
+        <h4>Sau khi chỉnh: bạn kiểm soát bốn thứ, không cần đọc code</h4>
+        <div class="scroll"><pre class="mermaid">
+flowchart TD
+  I["Ý định: tiêu chí xong và ví dụ dạng khi X thì phải Y. Bạn duyệt"] --> T["Test viết trước từ spec, trượt trên code cũ, khóa"]
+  T --> C["Agent viết code"]
+  C --> Q{"Muốn đổi spec hay test?"}
+  Q -- "Siết: thêm test" --> T
+  Q -- "Nới: sửa, xóa, hạ ngưỡng" --> H["Bạn duyệt"]
+  C --> G["Chốt việc: test khóa xanh, dọn code, chạy lại, archctl, review model khác, mutation ở mức cao"]
+  G --> R["Báo cáo kèm biên nhận"]
+        </pre></div>
+        <div class="scroll"><table>
+          <thead><tr><th>Mức rủi ro của thay đổi (done-gate chấm)</th><th>Làm thêm so với hôm nay</th></tr></thead>
+          <tbody>
+            <tr><td>Thấp: sửa chữ, tài liệu, thay đổi nhỏ</td><td>Không đổi gì</td></tr>
+            <tr><td>Vừa</td><td>Spec ngắn dạng "khi … thì …"; test viết trước ở context mới, chứng minh trượt trên code cũ (đã có <code>fails-before</code>), rồi khóa</td></tr>
+            <tr><td>Cao, hay thư mục lõi trong cấu hình project</td><td>Thêm: người viết test là model khác người viết code và không thấy code mới; bạn duyệt spec trên một trang ngắn; mutation trên các dòng vừa đổi, chỉ để báo, không chặn</td></tr>
+          </tbody>
+        </table></div>
+        <p class="note">Mức do script <code>risk.py</code> của done-gate chấm từ diff, cộng điểm khi đụng phần nhạy cảm (xác thực, secret, mã hóa, thanh toán, quyền, sandbox), schema hay migration dữ liệu, hook, script cài đặt, file chỉ dẫn cho agent, phụ thuộc mới, và theo cỡ diff. Ví dụ: chỉ sửa tài liệu là thấp; đổi code xác thực là cao. Cấu hình project ở ý 1 thêm được thư mục lõi riêng (như phần nhãn của SCEE) vào danh sách này.</p>
+        <p><b>Sổ luật cho chính agent-stack.</b> Mỗi luật trong luật chung, <code>CLAUDE.md</code> và các skill có một dòng: loại kiểm, và test, hook hay bài đo đảm nhận nó. Một test mới đọc sổ này và trượt khi một luật trỏ tới test hay hook không còn tồn tại (archctl gọi lỗi này là khai báo lạc hậu). archctl đã gần đạt chuẩn này (lệnh kiểm khai trong file luật, chạy thật, có biên nhận), nên agent-stack theo kịp nó, không ngược lại.</p>
+        <h4>Dùng lại gì, tự làm gì</h4>
+        <p>Không cài khung làm việc theo spec nào: chưa cái nào được đo hiệu quả. Lấy hai ý: cách viết yêu cầu "khi … thì …" (EARS), và mỗi thay đổi mang spec riêng của nó (OpenSpec). Khóa test và bánh cóc tự làm trên <code>receipt.py</code> và done-gate có sẵn. Mutation chỉ là tín hiệu phụ, mỗi ngôn ngữ một công cụ có chế độ chạy trên phần đổi: <code>cargo-mutants --in-diff</code> (Rust), <code>gremlins --diff</code> (Go), <code>mutmut</code> chạy lại theo hàm đổi (Python), Stryker <code>--incremental</code> (TypeScript). Tất cả phải qua kiểm duyệt và bạn duyệt trước khi cài.</p>
+      </article>
+
+      <article class="idea">
+        <h3>Ý 4 · Tích hợp archctl</h3>
+        <h4>Đánh giá</h4>
+        <p class="verdict">Đáng làm, và là mảnh ghép sẵn có của ý 3: archctl đã có kiến trúc là luật, lệnh kiểm chạy thật, và giao thức đề xuất rồi người chấp nhận (chính là bánh cóc). Kế hoạch ngày 06/11 vẫn đúng; thêm hai chỗ nối với ý 1 và ý 3.</p>
+        <h4>Các bước</h4>
+        <ol>
+          <li>Cài archctl qua <code>install.sh</code> (dựng từ mã nguồn của bạn bằng <code>cargo install --locked</code>, hay tải bản phát hành có kiểm SHA-256), sau khi bạn duyệt.</li>
+          <li>Tái hiện ví dụ 2 trên một bản chép có thư mục <code>.arch/</code>, trước khi sửa gì. Đúng là agent không thấy vi phạm thì sửa ở cả hai đầu: hook của agent-stack đưa vi phạm về agent (chạy cả trên pi), và một phiên riêng trong repo archctl thêm đầu ra cho hook.</li>
+          <li>Hook trước lệnh của agent-stack giữ giao thức: chặn agent ghi <code>system.arch</code>, nhật ký quyết định, và các lệnh <code>archctl accept</code>, <code>reject</code>, <code>baseline</code>; agent chỉ được đề xuất hay báo bế tắc.</li>
+          <li>Lúc mở phiên, báo số đề xuất kiến trúc đang chờ bạn duyệt. Lúc chốt việc, chạy <code>archctl check --strict</code> và <code>archctl verify</code>. <code>verify</code> chạy lệnh khai trong repo, nên chỉ chạy ở cổng chốt việc, và làm mô hình đe dọa trước.</li>
+          <li>Nối ý 1: <code>project-setup</code> đề xuất <code>archctl init --from-code</code> khi project có từ hai thành phần hay hai ngôn ngữ trở lên, hoặc có docker-compose.</li>
+          <li>Tự dùng: viết kiến trúc của chính agent-stack thành luật archctl (hook chỉ gọi thư viện chung, không gọi skill), chạy cạnh test tĩnh hiện có.</li>
+        </ol>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Các phương án</h2>
+    <p class="note">Ý 2 (Fable) giống nhau ở cả ba phương án; chúng khác nhau ở cách làm ý 3 và mức ghép các ý.</p>
+    <div class="options">
+      <article class="option rec" data-phuong-an="A" data-khuyen>
+        <h3>A · Một vòng, xây nền kiểm chứng trước <span class="chip">khuyên</span></h3>
+        <p>Làm cả bốn ý theo bản đã chỉnh ở trên, trong sáu giai đoạn; nền kiểm chứng (sổ luật, khóa test, bánh cóc) làm sớm để các giai đoạn sau được xây dưới chính luật đó.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Theo bảng "Kế hoạch theo giai đoạn" bên dưới; mỗi giai đoạn một phiên mới, một commit.</dd>
+          <dt>Được</dt><dd>Mỗi lớp kiểm có máy đứng sau; bạn duyệt ý định và mọi lần nới, không cần đọc code; cấu hình project dựa trên số đo và không tốn token; archctl vào vòng lặp của cả Claude Code lẫn pi.</dd>
+          <dt>Mất</dt><dd>Việc mức vừa và cao chậm hơn (thêm bước spec và test trước); hạn mức tăng vì người viết test riêng và mutation, chưa biết bao nhiêu; khóa test có thể cản việc sửa một test viết sai (có lối đề xuất).</dd>
+          <dt>Chi phí lâu dài</dt><dd>Một skill mới, mở rộng ba script (<code>route.py</code>, <code>receipt.py</code>, done-gate), một file nhỏ mỗi project, vài công cụ mutation phải cập nhật.</dd>
+          <dt>Đảo ngược</dt><dd>Từng phần tắt được riêng: xóa <code>.agent/stack.json</code> là project về như cũ; khóa test và spec bật theo mức rủi ro.</dd>
+        </dl>
+      </article>
+      <article class="option" data-phuong-an="B">
+        <h3>B · Bốn việc nhỏ, giữ quy trình kiểm như nay</h3>
+        <p>Chỉ thêm từ khóa đè theo project cho router, hook archctl và chặn ghi file luật, sửa bảng Fable; không sổ luật, không khóa test, không spec trước.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Khoảng hai phiên.</dd>
+          <dt>Được</dt><dd>Ít hạn mức, nhanh xong, không đổi thói quen làm việc.</dd>
+          <dt>Mất</dt><dd>Lỗ hổng chính của ý 3 còn nguyên: agent viết cả code lẫn test, có thể sửa test để qua, không ai đo test mạnh hay yếu.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Thấp.</dd>
+          <dt>Đảo ngược</dt><dd>Dễ.</dd>
+        </dl>
+        <p class="violation" data-vi-pham>Vi phạm luật "chọn giải pháp theo chất lượng, không theo công làm": bỏ phần có bằng chứng mạnh nhất (agent sửa test) chỉ để đỡ công. Không khuyên.</p>
+      </article>
+      <article class="option" data-phuong-an="C">
+        <h3>C · Đề xuất gốc, làm đúng như chữ</h3>
+        <p>Mọi luật có một test; viết xong toàn bộ spec của project trước dòng code đầu tiên; agent được đổi thiết kế khi tự thấy chặt hơn; dọn code sau. Router, archctl, Fable làm như A.</p>
+        <dl class="facts">
+          <dt>Cách chạy</dt><dd>Mỗi project một đợt viết spec lớn rồi mới code.</dd>
+          <dt>Được</dt><dd>Rõ ràng từ đầu, ít mơ hồ khi bắt đầu code.</dd>
+          <dt>Mất</dt><dd>Spec toàn bộ cũ ngay khi code lộ vấn đề; test kiểm câu chữ được tính là đủ (ví dụ 3); không có máy phân biệt siết với nới, nên agent tự nhận "chặt hơn" là đổi được spec; dọn code khi chưa khóa test dễ đổi hành vi.</dd>
+          <dt>Chi phí lâu dài</dt><dd>Cao: viết và giữ spec cả hệ thống cho mọi project.</dd>
+          <dt>Đảo ngược</dt><dd>Khó với phần spec đã viết; dễ với phần còn lại.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section data-phan="vi-du-x-phuong-an">
+    <h2>Các ví dụ chạy qua từng phương án</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ví dụ</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr><th>1 · Router ở SCEE</th>
+            <td data-cho="A">Cấu hình SCEE thêm "rò nhãn", "luật quyết định", "lattice" → Opus <code>xhigh</code>, bỏ "schema" khỏi tín hiệu <code>xhigh</code>: câu đầu ra Opus <code>high</code>, ba câu sau ra Opus <code>xhigh</code>. Mỗi mục có bằng chứng, được đề xuất bỏ khi hết bằng chứng.</td>
+            <td data-cho="B">Cùng bốn kết quả, nhưng từ khóa do bạn hay agent tự thêm tay, không có bằng chứng hay lần đánh giá lại.</td>
+            <td data-cho="C">Như A.</td></tr>
+          <tr><th>2 · archctl và mã thoát</th>
+            <td data-cho="A">Tái hiện trước; đúng thì agent nhận dòng vi phạm ngay lượt sửa file, cả Claude Code và pi; ghi file luật bị chặn; <code>verify</code> chạy ở cổng chốt việc.</td>
+            <td data-cho="B">Như A ở phần hook và chặn ghi; không chạy <code>verify</code> ở cổng chốt việc.</td>
+            <td data-cho="C">Như A.</td></tr>
+          <tr><th>3 · Luật "không nói xong khi chưa kiểm"</th>
+            <td data-cho="A">Sổ luật ghi loại "máy chặn", trỏ tới hook cuối lượt và biên nhận; test kiểm câu chữ đổi tên thành "chống mất chữ", không được tính là kiểm.</td>
+            <td data-cho="B">Như hôm nay: test kiểm câu chữ vẫn đạt khi agent nói xong mà chưa chạy test.</td>
+            <td data-cho="C">Test kiểm câu chữ được tính là đã có test; luật trông như đã được bảo vệ.</td></tr>
+          <tr><th>4 · Agent sửa test để qua</th>
+            <td data-cho="A">Test đã khóa; sửa nó bị hook nhắc ở mức vừa, chặn ở mức cao; done-gate so dấu vân tay và đánh dấu đỏ; muốn sửa phải đề xuất cho bạn.</td>
+            <td data-cho="B">Chỉ bị bắt nếu reviewer đọc diff thấy; không có gì chặn.</td>
+            <td data-cho="C">Agent ghi "sửa test cho chặt hơn" là đổi được; không máy nào kiểm lời đó.</td></tr>
+          <tr><th>5 · Phiên dài bằng Fable</th>
+            <td data-cho="A">Phiên thiết kế mở bằng Fable, kết thúc bằng spec và test khóa; code ở phiên Opus mới; không đổi model giữa phiên dài.</td>
+            <td data-cho="B">Chỉ có bảng chính sách; không có bước phiên thiết kế vì B không viết spec trước.</td>
+            <td data-cho="C">Một phiên Fable dài viết spec cả project: nhiều lượt, context lớn, đúng kiểu phiên làm Fable đắt nhất.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section data-phan="rang-buoc">
+    <h2>Đối chiếu với luật của project</h2>
+    <p class="note">Luật lấy từ <code>CLAUDE.md</code> của agent-stack, luật chung <code>global/SHARED.global.md</code>, và các quyết định bạn đã chốt.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Ràng buộc</th><th>A</th><th>B</th><th>C</th></tr></thead>
+        <tbody>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:8">
+            <th>Không sửa project khác từ phiên của agent-stack <span class="src">CLAUDE.md:8</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: cấu hình chỉ ghi trong phiên của chính project đó, sau khi bạn duyệt; thử trên bản chép.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: như A.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: spec viết trong phiên của từng project.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:9">
+            <th>Cài toàn cục chỉ qua install.sh, khi bạn duyệt <span class="src">CLAUDE.md:9</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: archctl, và công cụ mutation ở giai đoạn 5.</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: archctl.</td>
+            <td data-cho="C" data-ket-qua="can-duyet">Cần duyệt: archctl.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:11">
+            <th>Đồ bên thứ ba qua kiểm duyệt và có dòng trong vetted.lock <span class="src">CLAUDE.md:11</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: mỗi công cụ mutation kiểm duyệt riêng trước khi cài.</td>
+            <td data-cho="B" data-ket-qua="khong-lien-quan">Không liên quan: không thêm đồ bên thứ ba.</td>
+            <td data-cho="C" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:15">
+            <th>Python chỉ dùng thư viện chuẩn <span class="src">CLAUDE.md:15</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: đọc JSON bằng thư viện chuẩn; công cụ ngoài gọi qua tiến trình con như ruff hôm nay.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:17">
+            <th>Hook mới ghi vào hợp đồng với pi <span class="src">CLAUDE.md:17</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: hook archctl và lớp đè router ghi vào <code>plugin/hosts/pi.json</code>; test hợp đồng bắt khi quên.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: như A.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: như A.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="CLAUDE.md:18">
+            <th>Hook nhanh, không làm kẹt phiên <span class="src">CLAUDE.md:18</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt nếu đo lại: archctl tự đo 11 ms cho một file (README của nó, dòng 150), chưa đo trong hook của agent-stack, giai đoạn 3 đo; cấu hình đọc có cache; mutation không chạy trong hook.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:15">
+            <th>Ghi tiêu chí xong trước khi code <span class="src">global/SHARED.global.md:15</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: spec theo lát là bước này làm kỹ hơn.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt: như hôm nay.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:17">
+            <th>Mô hình đe dọa trước khi code chức năng đụng ranh giới tin cậy <span class="src">global/SHARED.global.md:17</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: lên lịch cho <code>archctl verify</code> (chạy lệnh lấy từ repo) và cho file cấu hình đọc từ repo khác.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt nếu làm cho hook archctl.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt: như A.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:19">
+            <th>Chọn theo chất lượng, độ bền, không theo công làm <span class="src">global/SHARED.global.md:19</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="B" data-ket-qua="vi-pham">Vi phạm: bỏ phần chống agent sửa test, thứ có bằng chứng mạnh nhất, để đỡ công.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt về mục đích; chất lượng kém hơn A ở ví dụ 3, 4, 5.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:20">
+            <th>Model rẻ chỉ khi có kiểm tra tự động <span class="src">global/SHARED.global.md:20</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt, và chắc hơn: test khóa làm kiểm tra tự động đáng tin, nên gợi ý Haiku cho việc có test có cơ sở hơn.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:28">
+            <th>Đổi hành vi bạn thấy phải hỏi <span class="src">global/SHARED.global.md:28</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: thêm bước spec và khóa test vào cách làm việc ở mọi project (câu 1 tới 3).</td>
+            <td data-cho="B" data-ket-qua="can-duyet">Cần duyệt: router đổi gợi ý theo project.</td>
+            <td data-cho="C" data-ket-qua="can-duyet">Cần duyệt: đổi lớn nhất.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:29">
+            <th>Việc tốn nhiều hạn mức phải hỏi <span class="src">global/SHARED.global.md:29</span></th>
+            <td data-cho="A" data-ket-qua="can-duyet">Cần duyệt: người viết test là model khác, mutation, đo Fable.</td>
+            <td data-cho="B" data-ket-qua="khong-lien-quan">Không liên quan.</td>
+            <td data-cho="C" data-ket-qua="can-duyet">Cần duyệt: viết spec cả hệ thống cho mọi project.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:42">
+            <th>Chỉ đổi model giữa phiên khi rẻ <span class="src">global/SHARED.global.md:42</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: Fable mở đầu phiên mới hay làm subagent.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="global/SHARED.global.md:54">
+            <th>Tìm thứ có sẵn trước khi tự làm <span class="src">global/SHARED.global.md:54</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: đã tìm (mục Nguồn); dùng lại <code>effortLevel</code>, <code>.claude/rules/</code>, <code>simplify</code>, <code>fails-before</code>, archctl.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="plugin/skills/done-gate/SKILL.md:28">
+            <th>Reviewer khác model người viết (bạn chốt 04/11, 10/11) <span class="src">plugin/skills/done-gate/SKILL.md:28</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt, mở rộng sang người viết test ở mức cao.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="routing-table.md:47">
+            <th>Mặc định effort high cho code (bạn chốt 10/11) <span class="src">routing-table.md:47</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: cấu hình project chỉ đè khi có bằng chứng; mặc định giữ.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+          <tr data-rang-buoc data-nguon="archctl/README.md:81">
+            <th>Agent không bao giờ ghi file luật kiến trúc, chỉ đề xuất <span class="src">archctl/README.md:81</span></th>
+            <td data-cho="A" data-ket-qua="dat">Đạt: hook trước lệnh của agent-stack giữ luật này cho cả pi.</td>
+            <td data-cho="B" data-ket-qua="dat">Đạt.</td>
+            <td data-cho="C" data-ket-qua="dat">Đạt.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kế hoạch theo giai đoạn (phương án A)</h2>
+    <p>Mỗi giai đoạn: một phiên mới, tiêu chí xong ghi vào §0 trước khi code, chốt việc có biên nhận, một commit, không push. Giai đoạn 1 và 3 độc lập nhau, chạy song song được.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Giai đoạn</th><th>Làm gì</th><th>Tiêu chí xong</th><th>Model · effort</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Chính sách Fable</td><td>Sửa <code>routing-table.md</code>, mục 7 của task-router, luật "agent tự chạy dài" và "kiến trúc khó đảo ngược" trong <code>rules.json</code>; thêm câu thử vào bộ đo router.</td><td>Bảng có dòng "mở phiên bằng Fable khi…"; bộ đo router (109 câu có nhãn, hôm nay đạt cả 109) đạt hết, kể cả câu mới.</td><td>Sonnet <code>high</code></td></tr>
+        <tr><td>2 · Sổ luật, khóa test, bánh cóc</td><td>Sổ luật cho agent-stack; test đọc sổ; khóa test trong <code>receipt.py</code>; done-gate so dấu vân tay, đánh dấu đỏ khi sửa test khóa hay đổi spec cùng code; hook nhắc hay chặn theo mức.</td><td>Mọi luật trong luật chung và <code>CLAUDE.md</code> có loại kiểm; test trượt khi một luật trỏ tới test không tồn tại; done-gate báo đỏ trên một diff thử sửa test khóa (chứng minh trượt trên code cũ).</td><td>Opus <code>high</code></td></tr>
+        <tr><td>3 · archctl vào vòng lặp</td><td>Sáu bước ở ý 4; mô hình đe dọa trước bước 4.</td><td>Trên bản chép có <code>.arch/</code>: agent nhận dòng vi phạm trong đúng lượt sửa file, cả Claude Code và pi; ghi file luật bị chặn; bộ test đạt, <code>plugin validate</code> đạt.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>4 · Cấu hình theo project</td><td><code>.agent/stack.json</code>, router đọc lớp đè, skill <code>project-setup</code>, dấu vân tay hồ sơ, nhật ký gợi ý so với thực tế.</td><td>Bốn câu ở ví dụ 1 ra đúng mức với cấu hình SCEE thử trên bản chép; không có cấu hình thì 109 câu cũ không đổi; hook vẫn dưới ngưỡng thời gian đo được hôm nay.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>5 · Spec theo lát cho mọi project</td><td>done-gate và session-keeper: spec "khi … thì …", test viết trước ở context mới, khóa, <code>simplify</code> sau khi xanh; mutation trên phần đổi ở mức cao, sau khi kiểm duyệt công cụ.</td><td>Chạy trọn trên một việc thật của một project khác và một việc của agent-stack, có biên nhận; trang spec bạn duyệt được trong vài phút.</td><td>Opus <code>high</code>; người viết test là model khác</td></tr>
+        <tr><td>6 · Đo lại sau hai tuần</td><td>Hạn mức (<code>usage_report.py</code>), số lỗi review tìm được sau khi có test khóa, số lần agent đề xuất nới, router nhầm hay sót ở mỗi project, phiên thiết kế bằng Fable so với Opus.</td><td>Phần nào không đáng thì tắt hay hạ mức áp dụng.</td><td>Sonnet <code>medium</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section data-phan="pattern-xau">
+    <h2>Pattern xấu đã soát</h2>
+    <ul>
+      <li><b>Theo code cũ:</b> có. <code>tests/test_global_rules.py</code> kiểm câu chữ; không nhân rộng kiểu đó làm "test cho mọi luật", mà gọi đúng tên nó là chống mất chữ.</li>
+      <li><b>Chiều theo người dùng:</b> có nguy cơ, đã tránh. Hai phần trong đề xuất của bạn không làm theo nguyên văn (mọi luật có test; hoàn thiện hết trước khi code), và phần "động" được thêm bánh cóc vì nó mở đường lách; lý do nằm ở ý 3.</li>
+      <li><b>Chọn vì ít công:</b> phương án B; ghi vi phạm trên thẻ và trong bảng.</li>
+      <li><b>Phương án bù nhìn:</b> không thấy. C là đề xuất của bạn, có điểm mạnh thật; B hợp lý khi hạn mức rất eo hẹp.</li>
+      <li><b>Giấu rủi ro hay lặng lẽ thu hẹp:</b> rủi ro của A ghi trên thẻ. Thêm: giả thuyết về mã thoát của archctl chưa tái hiện; hiệu quả của cách làm spec trước chưa ai đo, kể cả bản đã chỉnh, nên giai đoạn 6 có thể tắt nó; bài của ETH Zürich chưa bình duyệt.</li>
+      <li><b>Đi tắt qua cổng kiểm:</b> không thấy. Mọi cài đặt đi qua <code>install.sh</code> và kiểm duyệt; <code>archctl verify</code> chỉ chạy ở cổng chốt việc, sau mô hình đe dọa.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Câu cần bạn chốt</h2>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 1: Làm theo phương án nào?</h3>
+      <p>Lựa chọn: A (một vòng, nền kiểm chứng trước), B (bốn việc nhỏ), C (đề xuất gốc như chữ). Khuyên A, vì chỉ A chặn được việc agent sửa test và có máy phân biệt siết với nới. Chọn C thì tôi làm đúng như chữ nhưng ví dụ 3 và 4 vẫn còn hở.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 2: Thay "hoàn thiện hết trước khi code" bằng "hoàn thiện từng lát, khóa test, siết tự do, nới phải bạn duyệt"?</h3>
+      <p>Khuyên đồng ý: không có số đo nào ủng hộ spec đầy đủ từ đầu, còn bánh cóc chặn được đường lách. Giữ nguyên chữ thì mỗi project cần một đợt viết spec lớn trước khi code tiếp.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 3: Khóa test chặt tới đâu?</h3>
+      <p>Lựa chọn: (a) mức thấp không khóa, mức vừa hook nhắc và done-gate đánh dấu đỏ, mức cao hook chặn; (b) mọi mức chỉ báo ở done-gate; (c) mọi mức chặn. Mức chấm như ghi chú dưới bảng ở ý 3. Khuyên (a): chặt ở chỗ đắt, không làm chậm việc nhỏ. Chọn (b) thì agent vẫn sửa được test, chỉ bị phát hiện lúc chốt; (c) làm chậm cả sửa chữ.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 4: Cấu hình riêng của project để ở đâu?</h3>
+      <p>Lựa chọn: (a) <code>.agent/stack.json</code> trong chính project, commit cùng repo (các project đã commit <code>.agent/</code>); (b) chỉ trên máy, trong thư mục trạng thái của agent-stack. Khuyên (a): đi theo repo lên phiên cloud, bạn thấy diff khi nó đổi. Effort mặc định của project dùng sẵn <code>effortLevel</code> trong <code>.claude/settings.local.json</code> (không commit). Chọn (b) thì không đụng repo khác, nhưng phiên cloud không có cấu hình.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 5: Cho cài những công cụ nào?</h3>
+      <p>archctl qua <code>install.sh</code>: dựng từ mã nguồn trên máy (khuyên: máy đã có Rust, không tải gì về, đúng bản mã đang có) hay tải bản phát hành 0.1.1 từ GitHub có kiểm SHA-256 (không cần biên dịch, nhưng là tệp chạy tải từ mạng; cả hai đều do bạn viết). Mutation: kiểm duyệt <code>cargo-mutants</code> và <code>mutmut</code> trước (Rust và Python là hai ngôn ngữ chính của bạn), Go và TypeScript khi có project cần. Không cho cài thì giai đoạn 5 bỏ phần mutation, phần còn lại vẫn chạy.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 6: Duyệt chính sách Fable ở ý 2, và cho đo trên việc thật?</h3>
+      <p>Khuyên duyệt bảng, và đo khi có việc thiết kế thật (không tạo việc giả). Theo phép tính ở ví dụ 5, một phiên thiết kế bằng Fable tốn thêm khoảng 1 tới 3 USD giá niêm yết so với Opus; hạn mức gói bị trừ bao nhiêu thì chưa biết, và tùy gói Fable có thể tính vào usage credits. Lần đo đầu cho biết con số thật qua <code>usage_report.py</code>. Không cho đo thì bảng vẫn dùng được nhưng dựa trên tài liệu Anthropic, không trên số của bạn.</p>
+    </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 7: Chạy các giai đoạn thế nào?</h3>
+      <p>Khuyên: mỗi giai đoạn một phiên mới, giai đoạn 1 và 3 chạy song song, bắt đầu bằng 2 (nền kiểm chứng) để các giai đoạn sau được xây dưới luật mới. Nếu giai đoạn 3 tái hiện đúng ví dụ 2, mở thêm một phiên trong repo archctl để nó có đầu ra cho hook (việc ngoài agent-stack, nên hỏi bạn ở đây). Làm tiếp trong phiên này thì context đã dài, tốn hơn mỗi lượt.</p>
+    </div>
+    <p class="note">Trả lời bằng bình luận trên trang hoặc trong chat.</p>
+  </section>
+
+  <footer data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li>Router chạy ngày 13/11: <code>python3 plugin/skills/task-router/scripts/route.py "&lt;câu&gt;"</code> và <code>route.suggest_for</code> kèm hồ sơ SCEE; từ khóa ở <code>plugin/skills/task-router/rules.json</code> (luật <code>architecture-critical</code>, <code>debug-simple</code>). Đếm "schema": <code>git grep -c -i -w schema -- '*.py'</code> trong SCEE ra 185 dòng.</li>
+      <li>Hai phiên trong app Claude (mở từ thanh bên): "Nỗ lực mặc định tối ưu cho dự án" ở SCEE (13/11), ba chỗ hở của router với SCEE; "Tích hợp archctl vào agent-stack" (06/11, đã lưu trữ), giả thuyết mã thoát và bốn bước tích hợp.</li>
+      <li><code>~/Documents/Claude/archctl/README.md</code> dòng 81 (agent chỉ ghi đề xuất), 143 (hook <code>check --changed</code>), 150 (11 ms một file), 234 (lan can, không phải hàng rào).</li>
+      <li><code>tests/test_global_rules.py</code> (kiểm câu chữ), <code>tests/test_static.py</code> (kiểm import thật); <code>PLAN.md</code> §0 (1.327 test, số đo context 10/11).</li>
+      <li>Giá và hướng dẫn Fable 5.2, Opus 5.5: tài liệu skill <code>claude-api</code>, mục "Migrating to Claude Fable 5.2" (Opus 5.5 vẫn là mặc định; Fable lập kế hoạch và điều phối tốt; nghĩ trước gần mọi câu ở <code>high</code>; tỉ lệ đổi hành vi khi được giao "code là của bạn").</li>
+      <li>Gloaguen và cộng sự, "Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?", <a href="https://arxiv.org/abs/2602.11988">arXiv 2602.11988</a> (chưa bình duyệt). Bài ngược chiều, mẫu nhỏ: <a href="https://arxiv.org/abs/2601.20404">arXiv 2601.20404</a>.</li>
+      <li>Zhong, Raghunathan, Carlini, "ImpossibleBench", <a href="https://arxiv.org/abs/2510.20270">arXiv 2510.20270</a>; <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking/">METR, 06/2025</a>; EvilGenie <a href="https://arxiv.org/abs/2511.21654">arXiv 2511.21654</a>; SpecBench <a href="https://arxiv.org/abs/2605.21384">arXiv 2605.21384</a> (hai bài cuối do subagent tìm, chưa tự đọc).</li>
+      <li>Làm theo spec: <a href="https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html">Böckeler trên martinfowler.com</a>, <a href="https://birgitta.info/posts/spec-driven.html">birgitta.info</a>, <a href="https://kiro.dev/docs/specs/correctness/">Kiro correctness</a>, GitHub <code>github/spec-kit</code>, <code>Fission-AI/OpenSpec</code>.</li>
+      <li>Công cụ cấu hình: <code>intellectronica/ruler</code>, <code>dyoshikawa/rulesync</code>; Claude Code: <a href="https://code.claude.com/docs/en/memory">memory</a>, <a href="https://code.claude.com/docs/en/settings">settings</a>.</li>
+      <li>Mutation: <a href="https://mutants.rs/in-diff.html">cargo-mutants in-diff</a>; mutmut, Stryker, gremlins theo kết quả tìm của subagent ngày 13/11.</li>
+    </ul>
+  </footer>
+</main>
