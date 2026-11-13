@@ -178,7 +178,7 @@ def run(home: Path, root: Path, skills: list, local: bool, runner=subprocess.run
     if not ready:
         return {"status": why}
     exe, env = str(binary(home)), scan_env(home, local)
-    counts = {s: 0 for s in SEVERITIES}
+    counts = dict.fromkeys(SEVERITIES, 0)
     findings, scores, errors = [], [], []
     for target in targets(root, skills):
         try:

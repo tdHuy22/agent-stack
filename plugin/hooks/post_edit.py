@@ -18,7 +18,6 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 sys.path.insert(0, str(HERE.parent / "skills" / "done-gate" / "scripts"))
 import agentstack as A  # noqa: E402
 
-
 MAX_BYTES = 2_000_000  # file lớn hơn thì bỏ qua (giống quick_lint)
 MAX_HITS = 200  # chuỗi mới trùng quá nhiều chỗ thì thôi tìm, lấy dòng đổi theo git
 

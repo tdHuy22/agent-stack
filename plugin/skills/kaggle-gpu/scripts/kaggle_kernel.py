@@ -415,7 +415,7 @@ class WebSocket:
 # ---------- giao thức kernel Jupyter (bản 5.3, JSON qua WebSocket) ----------
 
 def kernel_message(msg_type: str, content: dict, session: str, channel: str) -> dict:
-    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    now = dt.datetime.now(dt.UTC).isoformat()
     return {"header": {"msg_id": uuid.uuid4().hex, "username": "kaggle-gpu", "session": session,
                        "msg_type": msg_type, "version": "5.3", "date": now},
             "parent_header": {}, "metadata": {}, "content": content, "channel": channel, "buffers": []}

@@ -130,6 +130,6 @@ async function main() {
 }
 
 main().then(() => process.exit(0)).catch(e => {
-  console.error(String((e && e.stack) || e))
+  console.error(String(e?.stack || e))
   process.exit(1)
 })

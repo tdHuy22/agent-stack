@@ -50,7 +50,7 @@ class Problem(Exception):
     """Không chạy được; thông điệp viết cho người dùng."""
 
 
-def git(top: Path, *args: str, data: bytes = None) -> bytes:
+def git(top: Path, *args: str, data: bytes | None = None) -> bytes:
     out = subprocess.run(GIT + ["-C", str(top), *args], input=data, capture_output=True)
     if out.returncode != 0:
         raise Problem(f"git {args[0]} lỗi: {out.stderr.decode('utf-8', 'replace').strip()[:300]}")
@@ -202,7 +202,7 @@ def tail(output: str) -> str:
     return "\n".join(output.rstrip().splitlines()[-TAIL_LINES:])
 
 
-def verdict(before: int, after: int, before_out: str = "", home: str = None, probed: bool = True):
+def verdict(before: int, after: int, before_out: str = "", home: str | None = None, probed: bool = True):
     """(mã thoát, kết luận). `home`: lý do môi trường nạp code từ thư mục làm việc thật, nếu có; `probed`: đã dò
     được môi trường của lệnh chưa (lệnh bọc ngoài như `sh -c`, `npm test` thì không)."""
     if after != 0:

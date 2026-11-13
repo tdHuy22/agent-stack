@@ -88,7 +88,7 @@ def copy_plugin(dest):
     return dest
 
 
-def run_script(script: Path, *args: str, stdin: str = "", env: dict = None) -> subprocess.CompletedProcess:
+def run_script(script: Path, *args: str, stdin: str = "", env: dict | None = None) -> subprocess.CompletedProcess:
     import os
     full_env = dict(os.environ)
     if env:

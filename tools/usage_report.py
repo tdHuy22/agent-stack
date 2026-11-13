@@ -1,8 +1,18 @@
 """Đếm mức dùng hạn mức của các phiên Claude Code 14 ngày qua (mọi project), chỉ đếm token, lần gọi, hook, subagent; không in nội dung. Chạy: python3 tools/usage_report.py. Mốc 10/11/2026: 88,6 triệu đơn vị, một phiên dài 47%, subagent review 14%."""
-import json, glob, os, time, collections, statistics
+import collections
+import glob
+import json
+import os
+import statistics
+import time
+
 root = os.path.expanduser("~/.claude/projects")
 cut = time.time() - 14 * 86400
 W = {"in": 1, "cw": 1.25, "cr": 0.1, "out": 5}   # trọng số so với token vào thường, cùng model
+def lines(path):
+    """Đọc từng dòng rồi đóng file (file phiên có thể lớn, không đọc cả một lần)."""
+    with open(path, errors="replace") as fh:
+        yield from fh
 def units(u):
     return (u.get("input_tokens", 0) * W["in"] + u.get("cache_creation_input_tokens", 0) * W["cw"]
             + u.get("cache_read_input_tokens", 0) * W["cr"] + u.get("output_tokens", 0) * W["out"])
@@ -13,7 +23,7 @@ cr_share = collections.Counter()
 for f in glob.glob(f"{root}/*/*.jsonl"):
     if os.path.getmtime(f) < cut: continue
     sessions += 1; first = None; seen_ids = set()
-    for line in open(f, errors="replace"):
+    for line in lines(f):
         try: e = json.loads(line)
         except Exception: continue
         t = e.get("type")
@@ -38,10 +48,11 @@ for f in glob.glob(f"{root}/*/*.jsonl"):
 for meta in glob.glob(f"{root}/*/*/subagents/*.meta.json"):
     j = meta.replace(".meta.json", ".jsonl")
     if not os.path.exists(j) or os.path.getmtime(j) < cut: continue
-    try: typ = json.load(open(meta)).get("agentType", "?")
+    try:
+        with open(meta) as fh: typ = json.load(fh).get("agentType", "?")
     except Exception: typ = "?"
     seen = set(); tot = 0
-    for line in open(j, errors="replace"):
+    for line in lines(j):
         try: e = json.loads(line)
         except Exception: continue
         if e.get("type") == "assistant":

@@ -259,13 +259,13 @@ def heuristic_headings(texts):
     found, last_top = [], 0
     for i, text in enumerate(texts, 1):
         for s in merged_lines(text.splitlines()):
-            if not s or len(s) > 90 or s.endswith((".", ",", ";")) and not _keyword_heading(s):
+            if not s or len(s) > 90 or (s.endswith((".", ",", ";")) and not _keyword_heading(s)):
                 continue
             m = NUM_HEADING.match(s)
             if m and len(m.group(2).split()) <= 10 and not re.match(r"^[\d\W]+$", m.group(2)):
                 top = m.group(1).split(".")[0]
                 top_num = int(top) if top.isdigit() else 100 + ord(top)  # phụ lục A, B… sau số
-                if top_num >= last_top and (top_num - last_top) <= 2 or top_num >= 100:
+                if (top_num >= last_top and (top_num - last_top) <= 2) or top_num >= 100:
                     found.append((i, s))
                     last_top = max(last_top, top_num)
                 continue
@@ -523,8 +523,7 @@ def write_cache(cache, out_dir):
         json.dump(cache, fh, ensure_ascii=False)
     n = cache["page_count"]
     with open(os.path.join(out_dir, "paper.txt"), "w", encoding="utf-8") as fh:
-        for p in cache["pages"]:
-            fh.write(page_header(p, n) + "\n" + p["text"].rstrip() + "\n\n")
+        fh.writelines(page_header(p, n) + "\n" + p["text"].rstrip() + "\n\n" for p in cache["pages"])
     with open(os.path.join(out_dir, "outline.txt"), "w", encoding="utf-8") as fh:
         fh.write(report(cache) + "\n")
 

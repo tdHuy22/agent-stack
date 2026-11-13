@@ -339,7 +339,7 @@ export const register: Register = on => {
     const sessionId = e.session_id
     $.clock.after(0, () => loadRouterHint($, sessionId))
     return result
-  }).catch(($, e, next) => next(e))
+  }).catch((_$, e, next) => next(e))
 
   // Dải trên ô nhập: gợi ý router của tin vừa gửi, nút điền /model hay /effort khi router bảo đổi còn rẻ.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -384,7 +384,7 @@ export const register: Register = on => {
       await $.env.set('AGENT_STACK_UI', '1')
     }
     return { sections: [...composed.sections, UI_SECTION] }
-  }).catch(($, e, next) => next(e))
+  }).catch((_$, e, next) => next(e))
 
   // Toast chỉ báo thêm; không đổi kết quả của hook Python.
   on('classic.Stop', async ($, e, next) => {
@@ -392,20 +392,20 @@ export const register: Register = on => {
     const text = result.block ? stopToast(result.block) : null
     if (text) $.ui.toast(text)
     return result
-  }).catch(($, e, next) => next(e))
+  }).catch((_$, e, next) => next(e))
 
   on('classic.StopFailure', async ($, e, next) => {
     const result = await next(e)
     $.ui.toast('agent-stack: lượt dừng vì lỗi API; lượt cuối đã được ghi lại, gõ "làm tiếp" khi sẵn sàng')
     return result
-  }).catch(($, e, next) => next(e))
+  }).catch((_$, e, next) => next(e))
 
   // Ghi nhớ lỗi thì vẫn để pane đóng như người dùng muốn.
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE && e.origin.kind === 'person') await $.store.set(CLOSED_KEY, true)
     if (e.id === PANE) await markPane($, false)
     return next(e)
-  }).catch(($, e, next) => next(e))
+  }).catch((_$, e, next) => next(e))
 
   on('command.run', { command: RECEIPT_COMMAND }, async $ => {
     try {

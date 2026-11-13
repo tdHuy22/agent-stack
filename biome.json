@@ -1,0 +1,22 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+	"files": {
+		"includes": [
+			"plugin/hooks/**/*.tsx",
+			"plugin/hooks/**/*.ts",
+			"plugin/types/**/*.ts",
+			"plugin/tests/**/*.tsx",
+			"plugin/tests/**/*.ts",
+			"tools/srt/*.mjs"
+		]
+	},
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"style": { "noNonNullAssertion": "off" }
+		}
+	}
+}

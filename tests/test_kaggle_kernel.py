@@ -13,10 +13,8 @@ import stat
 import struct
 import sys
 import threading
-import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from unittest import mock
 
 from tests._util import PLUGIN, TempDirTestCase
@@ -318,7 +316,7 @@ class Connect(KernelBase):
 
     def test_forget_removes_url(self):
         self.connect()
-        code, text = self.main("forget")
+        code, _text = self.main("forget")
         self.assertEqual(code, 0)
         self.assertFalse((self.tmp / "state" / KK.URL_FILE).exists())
 

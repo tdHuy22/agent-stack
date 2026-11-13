@@ -37,16 +37,16 @@ type Setup = {
 function fake(on: On, s: Setup) {
   mock.store(on, s.store)
   const clock = mock.clock(on)
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('turn.complete', () => ({ text: '' }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('session.cwd', () => ({ value: s.cwd ?? CWD }))
   on('session.id', () => ({ value: 'sid-1' }))
-  on('env.get', ($, e) => {
+  on('env.get', (_$, e) => {
     if (s.envFails) throw new Error('hỏng')
     return { value: e.name === 'CLAUDE_CODE_REMOTE' && s.remote ? 'true' : undefined }
   })
-  on('process.run', async ($, e) => {
+  on('process.run', async (_$, e) => {
     if (e.argv[1]?.endsWith('receipt.py')) {
       s.runs.push([...e.argv])
       const stdout = Array.from({ length: 20 }, (_, i) => `- kiểm ${i + 1}: ✓ đạt`).join('\n')
@@ -73,11 +73,11 @@ function fake(on: On, s: Setup) {
       isStderrTruncated: false,
     } }
   })
-  on('fs.stat', ($, e) => {
+  on('fs.stat', (_$, e) => {
     s.stats?.push(e.path)
     return { value: { kind: 'file', size: 10, mtimeMs: s.mtime ?? 1, isLink: false } }
   })
-  on('prompt.fill', ($, e) => {
+  on('prompt.fill', (_$, e) => {
     s.fills.push(e.text)
     return { isFilled: true }
   })
@@ -276,7 +276,7 @@ test('pane đã được vẽ: thêm mục system prompt cố định và đặt
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
   const envs: [string, string | undefined][] = []
-  on('env.set', ($, e) => {
+  on('env.set', (_$, e) => {
     envs.push([e.name, e.value])
     return { value: undefined }
   })
@@ -299,7 +299,7 @@ test('phiên -p (không nơi vẽ, như eval) giữ nguyên system prompt và kh
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
   const envs: string[] = []
-  on('env.set', ($, e) => {
+  on('env.set', (_$, e) => {
     envs.push(e.name)
     return { value: undefined }
   })
@@ -326,7 +326,7 @@ test('sau mỗi lượt: ghi số liệu hạn mức qua ui_status.py, không v�
     },
   }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
-  on('ui.status', ($, e) => {
+  on('ui.status', (_$, e) => {
     statuses.push(e.text)
     return { value: undefined }
   })
@@ -355,7 +355,7 @@ test('pane chờ không vẽ được (terminal hẹp): giữ luật cũ, không
   const s: Setup = { runs: [], fills: [], unplaced: true }
   fake(on, s)
   const envs: string[] = []
-  on('env.set', ($, e) => {
+  on('env.set', (_$, e) => {
     envs.push(e.name)
     return { value: undefined }
   })
@@ -397,7 +397,7 @@ test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, k
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
   const toasts: string[] = []
-  on('ui.toast', ($, e) => {
+  on('ui.toast', (_$, e) => {
     toasts.push(e.text)
     return { value: undefined }
   })
@@ -430,7 +430,7 @@ test('trước hook UserPromptSubmit của Python: ghi model hiện tại qua ui
   fake(on, s)
   on('session.model', () => ({ value: 'claude-sonnet-5-5' }))
   const seen: string[] = []
-  on('classic.UserPromptSubmit', ($, e) => {
+  on('classic.UserPromptSubmit', (_$, e) => {
     seen.push(`${e.session_id}|${e.prompt}`)
     return {}
   })
@@ -463,7 +463,7 @@ test('dải trên ô nhập: gợi ý router của tin vừa gửi, nút chỉ �
   let draft = ''
   on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
   const toasts: string[] = []
-  on('ui.toast', ($, e) => {
+  on('ui.toast', (_$, e) => {
     toasts.push(e.text)
     return { value: undefined }
   })

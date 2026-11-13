@@ -18,6 +18,8 @@ Lúc bắt đầu lượt và dấu §0 lúc đó do hook UserPromptSubmit ghi (
 (stop_hook_active) chỉ còn xét bằng chứng của done-gate, và giữ câu trả lời của lần đầu thay cho câu báo "đã cập
 nhật §0".
 """
+from __future__ import annotations
+
 import os
 import re
 import sys
@@ -204,7 +206,7 @@ def foreign_filters(root: Path) -> bool:
     return A.local_clean_filters(root)
 
 
-def gate_reason(result: dict, plan_rel: str, base: str = None) -> str:
+def gate_reason(result: dict, plan_rel: str, base: str | None = None) -> str:
     """`base`: HEAD lúc bắt đầu lượt, khi lượt đã commit (diff so với HEAD hiện tại không còn phần đã commit)."""
     level = {"vua": "vừa", "cao": "cao"}[result["level"]]
     why = "; ".join(result["reasons"][:3])

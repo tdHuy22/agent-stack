@@ -184,7 +184,7 @@ FIXTURE_DIR_RE = re.compile(r"(^|/)(tests?|spec|__tests__|samples?|fixtures?|tes
                             r"templates?)/")
 
 
-def doc_only(path: str, top: Path = None) -> bool:
+def doc_only(path: str, top: Path | None = None) -> bool:
     """File chỉ là tài liệu: sửa nó sau bước kiểm chứng không làm cũ biên nhận (receipt.py, hook Stop). `top`: gốc
     repo, để đọc dấu trang cho người đọc của file HTML nằm ngoài .agent/, docs/ (như HUONG-DAN.html ở gốc repo)."""
     if Path(path).suffix.lower() not in RECEIPT_DOC_EXT or FIXTURE_DIR_RE.search(path.lower()):
@@ -211,7 +211,7 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
     đã qua chốt việc, `text` chỉ còn dòng mới: bỏ luật theo đường dẫn cho chúng (hook Stop dùng).
     writer, rereview, limits: để chọn reviewer (xem review_plan)."""
     result = {"level": "thap", "score": 0, "files": len(changes), "added": 0, "deleted": 0,
-              "by_kind": {k: 0 for k in KIND_NAMES}, "reasons": [], "hotspots": [], "empty": not changes}
+              "by_kind": dict.fromkeys(KIND_NAMES, 0), "reasons": [], "hotspots": [], "empty": not changes}
     if not changes:
         result.update(review_plan("thap", writer, rereview=rereview, limits=limits))
         return result
@@ -303,7 +303,7 @@ def weakening(changes: list, hit) -> None:
         added = assert_lines(c.get("text") or "")
         gone = [strict for _, strict in assert_lines(c.get("removed") or "")] + list(c.get("vanished") or [])
         counts = (len(added), sum(s for _, s in added), len(gone), sum(1 for s in gone if s))
-        totals = [a + b for a, b in zip(totals, counts)]
+        totals = [a + b for a, b in zip(totals, counts, strict=False)]
         if counts[3] > counts[1]:
             loosened.append(c["path"])
         elif counts[2] > counts[0]:
@@ -524,7 +524,7 @@ def checked(root: Path, *args: str) -> str:
     return out.stdout
 
 
-def collect(root, base: str = None) -> list:
+def collect(root, base: str | None = None) -> list:
     """Đọc thay đổi so với base (mặc định HEAD), kể cả file chưa được git theo dõi."""
     root = Path(root)
     if git(root, "rev-parse", "--is-inside-work-tree").returncode != 0:
@@ -630,7 +630,7 @@ def render(r: dict, base: str = "HEAD") -> str:
     return "\n".join(lines)
 
 
-def fresh_changes(changes, seen: dict, removed_seen: dict = None, asserts_seen: dict = None):
+def fresh_changes(changes, seen: dict, removed_seen: dict | None = None, asserts_seen: dict | None = None):
     """Bỏ các dòng đã qua lần chấm trước (dấu băm trong `seen`, theo file). File đã có dấu chỉ giữ dòng mới và
     nằm trong tập trả về thứ hai, để `assess` không tính lại luật theo đường dẫn; file chưa có dấu giữ nguyên.
     `removed_seen`: dấu dòng bị xóa lúc chấm trước; dấu cũ không có mục này thì coi mọi dòng bị xóa là đã chấm.

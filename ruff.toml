@@ -1,0 +1,21 @@
+# Cấu hình ruff cho code của chính agent-stack (tests/test_static.py chạy). Bộ luật rộng, chọn 13/11/2026:
+# lỗi thật (F, E9, B), hiện đại hóa theo 3.11 (UP), gọn (SIM, C4, PIE, FURB, PERF), RUF, thứ tự import (I).
+# Bỏ các luật phong cách mà code cố ý viết khác: hook bắt mọi lỗi (BLE, S110), subprocess.run không check
+# (lệnh tự xem returncode), re.I thay re.IGNORECASE (FURB167), noqa ghi chú cho công cụ khác (RUF100),
+# chữ tiếng Việt có dấu (RUF001-003), vòng for gom list hay nối list bằng + (PERF401, PERF403, RUF005: viết lại
+# vài chục vòng lặp chỉ đổi kiểu viết), try trong vòng lặp (PERF203: chỉ báo khi target dưới 3.11).
+target-version = "py311"
+# Hook, lib và skill trên claude.ai phải chạy cả bằng Python 3.9 (container eval Harbor, MIN_PYTHON trong
+# evals/harbor/harbor_bench.py; sandbox claude.ai): ruff không được đề xuất cú pháp, API mới hơn ở đó.
+per-file-target-version = { "plugin/hooks/**" = "py39", "plugin/lib/**" = "py39", "claude-ai-skills/**" = "py39" }
+line-length = 120
+# evals/tasks, evals/vi-bench là đề bài giao cho model (có thể cố ý chứa lỗi), không phải code của agent-stack.
+extend-exclude = [".venv", ".venv-*", ".cache", ".tmp", "state", "vendor", "patches", "evals/tasks", "evals/vi-bench"]
+
+[lint]
+select = ["E9", "F", "B", "UP", "SIM", "C4", "PIE", "FURB", "PERF", "RUF", "I"]
+ignore = ["FURB167", "RUF001", "RUF002", "RUF003", "RUF100", "SIM105", "SIM108", "E501", "PERF401", "PERF403", "RUF005", "PERF203"]
+
+[lint.per-file-ignores]
+# Hằng dùng chung của lớp test (dict, list mẫu) không bị sửa giữa các test.
+"tests/**" = ["RUF012"]

@@ -168,7 +168,7 @@ def run_kaggle(args: list, timeout: int = CALL_TIMEOUT, auth_check: bool = True)
         proc = subprocess.run([kaggle_bin(), *flags, *args], capture_output=True, text=True, timeout=timeout,
                               stdin=subprocess.DEVNULL, env=kaggle_env())
     except subprocess.TimeoutExpired:
-        raise KaggleError(f"`kaggle {' '.join(args[:2])}` quá {timeout} giây")
+        raise KaggleError(f"`kaggle {' '.join(args[:2])}` quá {timeout} giây") from None
     text = redact((proc.stdout or "") + (proc.stderr or ""))
     if auth_check and proc.returncode != 0 and ("Authentication required" in text or "401 Client Error" in text):
         raise NotReady(login_hint())
@@ -336,7 +336,7 @@ def gpu_quota() -> dict | None:
         return None
     for row in rows if isinstance(rows, list) else []:
         if isinstance(row, dict) and row.get("resource") == "GPU":
-            def hours(key):
+            def hours(key, row=row):
                 try:
                     return float(str(row.get(key, "")).rstrip("h"))
                 except ValueError:
@@ -496,7 +496,7 @@ def lint_kernel(folder: Path) -> tuple:
                 errors.append("code_file không phải notebook JSON hợp lệ")
         for label, text in parts:
             # metadata (uuid của Kaggle, trạng thái widget) quét như dữ liệu: chuỗi hex dài ở đó không phải khóa
-            is_code = not label or "(" not in label and label.startswith("cell")
+            is_code = not label or ("(" not in label and label.startswith("cell"))
             hits = secret_lines(text.splitlines(), tokens, code=is_code, allow_mark=is_code)
             if hits:
                 where = f"{label}, dòng" if label else "dòng"
@@ -604,7 +604,7 @@ def wait(kernel: str, interval: int, max_wait: int) -> str:
     last, misses = None, 0
     while True:
         try:
-            code, text = run_kaggle(["kernels", "status", kernel])
+            _code, text = run_kaggle(["kernels", "status", kernel])
             status, failure = parse_status(text)
         except KaggleError as exc:  # lệnh kaggle quá thời gian
             status, failure, text = None, "", str(exc)
@@ -776,7 +776,7 @@ def cmd_push(args) -> int:
     if not 60 <= timeout <= MAX_TIMEOUT:
         raise Refused(f"--timeout phải từ 60 tới {MAX_TIMEOUT} giây")
     accelerator = args.accelerator or meta.get("machine_shape") or ""
-    uses_gpu = bool(accelerator) and not accelerator.startswith("Tpu") or truthy(meta.get("enable_gpu")) is True
+    uses_gpu = (bool(accelerator) and not accelerator.startswith("Tpu")) or truthy(meta.get("enable_gpu")) is True
     if uses_gpu:
         quota = gpu_quota()
         remaining = quota and quota["remaining"]

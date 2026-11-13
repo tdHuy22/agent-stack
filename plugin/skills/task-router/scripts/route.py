@@ -133,7 +133,7 @@ def available_skills() -> dict:
     """{tên skill: trạng thái}: "có" (của agent-stack hoặc có sẵn trong Claude Code), "đã duyệt" (cài bằng
     install.sh), "khi cần" (đã duyệt nhưng scope on-demand: không cài mặc định), "chờ duyệt" (đã kiểm duyệt,
     chờ người dùng duyệt)."""
-    status = {name: "có" for name in BUILTIN_SKILLS}
+    status = dict.fromkeys(BUILTIN_SKILLS, "có")
     home = A.home_dir()
     if not home:
         return status
@@ -396,7 +396,7 @@ def effort_keeps_cache(model: str) -> bool:
     return any((model or "").startswith(m) for m in (rules().get("switch") or {}).get("effort_keeps_cache") or [])
 
 
-def switch_advice(target: str, usage: dict, now: float = None) -> dict:
+def switch_advice(target: str, usage: dict, now: float | None = None) -> dict:
     """Đổi sang model họ `target` lúc này có rẻ không, theo usage của phiên (A.session_usage). Rẻ khi chưa có lần gọi
     nào (đầu phiên, sau /clear), context dưới free_tokens, hay đã nghỉ quá TTL (cache hết hạn). `cost` là giá niêm yết
     (USD) để ghi lại cả context vào cache của model mới. Trả {cheap, why, cost, context, idle, ttl}."""

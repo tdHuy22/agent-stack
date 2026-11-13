@@ -59,7 +59,7 @@ class ReviewerAgent(unittest.TestCase):
         tools = self.names(self.fm["tools"])
         self.assertIn("Read", tools)
         self.assertFalse(tools & self.WRITE_TOOLS, "reviewer không được có công cụ ghi")
-        self.assertTrue(self.WRITE_TOOLS <= self.names(self.fm["disallowedTools"]), "phải cấm tường minh công cụ ghi")
+        self.assertTrue(self.names(self.fm["disallowedTools"]) >= self.WRITE_TOOLS, "phải cấm tường minh công cụ ghi")
 
     def test_has_refutation_step_and_confidence_threshold(self):
         # chỉ kiểm có ý, không ghim câu chữ: không phân biệt hoa thường, nhận vài cách viết khác nhau

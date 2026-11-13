@@ -6,6 +6,8 @@ dần. Hook SessionStart gọi `maybe_start`: trên cloud, tối đa một lần
 này với `--run` để fetch nhánh mà setup script đã tải rồi `reset --keep` sang commit mới. Hook không chờ;
 bản mới có tác dụng từ lần gọi hook sau, skill mới từ phiên sau. Threat model: TM-43 đến TM-46.
 """
+from __future__ import annotations
+
 import os
 import re
 import subprocess
@@ -39,7 +41,7 @@ def same_repo(a: str, b: str) -> bool:
     """So URL repo, bỏ `/` và `.git` ở cuối: git ghi URL vào FETCH_HEAD không kèm `.git`."""
     def norm(url):
         url = url.strip().rstrip("/")
-        return url[:-4] if url.endswith(".git") else url
+        return url.removesuffix(".git")
     return bool(a.strip()) and norm(a) == norm(b)
 
 
@@ -48,7 +50,7 @@ def _spawn(cmd: list) -> None:
                      start_new_session=True, close_fds=True)
 
 
-def maybe_start(home, now: float = None, env=None, platform=None, spawn=None) -> bool:
+def maybe_start(home, now: float | None = None, env=None, platform=None, spawn=None) -> bool:
     """Khởi lần kéo nền nếu đang ở cloud, có bản clone git và lần trước đã quá INTERVAL. Trả về ngay."""
     env = os.environ if env is None else env
     if env.get(NO_BACKGROUND_ENV) or not on_cloud(env, platform):
@@ -100,7 +102,7 @@ def is_cloud_clone(home: Path) -> bool:
     return _git(home, "symbolic-ref", "-q", "HEAD").returncode != 0
 
 
-def clear_stale_git_locks(home: Path, now: float = None) -> None:
+def clear_stale_git_locks(home: Path, now: float | None = None) -> None:
     """Khoá git do lần chạy trước bị giết vì quá giờ để lại; không gỡ thì mọi lần sau đều lỗi."""
     now = time.time() if now is None else now
     for name in GIT_LOCKS:

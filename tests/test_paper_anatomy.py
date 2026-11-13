@@ -5,10 +5,13 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 import unicodedata
 import unittest
 from argparse import Namespace
+from pathlib import Path
 from unittest import mock
 
 from tests._util import REPO, TempDirTestCase, run_script
@@ -50,6 +53,15 @@ def status_of(anchor):
     status, reasons, _ = verify_anchors.check_anchor(verify_anchors.Paper(CACHE), anchor)
     return status, " | ".join(reasons)
 
+
+
+def scratch_dir(case) -> Path:
+    """Thư mục tạm riêng cho một test trong .tmp/, tự xóa khi test xong (trước đây dùng chung .tmp/test-paper-anatomy
+    và để lại sau khi chạy)."""
+    (REPO / ".tmp").mkdir(exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix="test-paper-anatomy-", dir=REPO / ".tmp"))
+    case.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+    return tmp
 
 class PrintedLabels(unittest.TestCase):
     def test_offset_consensus_beats_stray_numbers(self):
@@ -149,8 +161,7 @@ class VerifyAnchors(unittest.TestCase):
         self.assertEqual(status, "OK", reasons)
 
     def test_cli_exit_codes(self):
-        tmp = REPO / ".tmp" / "test-paper-anatomy"
-        tmp.mkdir(parents=True, exist_ok=True)
+        tmp = scratch_dir(self)
         (tmp / "pages.json").write_text(json.dumps(CACHE), encoding="utf-8")
         (tmp / "ok.md").write_text("Ý chính 【§1 · tr.101 · \"separate instructions from data\"】\n", encoding="utf-8")
         (tmp / "bad.md").write_text("Sai 【§1 · tr.999】\n", encoding="utf-8")
@@ -220,8 +231,7 @@ class MisplacedAnchors(unittest.TestCase):
                 self.assertEqual(self.row(text)["status"], "OK", self.row(text)["reasons"])
 
     def test_warnings_do_not_change_exit_code(self):
-        tmp = REPO / ".tmp" / "test-paper-anatomy"
-        tmp.mkdir(parents=True, exist_ok=True)
+        tmp = scratch_dir(self)
         (tmp / "pages-objects.json").write_text(json.dumps(self.CACHE), encoding="utf-8")
         (tmp / "misplaced.md").write_text("## 0. A\n## 2. B\nCòn 1,2% 【§1 · tr.101】 và 【§4 · tr.103 · Hình 2】\n",
                                          encoding="utf-8")
@@ -252,7 +262,9 @@ class SkillPackage(unittest.TestCase):
         sys.path.insert(0, str(REPO / "claude-ai-skills"))
         import package
         self.assertEqual(package.check(REPO / "claude-ai-skills" / "paper-anatomy"), [])
-        with zipfile.ZipFile(package.package("paper-anatomy")) as zf:
+        # Đóng gói vào thư mục tạm của test, không để lại .tmp/dist sau khi chạy bộ test.
+        with mock.patch.object(package, "DIST", scratch_dir(self)), \
+                zipfile.ZipFile(package.package("paper-anatomy")) as zf:
             names = set(zf.namelist())
         self.assertIn("paper-anatomy/SKILL.md", names)
         self.assertIn("paper-anatomy/scripts/verify_anchors.py", names)
@@ -411,9 +423,9 @@ class BlindGrading(TempDirTestCase):
         win = "A" if mapping["A"] == "new" else "B"
         lose = "B" if win == "A" else "A"
         grading = {"answers": {
-            win: {"scores": {k: 5 for k in self.blind.SCORES}, "facts": [{"status": "đủ"}],
+            win: {"scores": dict.fromkeys(self.blind.SCORES, 5), "facts": [{"status": "đủ"}],
                   "spot_checks": [{"verdict": "đúng"}]},
-            lose: {"scores": {k: 3 for k in self.blind.SCORES}, "facts": [{"status": "thiếu"}],
+            lose: {"scores": dict.fromkeys(self.blind.SCORES, 3), "facts": [{"status": "thiếu"}],
                    "spot_checks": [{"verdict": "sai"}]}},
             "preference": win, "margin": "ro", "reason": "dòng một\n  dòng hai"}
         (self.round_dir / "grading.json").write_text(json.dumps(grading), encoding="utf-8")
@@ -444,7 +456,7 @@ class BlindGrading(TempDirTestCase):
         (run / "outputs" / "answer.md").write_text("Failed to authenticate", encoding="utf-8")
         for bad in ({"is_error": True}, {}, "hỏng{"):
             (run / "timing.json").write_text(bad if isinstance(bad, str) else json.dumps(bad), encoding="utf-8")
-            code, out = self.prepare()
+            _code, out = self.prepare()
             self.assertIn("thiếu bài làm", out)
             self.assertFalse(self.round_dir.exists())
 

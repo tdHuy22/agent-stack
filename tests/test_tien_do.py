@@ -693,7 +693,7 @@ class AllModeChanges(SnapshotCase):
         return ws, a, b
 
     def test_each_project_is_compared_with_its_own_snapshot(self):
-        ws, a, b = self.workspace()
+        ws, a, _b = self.workspace()
         first = self.run_all(ws)
         for name in ("| a |", "| b |", "| c |"):
             self.assertIn(name, first)
@@ -713,7 +713,7 @@ class AllModeChanges(SnapshotCase):
         self.assertIn("Đổi từ lần trước: không project nào đổi", third)
 
     def test_last_time_of_each_project(self):
-        ws, a, b = self.workspace()
+        ws, a, _b = self.workspace()
         self.run_all(ws)
         self.age_snapshot(a, 5)
         self.edit(a, "- [ ] Đo hiệu năng cơ sở", "- [x] Đo hiệu năng cơ sở")
@@ -721,7 +721,7 @@ class AllModeChanges(SnapshotCase):
         self.assertIn("5 giờ trước", line)
 
     def test_no_snapshot_flag(self):
-        ws, a, b = self.workspace()
+        ws, a, _b = self.workspace()
         self.run_all(ws, "--no-snapshot")
         self.assertEqual(self.snapshot_files(), [])
         self.run_all(ws)
@@ -732,7 +732,7 @@ class AllModeChanges(SnapshotCase):
         self.assertEqual({p.name: p.read_bytes() for p in self.snapshot_files()}, before)
 
     def test_json_rows_carry_changes_per_project(self):
-        ws, a, b = self.workspace()
+        ws, a, _b = self.workspace()
         rows = {r["project"]: r for r in json.loads(self.run_all(ws, "--json"))}
         self.assertTrue(all(r["changes"] is None for r in rows.values()))
         self.edit(a, "- [ ] Đo hiệu năng cơ sở", "- [x] Đo hiệu năng cơ sở")

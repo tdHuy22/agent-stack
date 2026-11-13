@@ -18,7 +18,7 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Giá niêm yết API, USD trên 1 triệu token: (input, output, cache_read).
@@ -56,8 +56,8 @@ def price_for(model: str):
 
 def parse_ts(value: str):
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (AttributeError, ValueError):
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):  # TypeError: timestamp không phải chuỗi (null, số)
         return None
 
 
@@ -213,7 +213,7 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true", help="xuất JSON thay cho Markdown")
     args = ap.parse_args(argv)
 
-    until = parse_ts(args.now) if args.now else datetime.now(timezone.utc)
+    until = parse_ts(args.now) if args.now else datetime.now(UTC)
     if until is None:
         ap.error("--now không đúng định dạng ISO 8601")
     since = until - timedelta(days=args.days)

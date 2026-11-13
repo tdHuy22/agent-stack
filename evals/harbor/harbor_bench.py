@@ -307,7 +307,7 @@ def _toml_findings(data, path="") -> list:
     return out
 
 
-def vet_task(task_dir: Path, allow: dict = None) -> list:
+def vet_task(task_dir: Path, allow: dict | None = None) -> list:
     """Danh sách lý do từ chối một việc (rỗng là sạch): file compose chưa duyệt, Dockerfile, task.toml, symlink ra ngoài."""
     allow = load_allow() if allow is None else allow
     problems = []
@@ -350,7 +350,7 @@ def vet_task(task_dir: Path, allow: dict = None) -> list:
     return problems
 
 
-def vet_names(root: Path, names, allow: dict = None) -> dict:
+def vet_names(root: Path, names, allow: dict | None = None) -> dict:
     """{tên việc: [lý do]} cho các việc vi phạm; names=None là cả bộ."""
     allow = load_allow() if allow is None else allow
     all_names = list_tasks(root)
@@ -667,6 +667,7 @@ def cmd_validate_config(args) -> int:
     try:
         from importlib import import_module
         from importlib.metadata import version as _v
+
         from harbor.models.job.config import JobConfig
     except ImportError as exc:
         print(f"✗ chưa cài harbor ở python này ({exc})", file=sys.stderr)
@@ -702,7 +703,7 @@ def task_month_info(task_dir: Path):
         return None
 
 
-def pick_swerebench(root: Path, n: int = 25, seed: int = SEED, month: str = None) -> tuple:
+def pick_swerebench(root: Path, n: int = 25, seed: int = SEED, month: str | None = None) -> tuple:
     """Chọn n việc của tháng mới nhất có ít nhất n việc sạch. Trả (danh sách tên, tháng, đếm theo tháng)."""
     allow = load_allow()
     by_month = {}
@@ -946,7 +947,7 @@ def cmd_resume_exec(args) -> int:
             print(f"✗ không thấy {args.env_file}", file=sys.stderr)
             return 1
         try:
-            from dotenv import load_dotenv      # phụ thuộc của Harbor, có trong .venv trên TUF
+            from dotenv import load_dotenv  # phụ thuộc của Harbor, có trong .venv trên TUF
         except ImportError as exc:
             print(f"✗ chưa có python-dotenv ở python này ({exc})", file=sys.stderr)
             return 3
@@ -960,8 +961,8 @@ def cmd_resume_exec(args) -> int:
 def _seconds(span):
     from datetime import datetime
     try:
-        a = datetime.fromisoformat(span["started_at"].replace("Z", "+00:00"))
-        b = datetime.fromisoformat(span["finished_at"].replace("Z", "+00:00"))
+        a = datetime.fromisoformat(span["started_at"])
+        b = datetime.fromisoformat(span["finished_at"])
         return (b - a).total_seconds()
     except (TypeError, KeyError, ValueError, AttributeError):
         return None
@@ -1181,7 +1182,7 @@ def _summary(values):
     return {"n": len(vals), "median": statistics.median(vals), "total": sum(vals)}
 
 
-def compare(trials: list, oracle: list = None, arms=None) -> dict:
+def compare(trials: list, oracle: list | None = None, arms=None) -> dict:
     """So ghép cặp theo việc trên tập việc chung của mọi bản có mặt. Một lượt không có điểm (môi trường hỏng) hay hỏng vì
     hạ tầng, ở bất kỳ bản nào và dù còn lượt khác của việc đó, loại cả việc khỏi mọi phép so. Việc mà bản cần hook (agent-stack, noagents) chạy trong container không có python3 từ 3.9 cũng bị loại,
     vì hook không chạy thì bản đó không còn là bản đã định nghĩa. Nhiều lượt mỗi việc thì so tỉ lệ đạt theo việc."""
@@ -1531,7 +1532,7 @@ def _level(raw):
     if isinstance(raw, str):
         low = raw.strip().lower()
         for lv in LEVELS:
-            if low == lv or low.startswith(lv + " ") or low.startswith(lv + "-") or low.startswith(lv + "_"):
+            if low == lv or low.startswith((lv + " ", lv + "-", lv + "_")):
                 return lv
     return None
 

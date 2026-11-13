@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-import stat
 import subprocess
 import sys
 import time
@@ -153,9 +152,8 @@ class FileListing(TempDirTestCase):
         tree.mkdir()
         (tree / "x.bin").write_bytes(b"x" * 2048)
         with mock.patch.object(dynamic, "MAX_TREE_BYTES", 1024), \
-                mock.patch.object(dynamic.shutil, "which", return_value="/usr/bin/node"):
-            with self.assertRaises(ValueError):
-                dynamic.run(home, str(tree), ["true"])
+                mock.patch.object(dynamic.shutil, "which", return_value="/usr/bin/node"), self.assertRaises(ValueError):
+            dynamic.run(home, str(tree), ["true"])
 
 
 class Output(unittest.TestCase):
@@ -187,7 +185,7 @@ class SourceTree(TempDirTestCase):
         self.assertEqual(dynamic.source_tree(home, str(tree)), tree.resolve())
 
     def test_unknown_key_and_missing_cache_raise(self):
-        home, tree = self.make_home()
+        home, _tree = self.make_home()
         with self.assertRaises(ValueError):
             dynamic.source_tree(home, "khong/co")
         import shutil
@@ -635,7 +633,7 @@ class Hardening(TempDirTestCase):
         if not py:
             self.skipTest("không có python3 trên PATH")
         self.assertNotIn("/shims/", py, "shim của pyenv không chạy được trong sandbox")
-        argv, extra, reads = dynamic.resolve_command(["python3", "a.py"])
+        argv, _extra, reads = dynamic.resolve_command(["python3", "a.py"])
         self.assertEqual(argv, [py, "a.py"])
         for item in dynamic.interpreter_reads(Path(py)):
             self.assertIn(item, reads, "cho đọc phần cần của Python người dùng (pyenv: bin và lib)")

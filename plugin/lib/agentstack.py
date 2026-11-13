@@ -1024,7 +1024,7 @@ _CONSENT_TAIL = {"đi", "luôn", "lên", "nhé", "nha", "nhá", "giúp", "giùm"
                  "remote", "lại", "--hard", "hard", "về", "to", "the", "thay", "đổi", "changes", "git", "push", "force",
                  "--force", "-f", "ghi", "đè", "all", "hết", "cả", "and", "và", "thư", "mục", "folder", "file", "files",
                  "dir", "directory", "head", "này", "đó", "đấy", "this", "that", "--amend", "-i", "-fd", "-fdx",
-                 "--force-with-lease", "nữa", "rồi", "push", "rebase", "reset", "amend", "clean", "commit"}
+                 "--force-with-lease", "nữa", "rồi", "rebase", "reset", "amend", "clean"}
 _PUSH_TAIL = {"github", "gitlab", "repo"}  # chỉ cho push ("push claude-remote lên github")
 _CONSENT_REF = re.compile(r"(?:origin|upstream)/[a-z0-9_./-]+|head~?\d*|head\^+")
 _CONSENT_STRIP = "\"'`“”‘’()[]{}<>*_:"
@@ -1877,7 +1877,7 @@ def _summary_of(rec: dict) -> dict:
 
 def record_turn(root: Path, session_id, *, state: str, request: str, answer: str = "", next_step=None,
                 changed=(), dirty_count=None, branch=None, plan_status: str = "", note: str = "",
-                ts: float = None):
+                ts: float | None = None):
     """Ghi lượt cuối của thư mục (state: running lúc bắt đầu lượt, done khi xong, failed khi lỗi API kết thúc lượt).
     Giữ lại lượt xong trước đó của cùng phiên khi lượt mới đang chạy hay lỗi, và tối đa LAST_TURN_OTHERS phiên khác
     trong 24 giờ. Mọi chữ được che khóa; file quyền 0600, ký HMAC. Trả về đường dẫn đã ghi."""
@@ -1974,7 +1974,7 @@ def _ensure_agent_gitignore(agent_dir: Path) -> None:
 
 
 def write_last_turn(root: Path, session_id, request, answer, next_step, changed, dirty_count, branch,
-                    plan_status: str, ts: float = None) -> Path:
+                    plan_status: str, ts: float | None = None) -> Path:
     """Ghi lượt đã xong (giữ chữ ký hàm cũ)."""
     return record_turn(root, session_id, state="done", request=request, answer=answer, next_step=next_step,
                        changed=changed, dirty_count=dirty_count, branch=branch, plan_status=plan_status, ts=ts)

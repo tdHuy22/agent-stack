@@ -183,7 +183,7 @@ def unittest_missing(root: Path, args: list) -> list:
         if skip:
             skip = False
             continue
-        if arg in ("-k",):
+        if arg == "-k":
             skip = True  # giá trị của -k là mẫu tên test, không phải module
             continue
         if arg.startswith("-") or not MODULE_RE.match(arg):

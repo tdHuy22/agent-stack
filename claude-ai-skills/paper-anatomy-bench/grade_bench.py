@@ -27,7 +27,6 @@ BENCH = REPO / ".tmp" / "paper-anatomy-bench"
 sys.path.insert(0, str(REPO / "claude-ai-skills" / "paper-anatomy" / "scripts"))
 import verify_anchors  # noqa: E402
 
-
 READ_PREFIX = re.compile(r"^\s*\d+[\t→]", re.MULTILINE)  # số dòng mà công cụ Read chèn vào đầu mỗi dòng
 
 

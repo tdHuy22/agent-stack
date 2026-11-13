@@ -26,10 +26,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from redflags import HIDDEN_CHARS, RULES, hidden_chars, scan_text
+from redflags import HIDDEN_CHARS, hidden_chars, scan_text
 
 PROTOCOL = "2025-06-18"
 TIMEOUT = 15
@@ -108,7 +108,7 @@ def build_opener():
     return urllib.request.build_opener(_NoRedirect())
 
 
-def read_limited(resp, limit: int = MAX_BYTES, deadline: float = None, until_id=None) -> bytes:
+def read_limited(resp, limit: int = MAX_BYTES, deadline: float | None = None, until_id=None) -> bytes:
     """Đọc phản hồi tối đa `limit` byte và không quá `deadline`; luồng SSE thì dừng khi đã có phản hồi mang `until_id`."""
     sse = "text/event-stream" in (resp.headers.get("Content-Type") or "")
     chunks, size = [], 0
@@ -254,7 +254,7 @@ def _session(url: str, keep_open: bool = False):
     snap = {"url": url, "protocol": protocol, "capabilities": sorted(str(k) for k in caps),
             "server": {k: info.get(k) for k in ("name", "title", "version")},
             "instructions": init.get("instructions") if isinstance(init.get("instructions"), str) else None,
-            "tools": tools, "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            "tools": tools, "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
     return (snap, (opener, session, protocol, deadline)) if keep_open else snap
 
 
@@ -583,7 +583,7 @@ def scan_cmd(args, home: Path, url: str, deps) -> int:
     return {"REVIEW": 1, "FAIL": 2}[result]
 
 
-def claude_json_path(home: Path = None) -> Path:
+def claude_json_path(home: Path | None = None) -> Path:
     """Nơi Claude Code giữ MCP scope user: $CLAUDE_CONFIG_DIR/.claude.json nếu đặt biến đó, không thì ~/.claude.json."""
     configured = os.environ.get("CLAUDE_CONFIG_DIR")
     if configured:
@@ -634,7 +634,7 @@ def _write_state(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
-def save_check(home: Path, claude_json: Path, path: Path, fetch=None, now: float = None) -> list:
+def save_check(home: Path, claude_json: Path, path: Path, fetch=None, now: float | None = None) -> list:
     """Chạy drift_rows (có mạng) rồi lưu kết quả cho hook SessionStart đọc ở phiên sau."""
     rows = drift_rows(home, claude_json, fetch or fetch_snapshot)
     _write_state(path, {"checked_at": time.time() if now is None else now, "rows": rows})
@@ -688,7 +688,7 @@ def _spawn(cmd: list, env: dict) -> None:
                      start_new_session=True, close_fds=True)
 
 
-def maybe_start_background(home: Path, claude_json: Path, path: Path, now: float = None, spawn=None) -> bool:
+def maybe_start_background(home: Path, claude_json: Path, path: Path, now: float | None = None, spawn=None) -> bool:
     """Khởi lần kiểm lệch nền nếu có MCP đã duyệt đang cài và lần kiểm trước đã quá CHECK_INTERVAL. Trả về ngay:
     tiến trình con tách phiên, không chờ, nên hook không chậm. Lượt kiểm chỉ gửi initialize và tools/list tới
     đúng các server đã duyệt, không gửi dữ liệu của bạn."""

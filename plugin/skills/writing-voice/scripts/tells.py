@@ -148,14 +148,8 @@ FIRST_PERSON = {
 }
 VI_LETTERS = re.compile("[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]", re.IGNORECASE)
 SEGMENT_SPLIT = re.compile(r"[.,;:!?()\[\]{}\"“”‘’«»…\n—–/]+")
-VI_STOP = set("và của là có được những các một cho với trong này đó không người khi để thì mà cũng đã sẽ rất từ như về ra "
-              "vào lại nên nhưng hay hoặc bạn mình tôi em anh chị nó họ ta chúng ở tại theo đến tới đi làm bị do vì nếu thế "
-              "nào gì ai đây kia ấy còn chỉ đều rồi nữa vẫn đang mới cùng sau trước trên dưới giữa qua bằng hơn nhất lúc "
-              "nhiều ít mỗi mọi cả phải thể việc sự".split())
-EN_STOP = set("the and for that this with from have were will would there their they them what when which while into also "
-              "been being more most some such than then only very just like your about after before other these those "
-              "because could should does done each many much over under here where both same even make made said says "
-              "can our are was not but you all any how why who its it's".split())
+VI_STOP = {"và", "của", "là", "có", "được", "những", "các", "một", "cho", "với", "trong", "này", "đó", "không", "người", "khi", "để", "thì", "mà", "cũng", "đã", "sẽ", "rất", "từ", "như", "về", "ra", "vào", "lại", "nên", "nhưng", "hay", "hoặc", "bạn", "mình", "tôi", "em", "anh", "chị", "nó", "họ", "ta", "chúng", "ở", "tại", "theo", "đến", "tới", "đi", "làm", "bị", "do", "vì", "nếu", "thế", "nào", "gì", "ai", "đây", "kia", "ấy", "còn", "chỉ", "đều", "rồi", "nữa", "vẫn", "đang", "mới", "cùng", "sau", "trước", "trên", "dưới", "giữa", "qua", "bằng", "hơn", "nhất", "lúc", "nhiều", "ít", "mỗi", "mọi", "cả", "phải", "thể", "việc", "sự"}
+EN_STOP = {"the", "and", "for", "that", "this", "with", "from", "have", "were", "will", "would", "there", "their", "they", "them", "what", "when", "which", "while", "into", "also", "been", "being", "more", "most", "some", "such", "than", "then", "only", "very", "just", "like", "your", "about", "after", "before", "other", "these", "those", "because", "could", "should", "does", "done", "each", "many", "much", "over", "under", "here", "where", "both", "same", "even", "make", "made", "said", "says", "can", "our", "are", "was", "not", "but", "you", "all", "any", "how", "why", "who", "its", "it's"}
 
 
 def words(text: str) -> int:
@@ -277,7 +271,7 @@ def strip_frontmatter(text: str) -> str:
     return FRONTMATTER.sub("", text, count=1)
 
 
-def load_samples(path: Path, exclude: Path = None, vietnamese: bool = None, skip: Path = None) -> tuple:
+def load_samples(path: Path, exclude: Path | None = None, vietnamese: bool | None = None, skip: Path | None = None) -> tuple:
     """(văn bản gộp, số bài). Bỏ README, chính file đang được chấm và cây thư mục `skip`.
     Với thư mục, `vietnamese` (True/False) chỉ giữ bài cùng ngôn ngữ với bản nháp; None là giữ hết."""
     if path.is_file():
@@ -318,7 +312,7 @@ def find_project_samples(start: Path):
     return None
 
 
-def pick_samples(text: str, draft_path: Path = None, project_start: Path = None,
+def pick_samples(text: str, draft_path: Path | None = None, project_start: Path | None = None,
                  skill_samples: Path = DEFAULT_SAMPLES):
     """Chọn bộ bài mẫu cùng ngôn ngữ với bản nháp: bài của project, rồi bài riêng trong samples/ của skill,
     rồi văn mẫu kinh điển. Trả về {kind, where, text, files, words, note} hoặc None nếu không có gì."""
@@ -346,7 +340,7 @@ def pick_samples(text: str, draft_path: Path = None, project_start: Path = None,
 
 # ---------------------------------------------------------------- phân tích
 
-def analyze(text: str, samples: str = None, kind: str = "own") -> dict:
+def analyze(text: str, samples: str | None = None, kind: str = "own") -> dict:
     """samples: văn bản gộp của bài mẫu. None nghĩa là không so (kết quả chỉ phụ thuộc vào text).
     kind: project, own, path hoặc classic (văn kinh điển: không so cách xưng hô)."""
     text = unicodedata.normalize("NFC", text)

@@ -936,7 +936,7 @@ class Profiles(Base):
         self.assertIn(secret, K.redact(f"t {secret}", tokens=[]))
         self.make_profile("an", "huy", token=secret)
         self.set_scenario(kernels_logs=f"loaded token {secret}")
-        code, out = self.run_main("logs", "huy/hello-gpu", "--profile", "an")
+        _code, out = self.run_main("logs", "huy/hello-gpu", "--profile", "an")
         self.assertIn("loaded token", out)
         self.assertNotIn(secret, out)
 

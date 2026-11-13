@@ -147,7 +147,7 @@ def parse_diff(text: str) -> dict:
     for line in text.splitlines():
         if line.startswith("+++ "):
             target = line[4:].rstrip("\t")
-            path = None if target == "/dev/null" else (target[2:] if target.startswith("b/") else target)
+            path = None if target == "/dev/null" else (target.removeprefix("b/"))
             if path:
                 changed.setdefault(path, set())
         elif line.startswith("@@") and path:
@@ -507,7 +507,7 @@ def parse_udiff(out: str, err: str) -> list:
     for line in out.splitlines():
         if line.startswith("--- "):
             p = line[4:].split("\t")[0].strip()
-            p = p[2:] if p.startswith("a/") else p
+            p = p.removeprefix("a/")
             current = None if p == "/dev/null" else re.sub(r"\.orig$", "", p)
         elif line.startswith("@@") and current:
             m = re.match(r"@@ -(\d+)(?:,(\d+))?", line)
@@ -585,10 +585,20 @@ def parse_osv(out: str, err: str) -> list:
         path = (res.get("source") or {}).get("path")
         for pkg in res.get("packages") or []:
             info = pkg.get("package") or {}
-            for v in pkg.get("vulnerabilities") or []:
-                diags.append(Diag(path, None, None, v.get("id", ""),
-                                  f"{info.get('name')}@{info.get('version')}: {v.get('summary') or 'có lỗ hổng'}",
-                                  "warning"))
+            vulns = {v.get("id"): v for v in pkg.get("vulnerabilities") or [] if isinstance(v, dict)}
+            # Một lỗ hổng thường có nhiều mục là bí danh của nhau (PYSEC và GHSA): gộp theo `groups`, mỗi nhóm báo một lần.
+            groups = [g for g in pkg.get("groups") or [] if isinstance(g, dict) and g.get("ids")]
+            seen = {i for g in groups for i in g["ids"]}
+            groups += [{"ids": [i]} for i in vulns if i not in seen]
+            for g in groups:
+                members = [vulns[i] for i in g["ids"] if i in vulns] or [{"id": g["ids"][0]}]
+                best = next((v for v in members if v.get("summary")), members[0])
+                text = best.get("summary") or (best.get("details") or "").strip().split("\n")[0][:160] or "có lỗ hổng"
+                cve = next((a for a in g.get("aliases") or best.get("aliases") or [] if str(a).startswith("CVE-")), "")
+                sev = f", mức {g['max_severity']}" if g.get("max_severity") else ""
+                extra = f" ({cve}{sev})" if cve else (f" ({sev[2:]})" if sev else "")
+                diags.append(Diag(path, None, None, best.get("id", ""),
+                                  f"{info.get('name')}@{info.get('version')}: {text}{extra}", "warning"))
     return diags
 
 
@@ -841,7 +851,12 @@ def plan_python(ctx: Ctx, plan: Plan, files: list):
             # Project có cấu hình ruff, hay gọi ruff ở CI, pre-commit, Makefile: dùng đúng luật project chạy (mặc định
             # của ruff khi không có cấu hình) và mọi phát hiện đều chặn. Không thì bộ luật đầy đủ, phong cách chỉ báo.
             enforced = configured or mentions(ctx.corpus, "ruff")
-            argv = [ruff, "check", "--no-cache", "--output-format", "json", "--exit-zero"]
+            # --force-exclude: file truyền thẳng vẫn theo exclude của project (đề bài eval, file sinh ra…).
+            # --isolated khi project không có cấu hình: không mượn ruff.toml của thư mục cha (exclude của nó có thể
+            # bỏ qua cả project, như fixture test nằm trong .tmp/ của agent-stack).
+            argv = [ruff, "check", "--no-cache", "--force-exclude", "--output-format", "json", "--exit-zero"]
+            if not configured:
+                argv.append("--isolated")
             if not enforced:  # bỏ cặp luật docstring xung đột nhau và luật trùng formatter
                 argv += ["--select", "ALL", "--ignore", "D203,D213,COM812,ISC001"]
             source = "cấu hình ruff của project" if configured else ("luật mặc định ruff, project có gọi ruff"
@@ -862,7 +877,8 @@ def plan_python(ctx: Ctx, plan: Plan, files: list):
     if ruff and not is_covered(ctx, plan, "python", "format"):
         enforced = mentions(ctx.corpus, "ruff format", "black") or pyproject_has(root, "ruff.format", "black")
         plan.checks.append(Check("python", "format", "ruff format",
-                                 [ruff, "format", "--check", "--diff", "--no-cache", *files], root, parse_udiff,
+                                 [ruff, "format", "--check", "--diff", "--no-cache", "--force-exclude",
+                                  *([] if configured else ["--isolated"]), *files], root, parse_udiff,
                                  block_if_enforced, enforced, ok_codes=(0, 1)))
     if not is_covered(ctx, plan, "python", "type"):
         if pyproject_has(root, "mypy") or (root / "mypy.ini").exists() or (root / ".mypy.ini").exists() \
@@ -1020,7 +1036,7 @@ def read_json(path: Path) -> dict:
 def plan_rust(ctx: Ctx, plan: Plan, files: list):
     root = ctx.root
     cargo = shutil.which("cargo")
-    for crate, group in group_by(root, files, ("Cargo.toml",), top="[workspace]").items():
+    for crate in group_by(root, files, ("Cargo.toml",), top="[workspace]"):
         if crate is None:
             plan.notes.append("Rust: file .rs không thuộc crate nào (không thấy Cargo.toml).")
             continue
@@ -1175,8 +1191,8 @@ def plan_jvm(ctx: Ctx, plan: Plan, files: list, lang: str):
         kt = shutil.which("ktlint")
         if kt:
             plan.checks.append(Check("kotlin", "lint", "ktlint", [kt, "--reporter=plain", *files], root, parse_generic,
-                                     block_if_enforced, mentions(ctx.corpus, "ktlint") or (root / ".editorconfig").exists()
-                                     and "ktlint" in read_text(root / ".editorconfig"), ok_codes=(0, 1)))
+                                     block_if_enforced, mentions(ctx.corpus, "ktlint") or ((root / ".editorconfig").exists()
+                                     and "ktlint" in read_text(root / ".editorconfig")), ok_codes=(0, 1)))
         else:
             add_missing(plan, "kotlin", "lint", "ktlint")
     if is_covered(ctx, plan, lang, "type"):
@@ -1844,9 +1860,9 @@ def quick_lint(path: Path, lines, budget: float = 1.8) -> list:
             ruff = shutil.which("ruff")
             if ruff:
                 configured = (root / "ruff.toml").exists() or (root / ".ruff.toml").exists() or pyproject_has(root, "ruff")
-                argv = [ruff, "check", "--no-cache", "--output-format", "json", "--exit-zero"]
-                if not configured:
-                    argv += ["--select", ",".join(RUFF_REAL)]
+                argv = [ruff, "check", "--no-cache", "--force-exclude", "--output-format", "json", "--exit-zero"]
+                if not configured:  # không mượn cấu hình của thư mục cha (xem plan_python)
+                    argv += ["--isolated", "--select", ",".join(RUFF_REAL)]
                 code, out, err, _ = run_cmd(argv + [str(path)], root, max(0.1, deadline - time.time()))
                 diags, tool = parse_ruff(out, err) if code == 0 else [], "ruff"
             elif not (requires_python(root) or (0, 0)) > sys.version_info[:2]:

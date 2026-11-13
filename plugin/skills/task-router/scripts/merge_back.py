@@ -91,7 +91,7 @@ def special_modes(top: Path, sha: str) -> list:
     """File nhánh thêm hay đổi thành symlink (120000) hoặc submodule (160000): không tự gộp."""
     hits = []
     parts = git(top, "diff", "-z", "--raw", "--no-renames", "--no-abbrev", "HEAD", sha).stdout.split("\0")
-    for meta, path in zip(parts[0::2], parts[1::2]):  # -z: ":<mode cũ> <mode mới> ... <trạng thái>" rồi tên
+    for meta, path in zip(parts[0::2], parts[1::2], strict=False):  # -z: ":<mode cũ> <mode mới> ... <trạng thái>" rồi tên
         fields = meta.split()
         if len(fields) >= 2 and fields[1] in ("120000", "160000"):
             hits.append(path)

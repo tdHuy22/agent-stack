@@ -653,6 +653,38 @@
         "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply"
       }
     },
+    "brew:osv-scanner": {
+      "kind": "brew-tool",
+      "source": "brew:osv-scanner",
+      "license": "Apache-2.0",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13",
+      "redflags": {},
+      "reviews": [],
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "human_review": {
+        "status": "approved",
+        "at": "2026-11-13T08:00:00Z",
+        "note": "Người dùng duyệt trong chat 13/11/2026 ('làm 2 việc đã chọn', việc T.1 trong PLAN §0); gửi tên và phiên bản thư viện tới osv.dev (TM-98)"
+      }
+    },
+    "brew:biome": {
+      "kind": "brew-tool",
+      "source": "brew:biome",
+      "license": "Apache-2.0 OR MIT",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13",
+      "redflags": {},
+      "reviews": [],
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "human_review": {
+        "status": "approved",
+        "at": "2026-11-13T08:00:00Z",
+        "note": "Người dùng chọn 'Biome qua install.sh' trong chat 13/11/2026 (linter TS cho plugin/hooks/ui.tsx, không dùng npm)"
+      }
+    },
     "mcp:mcp.deepwiki.com/mcp": {
       "human_review": {
         "at": "2026-10-11T02:37:14Z",

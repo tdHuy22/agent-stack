@@ -36,7 +36,7 @@ def load(home: Path) -> tuple:
         catalog = json.loads((home / "catalog.json").read_text(encoding="utf-8"))
         entries = json.loads((home / "vetted.lock").read_text(encoding="utf-8")).get("entries", {})
     except (OSError, ValueError) as exc:
-        raise Refused(f"không đọc được catalog.json hay vetted.lock ({type(exc).__name__})")
+        raise Refused(f"không đọc được catalog.json hay vetted.lock ({type(exc).__name__})") from None
     return catalog, entries
 
 
@@ -72,7 +72,7 @@ def prepare_args(raw: str, drop: list) -> tuple:
     try:
         args = json.loads(raw)
     except ValueError:
-        raise Refused("--args phải là JSON hợp lệ")
+        raise Refused("--args phải là JSON hợp lệ") from None
     if not isinstance(args, dict):
         raise Refused("--args phải là một JSON object")
     dropped = sorted(k for k in args if k in drop)

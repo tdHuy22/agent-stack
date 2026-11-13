@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 08:51 13/11/2026 từ commit `a19300a` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 12:15 13/11/2026 từ commit `1ad297d` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -621,6 +621,19 @@
 |---:|---|---|---|---|
 | 1 | lệnh brew | `brew install ruff` |  | `brew uninstall ruff` |
 | 2 | lệnh brew | `brew install shellcheck` |  | `brew uninstall shellcheck` |
+
+## Lần cài 12:15 13/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261113-121521.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261113-121521`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: tools
+- Kết quả: 3 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh brew | `brew install pyright` |  | `brew uninstall pyright` |
+| 2 | lệnh brew | `brew install osv-scanner` |  | `brew uninstall osv-scanner` |
+| 3 | lệnh brew | `brew install biome` |  | `brew uninstall biome` |
 
 ## Gỡ toàn bộ
 

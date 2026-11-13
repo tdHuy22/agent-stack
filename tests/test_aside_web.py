@@ -108,10 +108,10 @@ class Check(Base):
         self.assertIn("Profile 0", out)
 
     def test_missing_cli_exit_3(self):
-        with mock.patch.dict(os.environ, {"ASIDE_BIN": str(self.tmp / "khong-co")}):
-            with mock.patch.object(W.shutil, "which", return_value=None), \
-                    mock.patch.object(W.Path, "home", return_value=self.tmp):
-                code, _, err = self.run_main("check")
+        with mock.patch.dict(os.environ, {"ASIDE_BIN": str(self.tmp / "khong-co")}), \
+                mock.patch.object(W.shutil, "which", return_value=None), \
+                mock.patch.object(W.Path, "home", return_value=self.tmp):
+            code, _, err = self.run_main("check")
         self.assertEqual(code, 3)
         self.assertIn("chưa có CLI", err)
 
@@ -198,7 +198,7 @@ class Exec(Base):
         self.assertFalse(any(c["args"][:1] == ["exec"] for c in self.calls()))
 
     def test_timeout_bounds(self):
-        code, _, err = self.run_main("exec", "--timeout", "45", "x")
+        code, _, _err = self.run_main("exec", "--timeout", "45", "x")
         self.assertEqual(code, 2)
         self.run_main("exec", "--timeout", "30", "x")
         args = self.exec_call()
@@ -206,7 +206,7 @@ class Exec(Base):
 
     def test_disconnected_refuses_before_exec(self):
         self.scenario({"profile": "disconnected"})
-        code, _, err = self.run_main("exec", "x")
+        code, _, _err = self.run_main("exec", "x")
         self.assertEqual(code, 3)
         self.assertFalse(any(c["args"][:1] == ["exec"] for c in self.calls()))
 
@@ -273,7 +273,7 @@ class Exec(Base):
         self.assertIn("aside session list", out)
 
     def test_resume_with_model_refused(self):
-        code, _, err = self.run_main("exec", "--resume", "sesAAAA1111", "--tier", "kho", "x")
+        code, _, _err = self.run_main("exec", "--resume", "sesAAAA1111", "--tier", "kho", "x")
         self.assertEqual(code, 2)
 
     def test_bad_session_id_refused(self):

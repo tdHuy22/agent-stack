@@ -119,7 +119,8 @@ class VnCheckTests(unittest.TestCase):
                 errs = vncheck.writing_checks("Trong bối cảnh hiện nay, the system is ready and we will deploy.")
                 # dấu hiệu văn AI không làm trượt (bạn chốt 08/11/2026), chỉ được đếm thành chỉ số phụ
                 self.assertFalse(any("văn AI" in e for e in errs))
-                self.assertEqual(__import__("json").load(open(os.environ["VI_METRICS"])), {"van_ai": 1})
+                with open(os.environ["VI_METRICS"]) as fh:
+                    self.assertEqual(__import__("json").load(fh), {"van_ai": 1})
             finally:
                 del os.environ["VI_METRICS"]
         self.assertTrue(any("tiếng Anh" in e for e in errs))

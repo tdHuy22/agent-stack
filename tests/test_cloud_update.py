@@ -3,7 +3,6 @@ import importlib.util
 import os
 import time
 import unittest
-from pathlib import Path
 
 from tests._util import PLUGIN, TempDirTestCase, git, run_script
 
@@ -236,7 +235,7 @@ class SessionStartHookTest(TempDirTestCase):
         project = self.tmp / "p"
         project.mkdir()
         result = run_script(PLUGIN / "hooks" / "session_start.py",
-                            stdin='{"session_id": "s1", "source": "startup", "cwd": "%s"}' % project,
+                            stdin=f'{{"session_id": "s1", "source": "startup", "cwd": "{project}"}}',
                             env=dict(CLOUD, AGENT_STACK_STATE=str(self.tmp / "state")))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")

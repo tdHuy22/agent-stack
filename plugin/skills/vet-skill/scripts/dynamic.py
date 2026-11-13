@@ -499,7 +499,7 @@ def source_tree(home: Path, key: str) -> Path:
     try:
         entry = json.loads((home / "vetted.lock").read_text(encoding="utf-8"))["entries"][key]
     except (OSError, ValueError, KeyError):
-        raise ValueError(f"Không thấy '{key}' trong vetted.lock và cũng không phải thư mục.")
+        raise ValueError(f"Không thấy '{key}' trong vetted.lock và cũng không phải thư mục.") from None
     source, sha, sub = entry.get("source", ""), entry.get("sha", ""), entry.get("subpath") or ""
     if not source.startswith("github:"):
         raise ValueError(f"'{key}' không phải đích GitHub; hãy truyền đường dẫn thư mục.")
@@ -515,7 +515,7 @@ def source_tree(home: Path, key: str) -> Path:
 def list_files(root: Path, limit: int = 20000) -> set:
     """Danh sách file (đường dẫn tương đối). Chạy ngoài sandbox nên KHÔNG đi theo symlink do script tạo ra."""
     found = set()
-    for base, dirs, files in os.walk(root, followlinks=False):
+    for base, _dirs, files in os.walk(root, followlinks=False):
         for name in files:
             found.add(os.path.relpath(os.path.join(base, name), root))
             if len(found) >= limit:
@@ -526,7 +526,7 @@ def list_files(root: Path, limit: int = 20000) -> set:
 def tree_size(root: Path, limit: int) -> int:
     """Tổng dung lượng file thường (không theo symlink); dừng sớm khi vượt `limit`."""
     total = 0
-    for base, dirs, files in os.walk(root, followlinks=False):
+    for base, _dirs, files in os.walk(root, followlinks=False):
         for name in files:
             try:
                 total += os.lstat(os.path.join(base, name)).st_size

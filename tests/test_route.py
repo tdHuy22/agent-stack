@@ -1,6 +1,6 @@
 import json
-import re
 import os
+import re
 import subprocess
 import sys
 import time
@@ -10,8 +10,9 @@ from tests._util import PLUGIN, REPO, SUBAGENT_HANDBACK, TempDirTestCase
 
 ROUTE = PLUGIN / "skills" / "task-router" / "scripts" / "route.py"
 sys.path.insert(0, str(ROUTE.parent))
-import route  # noqa: E402
+sys.path.insert(0, str(PLUGIN / "lib"))  # agentstack: không dựa vào route.py hay test khác chèn trước
 import agentstack as A  # noqa: E402
+import route  # noqa: E402
 
 
 class RouterRules(TempDirTestCase):

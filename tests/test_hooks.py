@@ -6,8 +6,17 @@ import time
 import unittest
 from pathlib import Path
 
-from tests._util import (CROSS_SESSION_MESSAGE, PLUGIN, REPO, SIDE_SESSIONS_EVENT, STARTED_SESSION_BRIEF,
-                         SUBAGENT_HANDBACK, TempDirTestCase, git, run_script)
+from tests._util import (
+    CROSS_SESSION_MESSAGE,
+    PLUGIN,
+    REPO,
+    SIDE_SESSIONS_EVENT,
+    STARTED_SESSION_BRIEF,
+    SUBAGENT_HANDBACK,
+    TempDirTestCase,
+    git,
+    run_script,
+)
 from tests.test_agentstack_lib import PLAN, A, secret_samples
 
 HOOKS = PLUGIN / "hooks"
@@ -1030,7 +1039,7 @@ class HookTests(TempDirTestCase):
         transcript = self.tmp / "f1.jsonl"
         transcript.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {"content": [
             {"type": "text", "text": "Đã đổi trong parser.py, còn cli.py."}]}}) + "\n", encoding="utf-8")
-        for i, py in enumerate(PYTHONS):
+        for _i, py in enumerate(PYTHONS):
             out = self.run_hook("stop_failure.py", {
                 "session_id": "f1", "cwd": str(self.project), "transcript_path": str(transcript),
                 "error": "rate_limit", "error_details": "token sk-ant-abcdef1234567890 hết hạn mức",

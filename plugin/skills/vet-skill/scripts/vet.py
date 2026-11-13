@@ -33,12 +33,11 @@ import shutil
 import subprocess
 import sys
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from redflags import (HIDDEN_CHARS, RISKY_ALLOWED, SEVERITIES, SHADOWED_COMMANDS, hidden_chars, is_comment,  # noqa: E402
-                      scan_text)
+from redflags import HIDDEN_CHARS, RISKY_ALLOWED, SEVERITIES, SHADOWED_COMMANDS, hidden_chars, is_comment, scan_text  # noqa: E402
 
 TOOL_VERSION = "vet.py/1"
 MD_EXT = {".md", ".mdc", ".markdown"}
@@ -178,7 +177,7 @@ MAGIC = {b"\xcf\xfa\xed\xfe": "Mach-O", b"\xce\xfa\xed\xfe": "Mach-O", b"\xca\xf
 
 
 def classify(path: Path, head: bytes) -> str:
-    for magic, _ in MAGIC.items():
+    for magic in MAGIC:
         if head.startswith(magic):
             return "binary"
     if b"\x00" in head:
@@ -352,7 +351,7 @@ def run_redflags(files: list, ci_root: bool = False) -> list:
     `.github/` có thể là thứ plugin tự gọi, nên không hạ bậc."""
     findings = []
     for f in files:
-        if f["symlink"] or f["kind"] in ("binary",) or f["size"] > MAX_SCAN_BYTES:
+        if f["symlink"] or f["kind"] == "binary" or f["size"] > MAX_SCAN_BYTES:
             continue
         try:
             text = f["path"].read_text(encoding="utf-8", errors="replace")
@@ -409,7 +408,7 @@ def run_scanner(home: Path, root: Path, skills: list):
     except (subprocess.TimeoutExpired, ValueError) as exc:
         return {"status": f"lỗi: {exc.__class__.__name__}"}
     results = [data] if single else data.get("results", [])
-    counts = {s: 0 for s in SEVERITIES}
+    counts = dict.fromkeys(SEVERITIES, 0)
     top = []
     for res in results:
         base = Path(res.get("skill_path") or root)
@@ -431,7 +430,7 @@ def run_scanner(home: Path, root: Path, skills: list):
 
 # ---------------------------------------------------------------- phán quyết
 
-def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict, spector: dict = None):
+def verdict(meta: dict, files: list, comp: dict, flags: list, scanner: dict, spector: dict | None = None):
     fail, review = [], []
     if meta.get("archived"):
         fail.append("Repo đã archived, không còn được bảo trì.")
@@ -525,7 +524,7 @@ def collapse(reasons: list) -> list:
 
 # ---------------------------------------------------------------- báo cáo
 
-def must_read(files: list, comp: dict, flags: list, scanner: dict, spector: dict = None) -> list:
+def must_read(files: list, comp: dict, flags: list, scanner: dict, spector: dict | None = None) -> list:
     paths = {f["rel"] for f in files if f["kind"] == "code"}
     paths |= {s["path"].rstrip("/") + "/SKILL.md" if s["path"] not in ("", ".") else "SKILL.md" for s in comp["skills"]}
     paths |= {a["path"] for a in comp["agents"]}
@@ -576,7 +575,7 @@ def render_reviews(reviews: list) -> list:
 
 
 def render_report(key: str, meta: dict, files: list, comp: dict, flags: list, scanner: dict,
-                  result: str, fail: list, review: list, reviews: list = (), spector: dict = None) -> str:
+                  result: str, fail: list, review: list, reviews: list = (), spector: dict | None = None) -> str:
     spector = spector or {"status": "không chạy"}
     L = [f"# Kiểm duyệt: {key}", "",
          f"- Ngày: {date.today()} · Công cụ: {TOOL_VERSION}" +
@@ -715,7 +714,7 @@ def cmd_scan(args, home: Path) -> int:
     same_sha = old.get("sha") == meta["sha"]
     # Nhận xét đọc tay chỉ còn giá trị khi nội dung (commit) không đổi.
     reviews = [r for r in old.get("reviews", []) if r.get("sha") == meta["sha"]]
-    counts = {s: 0 for s in SEVERITIES}
+    counts = dict.fromkeys(SEVERITIES, 0)
     for f in flags:
         counts[f["severity"]] += 1
     # Bản vá cục bộ đã duyệt gắn với đúng commit này: vet lại cùng commit thì giữ. Commit khác thì bỏ, và ghi lại
@@ -780,7 +779,7 @@ def cmd_review(args, home: Path, status: str) -> int:
         print(f"Không có khóa '{args.key}' trong vetted.lock.", file=sys.stderr)
         return 3
     lock["entries"][args.key]["human_review"] = {
-        "status": status, "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "note": args.note}
+        "status": status, "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "note": args.note}
     save_lock(home, lock)
     print(f"Đã ghi {status} cho {args.key}.")
     for d in lock["entries"][args.key].get("dropped_patches") or []:
@@ -796,7 +795,7 @@ def cmd_note(args, home: Path) -> int:
     if not entry:
         print(f"Không có khóa '{args.key}' trong vetted.lock.", file=sys.stderr)
         return 3
-    note = {"by": args.by, "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "sha": entry["sha"],
+    note = {"by": args.by, "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "sha": entry["sha"],
             "recommend": args.recommend, "text": args.text.strip()}
     entry.setdefault("reviews", [])
     entry["reviews"] = [r for r in entry["reviews"] if r.get("by") != args.by or r.get("sha") != entry["sha"]] + [note]

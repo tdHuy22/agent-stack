@@ -3,10 +3,13 @@
 - "Python chỉ dùng thư viện chuẩn": plugin/, tools/, tests/ không import module ngoài stdlib và ngoài repo.
 - Mọi file .py git theo dõi biên dịch được bằng python3 của repo (3.11), kể cả file chưa test nào import.
 - "Hook không bao giờ làm kẹt phiên": mọi hook trong hooks.json gặp stdin hỏng vẫn thoát 0, không in lỗi.
+- Linter: ruff theo `ruff.toml` (bộ luật rộng) cho Python, Biome theo `biome.json` cho lớp giao diện TS. Máy thiếu
+  công cụ thì bỏ qua và nói cách cài (`install.sh`, mục brew:ruff, brew:biome).
 """
 import ast
 import json
 import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -92,6 +95,35 @@ class StaticChecks(unittest.TestCase):
         # harbor, retry là tên fixture trong evals/: với plugin/ và tools/ vẫn phải tính là gói ngoài.
         self.assertEqual(sorted(found), ["harbor", "requests", "retry", "yaml"])
 
+
+class Linters(TempDirTestCase):
+    def run_tool(self, name: str, *args: str, stdin: str | None = None, cwd=REPO) -> subprocess.CompletedProcess:
+        tool = shutil.which(name)
+        if not tool:
+            self.skipTest(f"máy chưa có {name}: cài bằng ./install.sh --only tools --apply")
+        return subprocess.run([tool, *args], cwd=cwd, input=stdin, capture_output=True, text=True, timeout=120)
+
+    def test_ruff_clean(self):
+        self.assertTrue((REPO / "ruff.toml").is_file())
+        r = self.run_tool("ruff", "check", "--no-cache", "--output-format", "concise", ".")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_biome_clean(self):
+        r = self.run_tool("biome", "lint", "--error-on-warnings", ".")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Checked 5 files", r.stdout + r.stderr, "biome.json phải phủ ui.tsx, kiểu, test của mod, run.mjs")
+
+    def test_linters_catch_real_errors(self):
+        """Tự kiểm: cấu hình không được nuốt lỗi thật (tên chưa định nghĩa trong Python, biến thừa trong TS)."""
+        r = self.run_tool("ruff", "check", "--no-cache", "--stdin-filename", "plugin/hooks/x.py", "-",
+                          stdin="def f():\n    return chua_co\n")
+        self.assertIn("F821", r.stdout)
+        (self.tmp / "biome.json").write_text((REPO / "biome.json").read_text(encoding="utf-8"), encoding="utf-8")
+        (self.tmp / "plugin" / "hooks").mkdir(parents=True)
+        (self.tmp / "plugin" / "hooks" / "x.tsx").write_text("export function f(a: number) {\n  const thua = 1\n"
+                                                               "  return a\n}\n", encoding="utf-8")
+        r = self.run_tool("biome", "lint", ".", cwd=self.tmp)
+        self.assertIn("noUnusedVariables", r.stdout + r.stderr)
 
 class HooksSurviveBadInput(TempDirTestCase):
     BAD_INPUTS = ("", "{not json", "[1, 2]", "null", "{}", '{"hook_event_name": 42, "cwd": 7}')

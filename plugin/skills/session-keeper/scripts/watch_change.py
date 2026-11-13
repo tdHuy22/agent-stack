@@ -22,9 +22,9 @@ Thoát: `--until REGEX` khớp kết quả thì in rồi thoát 0; `--max-hours`
 êm (0). Mỗi lần chạy lệnh bị giới hạn `--run-timeout` giây (mặc định 120); quá hạn tính là kết quả "hết giờ chạy".
 """
 import argparse
-import signal
 import os
 import re
+import signal
 import subprocess
 import sys
 import time

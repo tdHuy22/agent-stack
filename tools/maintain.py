@@ -18,11 +18,11 @@ Ví dụ:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import shutil
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
 
 HOME_STACK = Path(__file__).resolve().parents[1]
@@ -32,11 +32,12 @@ MIN_CLAUDE = (2, 1, 277)
 # (lệnh, cách cài, để làm gì). Chỉ báo; cài toàn cục là việc của người dùng.
 RECOMMENDED_CLI = (
     ("gitleaks", "brew install gitleaks", "quét secret trước khi commit"),
-    ("osv-scanner", "brew install osv-scanner", "quét lỗ hổng đã biết trong thư viện"),
+    ("osv-scanner", "./install.sh --only tools --apply", "quét lỗ hổng đã biết trong thư viện"),
+    ("biome", "./install.sh --only tools --apply", "lint TS của mod trong bộ test"),
 )
 # pyright chỉ cần trong project bật LSP riêng; router đề xuất lúc mở phiên ở project đủ lớn.
-LSP_NOTE = ("- `pyright`: chỉ cần khi bật LSP theo project (pyright-lsp); "
-            "hồ sơ project lúc mở phiên sẽ đề xuất ở project cần, kèm lệnh cài.")
+LSP_NOTE = ("- `pyright`: chỉ cần khi bật LSP theo project (pyright-lsp, agent-stack bật ở scope local từ 13/11/2026); "
+            "`install.sh` bước tools cài kèm mục pyright-lsp; hồ sơ project lúc mở phiên đề xuất ở project khác cần.")
 
 
 def sh(*args, cwd=None, timeout=300):
@@ -54,7 +55,7 @@ def version_tuple(text: str):
 
 def check_versions(lines: list) -> None:
     lines.append("## 1. Phiên bản")
-    code, out = sh("claude", "--version")
+    _code, out = sh("claude", "--version")
     v = version_tuple(out)
     status = "?" if v is None else ("đủ mới" if v >= MIN_CLAUDE else "cũ, nên nâng cấp: `brew upgrade --cask claude-code`")
     lines.append(f"- Claude Code CLI: `{out.splitlines()[0] if out else '?'}` → {status}")
@@ -91,7 +92,7 @@ def check_drift(lines: list, offline: bool) -> None:
     if not drift:
         lines.append("- Không có. Mọi mục vẫn ở đúng commit đã kiểm.")
     for key, old, new in drift:
-        target = key if ":" not in key else key  # khóa trùng với cú pháp đích của vet.py
+        target = key  # khóa trùng với cú pháp đích của vet.py
         lines.append(f"- `{key}`: đã kiểm `{old[:12]}`, hiện tại `{new[:12]}` → "
                      f"`python3 plugin/skills/vet-skill/scripts/vet.py scan \"{target}\"`, đọc diff rồi approve lại")
 
@@ -101,11 +102,11 @@ def check_quality(lines: list, skip_tests: bool) -> None:
     if skip_tests:
         lines.append("- Bỏ qua (--skip-tests).")
     else:
-        code, out = sh(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".", timeout=900)
+        _code, out = sh(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".", timeout=900)
         summary = next((ln for ln in reversed(out.splitlines()) if ln.startswith(("OK", "FAILED"))), "?")
         ran = next((ln for ln in out.splitlines() if ln.startswith("Ran ")), "")
         lines.append(f"- Test: {ran} → **{summary}**")
-    code, out = sh("claude", "plugin", "validate", str(HOME_STACK / "plugin"), timeout=120)
+    _code, out = sh("claude", "plugin", "validate", str(HOME_STACK / "plugin"), timeout=120)
     lines.append(f"- Plugin: {'passed' if 'Validation passed' in out else 'LỖI: ' + out[-200:]}")
 
 
@@ -124,10 +125,11 @@ def check_skill_budget(lines: list) -> None:
 
 
 def check_usage(lines: list) -> None:
+    from datetime import datetime, timedelta
+
     import usage_snapshot as us
-    from datetime import datetime, timedelta, timezone
     lines.append("## 5. Mức dùng 7 ngày (so với BASELINE.md)")
-    until = datetime.now(timezone.utc)
+    until = datetime.now(UTC)
     summary = us.summarize(us.collect(Path("~/.claude/projects").expanduser(), until - timedelta(days=7), until))
     baseline = (HOME_STACK / "BASELINE.md").read_text(encoding="utf-8")
     m = re.search(r"Tổng ước tính: \*\*([\d.]+) USD\*\*", baseline)

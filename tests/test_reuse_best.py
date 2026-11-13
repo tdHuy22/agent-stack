@@ -6,7 +6,7 @@ import subprocess
 import sys
 import unittest
 import urllib.error
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest import mock
 
 from tests._util import PLUGIN
@@ -15,7 +15,7 @@ SCOUT = PLUGIN / "skills" / "reuse-best" / "scripts" / "scout.py"
 sys.path.insert(0, str(SCOUT.parent))
 import scout  # noqa: E402
 
-NOW = datetime(2026, 10, 2, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 2, tzinfo=UTC)
 GH_ROWS = [
     {"fullName": "good/tool", "description": "Fast | link checker", "stargazersCount": 3968, "pushedAt": "2026-09-28T10:00:00Z",
      "license": {"key": "apache-2.0"}, "isArchived": False, "url": "https://github.com/good/tool", "language": "Rust"},
@@ -147,7 +147,7 @@ class GitHubSearch(unittest.TestCase):
         rows = [scout.normalize_gh(r) for r in GH_ROWS]
         text = scout.render_repos(rows, "link checker", "gh")
         self.assertTrue(text.startswith("GitHub “link checker”: 3 repo"), text[:80])
-        tip = [line for line in text.splitlines() if line.startswith("Tiếp:")][0]
+        tip = next(line for line in text.splitlines() if line.startswith("Tiếp:"))
         self.assertIn("scout.py repo good/tool old/gpl --find", tip)
         self.assertNotIn("dead/nolicense", tip, "repo đã lưu trữ không đáng kiểm tiếp")
         self.assertNotIn("](", text, "bỏ link trong bảng để đỡ tốn token; tên repo đủ để dựng link")

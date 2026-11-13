@@ -49,13 +49,13 @@ def code_spans(text: str, is_html: bool) -> list:
     return [m.group(1) if m.group(1) is not None else m.group(3) for m in MD_SPAN_RE.finditer(text)]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def tracked() -> frozenset:
     out = subprocess.run(["git", "-C", str(REPO), "ls-files"], capture_output=True, text=True)
     return frozenset(out.stdout.splitlines()) if out.returncode == 0 else frozenset()
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def scripts() -> dict:
     """Tên file → các đường dẫn script Python của repo (bỏ test và bài eval, là dữ liệu chứ không phải lệnh)."""
     out = {}
@@ -65,7 +65,7 @@ def scripts() -> dict:
     return out
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def help_text(script: Path, sub: str = ""):
     """Đầu ra `--help` thật của script (hay của lệnh con), hoặc None khi script không dùng argparse hay không in được.
     Chạy với state riêng trong thư mục tạm, stdin rỗng, để không đụng trạng thái thật."""
@@ -84,7 +84,7 @@ def help_text(script: Path, sub: str = ""):
 def subcommands(help_out: str) -> set:
     """Lệnh con trong dòng usage: khối {a,b,c} không đứng sau một cờ (cờ có giá trị chọn trước như --level {x,y})."""
     usage = help_out.split("\n\n", 1)[0].split()
-    for prev, token in zip([""] + usage, usage):
+    for prev, token in zip([""] + usage, usage, strict=False):
         # `[-h]` là cờ đã đóng ngoặc; `--level` hay `[--level` thì {…} đứng sau là giá trị của nó.
         takes_value = prev.lstrip("[").startswith("-") and not prev.endswith("]")
         if token.startswith("{") and not takes_value:

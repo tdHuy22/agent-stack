@@ -24,6 +24,8 @@
 
 Lệnh không khớp mẫu nào thì thoát ngay, không in gì. Mọi lỗi đều bỏ qua: hook không bao giờ được làm kẹt phiên.
 """
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -323,9 +325,9 @@ def gate_user(gated: list, session_id: str):
     consented = [r for r in gated if r[0] == "confirm" and len(r) > 3 and r[3]
                  and lib().turn_consent(session_id, use_key(r), *r[3])]
     kinds = [use_key(r) for r in consented]
-    if consented and len(consented) == len(gated) and len(set(kinds)) == len(kinds):
-        if all(lib().turn_consent(session_id, use_key(r), *r[3], use=True, gate_key=r[2]) for r in consented):
-            return None
+    if (consented and len(consented) == len(gated) and len(set(kinds)) == len(kinds)
+            and all(lib().turn_consent(session_id, use_key(r), *r[3], use=True, gate_key=r[2]) for r in consented)):
+        return None
     audits = [r for r in gated if r[0] == "audit"]
     confirms = [r for r in gated if r[0] == "confirm"]
     gate = lib().release_gate(session_id, [r[2] for r in gated], once=[r[2] for r in confirms])
@@ -386,7 +388,7 @@ def confirm(command: str, why: str, where: Path, key_extra: str = "", consent=No
 PUSH_FORCE_FLAGS = {"-f", "--force", "--force-with-lease", "--force-if-includes"}
 
 
-def push_consent(args: list, rewrite: bool, where: Path = None):
+def push_consent(args: list, rewrite: bool, where: Path | None = None):
     """Việc mà tin của người dùng phải gọi tên để `git push` qua không hỏi, hay None (luôn hỏi): chỉ push thường tới
     remote có tên (không URL, đường dẫn), refspec không có `:` (xóa hay đẩy sang tên khác), không --tags, --all,
     --mirror, --delete, --prune. Remote phải là remote đã có của repo. Ghi đè lịch sử (--force, +ref) thì tin phải nói
@@ -404,7 +406,7 @@ def push_consent(args: list, rewrite: bool, where: Path = None):
     return ("push+force" if rewrite else "push", push_names(words, where))
 
 
-def push_names(words: list, where: Path = None) -> tuple:
+def push_names(words: list, where: Path | None = None) -> tuple:
     """Tên mà tin của người dùng được nêu kèm "push" ("Push claude-remote", "push nhánh feature-x"): tên repo, remote,
     nhánh trong lệnh, hay nhánh hiện tại khi lệnh không ghi nhánh. Tên lạ (repo khác) vẫn làm tin không được tính."""
     where = where or Path(".")

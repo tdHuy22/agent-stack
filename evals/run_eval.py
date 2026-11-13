@@ -43,6 +43,7 @@ TASKS = EVALS / "tasks"
 RESULTS = EVALS / "results"
 sys.path.insert(0, str(REPO / "tools"))
 import usage_snapshot  # noqa: E402  (bảng giá niêm yết, để tự tính chi phí khi CLI chưa biết giá model)
+
 # Ước tính thô chi phí mỗi việc (USD theo giá niêm yết), chỉ để báo trước khi chạy.
 GUESS_USD = {"claude-haiku-5-5": 0.01, "haiku": 0.04, "sonnet": 0.12, "opus": 0.25, "fable": 0.6}
 
@@ -109,7 +110,7 @@ def digests(task: Path) -> tuple:
 
 # ---------------------------------------------------------------- thư mục làm việc
 
-def git(workdir: Path, *args: str, data: bytes = None):
+def git(workdir: Path, *args: str, data: bytes | None = None):
     env = dict(os.environ, GIT_CEILING_DIRECTORIES=str(workdir.parent))
     return subprocess.run(["git", *GIT_ISOLATION, *args], cwd=str(workdir), input=data, capture_output=True, env=env)
 
@@ -297,7 +298,7 @@ def parse_output(stdout: str) -> tuple:
 
 
 def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int = TIMEOUT_S,
-            plugin_root=None, stream_file: Path = None) -> tuple:
+            plugin_root=None, stream_file: Path | None = None) -> tuple:
     """Chạy một lượt, chốt bài làm rồi mới chấm. Trả về (dòng kết quả, patch đã chốt).
 
     plugin_root: nạp agent-stack từ thư mục này thay cho plugin/ của repo.
@@ -317,7 +318,7 @@ def run_one(cfg: dict, task: Path, workdir: Path, cap_usd: float, timeout: int =
     for path in paths:
         cmd += ["--plugin-dir", str(path)]
     # Tính trước khi chạy: dấu phải ứng với bản plugin mà CLI nạp lúc khởi động.
-    digests_before = {d: plugin_digest(p) for d, p in zip(dirs, paths)}
+    digests_before = {d: plugin_digest(p) for d, p in zip(dirs, paths, strict=False)}
     start, timed_out, skills, skill_outputs = time.time(), False, [], []
     try:
         out = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=timeout)

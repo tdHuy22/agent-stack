@@ -29,7 +29,8 @@ class Maintain(unittest.TestCase):
         maintain.check_cli(lines, which=lambda name: "/usr/bin/x" if name == "gitleaks" else None)
         text = "\n".join(lines)
         self.assertIn("`gitleaks` (quét secret trước khi commit): có", text)
-        self.assertIn("`osv-scanner` (quét lỗ hổng đã biết trong thư viện): chưa cài, bạn tự chạy `brew install osv-scanner`", text)
+        self.assertIn("`osv-scanner` (quét lỗ hổng đã biết trong thư viện): chưa cài, bạn tự chạy "
+                      "`./install.sh --only tools --apply`", text)
         # LSP chỉ cần trong project được router đề xuất (03/10/2026), không nhắc cài toàn cục
         self.assertNotIn("brew install pyright", text)
         self.assertNotIn("brew install llvm", text)

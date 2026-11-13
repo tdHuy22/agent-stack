@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from tests._util import PLUGIN, TempDirTestCase
 
@@ -64,7 +64,7 @@ class PlanTree(TempDirTestCase):
         self.assertEqual(self.titles(), [("wip", "Đang dở"), ("next", "Việc tiếp theo"), ("phase", "G1: Thiết kế"),
                                          ("decisions", "Quyết định còn treo")])
         nxt = self.tree["milestones"][1]["all_leaves"]
-        self.assertEqual([leaf["text"] for leaf in nxt][0], "Viết test cho parser")  # bước đã gạch bị bỏ
+        self.assertEqual(next(leaf["text"] for leaf in nxt), "Viết test cho parser")  # bước đã gạch bị bỏ
         self.assertEqual(len(nxt), 2)
         dec = self.tree["milestones"][3]["all_leaves"]
         self.assertEqual(len(dec), 2)  # mục con cấp dưới không thành lá
@@ -264,7 +264,7 @@ class StopHelpers(TempDirTestCase):
         self.assertEqual(A.plan_done_count(self.tmp)["count"], 4)  # 3 ô tick + 1 bước gạch
 
     def entry(self, ts, tool_input):
-        stamp = datetime.fromtimestamp(ts, timezone.utc).isoformat().replace("+00:00", "Z")
+        stamp = datetime.fromtimestamp(ts, UTC).isoformat().replace("+00:00", "Z")
         return json.dumps({"type": "assistant", "timestamp": stamp, "message": {"content": [
             {"type": "tool_use", "name": "Bash", "input": tool_input}]}})
 

@@ -32,7 +32,7 @@ import sys
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 HEADERS = {"User-Agent": "agent-stack-scout/1", "Accept": "application/json"}
 TIMEOUT = 15
@@ -72,7 +72,7 @@ class ScoutError(Exception):
     pass
 
 
-def fetch(url: str, opener=urllib.request.urlopen, accept: str = None) -> bytes:
+def fetch(url: str, opener=urllib.request.urlopen, accept: str | None = None) -> bytes:
     request = urllib.request.Request(url, headers=dict(HEADERS, Accept=accept) if accept else HEADERS)
     try:
         with opener(request, timeout=TIMEOUT) as response:
@@ -92,12 +92,12 @@ def age_days(iso, now=None):
     if not iso:
         return None
     try:
-        when = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        when = datetime.fromisoformat(str(iso))
     except ValueError:
         return None
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return ((now or datetime.now(timezone.utc)) - when).days
+        when = when.replace(tzinfo=UTC)
+    return ((now or datetime.now(UTC)) - when).days
 
 
 def clip(text, limit: int, table: bool = True) -> str:
@@ -144,7 +144,7 @@ def repo_flags(repo: dict, now=None) -> list:
     return flags
 
 
-def search_github(query: str, limit: int = 10, language: str = None, sort: str = "both",
+def search_github(query: str, limit: int = 10, language: str | None = None, sort: str = "both",
                   runner=subprocess.run, opener=urllib.request.urlopen) -> tuple:
     """(danh sách repo xếp theo sao, nguồn). sort="both": gộp kết quả khớp nhất và nhiều sao nhất."""
     merged, source = {}, ""
@@ -155,13 +155,13 @@ def search_github(query: str, limit: int = 10, language: str = None, sort: str =
     return sorted(merged.values(), key=lambda r: -r["stars"])[:limit], source
 
 
-def relax_query(query: str, language: str = None) -> str:
+def relax_query(query: str, language: str | None = None) -> str:
     """Bỏ từ chung chung và tên ngôn ngữ (đã có --language) khỏi câu tìm."""
     drop = GENERIC_WORDS | ({language.lower()} if language else set())
     return " ".join(w for w in query.split() if w.lower() not in drop)
 
 
-def relaxations(query: str, language: str = None) -> list:
+def relaxations(query: str, language: str | None = None) -> list:
     """Các câu nới dần để thử khi câu gốc ra rỗng: bỏ từ chung chung, rồi bỏ thêm từ cuối (còn ít nhất 2 từ)."""
     steps, current = [], query
     relaxed = relax_query(query, language)
@@ -174,7 +174,7 @@ def relaxations(query: str, language: str = None) -> list:
     return steps
 
 
-def search_github_relaxed(query: str, limit: int = 10, language: str = None, sort: str = "both",
+def search_github_relaxed(query: str, limit: int = 10, language: str | None = None, sort: str = "both",
                           runner=subprocess.run, opener=urllib.request.urlopen) -> tuple:
     """(repo, nguồn, câu tìm thật sự đã dùng). Câu gốc ra rỗng thì nới dần (tối đa hai bước) tới khi có kết quả."""
     rows, source = search_github(query, limit, language, sort, runner, opener)
@@ -464,7 +464,7 @@ def paper_flags(paper: dict) -> list:
 
 # ---------------------------------------------------------------- hiển thị
 
-def render_repos(rows: list, query: str, source: str, asked: str = None) -> str:
+def render_repos(rows: list, query: str, source: str, asked: str | None = None) -> str:
     """asked: câu tìm người gọi đưa, khi khác câu đã dùng (câu gốc ra rỗng nên đã nới)."""
     lines = [f"GitHub “{query}”: {len(rows)} repo (nguồn: {source}; link: https://github.com/<repo>)"]
     if asked and asked != query:

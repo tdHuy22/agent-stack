@@ -354,7 +354,7 @@ class Installer:
         dest.symlink_to(src)
         self.record(type="symlink", path=str(dest), src=str(src), backup=previous)
 
-    def run(self, args: list, undo: list = None, ok_if: str = "") -> None:
+    def run(self, args: list, undo: list | None = None, ok_if: str = "") -> None:
         self.say(f"  $ {' '.join(args)}")
         if not self.apply:
             return
@@ -640,7 +640,7 @@ class Installer:
                 (vendor_root / "VENDORED.json").write_text("{}\n")
                 self.record(type="vendor-dir", path=str(vendor_root))
             for group, items, skip in (("skills", skills, SKIP_IN_VENDOR), ("plugins", plugins, SKIP_IN_VENDOR_PLUGIN)):
-                for name, src, _ in items:
+                for name, _src, _ in items:
                     meta_src = exports[name]
                     try:
                         export_vetted(*meta_src, vendor_root / group / name, skip)
@@ -930,7 +930,7 @@ def write_manifest() -> Path:
           "## Không thuộc lần cài (lần gỡ không đụng tới)", "",
           "- Quyết định duyệt trong `vetted.lock` và báo cáo trong `vet-reports/`: đây là hồ sơ kiểm duyệt.",
           "- `state/`, `.vet-cache/` và các thư mục `backups/install-*`: xóa tay khi không cần nữa.",
-          "- Công cụ bạn tự cài bằng brew (gitleaks, osv-scanner, pyright…): gỡ bằng `brew uninstall <tên>`.",
+          "- Công cụ bạn tự cài bằng brew ngoài install.sh (như gitleaks): gỡ bằng `brew uninstall <tên>`.",
           "- Cấu hình bạn tự sửa sau khi cài."]
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
     return path
@@ -940,7 +940,8 @@ def read_last_rollback():
     return read_json_file(LOG_DIR / "last-rollback.json")
 
 
-def read_json_file(path: Path):
+def read_json_any(path: Path):
+    """Nội dung JSON bất kỳ kiểu (dict, list...), None nếu không đọc được. Khác read_json_file (luôn trả dict)."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -984,7 +985,7 @@ def clean_plugin_leftovers(ids: list, marketplaces: list, listing, apply: bool) 
                 shutil.rmtree(path)
         for name in ("installed_plugins.json", "known_marketplaces.json"):
             path = root / name
-            data = read_json_file(path) if path.exists() else None
+            data = read_json_any(path) if path.exists() else None
             empty = data in ({}, []) or (isinstance(data, dict) and set(data) <= {"version", "plugins"}
                                          and not data.get("plugins"))
             if listing is not None and name not in listing and empty:
@@ -1015,8 +1016,8 @@ def cleanup_enabled_plugins(data: dict, apply: bool) -> None:
     và extraKnownMarketplaces (marketplace add với thư mục cục bộ). Lệnh gỡ của claude có thể để lại {}."""
     settings = Path.home() / ".claude" / "settings.json"
     snap = (data.get("pristine") or {}).get("settings.json")
-    before = (read_json_file(Path(snap)) if snap else None) or {}
-    current = read_json_file(settings) if settings.exists() else None
+    before = (read_json_any(Path(snap)) if snap else None) or {}
+    current = read_json_any(settings) if settings.exists() else None
     if not isinstance(current, dict):
         return
     changed = False
@@ -1044,17 +1045,17 @@ def compare_with_pristine(pristine: dict, marketplaces: list, apply: bool) -> li
     notes = []
     home = Path.home() / ".claude"
     settings, snap = home / "settings.json", (pristine or {}).get("settings.json")
-    current = read_json_file(settings) if settings.exists() else None
+    current = read_json_any(settings) if settings.exists() else None
     if current is not None:
         if not snap and current == {}:
             if apply:
                 settings.unlink()  # trước khi cài chưa có file này, giờ cũng trống: xóa cho sạch
         elif snap:
-            before = read_json_file(Path(snap)) or {}
+            before = read_json_any(Path(snap)) or {}
             diff = sorted(k for k in set(current) | set(before) if current.get(k) != before.get(k))
             if diff:
                 notes.append("~/.claude/settings.json còn khác bản trước khi cài ở khóa: " + ", ".join(diff))
-    known = read_json_file(home / "plugins" / "known_marketplaces.json")
+    known = read_json_any(home / "plugins" / "known_marketplaces.json")
     if isinstance(known, dict):
         left = sorted(set(marketplaces) & set(known))
         if left:

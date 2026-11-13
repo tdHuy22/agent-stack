@@ -99,9 +99,8 @@ class ClientGuards(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 302)
 
     def test_oversized_reply_is_refused(self):
-        with self.post("/big") as resp:
-            with self.assertRaises(ValueError):
-                mcp_remote.read_limited(resp, limit=1000)
+        with self.post("/big") as resp, self.assertRaises(ValueError):
+            mcp_remote.read_limited(resp, limit=1000)
 
 
 class _McpHandler(http.server.BaseHTTPRequestHandler):
@@ -289,7 +288,7 @@ class PinningAndScanning(unittest.TestCase):
             else:
                 tools[0]["inputSchema"]["properties"]["q" + chr(0x200B)] = {"type": "string"}
             snap = snapshot(tools=tools, instructions=instructions)
-            result, fail, _ = mcp_remote.verdict(snap, mcp_remote.scan(snap))
+            result, _fail, _ = mcp_remote.verdict(snap, mcp_remote.scan(snap))
             self.assertEqual(result, "FAIL", where)
 
     def test_bad_or_duplicate_tool_names_fail_and_names_are_cleaned_in_diffs(self):

@@ -18,7 +18,6 @@ import asyncio
 
 from harbor.environments.docker.docker import DockerEnvironment
 
-
 BUILD_TIMEOUT_FACTOR = 2.0     # hạn của chính lệnh dựng = hệ số × build_timeout_sec của việc; hạn cả bước dựng là ×4
 
 

@@ -194,7 +194,7 @@ class MergeBack(TempDirTestCase):
     def test_test_command_runs_without_a_shell(self):
         self.commit_in_wt("app.py", "x = 6\n")
         marker = self.tmp / "pwned"
-        code, out = self.run_script("--worktree", "sub/viec", "--test", f"{PASS} ; touch {marker}")
+        _code, _out = self.run_script("--worktree", "sub/viec", "--test", f"{PASS} ; touch {marker}")
         self.assertFalse(marker.exists())
 
     def test_empty_branch_is_cleaned_up(self):

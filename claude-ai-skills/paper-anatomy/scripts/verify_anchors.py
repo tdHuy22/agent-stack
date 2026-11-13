@@ -197,7 +197,7 @@ class Paper:
             if want and not spans:
                 for s in self.sections:
                     title = squash(re.sub(r"^\S*\d\S*\s+", "", s["title"]))
-                    if title and (title.startswith(want) or want.startswith(title) and len(title) >= 5):
+                    if title and (title.startswith(want) or (want.startswith(title) and len(title) >= 5)):
                         spans.append((s["page"], s["end"]))
         if not spans:
             return None

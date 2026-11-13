@@ -8,12 +8,11 @@ import importlib.util
 import io
 import json
 import os
-import re
 import signal
 import subprocess
 import sys
-import time
 import tempfile
+import time
 import unittest
 import unittest.mock
 import warnings
@@ -235,9 +234,8 @@ class ConfigTests(Base):
     def test_task_spec_validation(self):
         for text in ("a\nb\na\n", "tblite:a\ntblite:*\n", "lạ:a\n", "tblite:a b\n", "tblite:../x\n", "# chỉ có chú thích\n",
                      "tblite:a;rm -rf\n"):
-            with self.subTest(text=text):
-                with self.assertRaises(SystemExit):
-                    B.read_task_spec(self.write("t.txt", text))
+            with self.subTest(text=text), self.assertRaises(SystemExit):
+                B.read_task_spec(self.write("t.txt", text))
         self.assertEqual(B.read_task_spec(self.write("t.txt", "tblite:*\nswerebench:i__j-1\n")),
                          {"tblite": ["*"], "swerebench": ["i__j-1"]})
 
@@ -245,7 +243,7 @@ class ConfigTests(Base):
         for n in ("a", "b", "c"):
             self.write(f"datasets/tblite/{n}/task.toml", "")
         main = self.write("main.txt", "tblite:*\nswerebench:x-1\nswerebench:x-2\n")
-        cfg = self.make("main", tasks=main, attempts=2)
+        self.make("main", tasks=main, attempts=2)
         (self.tmp / "datasets/swerebench").mkdir(parents=True)
         r = run_script(SCRIPT, "plan", str(self.tmp / "cfg/main.json"), "--root", str(self.tmp))
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -257,7 +255,7 @@ class ConfigTests(Base):
         self.assertRegex(B.DEFAULTS["version"], r"^\d+\.\d+\.\d+$")
         self.assertTrue(B.DATASETS["swerebench"]["ref"].startswith("sha256:"))
         meta = self.tmp / "meta.json"
-        cfg = self.make("pilot", swerebench=self.tasks_file())
+        self.make("pilot", swerebench=self.tasks_file())
         self.write("datasets/tblite.lock.json", json.dumps({"name": "tblite", "sha256": "ab" * 32}))
         payload = self.tmp / "payload" / "full"
         payload.mkdir(parents=True)
@@ -356,9 +354,8 @@ class VetTests(Base):
         f = self.write("allow.txt", f"# chú thích\nviec-a {digest}   # đã đọc\n\nviec-a {'cd' * 32}\nviec-b {digest}\n")
         self.assertEqual(B.load_allow(f), {"viec-a": {digest, "cd" * 32}, "viec-b": {digest}})
         for bad in ("viec-a\n", f"viec-a {digest} thừa\n", "viec-a xyz\n", f"../x {digest}\n", f"viec-a {digest.upper()}\n"):
-            with self.subTest(bad=bad):
-                with self.assertRaises(SystemExit):
-                    B.load_allow(self.write("bad.txt", bad))
+            with self.subTest(bad=bad), self.assertRaises(SystemExit):
+                B.load_allow(self.write("bad.txt", bad))
         self.assertEqual(B.load_allow(self.tmp / "khong-co.txt"), {})
         self.assertEqual(B.load_allow(HARBOR / "compose-allow.txt"), {})      # bản commit: chưa duyệt việc nào
         self.assertIn("sha256", (HARBOR / "compose-allow.txt").read_text(encoding="utf-8"))
@@ -500,7 +497,7 @@ class PickTests(Base):
 
     def test_vetting_failures_are_not_picked_and_cli_prints_a_documented_list(self):
         ds = self.make_dataset({"2026-10": 26})
-        bad = sorted(B.list_tasks(ds))[0]
+        bad = min(B.list_tasks(ds))
         self.write(f"ds/{bad}/environment/docker-compose.yaml", "services:\n  main:\n    privileged: true\n")
         with self.assertRaises(SystemExit):          # còn 25 sạch thì được, 26 trừ 1 = 25 -> đủ
             B.pick_swerebench(ds, 26)
@@ -866,7 +863,7 @@ class ExportTests(Base):
         out = self.tmp / "out"
         r = run_script(SCRIPT, "export", str(self.tmp / "pilot"), "--out", str(out))
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual([p for p in out.rglob("reward.txt")], [])
+        self.assertEqual(list(out.rglob("reward.txt")), [])
         self.assertNotIn("mật khẩu", "".join(p.read_text() for p in out.rglob("*") if p.is_file()))
 
     def test_fails_when_the_job_has_no_finished_trial_yet(self):
@@ -1563,7 +1560,7 @@ class TufBehaviourTests(TempDirTestCase):
                 self.write(f"home/harbor-eval/datasets/{ds}/{n}/task.toml", '[metadata]\ndifficulty = "hard"\n')
         self.harbor("echo \"$@\" > \"$HOME/harbor-args.txt\"\nenv | sort > \"$HOME/harbor-env.txt\"\nsleep 6\n")
         self.env_file(f"CLAUDE_CODE_OAUTH_TOKEN={self.TOKEN}\n")
-        self.addCleanup(shutil_rmtree, REPO / ".tmp" / "harbor-jobs" / "jobs" / self.LOCAL_JOB)
+        self.addCleanup(rmtree_and_empty_parents, REPO / ".tmp" / "harbor-jobs" / "jobs" / self.LOCAL_JOB, REPO / ".tmp")
 
     def shim(self, name, body):
         p = self.bin / name
@@ -1757,7 +1754,7 @@ class TufBehaviourTests(TempDirTestCase):
         self.assertFalse(self.args_file().exists())
 
     def test_without_yes_nothing_is_launched_and_the_plan_is_printed(self):
-        for cmd, what in ((("oracle",), "lời giải mẫu"), (("pilot",), "pilot"), (("run",), "job lớn")):
+        for cmd, _what in ((("oracle",), "lời giải mẫu"), (("pilot",), "pilot"), (("run",), "job lớn")):
             r = self.tuf(*cmd)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             self.assertIn("Chưa chạy. Thêm --yes", r.stdout)
@@ -1921,6 +1918,19 @@ esac
 def shutil_rmtree(path):
     import shutil
     shutil.rmtree(path, ignore_errors=True)
+
+
+def rmtree_and_empty_parents(path, stop):
+    """Xóa path rồi xóa các thư mục cha đã rỗng tới (không gồm) stop, để test không để lại .tmp/harbor-jobs/jobs.
+    Thư mục cha còn file (kết quả đo thật kéo về bằng tuf.sh fetch) thì giữ."""
+    shutil_rmtree(path)
+    parent = path.parent
+    while parent != stop and stop in parent.parents:
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
 
 
 class SerialBuildEnvTests(TempDirTestCase):
@@ -2237,7 +2247,7 @@ class AgentFileTests(unittest.TestCase):
         conf.mkdir()
         (conf / "99agent-stack-proxy").write_text('Acquire::http::Proxy "http://172.18.0.1:3142";\n')
         fakes = {"apt-get": f'echo "$*" >> {log}\n' + apt_body, "dpkg": "exit 0\n"}
-        fakes.update({name: "exit 0\n" for name in present})
+        fakes.update(dict.fromkeys(present, "exit 0\n"))
         bin_dir = self.isolated_bin(tmp, fakes)
         cmd = (self.preinstall_script().replace("wd_update=90", "wd_update=1").replace("wd_install=300", "wd_install=1")
                .replace("/var/lib/apt", f"{tmp}/lib-apt").replace("/var/cache/apt", f"{tmp}/cache-apt")
@@ -2326,6 +2336,36 @@ class HostCompatTests(unittest.TestCase):
             for node in ast.walk(tree):
                 self.assertNotIsInstance(node, getattr(ast, "Match", ()), f.name)
             self.assertNotRegex(src, r"\bimport tomllib\b|from tomllib\b", f.name)
+
+    def test_hooks_and_lib_avoid_runtime_api_newer_than_the_minimum(self):
+        """Cú pháp 3.9 hợp lệ nhưng chạy lỗi dưới 3.10/3.11 (ruff autofix từng đưa vào 13/11/2026): `X | None` trong
+        chú thích khi thiếu `from __future__ import annotations`, `zip(strict=)`, `itertools.pairwise`, `datetime.UTC`."""
+        bad = []
+        for f in list((PLUGIN / "hooks").glob("*.py")) + list((PLUGIN / "lib").glob("*.py")):
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            lazy = any(isinstance(n, ast.ImportFrom) and n.module == "__future__"
+                       and any(a.name == "annotations" for a in n.names) for n in tree.body)
+            notes = []
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    args = node.args
+                    notes += [a.annotation for a in args.posonlyargs + args.args + args.kwonlyargs if a.annotation]
+                    notes += [a.annotation for a in (args.vararg, args.kwarg) if a and a.annotation]
+                    notes += [node.returns] if node.returns else []
+                elif isinstance(node, ast.AnnAssign):
+                    notes.append(node.annotation)
+                elif isinstance(node, ast.Call) and getattr(node.func, "id", None) == "zip" \
+                        and any(k.arg == "strict" for k in node.keywords):
+                    bad.append(f"{f.name}:{node.lineno} zip(strict=) cần 3.10")
+                elif isinstance(node, ast.Attribute) and node.attr in ("pairwise", "UTC"):
+                    bad.append(f"{f.name}:{node.lineno} .{node.attr} cần 3.10/3.11")
+                elif isinstance(node, ast.ImportFrom) and any(a.name in ("pairwise", "UTC") for a in node.names):
+                    bad.append(f"{f.name}:{node.lineno} import {node.module} cần 3.10/3.11")
+            if not lazy:
+                bad += [f"{f.name}:{n.lineno} `X | Y` trong chú thích cần from __future__ import annotations"
+                        for note in notes for n in ast.walk(note) if isinstance(n, ast.BinOp)
+                        and isinstance(n.op, ast.BitOr)]
+        self.assertEqual(bad, [])
 
 
 if __name__ == "__main__":

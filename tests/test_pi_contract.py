@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import unittest
 
 from tests._util import PLUGIN, REPO, TempDirTestCase, copy_plugin, git
 
@@ -241,6 +240,8 @@ class HookPayloadTests(TempDirTestCase):
             "SessionStart": {"source": "startup"},
             "UserPromptSubmit": {"prompt": "sửa lỗi trong hàm parse và chạy test"},
             "PreToolUse": {"tool_name": "Bash", "tool_input": {"command": "ls"}},
+            "PostToolUse": {"tool_name": "Write", "tool_input": {"file_path": "khong-co.py", "content": ""},
+                            "tool_response": {}},
             "Stop": {"stop_hook_active": False, "last_assistant_message": "Đã xong."},
             "PreCompact": {"trigger": "auto"},
             "SessionEnd": {"reason": "exit"},

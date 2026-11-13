@@ -116,7 +116,7 @@ class PlanTest(RepoCase):
         self.commit()
         self.write("src/a.ts", "export const a: number = 'x';\n")
         self.write("src-tauri/src/main.rs", "fn main() { let unused = 1; }\n")
-        ctx, plan = self.plan()
+        _ctx, plan = self.plan()
         tools = [c.tool for c in plan.checks]
         self.assertIn("npm run typecheck", tools)
         rust = [c for c in plan.checks if c.lang == "rust" and c.kind == "lint"]
@@ -134,7 +134,7 @@ class PlanTest(RepoCase):
         self.write("src/lib.rs", "pub fn a() {}\n")
         self.commit()
         self.write("src/lib.rs", "pub fn a() { let unused = 1; }\n")
-        ctx, plan = self.plan()
+        _ctx, plan = self.plan()
         self.assertEqual([c for c in plan.checks if c.lang == "rust"], [])
         self.assertEqual({(lang, kind) for lang, kind, _, _ in plan.covered},
                          {("rust", "lint"), ("rust", "type"), ("rust", "format")})
@@ -317,7 +317,7 @@ class SecondReviewTest(RepoCase):
         key = "AKIA" + "QYLPMN5HFIQR7XYZ"
         self.write("tests/fix.py", f'KEY = "{key}"\n')
         self.write("src/leak.py", f'KEY = "{key}"\n')
-        code, out = self.run_checks("--offline", path=os.environ["PATH"])
+        _code, out = self.run_checks("--offline", path=os.environ["PATH"])
         self.assertIn("✗ src/leak.py:1", out)
         self.assertNotIn("✗ tests/fix.py", out)  # allowlist `^tests/` của project được tôn trọng
         self.assertNotIn(key, out)
@@ -353,7 +353,7 @@ class SecondReviewTest(RepoCase):
         self.write("a.txt", "x\n")
         self.commit()
         self.write("--output-file=INJECTED.py", "x = undefined_name\n")
-        code, out = self.run_checks("--offline", path=os.environ["PATH"])
+        _code, out = self.run_checks("--offline", path=os.environ["PATH"])
         self.assertFalse((self.root / "INJECTED.py").exists())
         self.assertIn("F821", out)
 
@@ -382,7 +382,7 @@ class SecondReviewTest(RepoCase):
         self.commit()
         self.write("turbo.json", '{\n  // pipeline\n  "a": 1\n}\n')
         self.write("other.json", '{\n  // ghi chú\n  "a": 1\n}\n')
-        code, out = self.run_checks("--offline")
+        _code, out = self.run_checks("--offline")
         self.assertNotIn("✗", out)
 
 
@@ -420,7 +420,7 @@ class ThirdReviewTest(RepoCase):
         self.commit()
         self.write("-x.js", "x\n")
         _, plan = self.plan()
-        lint = [c for c in plan.checks if c.tool == "eslint"][0]
+        lint = next(c for c in plan.checks if c.tool == "eslint")
         self.assertIn("./-x.js", lint.argv)
         self.assertNotIn("-x.js", lint.argv)
 
@@ -447,6 +447,28 @@ class TriageTest(unittest.TestCase):
 
 
 class ParserTest(unittest.TestCase):
+    def test_osv_groups_aliases_once(self):
+        # Dạng output thật của osv-scanner 2.7.1 (requests 2.19.0), rút gọn: PYSEC và GHSA là bí danh của nhau.
+        out = json.dumps({"results": [{"source": {"path": "/r/requirements.txt"}, "packages": [{
+            "package": {"name": "requests", "version": "2.19.0"},
+            "vulnerabilities": [
+                {"id": "PYSEC-2018-28", "aliases": ["CVE-2018-18074", "GHSA-x84v-xcm2-53pg"],
+                 "details": "The Requests package before 2.20.0 sends an HTTP Authorization header\nmore"},
+                {"id": "GHSA-x84v-xcm2-53pg", "summary": "Insufficiently Protected Credentials in Requests"},
+                {"id": "PYSEC-2023-74", "details": "Requests is a HTTP library.\nmore",
+                 "aliases": ["CVE-2023-32681"]},
+                {"id": "OSV-LE", "summary": "Lẻ, không thuộc nhóm nào"}],
+            "groups": [{"ids": ["PYSEC-2018-28", "GHSA-x84v-xcm2-53pg"],
+                        "aliases": ["CVE-2018-18074", "GHSA-x84v-xcm2-53pg", "PYSEC-2018-28"], "max_severity": "7.5"},
+                       {"ids": ["PYSEC-2023-74"], "aliases": ["CVE-2023-32681"], "max_severity": "6.1"}]}]}]})
+        diags = checks.parse_osv(out, "")
+        self.assertEqual([d.code for d in diags], ["GHSA-x84v-xcm2-53pg", "PYSEC-2023-74", "OSV-LE"])
+        self.assertEqual(diags[0].msg, "requests@2.19.0: Insufficiently Protected Credentials in Requests "
+                                       "(CVE-2018-18074, mức 7.5)")
+        self.assertEqual(diags[1].msg, "requests@2.19.0: Requests is a HTTP library. (CVE-2023-32681, mức 6.1)")
+        self.assertTrue(all(d.level == "warning" for d in diags))
+        self.assertEqual(checks.parse_osv("không phải json", ""), [])
+
     def test_generic_formats(self):
         out = ("src/main.rs:3:9: warning: unused variable: `x`\n"
                "src/main.rs:5:1: error[E0425]: cannot find value `y` in this scope\n"
@@ -547,6 +569,27 @@ class HookTest(RepoCase):
         self.assertEqual(code, 0)
         self.assertIn("run.sh:4", out)
         self.assertNotIn("run.sh:2", out)
+
+    def test_ruff_respects_project_exclude(self):
+        """File trong thư mục project loại trừ (extend-exclude, như đề bài eval) không bị báo, ở hook lẫn done-gate."""
+        if not shutil.which("ruff"):
+            self.skipTest("máy chưa có ruff")
+        self.write("ruff.toml", 'extend-exclude = ["fixtures"]\n[lint]\nselect = ["F"]\n')
+        self.write("fixtures/de_bai.py", "x = 1\n")
+        self.write("a.py", "x = 1\n")
+        self.commit()
+        bad = "import json\nx = chua_co\n"
+        for rel in ("fixtures/de_bai.py", "a.py"):
+            (self.root / rel).write_text(bad, encoding="utf-8")
+        payload = {"tool_name": "Write", "cwd": str(self.root)}
+        _, out, _ = self.hook({**payload, "tool_input": {"file_path": str(self.root / "fixtures/de_bai.py")}},
+                              path=os.environ["PATH"])
+        self.assertEqual(out, "")
+        _, out, _ = self.hook({**payload, "tool_input": {"file_path": str(self.root / "a.py")}}, path=os.environ["PATH"])
+        self.assertIn("F821", out)
+        _code, out = self.run_checks("--offline", path=os.environ["PATH"])
+        self.assertIn("a.py", out)
+        self.assertNotIn("de_bai.py:", out)
 
     def test_ruff_reports_only_edited_line(self):
         if not shutil.which("ruff"):

@@ -18,7 +18,7 @@ class RepoHygiene(unittest.TestCase):
         bad = []
         for top in DIRS:
             for path in (REPO / top).rglob("*"):
-                if not path.is_file() or path.suffix in (".pyc",):
+                if not path.is_file() or path.suffix == ".pyc":
                     continue
                 try:
                     text = path.read_text(encoding="utf-8")

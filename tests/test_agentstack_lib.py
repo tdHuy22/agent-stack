@@ -4,12 +4,19 @@ import stat
 import sys
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
-from pathlib import Path
-
-from tests._util import (CROSS_SESSION_MESSAGE, PLUGIN, REPO, SIDE_SESSIONS_EVENT, STARTED_SESSION_BRIEF,
-                         SUBAGENT_HANDBACK, TempDirTestCase, git)
+from tests._util import (
+    CROSS_SESSION_MESSAGE,
+    PLUGIN,
+    REPO,
+    SIDE_SESSIONS_EVENT,
+    STARTED_SESSION_BRIEF,
+    SUBAGENT_HANDBACK,
+    TempDirTestCase,
+    git,
+)
 
 sys.path.insert(0, str(PLUGIN / "lib"))
 import agentstack as A  # noqa: E402
@@ -344,7 +351,7 @@ class LastRequest(TempDirTestCase):
                 prompt = A.load_last_request("s")["prompt"]
                 self.assertEqual(prompt, "dùng khóa [đã che] gọi API")
                 raw = (self.dir / "s.json").read_text(encoding="utf-8")
-                for i in range(0, len(secret) - 11):  # không còn mảnh 12 ký tự nào của khóa trên đĩa
+                for i in range(len(secret) - 11):  # không còn mảnh 12 ký tự nào của khóa trên đĩa
                     self.assertNotIn(secret[i:i + 12], raw)
 
     def test_masking_happens_before_cutting(self):
@@ -354,7 +361,7 @@ class LastRequest(TempDirTestCase):
         prompt = A.load_last_request("s")["prompt"]
         self.assertEqual(len(prompt), 1200)
         self.assertIn("[đã che]", prompt)
-        for i in range(0, len(secret) - 5):
+        for i in range(len(secret) - 5):
             self.assertNotIn(secret[i:i + 6], prompt)
 
     def test_paths_identifiers_and_ids_stay_readable(self):
@@ -481,6 +488,7 @@ class LastTurn(TempDirTestCase):
 
     def test_turn_records_head_and_flags_and_done_gate_marker_is_per_project(self):
         import os
+
         from tests._util import git
         old = os.environ.get("AGENT_STACK_STATE")
         os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")

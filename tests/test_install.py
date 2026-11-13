@@ -76,6 +76,25 @@ sys.exit(code)
 """
 
 
+class JsonReadTests(TempDirTestCase):
+    def test_stale_install_without_plugin_listing_is_false(self):
+        # Lỗi cũ (ruff F811 bắt 13/11/2026): read_json_file định nghĩa hai lần, bản sau trả None đè bản trả dict,
+        # nên stale_install ném AttributeError khi installed_plugins.json thiếu hay hỏng.
+        sys.path.insert(0, str(REPO / "tools"))
+        import install as installer
+
+        class Fake:
+            claude_dir = self.tmp / "claude"
+
+        self.assertFalse(installer.Installer.stale_install(Fake(), "a@b", self.tmp))
+        (self.tmp / "claude" / "plugins").mkdir(parents=True)
+        (self.tmp / "claude" / "plugins" / "installed_plugins.json").write_text("[1, 2]")
+        self.assertFalse(installer.Installer.stale_install(Fake(), "a@b", self.tmp))
+        self.assertEqual(installer.read_json_file(self.tmp / "khong-co.json"), {})
+        self.assertIsNone(installer.read_json_any(self.tmp / "khong-co.json"))
+        self.assertEqual(installer.read_json_any(self.tmp / "claude" / "plugins" / "installed_plugins.json"), [1, 2])
+
+
 class InstallTests(TempDirTestCase):
     def setUp(self):
         super().setUp()
@@ -344,7 +363,7 @@ class InstallTests(TempDirTestCase):
         self.assertIn("bị ẩn khỏi git status (plugins/dr/README.md)", out)
 
     def test_sparse_checkout_of_vet_skill_is_accepted(self):
-        cache, plugin, sha = self.vendor_plugin_fixture()
+        cache, _plugin, sha = self.vendor_plugin_fixture()
         other = cache / "plugins" / "khac"
         other.mkdir()
         (other / "x.md").write_text("plugin khác, chưa duyệt\n")
