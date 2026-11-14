@@ -2,6 +2,14 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 14/11/2026 16:08
+
+### Từ §0 của `PLAN.md`: Xong
+
+- **Xong (14/11/2026): GĐ2 sổ luật, khóa test, bánh cóc** (kế hoạch phiên bạn duyệt; đạt 4/4 tiêu chí). (1) `rulebook.json` 121 luật (máy chặn 34, máy báo 11, bộ việc 5, model khác review 9, bạn duyệt 62), kiểm bằng `tools/rulebook.py` + `tests/test_rulebook.py` (trượt khi gạch đầu dòng thiếu mục, sai loại, trỏ tới test/hook/eval không có, máy chặn chỉ có test chống mất chữ). (2) `receipt.py lock|locks|unlock` + `plugin/lib/testlock.py`: khóa sau fails-before mã 0 vào `.agent/test-lock.json` (sha256, dấu dòng giữ thụt lề, cấu trúc ast từng hàm); hook `pretool_guard.py`: mức vừa nhắc một lần mỗi lượt, cao chặn; siết = thêm hàm test, class, import không che tên, hay assert ở cuối hàm (bạn chọn 14/11); `unlock` chỉ qua khi tin bạn nêu đúng file, biên nhận `state/unlock-consents.json` gắn sha. (3) `done-gate/scripts/ratchet.py` trong `risk.py`: siết/nới từ diff và sổ ở base; nới, spec + code cùng đổi, sổ hỏng thì 🔴; SKILL.md bước 4, 7. (4) Bằng chứng: fails-before mã 0 cho `test_ratchet` + `test_testlock_guard` (đã khóa chính hai file này, mức cao); diff thử trên bản chép nới assert test khóa → 🔴 và hook chặn; 1398 test đạt qua `receipt.py run`; `plugin validate`, `plugin test` 24 đạt. Review opus·xhigh + sonnet·xhigh (19 lỗi, 2 cao) rồi sonnet·high (7 lỗi), sửa cả 26 kèm test; TM-102..106 đã có. Ghi nhớ: 62 luật bạn duyệt và 9 luật model review là chỗ siết dần; hook chặn cả trình thông dịch có nhắc tên sổ khóa trong lệnh hay heredoc (sửa file khác mà nội dung nhắc tên sổ thì dùng Edit).
+
+- **Xong (13/11/2026 chiều): T.1, T.2 và xử lý hạn chế trừ tuf** (bạn: "làm 2 việc đã chọn và xử lý các hạn chế trừ tuf"; tiêu chí rút từ 4 lựa chọn của bạn, đạt 6/6). (1) osv-scanner, biome, pyright cài qua `install.sh` (catalog.json, vetted.lock); osv-scanner chạy thật, `parse_osv` gộp bí danh PYSEC/GHSA (requests 2.19.0: 36 → 18 dòng, kèm CVE, mức). (2) `ruff.toml` bộ luật rộng (py39 cho `plugin/hooks`, `plugin/lib`, `claude-ai-skills`), `biome.json`, test `Linters`; ruff bắt lỗi thật `read_json_file` hai định nghĩa trong `tools/install.py` (fails-before đạt); checks.py/post_edit dùng `--force-exclude`, `--isolated` khi project không có cấu hình. (3) pyright-lsp bật scope local, `vet.py drift` khớp. (4) pi: coding-agents `4447176`, `pi.json` PostToolUse dùng. (5) test harbor, paper-anatomy không để rác `.tmp/`; ghi chú static-analysis sửa. (6) 1327 test đạt (biên nhận), `plugin validate` đạt, `plugin test` 24 pass. Review fable·high + sonnet·high (5 lỗi) rồi sonnet·high xem lại (1 lỗi), đã sửa cả 6; TM-100, TM-101 đã có.
+
 ## Đợt 14/11/2026 12:02
 
 ### Từ §0 của `PLAN.md`: Xong
