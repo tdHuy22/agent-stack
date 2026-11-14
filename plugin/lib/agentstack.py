@@ -1013,7 +1013,10 @@ CONSENT_VERBS = {  # việc → các cách gọi tên (một token, chữ thư�
     "amend": {"amend"},
     "rebase": {"rebase"},
     "rm": {"xóa", "xoá", "rm", "delete", "remove"},
+    "unlock": {"unlock", "mở-khóa"},  # "mở khóa" được gộp thành một token trong text_consents
 }
+_UNLOCK_TAIL = {"test", "tests", "file", "cho", "khóa"}  # "mở khóa test tests/test_x.py"
+_UNLOCK_RE = re.compile(r"\b(?:mở|gỡ|bỏ)\s+kh(?:óa|oá)\b")
 # Từ được đứng trước động từ trong mệnh đề (lời đồng ý, thúc giục) và đứng sau nó (tân ngữ quen thuộc, trợ từ).
 _CONSENT_LEAD = {"ok", "okay", "oke", "ừ", "ừm", "uh", "ờ", "vâng", "dạ", "đồng", "ý", "yes", "yep", "sure", "hãy", "cứ",
                  "please", "pls", "được", "rồi", "giờ", "bây", "now", "go", "ahead", "and", "và", "git", "thì", "vậy",
@@ -1069,6 +1072,8 @@ def text_consents(text: str, verb: str, targets=()) -> bool:
             return False
         paths.append(_norm_path(target))
     text = unicodedata.normalize("NFC", text).lower()
+    if verb == "unlock":
+        text = _UNLOCK_RE.sub("mở-khóa", text.replace("khoá", "khóa"))
     # tách ở dấu chấm chỉ khi sau nó là khoảng trắng hay hết chuỗi, để "xóa file.txt" vẫn nêu được đích
     for clause, end in re.findall(r"((?:[^.!?;,\n]|\.(?!\s|$))+)([.!?;,\n]?)", text):
         if "?" in end:
@@ -1081,11 +1086,12 @@ def text_consents(text: str, verb: str, targets=()) -> bool:
         tail = words[at + 1:]
         if tail and tail[-1] == "rồi":
             continue  # "push rồi": đã làm, không phải lời bảo làm
-        if verb == "rm":
+        if verb in ("rm", "unlock"):  # mọi đích phải được nêu
             said = [_norm_path(w) for w in tail]
             if not all(any(_names_target(w, p) for w in said) for p in paths):
                 continue
-            if any(w not in _CONSENT_TAIL and not any(_names_target(s, p) for p in paths) for w, s in zip(tail, said)):
+            allowed = _CONSENT_TAIL | (_UNLOCK_TAIL if verb == "unlock" else set())
+            if any(w not in allowed and not any(_names_target(s, p) for p in paths) for w, s in zip(tail, said)):
                 continue
         elif any(w not in _CONSENT_TAIL and w not in names and not _CONSENT_REF.fullmatch(w)
                  and not (verb in ("push", "force") and w in _PUSH_TAIL)

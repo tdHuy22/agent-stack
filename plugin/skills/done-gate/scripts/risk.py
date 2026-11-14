@@ -599,8 +599,9 @@ def reader_page(path: Path) -> bool:
 
 
 def render(r: dict, base: str = "HEAD") -> str:
+    shelf = ratchet_lines(r.get("ratchet"))
     if r["empty"]:
-        return f"Không có thay đổi nào so với {base}."
+        return "\n".join([f"Không có thay đổi nào so với {base}.", *shelf])
     sizes = ", ".join(f"{KIND_NAMES[k]} {v}" for k, v in r["by_kind"].items() if v)
     lines = [f"Mức rủi ro: {LEVEL_NAMES[r['level']]} (điểm {r['score']}) · {r['files']} file, "
              f"+{r['added']}/−{r['deleted']} dòng ({sizes or 'không đếm được dòng'})"]
@@ -621,6 +622,7 @@ def render(r: dict, base: str = "HEAD") -> str:
                      f"`{THREAT_MODEL_REL}`" + ("" if r.get("threat_model_updated") else
                                                 "; nếu chưa có mục cho việc này, chạy skill threat-model trước bước review")
                      + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
+    lines += shelf
     lines.append(f"Review đề nghị: {r['review']}")
     if r.get("ask"):
         choices = r.get("choices") or ["chỉ một reviewer sonnet·high (rẻ hơn)"]
@@ -628,6 +630,17 @@ def render(r: dict, base: str = "HEAD") -> str:
                      + f". Cho họ chọn: {', '.join(choices[:-1]) + ' hay ' if len(choices) > 1 else ''}{choices[-1]}; "
                      "trừ khi họ đã chọn cho việc này.")
     return "\n".join(lines)
+
+
+def ratchet_lines(r) -> list:
+    if not r:
+        return []
+    if r.get("verdict") == "loi":
+        return [f"Bánh cóc: 🔴 chưa xét được ({r.get('error')}): đưa vào \"Cần bạn quyết\", tự so test đã khóa bằng "
+                "`receipt.py locks`; không báo xong như khi bánh cóc xanh."]
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ratchet
+    return ratchet.render(r)
 
 
 def fresh_changes(changes, seen: dict, removed_seen: dict | None = None, asserts_seen: dict | None = None):
@@ -713,6 +726,7 @@ def main(argv=None) -> int:
     except GitError as exc:
         print(f"Không chấm được: {exc}. Kiểm lại --base hoặc trạng thái repo.")
         return 2
+    result["ratchet"] = ratchet_of(args.root, changes, args.base)
     # Diff rỗng (thường do quên --base sau khi commit) thì không ghi dấu: dấu rỗng sẽ làm hook Stop tưởng đã chốt việc.
     if changes:
         mark_ran(args.root, changes, result["level"])
@@ -721,6 +735,17 @@ def main(argv=None) -> int:
     else:
         print(render(result, args.base or "HEAD"))
     return 0
+
+
+def ratchet_of(root, changes, base=None) -> dict:
+    """Bánh cóc trên cả diff (kể cả khi --new): siết hay nới, theo diff và sổ khóa test (ratchet.py). Lỗi bất ngờ thì
+    nói rõ là chưa xét được, không làm hỏng việc chấm rủi ro."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import ratchet
+        return ratchet.classify(root, changes, base, kind=kind, weakening=weakening)
+    except Exception as exc:  # noqa: BLE001
+        return {"verdict": "loi", "error": repr(exc)[:200], "loosen": [], "approved": [], "tighten": [], "red": []}
 
 
 def line_hashes(text: str) -> list:

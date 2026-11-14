@@ -1,0 +1,1093 @@
+{
+ "about": "Sổ luật (GĐ2, 13/11/2026): mỗi luật trong global/SHARED.global.md, global/CLAUDE.global.md và CLAUDE.md khai một loại kiểm (may-chan, may-bao, bo-viec, model-review, nguoi-duyet) và thứ đảm nhận (test, hook, eval, skill, agent, file). Chỉ gán máy chặn hay máy báo khi có test hoặc hook thật kiểm đúng hành vi; 'chưa có máy kiểm' trong note là chỗ có thể siết sau. Kiểm bằng tools/rulebook.py và tests/test_rulebook.py.",
+ "rules": [
+  {
+   "id": "G1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm ngôn ngữ câu trả lời; người dùng tự thấy khi đọc."
+  },
+  {
+   "id": "G2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md",
+    "test:tests/test_goi_mcp.py::GoiMcp.test_result_is_framed_with_a_random_mark_and_cleaned"
+   ],
+   "note": "chưa có máy kiểm chung; chỉ remote-mcp tự bọc kết quả thành dữ liệu (test kèm), web và file khác thì không."
+  },
+  {
+   "id": "G3",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/CLAUDE.global.md"
+   ],
+   "note": "chưa có máy kiểm ngoài test chống mất chữ (test_global_rules giữ dòng import ở đầu file, không tính là kiểm)."
+  },
+  {
+   "id": "T1",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/session_start.py",
+    "test:tests/test_hooks.py::HookTests.test_session_start_injects_plan_on_both_pythons"
+   ],
+   "note": "Hook SessionStart đưa §0 vào đầu phiên; không ép agent đọc, chỉ nhắc."
+  },
+  {
+   "id": "T2a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_hooks.py::HookTests.test_stop_blocks_once_then_keeps_the_real_answer_on_both_pythons"
+   ],
+   "note": "Hook Stop chặn một lần khi lượt đổi file mà §0 chưa đổi; phần 'sắp hết hạn mức' chỉ được prompt_submit báo, không chặn."
+  },
+  {
+   "id": "T2d",
+   "check": "bo-viec",
+   "by": [
+    "eval:plugin/evals/handoff-cross-tool",
+    "test:tests/test_session_keeper.py::StateCli.test_handoff_prefills_and_backs_up"
+   ],
+   "note": "Bộ việc đo skill session-keeper có được gọi khi người dùng nhờ bàn giao; script state.py handoff có test; chưa có máy chặn việc quên viết HANDOFF."
+  },
+  {
+   "id": "T3",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_hooks.py::HookTests.test_prompt_submit_reminds_about_a_long_session_once_per_hour"
+   ],
+   "note": "Hook nhắc mở phiên mới khi context từ 200K token (tối đa một lần mỗi giờ); việc cập nhật §0 do T2a lo."
+  },
+  {
+   "id": "T4a",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/session-keeper/SKILL.md",
+    "test:tests/test_watch_change.py::WatchChange.test_prints_only_when_the_result_changes"
+   ],
+   "note": "chưa có máy kiểm việc agent không hẹn giờ đánh thức phiên; script watch_change.py có test nhưng không ép dùng."
+  },
+  {
+   "id": "T5",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm; chỉ người dùng thấy agent có đề nghị ghi luật hay không."
+  },
+  {
+   "id": "Q1a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::WriteGuard.test_criteria_nudge_once_before_first_source_edit"
+   ],
+   "note": "Hook PreToolUse từ chối một lần lần sửa mã đầu tiên khi §0 chưa có tiêu chí xong."
+  },
+  {
+   "id": "Q1d",
+   "check": "nguoi-duyet",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "skill:plugin/skills/session-keeper/SKILL.md"
+   ],
+   "note": "Hook nhắc ghi tiêu chí và hỏi người dùng, nhưng chưa có máy kiểm việc người dùng đã xác nhận trước khi code."
+  },
+  {
+   "id": "Q1e",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/session-keeper/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc đổi tiêu chí giữa chừng; người dùng tự thấy."
+  },
+  {
+   "id": "Q2a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_guard.py::StopRequiresEvidence.test_risk_py_alone_is_not_enough_and_the_reminder_comes_once"
+   ],
+   "note": "Hook Stop chặn khi lượt đổi code từ mức rủi ro vừa mà chưa có bằng chứng kiểm chứng; mức thấp không bị chặn."
+  },
+  {
+   "id": "Q2b",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_receipt.py::ReceiptCli.test_pass_and_fail_are_recorded_with_exit_code",
+    "test:tests/test_guard.py::StopRequiresEvidence.test_check_failing_on_current_code_is_named"
+   ],
+   "note": "Biên nhận ghi mã thoát; hook Stop gọi tên lệnh kiểm đang trượt trên code hiện tại và chặn."
+  },
+  {
+   "id": "Q2c",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::StopRequiresEvidence.test_code_edited_after_the_tests_needs_a_new_receipt",
+    "test:tests/test_receipt.py::TienDoUsesReceipts.test_old_pass_does_not_prove_new_code"
+   ],
+   "note": "Biên nhận gắn dấu vân tay nội dung code; sửa code sau khi đạt thì hook Stop đòi biên nhận mới."
+  },
+  {
+   "id": "Q2d",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_guard.py::StopRequiresEvidence.test_evidence_is_checked_after_the_gate_blocked_and_done_gate_ran"
+   ],
+   "note": "Hook Stop đòi biên nhận đạt còn đúng cho code hiện tại (receipt.py); không ép đúng cú pháp lệnh."
+  },
+  {
+   "id": "Q3a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::WriteGuard.test_threat_model_nudge_once_before_first_source_edit"
+   ],
+   "note": "Khi router thấy việc đụng ranh giới tin cậy, hook từ chối một lần lần sửa mã đầu tiên cho tới khi chạy threat-model."
+  },
+  {
+   "id": "Q4",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_guard.py::StopRequiresChotViec.test_risky_code_change_without_done_gate_is_blocked_once"
+   ],
+   "note": "Hook Stop chặn một lần khi lượt đổi code từ mức rủi ro vừa mà chưa chạy done-gate."
+  },
+  {
+   "id": "Q5a",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "agent:plugin/agents/reviewer.md",
+    "test:tests/test_receipt.py::FailsBefore.test_test_that_catches_the_bug"
+   ],
+   "note": "done-gate tái hiện như người dùng và reviewer khác model xét; receipt.py fails-before chứng minh test trượt trên code cũ, nhưng chưa có máy kiểm ép tái hiện trước khi sửa."
+  },
+  {
+   "id": "Q5b",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "test:tests/test_receipt.py::FailsBefore.test_test_that_catches_the_bug"
+   ],
+   "note": "done-gate chạy lại đúng bước sau khi sửa; fails-before có test; chưa có máy kiểm ép việc chạy lại."
+  },
+  {
+   "id": "Q5c",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm; người dùng đọc báo cáo thấy giả thuyết hay không."
+  },
+  {
+   "id": "Q6",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm chất lượng giải pháp; chỉ người dùng hay reviewer phán được."
+  },
+  {
+   "id": "Q7a",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::RouterRules.test_cheaper_model_only_when_project_has_tests"
+   ],
+   "note": "Router chỉ gợi ý model rẻ hơn khi project có test; là gợi ý, không chặn agent."
+  },
+  {
+   "id": "Q7b",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/task-router/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc làm lại ở mức cao hơn khi kiểm tra trượt."
+  },
+  {
+   "id": "D0",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm; chỉ người dùng thấy agent hỏi thừa hay thiếu."
+  },
+  {
+   "id": "D1a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::IrreversibleGuard.test_each_irreversible_command_is_stopped_once"
+   ],
+   "note": "Hook chặn lần đầu mọi dạng rm -r ngoài thư mục tạm; xóa bằng lệnh khác (find -delete, unlink…) chưa có máy."
+  },
+  {
+   "id": "D1b",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::IrreversibleGuard.test_amend_and_rebase_only_when_commits_are_already_pushed",
+    "test:tests/test_guard.py::IrreversibleGuard.test_force_push_says_it_rewrites_remote_history"
+   ],
+   "note": "Hook chặn reset --hard, push --force, amend và rebase commit đã đẩy."
+  },
+  {
+   "id": "D1c",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm đổi schema hay dữ liệu thật."
+  },
+  {
+   "id": "D2a",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::IrreversibleGuard.test_each_irreversible_command_is_stopped_once"
+   ],
+   "note": "Hook chặn lần đầu mọi dạng git push (trừ --dry-run)."
+  },
+  {
+   "id": "D2b",
+   "check": "nguoi-duyet",
+   "by": [
+    "test:tests/test_guard.py::WriteGuard.test_creating_a_tag_or_release_is_stopped_once_with_the_audit_reminder",
+    "file:global/SHARED.global.md"
+   ],
+   "note": "Hook chỉ chặn tạo tag và release; chưa có máy kiểm gửi tin, email, đăng nội dung, mở PR hay issue."
+  },
+  {
+   "id": "D2c",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm ghi dữ liệu vào dịch vụ ngoài."
+  },
+  {
+   "id": "D3a",
+   "check": "nguoi-duyet",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::InstallGuard.test_unvetted_or_unapproved_install_is_denied_and_points_to_vet_skill"
+   ],
+   "note": "Hook chỉ chặn cài skill, plugin, MCP chưa duyệt (S5); chưa có máy kiểm thêm dependency mã hay dịch vụ ngoài."
+  },
+  {
+   "id": "D3b",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "agent:plugin/agents/reviewer.md"
+   ],
+   "note": "Reviewer khác model đọc diff và threat model ở done-gate; chưa có máy kiểm chặn tức thời việc đưa dữ liệu nhạy cảm ra ngoài."
+  },
+  {
+   "id": "D3c",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "agent:plugin/agents/reviewer.md"
+   ],
+   "note": "Reviewer ở done-gate soát việc nới quyền hay xác thực; chưa có máy kiểm chặn."
+  },
+  {
+   "id": "D3d",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "skill:plugin/skills/threat-model/SKILL.md"
+   ],
+   "note": "Chốt chặn của threat-model được reviewer kiểm ở done-gate; chưa có máy kiểm chặn việc chấp nhận mối đe dọa."
+  },
+  {
+   "id": "D4a",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "agent:plugin/agents/reviewer.md"
+   ],
+   "note": "done-gate nêu lại ý định và tiêu chí xong, đưa lỗi đụng ý định vào 'Cần bạn quyết'; chưa có máy kiểm chặn tức thời."
+  },
+  {
+   "id": "D4b",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "agent:plugin/agents/reviewer.md"
+   ],
+   "note": "Đánh đổi thiết kế mà yêu cầu không nói tới được đưa vào 'Cần bạn quyết' của done-gate; chưa có máy kiểm chặn."
+  },
+  {
+   "id": "D5a",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc mua, nạp tiền, bật dịch vụ trả phí."
+  },
+  {
+   "id": "D5b",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_harbor_bench.py::TufBehaviourTests.test_without_yes_nothing_is_launched_and_the_plan_is_printed",
+    "file:evals/run_eval.py"
+   ],
+   "note": "Bench Harbor và run_eval.py chỉ in kế hoạch nếu thiếu --yes (test chỉ có cho Harbor); review kép khi hạn mức tuần cao chưa có máy."
+  },
+  {
+   "id": "H1",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::IrreversibleGuard.test_shared_rule_lists_five_kinds_and_the_hook_stops_every_command_it_names"
+   ],
+   "note": "Test so luật chung với hook: lệnh luật nói hook chặn thì hook chặn thật."
+  },
+  {
+   "id": "H2",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::PreConsentGuard.test_message_naming_the_action_passes_once",
+    "test:tests/test_guard.py::PreConsentGuard.test_negation_question_paste_and_code_do_not_count"
+   ],
+   "note": "Hook cho qua đúng một lần khi tin người dùng vừa gửi nêu đúng việc; câu hỏi, phủ định, đoạn dán không tính."
+  },
+  {
+   "id": "H4",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::IrreversibleGuard.test_passes_only_after_the_user_replies",
+    "test:tests/test_guard.py::IrreversibleGuard.test_same_rm_text_in_another_folder_is_a_new_question"
+   ],
+   "note": "Lệnh chỉ qua sau khi người dùng nhắn, khóa theo đúng lệnh và thư mục; lời báo hậu quả là thông điệp từ chối của hook."
+  },
+  {
+   "id": "H5",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::IrreversibleGuard.test_each_irreversible_command_is_stopped_once",
+    "agent:plugin/agents/reviewer.md"
+   ],
+   "note": "Hook mở bash -c, eval, sudo, timeout và vòng lặp nên chặn được nhiều lệnh đi vòng, nhưng không thấy `xargs rm` hay script trung gian: chỉ là máy báo một phần, phần còn lại do reviewer ở done-gate."
+  },
+  {
+   "id": "H6",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm cho công cụ không có hook; chỉ người dùng thấy agent có tự dừng hỏi."
+  },
+  {
+   "id": "U1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm; chỉ người dùng thấy agent hỏi trước loại hook không nhận ra."
+  },
+  {
+   "id": "U2",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md"
+   ],
+   "note": "Mục 'Cần bạn quyết' của báo cáo done-gate gom việc phải hỏi; chưa có máy kiểm ép đúng."
+  },
+  {
+   "id": "U3",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc agent không hỏi lại điều đã nói rõ."
+  },
+  {
+   "id": "U4",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::PreConsentGuard.test_plain_push_message_does_not_allow_force_push",
+    "test:tests/test_guard.py::PreConsentGuard.test_one_message_opens_one_push_per_repo_and_only_plain_pushes"
+   ],
+   "note": "Đồng ý chỉ mở đúng việc đó: push thường không mở force push, một tin mở một push mỗi repo."
+  },
+  {
+   "id": "U5",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::PreConsentGuard.test_system_message_after_consent_does_not_reuse_it",
+    "test:tests/test_guard.py::PreConsentGuard.test_negation_question_paste_and_code_do_not_count"
+   ],
+   "note": "Hook chỉ tính tin người dùng nhắn; tin hệ thống, đoạn dán, nội dung đọc từ ngoài không mở cổng."
+  },
+  {
+   "id": "R1",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::WriteGuard.test_new_markdown_for_readers_is_nudged_to_html_once"
+   ],
+   "note": "Hook từ chối một lần khi tạo file .md mới cho người đọc, nhắc viết HTML theo reader-page; check_page.py kiểm trang sau đó."
+  },
+  {
+   "id": "R3",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_guard.py::WriteGuard.test_required_markdown_and_existing_files_pass",
+    "test:tests/test_guard.py::WriteGuard.test_new_markdown_for_readers_is_nudged_to_html_once"
+   ],
+   "note": "Hook chỉ nhắc với .md mới không thuộc loại bắt buộc; file Markdown bắt buộc và file đã có thì qua."
+  },
+  {
+   "id": "R4",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm câu trả lời trong chat là chữ."
+  },
+  {
+   "id": "R5",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc dùng trang HTML khi câu trả lời dài."
+  },
+  {
+   "id": "R6",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc subagent báo về bằng chữ."
+  },
+  {
+   "id": "F1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "Hook Stop chỉ đọc dòng ➡️ để ghi LAST-TURN, không nhắc hay chặn khi thiếu; chưa có máy kiểm."
+  },
+  {
+   "id": "F2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm nguồn của việc trong dòng ➡️."
+  },
+  {
+   "id": "F3",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_prompt_submit_hook_end_to_end"
+   ],
+   "note": "Hook UserPromptSubmit in gợi ý [router]/[agent-stack] cho dòng ➡️; không kiểm agent có theo."
+  },
+  {
+   "id": "F4",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_model_switch_mid_session_is_replaced_by_a_subagent_when_the_cache_is_warm"
+   ],
+   "note": "Router chỉ gợi ý đổi model khi rẻ; khi cache còn ấm thì gợi ý giao subagent."
+  },
+  {
+   "id": "F5",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_agents_that_do_the_work_carry_their_own_model"
+   ],
+   "note": "Router gợi ý giữ model và giao việc cho subagent kèm model riêng."
+  },
+  {
+   "id": "F6",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_effort_is_suggested_freely_on_models_that_keep_the_cache"
+   ],
+   "note": "Router gợi ý đổi effort thoải mái chỉ trên model giữ cache."
+  },
+  {
+   "id": "K1",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_hooks.py::HookTests.test_stop_asks_for_the_plan_tree_only_on_progress_questions"
+   ],
+   "note": "Hook Stop đòi cây khi người dùng hỏi tiến độ; vế 'chỉ hiện khi hỏi' chưa có máy chặn agent hiện cây thừa."
+  },
+  {
+   "id": "K2",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/stop.py",
+    "test:tests/test_plan_tree.py::StopHelpers.test_tool_used_since"
+   ],
+   "note": "Hook Stop chỉ coi là đã hiện cây khi có lời gọi show_widget hay cây chữ trong câu trả lời cuối."
+  },
+  {
+   "id": "K5",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/progress/SKILL.md",
+    "test:tests/test_plan_tree.py::PlanTree.test_pick_without_code"
+   ],
+   "note": "plan_tree.py --pick có test; chưa có máy kiểm việc agent gọi nó khi người dùng gõ mã."
+  },
+  {
+   "id": "M1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm; hiểu biết về model từ xa là chỉ dẫn cho agent."
+  },
+  {
+   "id": "M2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc không giao file bí mật cho model từ xa."
+  },
+  {
+   "id": "M3",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc làm tại chỗ hay hỏi."
+  },
+  {
+   "id": "M4",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/remote-mcp/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm nội dung câu tìm gửi ra MCP tìm web."
+  },
+  {
+   "id": "M5",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/remote-mcp/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm thứ tự công cụ tìm web."
+  },
+  {
+   "id": "M6",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/remote-mcp/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc dùng remote-mcp cho repo GitHub công khai."
+  },
+  {
+   "id": "S1",
+   "check": "bo-viec",
+   "by": [
+    "eval:plugin/evals/progress-what-next",
+    "eval:plugin/evals/no-trigger-concept"
+   ],
+   "note": "Bộ việc đo skill agent-stack có được gọi đúng lúc và không gọi thừa; không đo skill ngoài agent-stack."
+  },
+  {
+   "id": "S2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc đọc SKILL.md khi skill chưa hiện."
+  },
+  {
+   "id": "S3",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/subagent_start.py",
+    "test:tests/test_hooks.py::HookTests.test_subagent_start_gives_request_and_plan_on_both_pythons"
+   ],
+   "note": "Hook SubagentStart tự đưa yêu cầu gần nhất và kế hoạch cho subagent; không kiểm prompt do agent viết."
+  },
+  {
+   "id": "S4a",
+   "check": "bo-viec",
+   "by": [
+    "eval:plugin/evals/reuse-before-build"
+   ],
+   "note": "Bộ việc đo reuse-best có được gọi trước khi tự làm công cụ."
+  },
+  {
+   "id": "S4b",
+   "check": "bo-viec",
+   "by": [
+    "eval:evals/tasks/reuse-gap",
+    "test:tests/test_eval_suites.py::ReuseBestGraders.test_reuse_gap"
+   ],
+   "note": "Bài đo reuse-gap chấm việc không lặng lẽ bỏ phần thứ dùng lại chưa đáp ứng."
+  },
+  {
+   "id": "S5",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::InstallGuard.test_unvetted_or_unapproved_install_is_denied_and_points_to_vet_skill"
+   ],
+   "note": "Hook từ chối cài skill, plugin, MCP chưa qua vet-skill và chưa được duyệt trong vetted.lock."
+  },
+  {
+   "id": "S6",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/vet-skill/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc đòi số liệu eval cho skill hứa làm agent giỏi hơn."
+  },
+  {
+   "id": "S7a",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc chọn skill Semgrep."
+  },
+  {
+   "id": "S7b",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm nơi ghi kết quả Semgrep."
+  },
+  {
+   "id": "S7c",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm việc tránh static-analysis:codeql."
+  },
+  {
+   "id": "C1",
+   "check": "bo-viec",
+   "by": [
+    "eval:evals/router-prompts.jsonl",
+    "test:tests/test_route.py::RouterRules.test_labeled_prompts_accuracy"
+   ],
+   "note": "Bộ 109 câu có nhãn đo router gợi ý model và effort theo bảng; bảng nằm trong task-router."
+  },
+  {
+   "id": "C4",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:routing-table.md"
+   ],
+   "note": "chưa có máy kiểm; routing-table.md là căn cứ của bảng, người dùng duyệt khi đổi."
+  },
+  {
+   "id": "C5",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/task-router/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc lên bậc khi chưa đạt."
+  },
+  {
+   "id": "C6",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/task-router/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc thêm ultrathink."
+  },
+  {
+   "id": "C7",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/CLAUDE.global.md"
+   ],
+   "note": "chưa có máy kiểm; diễn giải cách đọc bảng model."
+  },
+  {
+   "id": "C8",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_effort_is_suggested_freely_on_models_that_keep_the_cache"
+   ],
+   "note": "Router chỉ gợi ý đổi effort tự do trên model giữ prompt cache."
+  },
+  {
+   "id": "C10",
+   "check": "may-bao",
+   "by": [
+    "hook:plugin/hooks/prompt_submit.py",
+    "test:tests/test_route.py::HookSuggestion.test_agents_that_do_the_work_carry_their_own_model"
+   ],
+   "note": "Router gợi ý giao Agent kèm model và effort hợp việc."
+  },
+  {
+   "id": "C13",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/task-router/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm frontmatter skill có model: mà thiếu context: fork (gợi ý: thêm test vào test_skill_meta)."
+  },
+  {
+   "id": "B1",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/reader-page/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc dùng reader-page và artifact-design; check_page.py chỉ kiểm trang đã viết."
+  },
+  {
+   "id": "B2",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/reader-page/SKILL.md"
+   ],
+   "note": "chưa có máy kiểm việc đăng Artifact và đọc bình luận trước khi làm."
+  },
+  {
+   "id": "SA1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/CLAUDE.global.md"
+   ],
+   "note": "chưa có máy kiểm tiền tố agent-stack: khi gọi subagent."
+  },
+  {
+   "id": "SA2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/CLAUDE.global.md"
+   ],
+   "note": "chưa có máy kiểm việc giao subagent đúng loại."
+  },
+  {
+   "id": "SA3",
+   "check": "nguoi-duyet",
+   "by": [
+    "skill:plugin/skills/session-keeper/SKILL.md",
+    "test:tests/test_watch_change.py::WatchChange.test_prints_only_when_the_result_changes"
+   ],
+   "note": "watch_change.py có test; chưa có máy kiểm việc agent chạy nó bằng Monitor."
+  },
+  {
+   "id": "P1",
+   "file": "CLAUDE.md",
+   "anchor": "Chỉ tạo hoặc sửa file bên trong `agent-stack/`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm phạm vi sửa file của repo này."
+  },
+  {
+   "id": "P2",
+   "file": "CLAUDE.md",
+   "anchor": "Không sửa các project khác trong `~/Documents/Claude/`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm việc không sửa project khác và dùng git --no-optional-locks."
+  },
+  {
+   "id": "P3",
+   "file": "CLAUDE.md",
+   "anchor": "Không sửa `~/.claude/`, `~/.agents/`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm việc không sửa cấu hình toàn cục."
+  },
+  {
+   "id": "P4",
+   "file": "CLAUDE.md",
+   "anchor": "Mọi kích hoạt toàn cục đi qua `install.sh`",
+   "check": "nguoi-duyet",
+   "by": [
+    "test:tests/test_install.py::InstallTests.test_dry_run_changes_nothing",
+    "file:tools/install.py"
+   ],
+   "note": "install.py mặc định chỉ in kế hoạch (test kèm); chưa có máy kiểm ngăn agent tự chạy --apply."
+  },
+  {
+   "id": "P5",
+   "file": "CLAUDE.md",
+   "anchor": "Gói Python bên thứ ba cài vào `.venv/`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm nơi cài gói Python bên thứ ba."
+  },
+  {
+   "id": "P6",
+   "file": "CLAUDE.md",
+   "anchor": "phải qua skill `vet-skill` và có dòng trong `vetted.lock`",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::InstallGuard.test_unvetted_or_unapproved_install_is_denied_and_points_to_vet_skill"
+   ],
+   "note": "Hook từ chối cài đồ bên thứ ba chưa qua vet-skill và chưa duyệt trong vetted.lock."
+  },
+  {
+   "id": "P7",
+   "file": "CLAUDE.md",
+   "anchor": "Python chỉ dùng thư viện chuẩn",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_static.py::StaticChecks.test_stdlib_only_outside_evals",
+    "test:tests/test_static.py::StaticChecks.test_every_tracked_file_compiles"
+   ],
+   "note": "Test quét import của mọi file .py (trừ evals) và biên dịch bằng python3 của repo."
+  },
+  {
+   "id": "P8",
+   "file": "CLAUDE.md",
+   "anchor": "Không chạy hay kiểm trên `/usr/bin/python3`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm việc agent không dùng Python 3.9 của hệ thống."
+  },
+  {
+   "id": "P9",
+   "file": "CLAUDE.md",
+   "anchor": "TypeScript chỉ dùng cho lớp giao diện",
+   "check": "nguoi-duyet",
+   "by": [
+    "test:tests/test_static.py::Linters.test_biome_clean"
+   ],
+   "note": "Biome kiểm 5 file của mod; chưa có máy kiểm cấm TypeScript hay npm ngoài mod."
+  },
+  {
+   "id": "P10",
+   "file": "CLAUDE.md",
+   "anchor": "kiểm bằng binary của app (`tools/claude_app.py`)",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_ui_mod.py::AppEngineTest.test_validate_passes_without_engine_complaints",
+    "test:tests/test_ui_mod.py::AppEngineTest.test_mod_tests_pass"
+   ],
+   "note": "Test chạy validate và test của mod bằng engine của app; mod hỏng thì test trượt."
+  },
+  {
+   "id": "P11",
+   "file": "CLAUDE.md",
+   "anchor": "ghi vào hợp đồng `plugin/hosts/pi.json`",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_pi_contract.py::ContractTests.test_repo_plugin_matches_contract",
+    "test:tests/test_pi_contract.py::ContractTests.test_new_hook_event_needs_entry"
+   ],
+   "note": "Test trượt khi hook, subagent, skill mới hay đổi tên mà chưa có mục trong hợp đồng pi."
+  },
+  {
+   "id": "P12",
+   "file": "CLAUDE.md",
+   "anchor": "bắt mọi lỗi, thoát mã 0",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_static.py::HooksSurviveBadInput.test_every_registered_hook_exits_zero_on_bad_stdin",
+    "test:tests/test_hooks.py::HookTests.test_bad_input_never_breaks_session"
+   ],
+   "note": "Test chạy mọi hook đã đăng ký với stdin hỏng, đòi thoát mã 0; vế 'nhanh' chỉ đo ở vài test riêng."
+  },
+  {
+   "id": "P13",
+   "file": "CLAUDE.md",
+   "anchor": "File tạm nằm trong `.tmp/`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:.gitignore"
+   ],
+   "note": ".gitignore bỏ qua state/ và .tmp/; chưa có máy kiểm việc agent ghi file tạm đúng chỗ."
+  },
+  {
+   "id": "P14",
+   "file": "CLAUDE.md",
+   "anchor": "Ngoại lệ:",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "Dòng mở đầu của các ngoại lệ; từng ngoại lệ có mục riêng (P15 đến P18)."
+  },
+  {
+   "id": "P15",
+   "file": "CLAUDE.md",
+   "anchor": "thư mục làm việc của model nằm trong thư mục tạm của hệ điều hành",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_evals.py::Isolation.test_work_root_inside_repo_is_refused",
+    "test:tests/test_evals.py::Isolation.test_default_work_root_is_outside_repo"
+   ],
+   "note": "run_eval.py từ chối thư mục làm việc nằm trong repo hay dưới CLAUDE.md; mặc định ngoài repo."
+  },
+  {
+   "id": "P16",
+   "file": "CLAUDE.md",
+   "anchor": "Test mô phỏng bản chép plugin nằm ngoài repo",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:tests/_util.py"
+   ],
+   "note": "Ngoại lệ cho phép dùng thư mục tạm của hệ điều hành; chưa có máy kiểm việc tự xóa."
+  },
+  {
+   "id": "P17",
+   "file": "CLAUDE.md",
+   "anchor": "`checks.py` (done-gate) chép file vừa đổi vào thư mục tạm",
+   "check": "nguoi-duyet",
+   "by": [
+    "test:tests/test_checks.py::SecondReviewTest.test_gitleaks_respects_allowlist_paths"
+   ],
+   "note": "Test gitleaks chạy trên bản chép, nhưng chưa có máy kiểm việc dọn thư mục tạm."
+  },
+  {
+   "id": "P18",
+   "file": "CLAUDE.md",
+   "anchor": "`receipt.py fails-before` dựng code trước bản sửa",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_receipt.py::FailsBefore.test_test_that_catches_the_bug"
+   ],
+   "note": "Test đòi thư mục làm việc không đổi và thư mục tạm bị xóa sau khi chạy."
+  },
+  {
+   "id": "P19",
+   "file": "CLAUDE.md",
+   "anchor": "Docstring và chú thích viết tiếng Việt, ngắn",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm ngôn ngữ docstring."
+  },
+  {
+   "id": "P20",
+   "file": "CLAUDE.md",
+   "anchor": "`name` viết kebab-case, tối đa 64 ký tự",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_skill_meta.py::SkillMetadata.test_name_and_description_limits"
+   ],
+   "note": "Test kiểm name, độ dài description và when_to_use của mọi skill."
+  },
+  {
+   "id": "P21",
+   "file": "CLAUDE.md",
+   "anchor": "Đặt use-case lên đầu `description`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm thứ tự nội dung description."
+  },
+  {
+   "id": "P22",
+   "file": "CLAUDE.md",
+   "anchor": "`python3 -m unittest discover -s tests -t .` phải đạt",
+   "check": "model-review",
+   "by": [
+    "skill:plugin/skills/done-gate/SKILL.md",
+    "test:tests/test_guard.py::StopRequiresEvidence.test_check_failing_on_current_code_is_named"
+   ],
+   "note": "done-gate chạy kiểm chứng và hook Stop đòi biên nhận đạt, nhưng chưa có máy kiểm ép đúng lệnh này."
+  },
+  {
+   "id": "P23",
+   "file": "CLAUDE.md",
+   "anchor": "plugin validate plugin",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_ui_mod.py::AppEngineTest.test_validate_passes_without_engine_complaints"
+   ],
+   "note": "Test gọi chính lệnh validate của app, trượt khi không ra Validation passed."
+  },
+  {
+   "id": "P24",
+   "file": "CLAUDE.md",
+   "anchor": "plugin test plugin",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_ui_mod.py::AppEngineTest.test_mod_tests_pass"
+   ],
+   "note": "Test gọi lệnh test mod của app."
+  },
+  {
+   "id": "P25",
+   "file": "CLAUDE.md",
+   "anchor": "File mới thì `git add` trước lần chạy bộ test cuối",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm thứ tự thao tác của agent."
+  },
+  {
+   "id": "P26",
+   "file": "CLAUDE.md",
+   "anchor": "tạo lại `tools/cloud-files.txt`",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_cloud_setup.py::CloudManifestTest.test_manifest_matches_tracked_files"
+   ],
+   "note": "Test so tools/cloud-files.txt với file git theo dõi, trượt khi lệch."
+  },
+  {
+   "id": "P27",
+   "file": "CLAUDE.md",
+   "anchor": "Làm trên nhánh `main`",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm nhánh làm việc."
+  },
+  {
+   "id": "P28",
+   "file": "CLAUDE.md",
+   "anchor": "Commit sau mỗi giai đoạn",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:CLAUDE.md"
+   ],
+   "note": "chưa có máy kiểm nhịp commit."
+  },
+  {
+   "id": "P29",
+   "file": "CLAUDE.md",
+   "anchor": "Không push",
+   "check": "may-chan",
+   "by": [
+    "hook:plugin/hooks/pretool_guard.py",
+    "test:tests/test_guard.py::IrreversibleGuard.test_each_irreversible_command_is_stopped_once"
+   ],
+   "note": "Hook chặn git push lần đầu; chỉ qua khi người dùng nhắn đúng việc đó."
+  }
+ ]
+}

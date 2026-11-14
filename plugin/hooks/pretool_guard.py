@@ -31,12 +31,13 @@ import os
 import re
 import shlex
 import sys
+import time
 from pathlib import Path
 
 # `\` cuối dòng (số lẻ dấu `\`; `\\` là một dấu `\` thật): shell nối với dòng sau thành một lệnh.
 CONTINUATION_RE = re.compile(r"(?<!\\)((?:\\\\)*)\\\n")
 SHELL_C_RE = re.compile(r"^-[a-zA-Z]*c[a-zA-Z]*$")  # bash -c, -lc, -ec
-HEREDOC_RE = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1[^\n]*\n.*?\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
+HEREDOC_RE = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1([^\n]*)\n.*?\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 PREFIXES = {"sudo", "env", "command", "exec", "time", "nohup", "nice", "timeout", "!"}
 # Từ khóa shell đứng đầu một lệnh đơn (`if git push; then rm -rf x; fi`, `for d in a; do …; done`, `{ git push; }`).
@@ -115,7 +116,10 @@ def simple_commands(command: str, depth: int = 0) -> list:
     dòng, nối dòng kết thúc bằng `\\`, bỏ gán biến và tiền tố như sudo, env; mở `bash -c "..."` (cả `-lc`, `-ec`) và
     `eval '...'` thêm một tầng. Chuỗi trích dẫn (thông điệp commit, echo) nằm trong argv của lệnh khác nên không bị hiểu
     nhầm là lệnh. Không phân tích được thì trả rỗng."""
-    text = CONTINUATION_RE.sub(r"\1 ", HEREDOC_RE.sub("\n", command))
+    # Bỏ thân heredoc nhưng giữ phần còn lại của dòng mở (`cat <<'EOF' > f`, `<<EOF | tee f`, `<<EOF && git push`).
+    text = CONTINUATION_RE.sub(r"\1 ", HEREDOC_RE.sub(lambda m: " " + m.group(3) + "\n", command))
+    text = re.sub(r">\|", ">", text)  # `>|` (ghi đè dù noclobber) là chuyển hướng, không phải ống
+    text = re.sub(r">&(?=[^\d\s&-])", ">", text)  # `>&file` ghi vào file, không phải chạy nền (`2>&1` giữ nguyên)
     lexer = shlex.shlex(text, posix=True, punctuation_chars=";&|()\n")
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
@@ -175,13 +179,17 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
     lệnh không đảo ngược), cổng đứng trước hỏi: lời nhắc không được che lệnh bị chặn đứng sau nó, vì qua cổng là cả
     chuỗi chạy."""
     results = []
+    if LOCK_NAME in command:
+        found = lock_named_by_interpreter(command, cwd)
+        if found:
+            return found
     temp_vars = mktemp_vars(command)
     for argv in simple_commands(command):
-        if Path(argv[0]).name == "cd":  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
+        if Path(argv[0]).name in ("cd", "pushd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
             if len(argv) == 2 and argv[1] != "-":
                 cwd = str(Path(cwd or ".") / Path(argv[1]).expanduser())
             continue
-        result = check_argv(argv, cwd, temp_vars)
+        result = check_argv(argv, cwd, temp_vars, session_id)
         if result:
             results.append(result)
     denied = [r for r in results if r[0] == "deny"]
@@ -222,10 +230,20 @@ def mktemp_vars(command: str) -> frozenset:
     return frozenset(n for n in names if not reassigned(n))
 
 
-def check_argv(argv: list, cwd: str, temp_vars=frozenset()):
+def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""):
     vet_hint = ("Chạy skill vet-skill cho nó trước; chỉ cài khi người dùng đã duyệt trong vetted.lock "
                 "(cài bằng ./install.sh của agent-stack). Nếu người dùng muốn tự cài thì họ chạy lệnh này trong terminal.")
     prog, args = Path(argv[0]).name, argv[1:]
+    try:
+        locked = check_locked_bash(argv, cwd, session_id)
+    except Exception as exc:  # noqa: BLE001 (lỗi ở phần sổ khóa không được tắt các chốt chặn khác)
+        try:
+            lib().log_event("hook-error", {"hook": "pretool_guard.testlock", "error": repr(exc)[:300]})
+        except Exception:  # noqa: BLE001
+            pass
+        locked = None
+    if locked:
+        return locked
     words = positional(args)
     if prog == "claude" and words[:2] in (["plugin", "install"], ["plugin", "i"]) and len(words) > 2:
         plugin = words[2]
@@ -637,11 +655,347 @@ def check_new_markdown(full: Path, cwd: str, session_id: str):
                     "ước Markdown, người dùng xin .md) thì ghi lại đúng lệnh này: nhắc chỉ hiện một lần cho file này.")
 
 
+LOCK_NAME = "test-lock.json"
+# Lệnh có thể ghi sổ khóa khi nhắc tên nó (trình thông dịch, trình soạn): chặn. Lệnh khác chỉ chặn khi sổ là đích ghi.
+LOCK_WRITERS = {"python", "python3", "node", "perl", "ruby", "sh", "bash", "zsh", "awk", "gawk", "ed", "ex", "vi",
+                "vim", "nvim", "nano", "emacs", "dd", "sponge", "osascript", "uv", "uvx", "deno", "bun", "php"}
+SED_LIKE = {"sed", "gsed", "perl"}
+FILE_OPS = {"cp", "mv", "rm", "ln", "install", "tee", "sed", "gsed", "perl", "cat", "truncate", "unlink", "shred",
+            "rsync", "git"}
+RECEIPT_SAFE = {"run", "show", "forget", "fails-before", "prune", "lock", "locks"}  # tự ghi sổ đúng cách hay chỉ đọc
+UNLOCK_CONSENTS = "unlock-consents.json"
+RUNNER_RE = re.compile(r"^(python[\d.]*|uv|uvx|env|pipx|pyenv|poetry|pdm|hatch|rye)$")
+# Cờ của receipt.py nhận giá trị: lệnh bên trong là phần còn lại sau chúng (argparse REMAINDER, có hay không `--`).
+RECEIPT_VALUE_FLAGS = {"--project", "--label", "--timeout", "--base", "--link", "--tests", "--level", "--reason"}
+
+
+def testlock_lib():
+    lib()  # đưa plugin/lib vào sys.path
+    import testlock
+    return testlock
+
+
+def receipt_subcommand(argv: list):
+    """Lệnh con khi argv chạy receipt.py, kể cả qua trình chạy (`uv run python3 -X utf8 …/receipt.py unlock …`);
+    (None, []) khi không phải, hay khi receipt.py chỉ là tham số của lệnh thao tác file (`cp …/receipt.py x`)."""
+    first = Path(argv[0]).name
+    if first in FILE_OPS or not (first == "receipt.py" or RUNNER_RE.match(first)):
+        return None, []
+    at = next((i for i, a in enumerate(argv) if Path(a).name == "receipt.py"), None)
+    if at is None:
+        return None, []
+    rest = argv[at + 1:]
+    return (rest[0] if rest else ""), rest[1:]
+
+
+def receipt_inner(rest: list) -> list:
+    """Lệnh mà `receipt.py run|fails-before|lock` sẽ chạy: phần còn lại sau các cờ có giá trị, bỏ `--` đứng đầu."""
+    i = 0
+    while i < len(rest) and rest[i].startswith("-") and rest[i] != "--":
+        flag = rest[i].split("=", 1)[0]
+        i += 2 if flag in RECEIPT_VALUE_FLAGS and "=" not in rest[i] else 1
+        if flag == "--tests":  # nargs="+": nuốt tới cờ kế tiếp
+            while i < len(rest) and not rest[i].startswith("-"):
+                i += 1
+    inner = rest[i:]
+    return inner[1:] if inner[:1] == ["--"] else inner
+
+
+def target_path(where: Path, target: str):
+    """Đường dẫn đầy đủ của đích; None khi không tính được (~ người dùng lạ, tên quá dài)."""
+    try:
+        return Path(os.path.expanduser(str(where))) / os.path.expanduser(target)
+    except (RuntimeError, ValueError, OSError):
+        return None
+
+
+def is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except (OSError, ValueError):
+        return False  # tên quá dài, không có quyền: không phải thư mục ta biết
+
+
+def write_targets(argv: list, where: Path) -> list:
+    """(đường dẫn đầy đủ, chữ trong lệnh) của các đích lệnh đơn có thể ghi đè, sửa hay xóa (đoán theo tên lệnh, không
+    chắc thì bỏ qua): rm, mv, cp (đích cuối), sed/perl -i, truncate, tee, git [-C dir] rm|mv|checkout|restore, và đích
+    của chuyển hướng `>`, `>>`."""
+    out, args = [], argv[1:]
+    for i, arg in enumerate(argv):
+        m = re.fullmatch(r"\d*>>?\|?(.*)", arg) or (re.fullmatch(r"[^>]*?[^\d>]\d*>>?\|?([^>]*)", arg) if i else None)
+        if m:
+            target = m.group(1) or (argv[i + 1] if i + 1 < len(argv) else "")
+            if target.startswith("&") and not re.fullmatch(r"&(\d+|-)", target):
+                target = target[1:]  # `>&file`: ghi cả stdout lẫn stderr vào file
+            if target and not target.startswith("&"):
+                out.append((where, target))
+    prog = Path(argv[0]).name
+    words = [a for a in positional(drop_redirects(args), set()) if a != "--"]
+    if prog in ("mv", "cp", "install", "ln", "rsync") and len(words) >= 2:
+        dest = target_path(where, words[-1])
+        if dest is not None and is_dir(dest):  # `cp x.py tests/`: đích là tests/x.py, không phải cả thư mục
+            out += [(dest, Path(w).name) for w in words[:-1]]
+        else:
+            out.append((where, words[-1]))
+        if prog == "mv":
+            out += [(where, w) for w in words[:-1]]
+    elif prog in ("rm", "truncate", "tee", "unlink", "shred"):
+        out += [(where, w) for w in words]
+    elif prog == "dd":
+        out += [(where, a[3:]) for a in args if a.startswith("of=")]
+    elif prog in SED_LIKE and any(a.startswith("-") and "i" in a.lstrip("-")[:3] for a in args):
+        out += [(where, w) for w in words[1:]]  # bỏ biểu thức sed/perl
+    elif prog == "git":
+        rest, here = drop_redirects(args), where
+        while rest and rest[0].startswith("-"):
+            if rest[0] in GIT_OPTS_WITH_VALUE and len(rest) >= 2:
+                if rest[0] == "-C":
+                    here = Path(os.path.expanduser(rest[1])) if Path(rest[1]).is_absolute() else here / rest[1]
+                rest = rest[2:]
+            else:
+                rest = rest[1:]
+        sub = [a for a in positional(rest, set()) if a != "--"]
+        staged_only = ("--staged" in rest or "-S" in rest) and "--worktree" not in rest and "-W" not in rest
+        cached = sub[:1] == ["rm"] and "--cached" in rest
+        if sub[:1] in (["rm"], ["mv"]) and not cached:
+            out += [(here, w) for w in sub[1:]]
+        elif sub[:1] == ["checkout"]:
+            # Trả file về bản trong index (`git checkout -- f`, `git checkout f`) là bỏ thay đổi dở, không phải nới; chỉ
+            # lấy file từ một commit khác (`git checkout HEAD~1 -- f`) mới ghi bản lạ.
+            before = positional(rest[1:rest.index("--")], set()) if "--" in rest else None
+            paths = sub[1:]
+            if before is None and paths and target_path(here, paths[0]) is not None and \
+                    os.path.lexists(str(target_path(here, paths[0]))):
+                before = []
+            if before is None:
+                before, paths = paths[:1], paths[1:]
+            if before:
+                out += [(here, w) for w in paths]
+        elif sub[:1] == ["restore"] and not staged_only and any(a.startswith(("--source", "-s")) for a in rest):
+            out += [(here, w) for w in sub[1:]]
+    return [(full, text) for full, text in ((target_path(w, t), t) for w, t in out) if full is not None]
+
+
+def locked_hit(full: Path, how: str, session_id: str, change: str = "changed"):
+    """Quyết định khi một thao tác đụng file test đã khóa (câu 3): chỉ thêm (siết) thì qua; nới ở mức cao thì chặn, mức
+    vừa thì nhắc một lần mỗi lượt cho mỗi file."""
+    TL = testlock_lib()
+    found = TL.lookup(full)
+    if not found or change in ("same", "added"):
+        return None
+    top, rel, entry = found
+    fix = (f"Sửa code cho test đạt, không sửa test. Nếu test sai thật thì dừng và đề xuất cho người dùng (đây là "
+           f"nới); họ duyệt bằng một tin nêu đúng file (như \"mở khóa {rel}\") thì chạy `receipt.py unlock {rel} "
+           f"--reason \"<lời họ>\"` rồi mới sửa. Thêm hàm test mới bằng Edit hay Write (siết) thì không bị chặn; lệnh "
+           f"shell ghi vào test khóa luôn tính là nới.")
+    if entry.get("level") == "cao":
+        return "deny", f"agent-stack: `{rel}` là test đã khóa ở mức rủi ro cao; {how} là nới, bị chặn. {fix}"
+    A = lib()
+    turn = A.load_turn(session_id) if session_id else None
+    msg = (f"agent-stack: `{rel}` là test đã khóa (mức vừa); {how} là nới và done-gate sẽ đánh dấu đỏ. {fix} Nhắc "
+           "này chỉ hiện một lần mỗi lượt cho file này.")
+    if not turn:
+        return "ask", msg
+    key = f"{top}:{rel}"
+    nudged = turn.get("lock_nudged") if isinstance(turn.get("lock_nudged"), list) else []
+    if key in nudged:
+        return None
+    turn["lock_nudged"] = nudged + [key]
+    A.save_turn(session_id, turn)
+    return "deny", msg
+
+
+def lock_named_by_interpreter(command: str, cwd: str):
+    """Trình thông dịch hay trình soạn (python -c, node -e, heredoc vào python…) mà cả chuỗi lệnh nhắc tên sổ khóa,
+    khi repo có sổ: chặn (TM-103). Lệnh khác nhắc tên sổ (cat, git add) xét ở check_locked_bash."""
+    try:
+        TL = testlock_lib()
+        top = TL.find_top(Path(cwd or "."))
+        if top is None or not (top / TL.LOCK_REL).is_file():
+            return None
+        def interp(argv) -> bool:
+            name = Path(argv[0]).name if argv else ""
+            return bool(RUNNER_RE.match(name) or name in LOCK_WRITERS) and receipt_subcommand(argv)[0] is None
+
+        named = any(interp(a) and any(LOCK_NAME in x for x in a[1:]) for a in simple_commands(command))
+        for m in HEREDOC_RE.finditer(command):  # thân heredoc đưa vào trình thông dịch (`python3 - <<'EOF'`)
+            head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+            if LOCK_NAME in m.group(0) and any(interp(a) for a in simple_commands(head)):
+                named = True
+        if not named:
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+    return "deny", ("agent-stack: lệnh này chạy trình thông dịch hay trình soạn và nhắc tới `.agent/test-lock.json` (sổ "
+                    "khóa test). Chỉ sửa sổ bằng `receipt.py lock` hay `receipt.py unlock` (cần người dùng duyệt).")
+
+
+def check_unlock(rest: list, where: Path, session_id: str):
+    """`receipt.py unlock`: chỉ qua khi tin người dùng mở lượt này bảo mở khóa đúng các file (TM-104), một lần mỗi tin;
+    không có đường "người dùng đã nhắn gì đó sau lần chặn" như git push, vì người cần kiểm chính là agent. Qua thì ghi
+    biên nhận đồng ý vào state/ (ngoài repo) để done-gate phân biệt bản ghi duyệt thật với bản agent tự khai."""
+    project = where
+    for i, arg in enumerate(rest[:-1]):
+        if arg == "--project":
+            project = target_path(where, rest[i + 1]) or where
+    files = positional(rest, {"--reason", "--project"})
+    if not files:
+        return None
+    A, TL = lib(), testlock_lib()
+    top = TL.find_top(project)
+    rels = []
+    for f in files:
+        full = target_path(project, f)
+        try:
+            rels.append(full.resolve().relative_to(top).as_posix() if full is not None and top else f)
+        except (OSError, ValueError, RuntimeError):
+            rels.append(f)
+    book = TL.load(top) if top else TL.empty()
+    names = [Path(r).name for r in book["files"]]
+    text = str((A.load_turn(session_id) or {}).get("consent_text") or "") if session_id else ""
+    vague = [r for r in rels if names.count(Path(r).name) > 1 and r not in text]
+    key = f"{top or project} unlock {' '.join(sorted(rels))}"
+    if session_id and not vague and A.turn_consent(session_id, key, "unlock", tuple(rels), use=True):
+        try:
+            turn = A.load_turn(session_id) or {}
+            path = A.state_dir() / UNLOCK_CONSENTS
+            seen = A.read_json(path, [])
+            seen = seen if isinstance(seen, list) else []
+            for rel in rels:
+                sha = (book["files"].get(rel) or {}).get("sha256", "")
+                seen.append({"top": str(top), "path": rel, "sha256": sha, "ts": time.time(),
+                             "text": str(turn.get("consent_text") or "")[:300]})
+            path.parent.mkdir(parents=True, exist_ok=True)
+            A.write_json_atomic(path, seen[-200:])
+        except (OSError, ValueError, RuntimeError):
+            pass  # thiếu biên nhận thì done-gate báo đỏ: đóng chứ không mở
+        return None
+    shown = ", ".join(files)
+    return "deny", (f"agent-stack: mở khóa {shown} là nới test đã khóa, chỉ chạy khi tin người dùng vừa gửi bảo mở khóa "
+                    f"đúng file đó (ví dụ \"mở khóa {files[0]}\"). Dừng ở đây, đừng chạy lại trong lượt này: đề xuất "
+                    "cho người dùng vì sao test cần đổi; họ trả lời như vậy thì chạy lại đúng lệnh này.")
+
+
+def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
+    """Lệnh đơn đụng sổ khóa hay test đã khóa (TM-102..104). `receipt.py unlock` qua cổng đồng ý của người dùng."""
+    sub, rest = receipt_subcommand(argv)
+    where = Path(cwd or ".")
+    if sub == "unlock":
+        return check_unlock(rest, where, session_id)
+    if sub in ("run", "fails-before", "lock"):  # `receipt.py run [--] rm tests/x.py`: xét lệnh bên trong
+        inner = receipt_inner(rest)
+        found = check_bash(shlex.join(inner), str(where), session_id) if inner else None
+        if found and found[0] in ("deny", "ask"):
+            return found
+    TL = testlock_lib()
+    prog = Path(argv[0]).name
+    targets = write_targets(argv, where)
+    for arg in argv[1:]:
+        if LOCK_NAME not in arg:
+            continue
+        full = target_path(where, arg.lstrip(">"))
+        if full is not None and TL.is_lock_file(full) and (
+                prog in LOCK_WRITERS or any(TL.is_lock_file(t) for t, _ in targets)):
+            return "deny", ("agent-stack: `.agent/test-lock.json` là sổ khóa test, chỉ sửa bằng `receipt.py lock` "
+                            "hay `receipt.py unlock` (cần người dùng duyệt). Sửa tay sổ là nới mà không ai duyệt.")
+    for full, text in targets:
+        try:
+            if any(ch in text for ch in GLOB_CHARS):  # `rm tests/*.py`: shell mở rộng trước khi chạy
+                paths = expand_glob(full)
+            else:
+                paths = locked_inside(TL, full) if full.is_dir() else [full]
+            if any(TL.is_lock_file(p) for p in paths):
+                return "deny", ("agent-stack: lệnh này xóa hay ghi đè `.agent/test-lock.json` (sổ khóa test). Chỉ sửa "
+                                "sổ bằng `receipt.py lock` hay `receipt.py unlock` (cần người dùng duyệt).")
+            for path in paths:
+                hit = locked_hit(path, f"lệnh shell `{prog}`", session_id)
+                if hit:
+                    return hit
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return None
+
+
+def brace_expand(pattern: str) -> list:
+    """Mở một tầng ngoặc nhọn của shell: tests/test_{a,b}.py → hai mẫu."""
+    m = re.search(r"\{([^{}]*,[^{}]*)\}", pattern)
+    if not m:
+        return [pattern]
+    return [x for part in m.group(1).split(",")[:50] for x in brace_expand(pattern[:m.start()] + part + pattern[m.end():])]
+
+
+def expand_glob(full: Path) -> list:
+    """File khóa (và chính sổ khóa) khớp mẫu glob: so mẫu với các mục trong sổ, không quét đĩa (TM-106)."""
+    import fnmatch
+    TL = testlock_lib()
+    prefix = str(full).split("*")[0].split("?")[0].split("[")[0].split("{")[0]
+    top = TL.find_top(Path(prefix) if prefix.endswith("/") else Path(prefix).parent)
+    if top is None or not (top / TL.LOCK_REL).is_file():
+        return []
+    candidates = [top / rel for rel in TL.load(top)["files"]] + [top / TL.LOCK_REL]
+    pats = brace_expand(str(full))
+    return [c for c in candidates if any(fnmatch.fnmatchcase(str(c), p) or fnmatch.fnmatchcase(str(c.resolve()), p)
+                                         for p in pats)]
+
+
+def locked_inside(TL, folder: Path) -> list:
+    """File đã khóa nằm trong thư mục `folder` (`rm -r tests/`, `git checkout -- tests`)."""
+    try:
+        top = TL.find_top(folder)
+        rel = folder.resolve().relative_to(top).as_posix() if top else None
+    except (OSError, ValueError):
+        return []
+    if top is None or not (top / TL.LOCK_REL).is_file():
+        return []  # project không có sổ khóa: hành vi như cũ
+    prefix = "" if rel in (".", "") else rel + "/"
+    return [top / p for p in [*TL.load(top)["files"], TL.LOCK_REL] if p.startswith(prefix)]
+
+
+def check_locked_write(tool: str, tool_input: dict, full: Path, session_id: str):
+    """Write/Edit/MultiEdit/NotebookEdit vào sổ khóa (chặn) hay vào test đã khóa: so nội dung mới với bản khóa."""
+    TL = testlock_lib()
+    if TL.is_lock_file(full):
+        return "deny", ("agent-stack: `.agent/test-lock.json` là sổ khóa test, chỉ sửa bằng `receipt.py lock` hay "
+                        "`receipt.py unlock` (cần người dùng duyệt).")
+    found = TL.lookup(full)
+    if not found:
+        return None
+    new = new_content(tool, tool_input, full)
+    change = "changed" if new is None else TL.compare(found[2], new)
+    how = {"Write": "ghi đè file", "NotebookEdit": "sửa notebook"}.get(tool, "sửa dòng có sẵn")
+    return locked_hit(full, how, session_id, change)
+
+
+def new_content(tool: str, tool_input: dict, full: Path):
+    """Nội dung file sau thao tác; None khi không tính được (coi là nới)."""
+    if tool == "Write":
+        content = tool_input.get("content")
+        return content if isinstance(content, str) else None
+    try:
+        if full.stat().st_size > 1_000_000:
+            return None
+        text = full.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    edits = tool_input.get("edits") if tool == "MultiEdit" else [tool_input] if tool == "Edit" else None
+    if not isinstance(edits, list):
+        return None
+    for e in edits:
+        old, rep = (e.get("old_string"), e.get("new_string")) if isinstance(e, dict) else (None, None)
+        if not isinstance(old, str) or not isinstance(rep, str) or old not in text:
+            return None
+        text = text.replace(old, rep) if e.get("replace_all") else text.replace(old, rep, 1)
+    return text
+
+
 def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"):
     path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
     if not path:
         return None
     full = Path(path) if Path(path).is_absolute() else Path(cwd or ".") / path
+    locked = check_locked_write(tool, tool_input, full, session_id)
+    if locked:
+        return locked
     if REPORT_RE.search(full.name) and full.suffix.lower() == ".md" and not safe_scratch(full):
         return "deny", ("agent-stack: báo cáo differential-review là danh sách lỗ hổng chưa vá; đừng ghi vào trong "
                         "project (dễ bị commit lẫn). Ghi vào `.tmp/` của project (nếu đã bị git bỏ qua) hoặc thư mục "
