@@ -874,6 +874,17 @@
    "note": "chưa có máy kiểm việc agent không dùng Python 3.9 của hệ thống."
   },
   {
+   "id": "P8a",
+   "file": "CLAUDE.md",
+   "anchor": "Hook chỉ import thư viện chung `plugin/lib`",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_static.py::ArchitectureRules.test_hooks_import_only_lib_and_lib_only_itself",
+    "test:tests/test_static.py::ArchitectureRules.test_baseline_only_shrinks"
+   ],
+   "note": "Test đọc import của plugin/hooks và plugin/lib; chỗ mới trượt, chỗ cũ (ARCH_BASELINE, 14/11/2026) đã sửa mà còn trong baseline cũng trượt. Thay cho luật archctl vì archctl chưa phân giải import sau sys.path.insert (GĐ3)."
+  },
+  {
    "id": "P9",
    "file": "CLAUDE.md",
    "anchor": "TypeScript chỉ dùng cho lớp giao diện",

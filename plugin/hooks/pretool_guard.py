@@ -96,6 +96,20 @@ def lib():
     return agentstack
 
 
+def arch_lib():
+    lib()
+    import archgate
+    return archgate
+
+
+ARCH_FILE_REASON = ("agent-stack: `{rel}` là file luật kiến trúc của archctl, chỉ người dùng đổi (qua `archctl accept`, "
+                    "`reject`, `baseline`). Muốn đổi luật thì chạy `archctl propose '<luật>' --reason \"...\"` (hay "
+                    "`archctl block --on '<luật>' --reason \"...\"` khi bế tắc) rồi dừng phần việc đó, chờ người dùng.")
+ARCH_CMD_REASON = ("agent-stack: `archctl {sub}` là lệnh của người dùng (giao thức archctl: agent chỉ đề xuất hay báo bế "
+                   "tắc, người duyệt). Đừng chạy, kể cả qua đường khác. Dùng `archctl propose` hay `archctl block`, rồi "
+                   "báo người dùng tự chạy `archctl {sub} …` trong terminal nếu họ đồng ý.")
+
+
 def approved_plugins(A) -> set:
     """Id "tên@marketplace" của plugin trong catalog.json đã được duyệt trong vetted.lock."""
     home = A.home_dir()
@@ -183,6 +197,10 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         found = lock_named_by_interpreter(command, cwd)
         if found:
             return found
+    if ".arch" in command.casefold() or "archctl" in command.casefold():
+        found = arch_named_by_interpreter(command, cwd) or arch_fed_to_shell(command, cwd)
+        if found:
+            return found
     temp_vars = mktemp_vars(command)
     for argv in simple_commands(command):
         if Path(argv[0]).name in ("cd", "pushd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
@@ -244,6 +262,16 @@ def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""
         locked = None
     if locked:
         return locked
+    try:
+        arch = check_arch_argv(argv, cwd)
+    except Exception as exc:  # noqa: BLE001 (lỗi phần archctl không được tắt các chốt chặn khác)
+        try:
+            lib().log_event("hook-error", {"hook": "pretool_guard.archctl", "error": repr(exc)[:300]})
+        except Exception:  # noqa: BLE001
+            pass
+        arch = None
+    if arch:
+        return arch
     words = positional(args)
     if prog == "claude" and words[:2] in (["plugin", "install"], ["plugin", "i"]) and len(words) > 2:
         plugin = words[2]
@@ -916,6 +944,96 @@ def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
     return None
 
 
+def check_arch_argv(argv: list, cwd: str):
+    """Lệnh đơn chạy lệnh archctl chỉ người được chạy (cả qua xargs, find -exec, đường dẫn tuyệt đối), hay ghi, xóa,
+    đổi tên file luật trong `.arch/` (TM-111). `propose`, `block`, `check`, `verify` vẫn qua."""
+    G = arch_lib()
+    where = Path(cwd or ".")
+    for i, word in enumerate(argv):
+        if G.is_archctl(word):
+            rest = strip_prefixes(argv[i:])
+            sub = G.human_command(rest)
+            if sub:
+                return "deny", ARCH_CMD_REASON.format(sub=sub)
+            if G.nested_init(rest, where):
+                return "deny", ("agent-stack: `archctl init` ở đây tạo một bộ luật mới lồng trong project đã có "
+                                "`.arch/system.arch`; hook sẽ kiểm theo bộ luật rỗng gần hơn. Đổi luật thì `archctl "
+                                "propose`; muốn tách bộ luật thì báo người dùng tự chạy.")
+            if i and Path(argv[0]).name == "xargs" and not positional(rest[1:], G.VALUE_FLAGS):
+                return "deny", ("agent-stack: `xargs archctl` lấy lệnh con từ stdin nên không biết sẽ chạy gì "
+                                "(có thể là accept, baseline). Gọi archctl với lệnh con viết rõ.")
+    targets = write_targets(argv, where)
+    targets += [(t, text) for text in G.out_targets(strip_prefixes(argv)) for t in [target_path(where, text)] if t]
+    for full, text in targets:
+        paths = [full]
+        if any(ch in text for ch in GLOB_CHARS):  # `sed -i … .arch/*.arch`: shell mở rộng trước khi chạy
+            import glob
+            paths += [Path(p) for p in glob.glob(str(full))[:500]]
+        for path in paths:
+            if G.is_protected(path, where):
+                return "deny", ARCH_FILE_REASON.format(rel=arch_rel(path, text))
+    return None
+
+
+def arch_rel(full: Path, text: str) -> str:
+    """Tên gọn của file luật cho lời báo: `.arch/<tên>`."""
+    if full.name.casefold() == ".arch":
+        return ".arch/ (cả thư mục luật)"
+    return f".arch/{full.name}" if full.parent.name.casefold() == ".arch" else (text or str(full))
+
+
+def arch_named_by_interpreter(command: str, cwd: str):
+    """Trình thông dịch hay trình soạn (python -c, node -e, heredoc vào python…) mà chuỗi lệnh nhắc tên một file luật
+    `.arch/<tên>`, khi project có `.arch/system.arch`: chặn (TM-111). Đọc luật thì dùng Read hay `cat`."""
+    try:
+        G = arch_lib()
+        if G.find_root(Path(cwd or ".")) is None:
+            return None
+        names = [f"{G.ARCH_DIR}/{n}" for n in G.PROTECTED]
+
+        def interp(argv) -> bool:
+            name = Path(argv[0]).name if argv else ""
+            return bool(RUNNER_RE.match(name) or name in LOCK_WRITERS) and receipt_subcommand(argv)[0] is None
+
+        hit = next((n for a in simple_commands(command) if interp(a) for x in a[1:] for n in names
+                    if n in x.casefold()), None)
+        for m in HEREDOC_RE.finditer(command):
+            head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+            found = next((n for n in names if n in m.group(0).casefold()), None)
+            if found and any(interp(a) for a in simple_commands(head)):
+                hit = hit or found
+        if not hit:
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+    return "deny", ARCH_FILE_REASON.format(rel=hit)
+
+
+HUMAN_ARCHCTL_RE = re.compile(r"\barchctl\b[^\n;&|]*?\b(accept|reject|baseline|serve)\b", re.I)
+
+
+def arch_fed_to_shell(command: str, cwd: str):
+    """Lệnh archctl chỉ người được chạy nằm trong chữ đưa vào shell qua stdin: thân heredoc của `bash <<EOF`, hay
+    `echo "…" | sh` (simple_commands không mở các dạng này như `bash -c`)."""
+    try:
+        for m in HEREDOC_RE.finditer(command):
+            head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+            if any(Path(a[0]).name in SHELLS for a in simple_commands(head) if a):
+                body = m.group(0).split("\n", 1)[1] if "\n" in m.group(0) else ""
+                for argv in simple_commands(body):
+                    found = check_arch_argv(argv, cwd)
+                    if found:
+                        return found
+        bare_shell = any(Path(a[0]).name in SHELLS and not any(SHELL_C_RE.match(x) for x in a[1:])
+                         and not positional(a[1:], set()) for a in simple_commands(command) if a)
+        m = HUMAN_ARCHCTL_RE.search(command) if bare_shell else None
+        if m:
+            return "deny", ARCH_CMD_REASON.format(sub=m.group(1).lower())
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def brace_expand(pattern: str) -> list:
     """Mở một tầng ngoặc nhọn của shell: tests/test_{a,b}.py → hai mẫu."""
     m = re.search(r"\{([^{}]*,[^{}]*)\}", pattern)
@@ -993,6 +1111,11 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
     if not path:
         return None
     full = Path(path) if Path(path).is_absolute() else Path(cwd or ".") / path
+    try:
+        if arch_lib().is_protected(full, cwd or "."):
+            return "deny", ARCH_FILE_REASON.format(rel=arch_rel(full, path))
+    except Exception:  # noqa: BLE001
+        pass
     locked = check_locked_write(tool, tool_input, full, session_id)
     if locked:
         return locked

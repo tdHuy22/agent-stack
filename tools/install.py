@@ -145,6 +145,25 @@ def uv_tool_problem(tool) -> str | None:
     return None
 
 
+COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+CRATE_PATH_RE = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
+
+
+def cargo_source_problem(entry: dict) -> str | None:
+    """Lý do mục cargo-source của vetted.lock sai dạng, hoặc None. Repo, commit, crate lấy từ vetted.lock (đã vet),
+    không từ catalog.json, để catalog không đổi được mã sẽ dựng (TM-107)."""
+    repo, commit, crate, binary = (entry.get(k) for k in ("repo", "commit", "crate_path", "bin"))
+    if not (isinstance(repo, str) and Path(repo).is_absolute()):
+        return "repo phải là đường dẫn tuyệt đối"
+    if not (isinstance(commit, str) and COMMIT_RE.fullmatch(commit)):
+        return "commit phải là sha đủ 40 ký tự"
+    if not (isinstance(crate, str) and CRATE_PATH_RE.fullmatch(crate) and ".." not in crate.split("/")):
+        return "crate_path sai dạng"
+    if not (isinstance(binary, str) and UV_NAME_RE.fullmatch(binary)):
+        return "bin sai dạng"
+    return None
+
+
 def uv_tool_installed(uv: str, package: str) -> bool | None:
     """`uv tool list` có gói này không (dòng đầu mỗi mục: `<tên> v<bản>`, tên đã chuẩn hóa kiểu PEP 503). Không hỏi
     được uv thì None: bên gọi bỏ qua thay vì cài đè rồi ghi lệnh gỡ."""
@@ -512,7 +531,7 @@ class Installer:
             if item["kind"] == "mcp-remote":
                 self.install_mcp(item, entry)
                 continue
-            if item["kind"] == "brew-tool":  # công cụ dòng lệnh: bước tools cài theo khóa brew
+            if item["kind"] in ("brew-tool", "cargo-source"):  # công cụ dòng lệnh: bước tools cài
                 self.say(f"  · công cụ dòng lệnh, bước tools cài: {key}")
                 continue
             if item["kind"] in ("vendor-skill", "vendor-plugin"):
@@ -722,9 +741,16 @@ class Installer:
         self.say("[tools] công cụ dòng lệnh cho các mục đã duyệt")
         catalog = json.loads((HOME_STACK / "catalog.json").read_text(encoding="utf-8"))
         approved = self.approved()
-        wanted, uv_wanted = {}, {}
+        wanted, uv_wanted, cargo_wanted = {}, {}, []
         for item in catalog["items"]:
             entry = approved.get(item["key"])
+            if entry and entry.get("verdict") != "FAIL" and item.get("kind") == "cargo-source":
+                problem = cargo_source_problem(entry)
+                if problem:
+                    self.say(f"  ! bỏ qua {item['key']}: {problem}")
+                    self.skipped.append(f"{item['key']}: {problem}")
+                else:
+                    cargo_wanted.append((item["key"], entry))
             if entry and entry.get("verdict") != "FAIL":
                 for name in item.get("brew") or []:
                     wanted.setdefault(name, item["key"])
@@ -735,9 +761,11 @@ class Installer:
                         self.skipped.append(f"uv_tool của {item['key']}: {problem}")
                     else:
                         uv_wanted.setdefault(tool["bin"], (tool, item["key"]))
-        if not wanted and not uv_wanted:
+        if not wanted and not uv_wanted and not cargo_wanted:
             self.say("  = không mục nào cần công cụ ngoài")
             return
+        for key, entry in cargo_wanted:
+            self.install_cargo_source(key, entry)
         # Công cụ Python (khóa "uv_tool"): `uv tool install` đúng phiên bản ghim, gỡ bằng `uv tool uninstall`.
         uv = os.environ.get("AGENT_STACK_UV_BIN") or shutil.which("uv")
         for name, (tool, key) in uv_wanted.items():
@@ -771,6 +799,67 @@ class Installer:
                 self.skipped.append(f"{name}: cần Homebrew")
                 continue
             self.run([brew, "install", name], undo=[brew, "uninstall", name])
+
+    def install_cargo_source(self, key: str, entry: dict) -> None:
+        """Dựng công cụ Rust từ đúng commit đã vet (TM-107): `git archive <commit>` của repo nguồn vào thư mục tạm
+        (không đọc cây làm việc, không ghi vào repo nguồn), rồi `cargo install --locked --offline` với target tạm.
+        Binary vào ~/.cargo/bin; gỡ bằng `cargo uninstall`. Đã có trên PATH thì bỏ qua."""
+        name, repo, commit = entry["bin"], entry["repo"], entry["commit"]
+        if shutil.which(name):
+            self.say(f"  = {name} đã có ({shutil.which(name)})")
+            return
+        cargo = os.environ.get("AGENT_STACK_CARGO_BIN") or shutil.which("cargo")
+        git_bin = shutil.which("git")
+        if not cargo or not git_bin:
+            self.say(f"  ! không có {'cargo' if not cargo else 'git'} nên không dựng được {name} (cho {key})")
+            self.skipped.append(f"{name}: cần {'cargo' if not cargo else 'git'}")
+            return
+        safe_git = [git_bin, "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null",
+                    "-C", repo]
+        found = subprocess.run([*safe_git, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"],
+                               capture_output=True, text=True)
+        if found.returncode != 0 or found.stdout.strip() != commit:
+            self.say(f"  ! {repo} không có commit {commit[:12]} đã vet nên không dựng {name} (cho {key})")
+            self.skipped.append(f"{name}: thiếu commit đã vet")
+            return
+        crate = entry["crate_path"]
+        self.say(f"  $ git -C {repo} archive {commit[:12]} | tar -x -C <thư mục tạm>/src")
+        self.say(f"  $ CARGO_TARGET_DIR=<thư mục tạm>/target {cargo} install --locked --offline "
+                 f"--path <thư mục tạm>/src/{crate}")
+        if not self.apply:
+            return
+        work = Path(tempfile.mkdtemp(prefix="agent-stack-cargo-"))
+        try:
+            src = work / "src"
+            src.mkdir()
+            tar = subprocess.run([*safe_git, "archive", "--format=tar", commit], capture_output=True)
+            if tar.returncode != 0:
+                self.say(f"    lỗi git archive ({tar.returncode})")
+                self.failures.append(f"git archive {name}: mã {tar.returncode}")
+                return
+            archive = work / "src.tar"
+            archive.write_bytes(tar.stdout)
+            with tarfile.open(archive) as tf:
+                tf.extractall(src, filter="data")  # chặn đường dẫn tuyệt đối, `..`, symlink ra ngoài
+            env = {**os.environ, "CARGO_TARGET_DIR": str(work / "target"), "CARGO_NET_OFFLINE": "true"}
+            args = [cargo, "install", "--locked", "--offline", "--path", str(src / crate)]
+            self.say("    dựng…")
+            try:
+                out = subprocess.run(args, capture_output=True, text=True, env=env, timeout=1800)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                self.say(f"    lỗi: {exc}")
+                self.failures.append(f"cargo install {name}: {exc}")
+                return
+            if out.returncode != 0:
+                text = (out.stdout + out.stderr).strip()
+                self.say(f"    lỗi ({out.returncode}): {text[-300:]}")
+                self.failures.append(f"cargo install {name}: mã {out.returncode}")
+                return
+            self.record(type="cmd", cmd=[cargo, "install", "--locked", "--offline", "--path",
+                                         f"{repo}@{commit[:12]}/{crate}"],
+                        undo=[cargo, "uninstall", name])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
     # ------------------------------------------------------------ chạy
 

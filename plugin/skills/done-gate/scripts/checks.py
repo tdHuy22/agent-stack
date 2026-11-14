@@ -84,6 +84,7 @@ INSTALL = {
     "swiftc": "xcode-select --install", "mypy": "pip install mypy (trong venv của project)",
     "pyright": "brew install pyright", "shfmt": "brew install shfmt", "clang-tidy": "brew install llvm",
     "clang-format": "brew install clang-format", "ruby": "brew install ruby", "pre-commit": "brew install pre-commit",
+    "archctl": "./install.sh --only tools của agent-stack (mục cargo:archctl, cần bạn duyệt trong vetted.lock)",
 }
 SKIP_DIRS = ("node_modules/", "vendor/", "dist/", "build/", ".venv/", "venv/", "target/", "third_party/", ".git/",
              "__pycache__/", "Pods/", ".build/", "DerivedData/")
@@ -95,7 +96,8 @@ JSONC_NAMES = re.compile(r"(^|/)(tsconfig[^/]*|jsconfig[^/]*|\.eslintrc|\.babelr
                          r"|(^|/)\.vscode/|\.jsonc$")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 KIND_LABEL = {"lint": "lint", "type": "kiểu/biên dịch", "format": "định dạng", "syntax": "cú pháp",
-              "security": "bảo mật (semgrep)", "secrets": "khóa lộ", "deps": "thư viện có lỗ hổng", "config": "cấu hình"}
+              "security": "bảo mật (semgrep)", "secrets": "khóa lộ", "deps": "thư viện có lỗ hổng", "config": "cấu hình",
+              "arch": "luật kiến trúc (archctl)"}
 
 
 def fold(text: str) -> str:
@@ -266,6 +268,7 @@ COVER = [
     (r"\bsemgrep\b", "*", ("security",)),
     (r"\bgitleaks\b|\btrufflehog\b", "*", ("secrets",)),
     (r"\bosv-scanner\b", "*", ("deps",)),
+    (r"\barchctl\s+(?:\S+\s+)*?check\b[^`\n]*--strict", "*", ("arch",)),
     (r"\bmake\s+lint\b", "*", ("lint",)),
     (r"\bmake\s+(?:typecheck|type-check)\b", "*", ("type",)),
 ]
@@ -750,6 +753,7 @@ class Ctx:
     corpus: str
     offline: bool = False
     by_lang: dict = field(default_factory=dict)
+    base: str = "HEAD"
 
 
 @dataclass
@@ -1353,10 +1357,12 @@ def nearest_glob(root: Path, rel: str, patterns: tuple):
 
 
 def plan_cross(ctx: Ctx, plan: Plan):
-    """Kiểm chung mọi ngôn ngữ: khóa lộ (gitleaks), bảo mật (semgrep), thư viện có lỗ hổng (osv-scanner)."""
+    """Kiểm chung mọi ngôn ngữ: khóa lộ (gitleaks), bảo mật (semgrep), thư viện có lỗ hổng (osv-scanner), luật kiến
+    trúc (archctl, khi project có `.arch/system.arch`)."""
     root, files = ctx.root, sorted(ctx.changed)
     if not files:
         return
+    plan_arch(ctx, plan)
     if not is_covered(ctx, plan, "*", "secrets"):
         gl = shutil.which("gitleaks")
         if gl:
@@ -1393,6 +1399,109 @@ def plan_cross(ctx: Ctx, plan: Plan):
                 argv += ["-L", f]
             plan.checks.append(Check("*", "deps", "osv-scanner", argv, root, parse_osv, block_none, ok_codes=(0, 1),
                                      timeout=300))
+
+
+def archgate():
+    """Thư viện chung `plugin/lib/archgate.py` (tìm archctl ngoài project, TM-108)."""
+    lib = str(Path(__file__).resolve().parents[3] / "lib")
+    if lib not in sys.path:
+        sys.path.insert(0, lib)
+    import archgate as G  # noqa: E402
+    return G
+
+
+def arch_rules_unchanged(root: Path, base: str = "HEAD") -> bool:
+    """`.arch/system.arch` trên đĩa giống hệt bản ở HEAD và ở `base` (so mã băm blob, nên `assume-unchanged` hay sửa
+    trong lúc làm rồi commit không lọt): chỉ khi đó mới chạy `archctl verify`, vì verify chạy lệnh shell khai trong
+    file đó (TM-110). File chưa được git theo dõi, hay không đọc được, thì coi là đổi."""
+    git = ["git", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null", "-C", str(root)]
+    rel = ".arch/system.arch"
+    try:
+        disk = subprocess.run([*git, "hash-object", "--", rel], capture_output=True, text=True, timeout=20)
+        blobs = [subprocess.run([*git, "rev-parse", "--verify", "--quiet", f"{ref}:{rel}"], capture_output=True,
+                                text=True, timeout=20) for ref in dict.fromkeys(("HEAD", base or "HEAD"))]
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    want = disk.stdout.strip()
+    return disk.returncode == 0 and bool(want) and all(b.returncode == 0 and b.stdout.strip() == want for b in blobs)
+
+
+def verify_commands(root: Path) -> list:
+    """Tên và lệnh của các dòng `verify <tên> runs "<lệnh>"` trong `.arch/system.arch`, để báo cáo nêu trước."""
+    try:
+        text = (root / ".arch" / "system.arch").read_text(encoding="utf-8", errors="replace")[:500_000]
+    except OSError:
+        return []
+    return re.findall(r'^\s*verify\s+(\S+)\s+runs\s+"((?:[^"\\]|\\.)*)"', text, re.M)
+
+
+def parse_archctl(out: str, err: str = "") -> list:
+    """Đầu ra người đọc của `archctl check`: khối `✗ VI PHẠM` (dòng sau là `file:dòng  import …`) thành lỗi; dòng `⚠`
+    thành cảnh báo, trừ khi không có `✗` nào (khi đó `--strict` trượt vì chính các cảnh báo đó, nên tính là lỗi)."""
+    G = archgate()
+    diags, lines = [], [G.clean(x) for x in out.splitlines()]
+    for i, line in enumerate(lines):
+        if line.startswith("✗"):
+            loc = lines[i + 1].strip() if i + 1 < len(lines) and lines[i + 1].startswith(" ") else ""
+            m = re.match(r"(\S+?):(\d+)\s+(.*)", loc)
+            path, lineno, what = (m.group(1), int(m.group(2)), m.group(3)) if m else (None, None, loc)
+            msg = " ".join(line.lstrip("✗ ").split()) + (f" · {what}" if what else "")
+            diags.append(Diag(path, lineno, None, "archctl", msg, "error"))
+        elif line.startswith("⚠"):
+            hint = lines[i + 1].strip() if i + 1 < len(lines) and lines[i + 1].startswith(" ") else ""
+            msg = " ".join(line.lstrip("⚠ ").split()) + (f" ({hint})" if hint else "")
+            diags.append(Diag(None, None, None, "archctl", msg, "warning"))
+    if diags and not any(d.level == "error" for d in diags):
+        for d in diags:
+            d.level = "error"
+    return diags
+
+
+def arch_runner(binary: str, root: Path, run_verify: bool, timeout: int):
+    """Chạy `archctl verify` (khi được phép) rồi `archctl check --strict`; mã lạ (2: file luật hỏng) thì lỗi, không
+    bao giờ coi là sạch."""
+    def run():
+        diags = []
+        if run_verify:
+            code, out, err, _ = run_cmd([binary, "verify", "--root", str(root)], root, timeout)
+            if code is None:
+                raise RuntimeError(f"archctl verify hết {timeout} giây")
+            if code != 0:
+                diags.append(Diag(None, None, None, "archctl verify", f"verify trượt (mã {code}): {tail(out + err)}",
+                                  "error"))
+        code, out, err, _ = run_cmd([binary, "check", "--strict", "--root", str(root)], root, 300)
+        if code is None:
+            raise RuntimeError("archctl check hết 300 giây")
+        if code not in (0, 1):
+            raise RuntimeError(f"archctl check mã {code}: {tail(out + err)}")
+        found = parse_archctl(out, err) if code == 1 else []
+        if code == 1 and not found:
+            found = [Diag(None, None, None, "archctl", f"check --strict trượt (mã 1): {tail(out + err)}", "error")]
+        return diags + found
+    return run
+
+
+def plan_arch(ctx: Ctx, plan: Plan):
+    """Project có `.arch/system.arch`: `archctl check --strict` (vi phạm mới chặn, ở cả file ngoài diff) và
+    `archctl verify` khi file luật không đổi so với HEAD (TM-110). Thiếu archctl thì báo chưa kiểm (mã 2)."""
+    root = ctx.root
+    if not (root / ".arch" / "system.arch").is_file() or is_covered(ctx, plan, "*", "arch"):
+        return
+    binary = archgate().find_binary(root)
+    if not binary:
+        add_missing(plan, "*", "arch", "archctl")
+        return
+    run_verify = arch_rules_unchanged(root, ctx.base)
+    cmds = verify_commands(root)
+    if cmds and run_verify:
+        plan.notes.append("archctl verify chạy các lệnh khai trong `.arch/system.arch`: "
+                          + "; ".join(f"{n} = `{c}`" for n, c in cmds[:8]))
+    elif cmds:
+        plan.missing.append(("*", "arch", "archctl verify", "bỏ vì `.arch/system.arch` đổi so với HEAD hay base, hay "
+                             "chưa được git theo dõi (TM-110): người dùng xem `archctl diff` rồi tự chạy `archctl "
+                             "verify`"))
+    plan.checks.append(Check("*", "arch", "archctl", cwd=root, block=block_errors, enforced=True, anywhere=True,
+                             timeout=1800, inproc=arch_runner(binary, root, run_verify and bool(cmds), 1800)))
 
 
 def gitleaks_runner(gl: str, root: Path, files: list):
@@ -1485,7 +1594,7 @@ def make_ctx(root: Path, base: str = "HEAD", offline: bool = False, all_files: b
         return None
     moc = moc_text(root)
     pkg = read_json(root / "package.json")
-    return Ctx(root, changed, moc, coverage(moc_commands(moc)), enforcement_corpus(root, moc, pkg), offline)
+    return Ctx(root, changed, moc, coverage(moc_commands(moc)), enforcement_corpus(root, moc, pkg), offline, base=base)
 
 
 # ---------------------------------------------------------------- chạy

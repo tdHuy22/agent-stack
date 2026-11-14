@@ -685,6 +685,31 @@
         "note": "Người dùng chọn 'Biome qua install.sh' trong chat 13/11/2026 (linter TS cho plugin/hooks/ui.tsx, không dùng npm)"
       }
     },
+    "cargo:archctl": {
+      "kind": "cargo-source",
+      "source": "git:/Users/macos/Documents/Claude/archctl",
+      "repo": "/Users/macos/Documents/Claude/archctl",
+      "commit": "a82879b60c1e209ea23463bd441e4d4f7b8e0bcc",
+      "crate_path": "crates/archctl",
+      "bin": "archctl",
+      "version": "0.1.1",
+      "license": "Apache-2.0",
+      "tool": "vet.py/1 + đọc tay",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-14",
+      "redflags": {
+        "critical": 21,
+        "medium": 3
+      },
+      "reviews": [],
+      "report": "vet-reports/local__archctl@46315651aec0.md",
+      "note": "vet.py ra FAIL (21 rce-pipe, 3 hidden-unicode), đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246) và tài liệu mô tả tấn công; hidden-unicode là xử lý BOM trong bench/*.py. Không crate ngoài (Cargo.lock 2 gói), không build.rs, không proc-macro; mạng chỉ ở `serve` (127.0.0.1, khóa phiên); shell chỉ ở `verify` (lệnh khai trong .arch/system.arch). Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-107). Chưa chạy skill-scanner, SkillSpector (máy chưa cài).",
+      "human_review": {
+        "status": "approved",
+        "at": "2026-11-14T05:00:00Z",
+        "note": "Người dùng chọn 'Duyệt và cài (Recommended)' trong chat 14/11/2026 (GĐ3), sau khi được báo vet.py ra FAIL do báo nhầm và mục ghi REVIEW; xem trước install.sh khớp mô tả thì --apply"
+      }
+    },
     "mcp:mcp.deepwiki.com/mcp": {
       "human_review": {
         "at": "2026-10-11T02:37:14Z",

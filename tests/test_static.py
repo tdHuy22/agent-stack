@@ -5,6 +5,8 @@
 - "Hook không bao giờ làm kẹt phiên": mọi hook trong hooks.json gặp stdin hỏng vẫn thoát 0, không in lỗi.
 - Linter: ruff theo `ruff.toml` (bộ luật rộng) cho Python, Biome theo `biome.json` cho lớp giao diện TS. Máy thiếu
   công cụ thì bỏ qua và nói cách cài (`install.sh`, mục brew:ruff, brew:biome).
+- Kiến trúc (GĐ3, thay cho luật archctl vì archctl chưa thấy import trần sau `sys.path.insert`): hook chỉ import lib
+  và hosts, lib chỉ import lib. Chỗ cũ nằm trong baseline; chỗ mới trượt, chỗ cũ đã sửa phải bỏ khỏi baseline.
 """
 import ast
 import json
@@ -12,8 +14,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 import warnings
+from pathlib import Path
 
 from tests._util import PLUGIN, REPO, TempDirTestCase
 
@@ -49,6 +53,60 @@ def top_imports(tree: ast.AST):
                 yield node.lineno, alias.name.split(".")[0]
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             yield node.lineno, node.module.split(".")[0]
+
+
+# (file, module) đã có trước luật kiến trúc (14/11/2026, bạn chọn "ghi luật + baseline"). Chỉ được bỏ bớt: sửa xong một
+# chỗ (dời phần dùng chung vào plugin/lib) thì xóa dòng của nó.
+ARCH_BASELINE = {
+    ("plugin/hooks/post_edit.py", "checks"),
+    ("plugin/hooks/prompt_submit.py", "route"),
+    ("plugin/hooks/session_start.py", "cloud_update"),
+    ("plugin/hooks/session_start.py", "collect"),
+    ("plugin/hooks/session_start.py", "route"),
+    ("plugin/hooks/session_start.py", "drift"),
+    ("plugin/hooks/session_start.py", "mcp_remote"),
+    ("plugin/hooks/stop.py", "risk"),
+    ("plugin/lib/agentstack.py", "risk"),
+}
+
+
+def arch_violations() -> set:
+    """(file, module) mà hook import ngoài stdlib, `plugin/lib`, `plugin/hosts`; hay lib import ngoài stdlib và lib.
+    Tên module so theo tên file (hook, lib nạp script qua `sys.path.insert` rồi `import <tên>`)."""
+    lib = {p.stem for p in (PLUGIN / "lib").glob("*.py")}
+    hosts = {p.stem for p in (PLUGIN / "hosts").glob("*.py")}
+    found = set()
+    for folder, allowed in (("hooks", lib | hosts), ("lib", lib)):
+        for path in sorted((PLUGIN / folder).glob("*.py")):
+            for _, name in top_imports(ast.parse(path.read_text(encoding="utf-8"), str(path))):
+                if name not in sys.stdlib_module_names and name not in allowed:
+                    found.add((path.relative_to(REPO).as_posix(), name))
+    return found
+
+
+class ArchitectureRules(unittest.TestCase):
+    def test_hooks_import_only_lib_and_lib_only_itself(self):
+        found = arch_violations()
+        new = sorted(f"{f} import {m}" for f, m in found - ARCH_BASELINE)
+        self.assertEqual(new, [], "Hook chỉ gọi thư viện chung plugin/lib (và plugin/hosts), lib chỉ gọi lib: dời phần "
+                                  "dùng chung vào plugin/lib thay vì import script của skill hay hook khác")
+
+    def test_baseline_only_shrinks(self):
+        fixed = sorted(f"{f} import {m}" for f, m in ARCH_BASELINE - arch_violations())
+        self.assertEqual(fixed, [], "Chỗ này đã sửa: xóa khỏi ARCH_BASELINE để luật không nới trở lại")
+
+    def test_baseline_never_grows(self):
+        """Baseline chỉ được bớt: thêm một chỗ miễn mới vào ARCH_BASELINE là nới luật (14/11/2026 có 9 chỗ)."""
+        self.assertLessEqual(len(ARCH_BASELINE), 9)
+
+    def test_rule_sees_a_new_skill_import(self):
+        """Luật bắt đúng kiểu import của repo: `sys.path.insert(...skills...)` rồi `import <script>`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "hook.py"
+            fake.write_text("import sys\nsys.path.insert(0, 'x/skills/done-gate/scripts')\nimport risk\nimport archgate\n")
+            names = {n for _, n in top_imports(ast.parse(fake.read_text()))}
+        lib = {p.stem for p in (PLUGIN / "lib").glob("*.py")}
+        self.assertEqual({n for n in names if n not in sys.stdlib_module_names and n not in lib}, {"risk"})
 
 
 class StaticChecks(unittest.TestCase):

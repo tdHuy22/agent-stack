@@ -58,6 +58,7 @@ plugin/hooks/ui_status.py
 plugin/hosts/pi.json
 plugin/hosts/pi_host.py
 plugin/lib/agentstack.py
+plugin/lib/archgate.py
 plugin/lib/client_place.py
 plugin/lib/testlock.py
 plugin/skills/aside-web/SKILL.md

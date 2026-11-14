@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 from tests._util import REPO, TempDirTestCase, copy_plugin, git
 
@@ -591,6 +592,57 @@ class InstallTests(TempDirTestCase):
         out = self.run_install("--apply", "--only", "tools", extra_env=env, expect=2)
         self.assertIn("không hỏi được `uv tool list`", out)
         self.assertEqual(uv_log.read_text().splitlines(), before)
+
+    def test_tools_step_builds_cargo_source_from_vetted_commit_only(self):
+        """cargo-source (TM-107): dựng đúng commit ghim trong vetted.lock bằng git archive, không đọc cây làm việc,
+        target tạm, --locked --offline; commit lạ, mục chờ duyệt, catalog tự khai repo thì không dựng."""
+        src = self.tmp / "nguon-rust"
+        (src / "crates" / "cli").mkdir(parents=True)
+        (src / "crates" / "cli" / "main.rs").write_text("ban-da-vet\n")
+        git(src, "init", "-q")
+        git(src, "add", "-A")
+        git(src, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v")
+        commit = git(src, "rev-parse", "HEAD").strip()
+        (src / "crates" / "cli" / "main.rs").write_text("ban-chua-vet\n")  # cây làm việc bẩn: không được dựng
+        cargo_log = self.tmp / "cargo.log"
+        cargo = self.tmp / "fake-cargo"
+        cargo.write_text("#!/bin/sh\n"
+                         f"echo \"$@ | target=$CARGO_TARGET_DIR | offline=$CARGO_NET_OFFLINE\" >> {cargo_log}\n"
+                         f"if [ \"$1\" = install ]; then cat \"$5/main.rs\" >> {cargo_log}; fi\n")
+        cargo.chmod(0o755)
+        good = {"kind": "cargo-source", "repo": str(src), "commit": commit, "crate_path": "crates/cli",
+                "bin": "cong-cu-rust-xyz", "verdict": "REVIEW", "human_review": {"status": "approved"}}
+        self.lock["entries"] = {
+            "cargo:tot": good,
+            "cargo:cho": {**good, "bin": "cong-cu-rust-cho", "human_review": {"status": "pending"}},
+            "cargo:la": {**good, "bin": "cong-cu-rust-la", "commit": "0" * 40},
+            "cargo:sai": {**good, "bin": "cong-cu-rust-sai", "crate_path": "../ngoai"}}
+        self.catalog["items"] = [
+            {"key": k, "kind": "cargo-source", "scope": "user", "install": {"name": k},
+             "repo": "/khong/dung/den"} for k in self.lock["entries"]]
+        self.save()
+        env = {"AGENT_STACK_CARGO_BIN": str(cargo), "AGENT_STACK_BREW_BIN": str(self.tmp / "khong-co-brew")}
+        out = self.run_install("--only", "tools", extra_env=env, expect=2)
+        self.assertIn(f"archive {commit[:12]}", out)
+        self.assertIn("--locked --offline", out)
+        self.assertIn("không có commit 000000000000 đã vet", out)
+        self.assertIn("crate_path sai dạng", out)
+        self.assertNotIn("cong-cu-rust-cho", out, "mục chờ duyệt không được nhắc tới để dựng")
+        self.assertFalse(cargo_log.exists(), "xem trước không chạy gì")
+        self.run_install("--apply", "--only", "tools", extra_env=env, expect=2)
+        lines = cargo_log.read_text().splitlines()
+        self.assertEqual(len(lines), 2, lines)
+        self.assertTrue(lines[0].startswith("install --locked --offline --path "), lines[0])
+        self.assertIn("offline=true", lines[0])
+        target = lines[0].split("target=")[1].split(" |")[0]
+        self.assertTrue(target and not target.startswith(str(src)), "target nằm ngoài repo nguồn")
+        self.assertFalse(Path(target).exists(), "thư mục tạm đã xóa")
+        self.assertEqual(lines[1], "ban-da-vet", "dựng từ commit đã vet, không từ cây làm việc")
+        self.assertEqual(git(src, "status", "--porcelain").strip(), "M crates/cli/main.rs", "repo nguồn không bị ghi")
+        manifest = (self.stack / "INSTALLED.md").read_text(encoding="utf-8")
+        self.assertIn("`fake-cargo uninstall cong-cu-rust-xyz`", manifest)
+        self.run_install("--rollback", "--apply", extra_env=env)
+        self.assertEqual(cargo_log.read_text().splitlines()[-1].split(" |")[0], "uninstall cong-cu-rust-xyz")
 
     def test_failed_command_is_reported_and_exits_1(self):
         out = self.run_install("--apply", "--only", "plugin", expect=1, extra_env={"FAKE_CLAUDE_EXIT": "1"})

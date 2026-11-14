@@ -63,7 +63,8 @@ def main():
     except ImportError:
         pass
     # Cảnh báo đặt trên đầu: pi lệch hợp đồng (mỗi lần mở phiên pi), plugin lệch bản đã kiểm duyệt (lúc khởi động)
-    notes = [pi_sync() if A.host() == "pi" else ("", ""), plugin_drift() if source == "startup" else ("", "")]
+    notes = [pi_sync() if A.host() == "pi" else ("", ""), plugin_drift() if source == "startup" else ("", ""),
+             arch_pending(root)]
     drift_note = "\n".join(n for n, _ in notes if n)
     drift_user = " · ".join(u for _, u in notes if u)
     # Lệnh không tương tác (`claude -p`, `pi -p`) là một câu hỏi độc lập: ghi chú lượt cuối làm model chép lại
@@ -92,6 +93,24 @@ def main():
         context = drift_note + "\n" + context
         user = f"{drift_user} · {user}"
     A.emit("SessionStart", context, user)
+
+
+def arch_pending(root) -> tuple:
+    """Số đề xuất kiến trúc (archctl propose, block) đang chờ người dùng duyệt trong `.arch/proposals.arch` của project
+    (đọc file, không gọi archctl; chỉ đưa số, không đưa nội dung đề xuất vào context, TM-109). Không có thì rỗng."""
+    try:
+        import archgate  # noqa: E402 (cùng thư mục lib với agentstack)
+        top = archgate.find_root(Path(root))
+        count = archgate.pending_count(top) if top is not None else 0
+    except Exception as exc:  # noqa: BLE001 (việc phụ)
+        A.log_event("hook-error", {"hook": "session-start.archctl", "error": repr(exc)[:300]})
+        return "", ""
+    if not count:
+        return "", ""
+    return (f"[agent-stack] {count} đề xuất kiến trúc (archctl) đang chờ người dùng duyệt. Nhắc người dùng xem bằng "
+            "`archctl proposals` rồi tự chạy `archctl accept|reject <id> --reason ...`; agent không chạy hai lệnh này. "
+            "Phần việc đang bế tắc vì đề xuất thì chờ, đừng lách luật.",
+            f"⏸ {count} đề xuất kiến trúc chờ bạn duyệt · archctl proposals")
 
 
 def pi_sync():
