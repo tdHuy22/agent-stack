@@ -125,6 +125,22 @@ class Linters(TempDirTestCase):
         r = self.run_tool("biome", "lint", ".", cwd=self.tmp)
         self.assertIn("noUnusedVariables", r.stdout + r.stderr)
 
+    def test_biome_skips_worktrees(self):
+        """Worktree của phiên khác trong `.claude/worktrees/` có biome.json riêng: biome không được dừng vì cấu hình lồng."""
+        cfg = (REPO / "biome.json").read_text(encoding="utf-8")
+        (self.tmp / "biome.json").write_text(cfg, encoding="utf-8")
+        (self.tmp / "plugin" / "hooks").mkdir(parents=True)
+        (self.tmp / "plugin" / "hooks" / "x.tsx").write_text("export const a = 1\n", encoding="utf-8")
+        nested = self.tmp / ".claude" / "worktrees" / "w"
+        (nested / "plugin" / "hooks").mkdir(parents=True)
+        (nested / "biome.json").write_text(cfg, encoding="utf-8")
+        (nested / "plugin" / "hooks" / "x.tsx").write_text("export const a = 1\n", encoding="utf-8")
+        r = self.run_tool("biome", "lint", "--verbose", "--error-on-warnings", ".", cwd=self.tmp)
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertIn("plugin/hooks/x.tsx", out)
+        self.assertNotIn(".claude/worktrees", out)
+
 class HooksSurviveBadInput(TempDirTestCase):
     BAD_INPUTS = ("", "{not json", "[1, 2]", "null", "{}", '{"hook_event_name": 42, "cwd": 7}')
 
