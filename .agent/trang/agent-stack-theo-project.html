@@ -200,6 +200,7 @@ flowchart LR
           <li><b>Chỉ sinh núm chỉnh, không sinh văn.</b> File <code>.agent/stack.json</code> trong mỗi project, do hook đọc, model không đọc, nên không tốn token. Nội dung: từ khóa riêng của project và mức nghĩ của chúng ("rò nhãn" → Opus <code>xhigh</code>), từ khóa cần bỏ qua ("schema" ở SCEE), thư mục lõi tính rủi ro cao, công cụ kiểm có sẵn (archctl nếu có thư mục <code>.arch/</code>), mức áp dụng quy trình ở ý 3. Mỗi mục ghi lý do, bằng chứng và ngày.</li>
           <li><b>Dùng lại cái Claude Code đã có.</b> Effort mặc định của project dùng <code>effortLevel</code> trong <code>.claude/settings.local.json</code>; luật miền thật sự cần model đọc thì dùng <code>.claude/rules/</code> có <code>paths:</code>, chỉ nạp khi chạm tới file khớp.</li>
           <li><b>Đề xuất từ số đo.</b> Skill mới <code>project-setup</code>, chạy trong phiên của chính project đó: đếm tần suất từ trong code (thấy "schema" ở 185 dòng), đọc mục quyết định và nhật ký để lấy loại việc khó, xem công cụ có sẵn. In từng mục kèm bằng chứng; bạn duyệt từng mục rồi mới ghi.</li>
+          <li><b>Model mạnh đọc cả project, một lần</b> <span class="chip">thêm 14/11</span>. <code>project-setup</code> chạy bằng model của phiên (Opus <code>high</code>), giao phần đọc rộng cho subagent Explore. Project mới, lớn hay yêu cầu còn mơ hồ thì mở phiên này bằng Fable <code>high</code> (bảng ở ý 2). Kết quả là <b>mức sàn</b> ghi trong <code>stack.json</code>: theo vùng (thư mục lõi, loại việc) và theo cỡ, độ phức tạp của project. Router không bao giờ gợi ý dưới sàn. Việc đọc cả project chỉ làm lại khi dấu vân tay đổi nhiều, không làm ở mỗi tin nhắn (vì sao: ý 5).</li>
           <li><b>Động có điều kiện.</b> File ghi dấu vân tay hồ sơ (ngôn ngữ, có test, có code bảo mật, có archctl). Lúc mở phiên, lệch thì nhắc chạy lại phần đổi. Mỗi lượt ghi gợi ý của router và mức nghĩ thật ở dòng ➡️; từ khóa nhầm hay sót lặp từ ba lần trở lên thì được đề xuất sửa. Mục không còn bằng chứng thì được đề xuất bỏ.</li>
           <li><b>Siết tự do, nới cần bạn.</b> Hạ mức nghĩ, bỏ công cụ kiểm, tắt quy trình ở ý 3: phải bạn duyệt.</li>
         </ul>
@@ -298,7 +299,7 @@ flowchart TD
         <h4>Thiết kế đề xuất: ba lớp</h4>
         <ol>
           <li><b>Lớp từ khóa</b> (đã có, vài mili giây, không tốn token), cộng từ khóa riêng của project ở ý 1.</li>
-          <li><b>Lớp model nhỏ</b>: Haiku 5.5 ở <code>low</code> đọc câu, hồ sơ project, từ khóa miền của project, bảng chọn model rút gọn và gợi ý của lớp 1, rồi trả loại việc, độ khó, model, effort, lý do, độ tin. Chạy ở ba lúc:
+          <li><b>Lớp model nhỏ</b>: Haiku 5.5 ở <code>low</code> đọc câu, hồ sơ project, từ khóa miền và mức sàn của project trong <code>stack.json</code> (do model mạnh viết ở ý 1), bảng chọn model rút gọn và gợi ý của lớp 1, rồi trả loại việc, độ khó, model, effort, lý do, độ tin. Nó không đọc lại project. Chạy ở ba lúc:
             <ul>
               <li>Lúc mở phiên, chạy nền trên việc tiếp theo trong §0: không ai phải chờ; kết quả tới model ở tin đầu tiên của bạn và hiện ở dải gợi ý trên ô nhập (giao diện agent-stack đã có dải này).</li>
               <li>Mỗi tin bạn gõ, chỉ khi lớp 1 không chắc: không khớp gì, chỉ khớp từ project đánh dấu bỏ qua (như "schema" ở SCEE), hay câu dài và mơ hồ. Có giới hạn thời gian cứng; quá giờ thì dùng lớp 1, không bao giờ làm kẹt phiên.</li>
@@ -309,6 +310,18 @@ flowchart TD
         </ol>
         <p><b>Kết hợp hai lớp:</b> ở việc rủi ro cao lấy mức cao hơn của hai lớp; lớp model chỉ được hạ mức so với lớp 1 khi lớp 1 khớp vào từ khóa mà project đánh dấu bỏ qua. <b>Học:</b> mỗi lần ghi gợi ý của hai lớp và mức thật đã cần (leo thang vì test trượt, bạn đổi <code>/effort</code>, review tìm ra lỗi). Một kiểu lệch lặp từ ba lần thì thành đề xuất thêm hay bỏ từ khóa trong cấu hình project, bạn duyệt. Lớp từ khóa rộng dần, lớp model chạy ít dần.</p>
         <p><b>Chi phí:</b> Haiku 5.5 giá 0,10 USD mỗi triệu token vào. Một lần chấm khoảng 3.000 token vào và 200 token ra, tức khoảng 0,0004 USD; 200 lần một ngày khoảng 0,08 USD. Đo độ chính xác trên khoảng 200 câu thật cũng chỉ khoảng 0,1 USD, nên khác với Fable (câu 6), lớp này đo bằng bộ câu được.</p>
+        <h4>Vì sao không để Opus đọc cả project ở mỗi lần chấm <span class="chip">bạn hỏi 14/11</span></h4>
+        <p>Router chạy theo tin nhắn, và bạn phải chờ nó xong. File git theo dõi của agent-stack cộng lại khoảng 5,8 MB, của SCEE khoảng 8,6 MB, tức cỡ 1,5 đến 2 triệu token, lớn hơn context của mọi model hiện có. "Đọc cả project" thực tế là model tự tìm và đọc chọn lọc. Mỗi lần chấm là một tiến trình <code>claude -p</code> riêng, không dùng lại cache của phiên chính. Ước tính theo giá niêm yết:</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Mỗi lần chấm</th><th>Haiku 5.5 <code>low</code> đọc <code>stack.json</code></th><th>Opus 5.5 <code>high</code> đọc project</th></tr></thead>
+          <tbody>
+            <tr><td>Lượng đọc vào</td><td>khoảng 3 nghìn token</td><td>khoảng 150 nghìn token</td></tr>
+            <tr><td>Giá</td><td>khoảng 0,0004 USD</td><td>khoảng 0,7–0,9 USD</td></tr>
+            <tr><td>Bạn chờ</td><td>1–3 giây</td><td>1–3 phút</td></tr>
+            <tr><td>Một phiên 40 tin</td><td>khoảng 0,02 USD</td><td>khoảng 30 USD và 40–120 phút chờ</td></tr>
+          </tbody>
+        </table></div>
+        <p>Vì vậy phần cần hiểu cả project do model mạnh làm một lần và ghi thành mức sàn (ý 1); plan mode đầu phiên (ý 6) để model của phiên, đã đọc project, gán model cho từng bước. Lớp model nhỏ chỉ chấm từng việc trên sàn đó. Cỡ project vào mức sàn, nhưng không tự quyết model: sửa một dòng chữ trong project lớn vẫn chỉ cần Sonnet <code>low</code>, lỗi mã hóa trong project nhỏ vẫn cần Opus <code>xhigh</code>; project lớn cũng không phải lý do dùng Fable (bảng ý 2). <b>Chọn model cho lớp này bằng số đo:</b> giai đoạn 5 đo Haiku 5.5 <code>low</code> và Sonnet 5.5 <code>low</code> trên cùng bộ câu thật, dùng model rẻ nhất đạt; nếu cả hai không đúng hơn lớp từ khóa thì bỏ lớp model.</p>
         <p><b>Chưa biết, đo đầu giai đoạn 5:</b> gọi <code>claude -p</code> với Haiku từ trong hook mất bao lâu (khởi động chương trình cộng một lần gọi model). Đề xuất giới hạn chờ 3 giây; nếu chậm hơn thì lớp model chỉ chạy nền và tới ở lượt sau, và phiên giai đoạn 5 hỏi bạn trước khi chọn. Phải chặn lặp vô hạn: phiên <code>claude -p</code> con không được chạy lại hook router của agent-stack.</p>
       </article>
 
@@ -526,8 +539,8 @@ flowchart TD
         <tr><td>2 · Sổ luật, khóa test, bánh cóc (làm đầu tiên)</td><td>Sổ luật cho agent-stack; test đọc sổ; khóa test trong <code>receipt.py</code>; done-gate so dấu vân tay, đánh dấu đỏ khi sửa test khóa hay đổi spec cùng code; hook nhắc ở mức vừa, chặn ở mức cao (câu 3).</td><td>Mọi luật trong luật chung và <code>CLAUDE.md</code> có loại kiểm; test trượt khi một luật trỏ tới test không tồn tại; done-gate báo đỏ trên một diff thử sửa test khóa (chứng minh trượt trên code cũ).</td><td>Opus <code>high</code></td></tr>
         <tr><td>1 · Chính sách Fable, phiên mở bằng kế hoạch</td><td>Sửa <code>routing-table.md</code> (bảng ở ý 2, kèm điều kiện câu 6: Fable chỉ đo bằng dùng thật), mục 7 của task-router, <code>rules.json</code>; khuôn kế hoạch phiên và gợi ý plan mode lúc mở phiên (ý 6).</td><td>Bảng có dòng "mở phiên bằng Fable khi…" và câu "không đo Fable bằng benchmark"; lúc mở phiên ở SCEE và agent-stack, dòng 🧭 gợi ý plan mode cho việc tiếp theo trong §0; bộ đo router (109 câu có nhãn) đạt hết, kể cả câu mới.</td><td>Sonnet <code>high</code></td></tr>
         <tr><td>3 · archctl vào vòng lặp (song song với 1)</td><td>Sáu bước ở ý 4; mô hình đe dọa trước bước 4.</td><td>Trên bản chép có <code>.arch/</code>: agent nhận dòng vi phạm trong đúng lượt sửa file, cả Claude Code và pi; ghi file luật bị chặn; bộ test đạt, <code>plugin validate</code> đạt.</td><td>Opus <code>high</code></td></tr>
-        <tr><td>4 · Cấu hình theo project</td><td><code>.agent/stack.json</code>, router đọc lớp đè, skill <code>project-setup</code>, dấu vân tay hồ sơ, nhật ký gợi ý so với thực tế.</td><td>Bốn câu ở ví dụ 1 ra đúng mức với cấu hình SCEE thử trên bản chép; không có cấu hình thì 109 câu cũ không đổi; hook vẫn dưới ngưỡng thời gian đo được hôm nay.</td><td>Opus <code>high</code></td></tr>
-        <tr><td>5 · Router có model (ý 5)</td><td>Đo độ trễ trước; lớp model nhỏ có giới hạn thời gian; ghi gợi ý của hai lớp và mức thật đã cần; lệch lặp lại thành đề xuất cho <code>stack.json</code>.</td><td>Trên bộ câu thật lấy từ các phiên đã qua (gắn nhãn bằng mức cuối cùng đã cần): hai lớp đúng nhiều hơn lớp tĩnh, không làm câu nào tệ đi ở việc rủi ro cao; việc tiếp theo trong §0 của SCEE và agent-stack được gợi ý đúng lúc mở phiên; hook không bao giờ bắt bạn chờ quá giới hạn đã chốt.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>4 · Cấu hình theo project</td><td><code>.agent/stack.json</code>, router đọc lớp đè, skill <code>project-setup</code>, dấu vân tay hồ sơ, nhật ký gợi ý so với thực tế. <code>project-setup</code> chạy bằng model của phiên, đọc cả project (Explore đọc rộng; project mới, lớn hay mơ hồ thì phiên Fable <code>high</code>), ghi mức sàn theo vùng và theo cỡ project; làm lại khi dấu vân tay đổi nhiều.</td><td>Bốn câu ở ví dụ 1 ra đúng mức với cấu hình SCEE thử trên bản chép; router không gợi ý dưới mức sàn của <code>stack.json</code>; không có cấu hình thì 109 câu cũ không đổi; hook vẫn dưới ngưỡng thời gian đo được hôm nay.</td><td>Opus <code>high</code></td></tr>
+        <tr><td>5 · Router có model (ý 5)</td><td>Đo độ trễ trước; lớp model nhỏ có giới hạn thời gian, đọc <code>stack.json</code> chứ không đọc lại project; đo Haiku 5.5 <code>low</code> và Sonnet 5.5 <code>low</code> trên cùng bộ câu, dùng model rẻ nhất đạt; ghi gợi ý của hai lớp và mức thật đã cần; lệch lặp lại thành đề xuất cho <code>stack.json</code>.</td><td>Trên bộ câu thật lấy từ các phiên đã qua (gắn nhãn bằng mức cuối cùng đã cần): hai lớp đúng nhiều hơn lớp tĩnh (cả hai model không đạt thì bỏ lớp model), không làm câu nào tệ đi ở việc rủi ro cao; việc tiếp theo trong §0 của SCEE và agent-stack được gợi ý đúng lúc mở phiên; hook không bao giờ bắt bạn chờ quá giới hạn đã chốt.</td><td>Opus <code>high</code></td></tr>
         <tr><td>6 · Spec theo lát cho mọi project</td><td>done-gate và session-keeper: spec "khi … thì …", test viết trước ở context mới, khóa, <code>simplify</code> sau khi xanh; mutation trên phần đổi ở mức cao (công cụ của câu 5, sau kiểm duyệt).</td><td>Chạy trọn trên một việc thật của một project khác và một việc của agent-stack, có biên nhận; trang spec bạn duyệt được trong vài phút.</td><td>Opus <code>high</code>; người viết test là model khác</td></tr>
         <tr><td>7 · Đo lại sau hai tuần dùng</td><td>Hạn mức (<code>usage_report.py</code>), số lỗi review tìm được sau khi có test khóa, số lần agent đề xuất nới, router hai lớp nhầm hay sót ở mỗi project, phiên mở bằng kế hoạch so với phiên không, Fable từ các lần dùng thật.</td><td>Phần nào không đáng thì tắt hay hạ mức áp dụng.</td><td>Sonnet <code>medium</code></td></tr>
       </tbody>
@@ -547,8 +560,8 @@ flowchart TD
   </section>
 
   <section>
-    <h2>Các câu đã chốt (13/11/2026)</h2>
-    <p class="note">Bạn trả lời trong chat ngày 13/11. Mọi câu chọn đúng khuyến nghị, trừ câu 6 có thêm điều kiện.</p>
+    <h2>Các câu đã chốt (13–14/11/2026)</h2>
+    <p class="note">Bạn trả lời câu 1–7 trong chat ngày 13/11, câu 8 ngày 14/11. Mọi câu chọn đúng khuyến nghị, trừ câu 6 có thêm điều kiện.</p>
     <div class="question" data-cau-hoi>
       <h3>Câu 1: Làm theo phương án nào? <span class="chip">đã chốt: A</span></h3>
       <p>Phương án A: một vòng, xây nền kiểm chứng trước. B và C giữ trên trang để thấy vì sao không chọn.</p>
@@ -577,12 +590,17 @@ flowchart TD
       <h3>Câu 7: Chạy các giai đoạn thế nào? <span class="chip">đã chốt: theo khuyến nghị</span></h3>
       <p>Mỗi giai đoạn một phiên mới; bắt đầu bằng giai đoạn 2 (nền kiểm chứng); sau đó giai đoạn 1 và 3 chạy song song. Nếu giai đoạn 3 tái hiện đúng ví dụ 2, mở thêm một phiên trong repo archctl để nó có đầu ra cho hook.</p>
     </div>
+    <div class="question" data-cau-hoi>
+      <h3>Câu 8 (14/11): Model nào đánh giá project, model nào chấm từng việc? <span class="chip">đã chốt: ghi vào kế hoạch</span></h3>
+      <p>Bạn hỏi sao không để Opus <code>high</code> đọc cả project rồi quyết, tùy cỡ project mà lên Fable hay xuống Sonnet. Đã chốt: model mạnh đọc cả project một lần trong <code>project-setup</code> (giai đoạn 4) và ghi mức sàn theo vùng và theo cỡ vào <code>stack.json</code>; lớp model của router (giai đoạn 5) chỉ đọc <code>stack.json</code>, model chọn bằng số đo giữa Haiku 5.5 và Sonnet 5.5 ở <code>low</code>, không đạt thì bỏ. Lý do và số: ý 5, mục "Vì sao không để Opus đọc cả project".</p>
+    </div>
   </section>
 
   <footer data-phan="nguon">
     <h2>Nguồn</h2>
     <ul>
       <li>Router chạy ngày 13/11: <code>python3 plugin/skills/task-router/scripts/route.py "&lt;câu&gt;"</code> và <code>route.suggest_for</code> kèm hồ sơ SCEE; từ khóa ở <code>plugin/skills/task-router/rules.json</code> (luật <code>architecture-critical</code>, <code>debug-simple</code>). Đếm "schema": <code>git grep -c -i -w schema -- '*.py'</code> trong SCEE ra 185 dòng.</li>
+      <li>Cỡ project ngày 14/11: tổng byte các file git theo dõi (<code>git ls-files -z | xargs -0 cat | wc -c</code>): agent-stack 5.822.485, SCEE 8.582.113. Quy ra token theo khoảng 3–4 byte mỗi token; chi phí ở ý 5 là ước tính theo giá niêm yết, chưa đo.</li>
       <li>Hai phiên trong app Claude (mở từ thanh bên): "Nỗ lực mặc định tối ưu cho dự án" ở SCEE (13/11), ba chỗ hở của router với SCEE; "Tích hợp archctl vào agent-stack" (06/11, đã lưu trữ), giả thuyết mã thoát và bốn bước tích hợp.</li>
       <li><code>~/Documents/Claude/archctl/README.md</code> dòng 81 (agent chỉ ghi đề xuất), 143 (hook <code>check --changed</code>), 150 (11 ms một file), 234 (lan can, không phải hàng rào).</li>
       <li><code>tests/test_global_rules.py</code> (kiểm câu chữ), <code>tests/test_static.py</code> (kiểm import thật); <code>PLAN.md</code> §0 (1.327 test, số đo context 10/11).</li>
