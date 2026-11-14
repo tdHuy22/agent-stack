@@ -126,7 +126,7 @@ class PostEditArch(ArchHookBase):
         self.assertEqual(self.calls(), [])
 
     def test_archctl_inside_the_project_is_never_run(self):
-        """TM-108: file tên archctl do repo đặt sẵn (đứng trước trên PATH) không được chạy; coi như máy thiếu."""
+        """TM-112: file tên archctl do repo đặt sẵn (đứng trước trên PATH) không được chạy; coi như máy thiếu."""
         inside = make_fake(self.project / "bin")
         env = self.fake_env(1, VIOLATION)
         env["PATH"] = f"{inside.parent}:{BASE_PATH}"
@@ -211,7 +211,7 @@ class PendingProposals(ArchHookBase):
         self.assertIn("⏸ 1 đề xuất kiến trúc chờ bạn duyệt", out.get("systemMessage", ""))
         ctx = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("agent không chạy hai lệnh này", ctx)
-        self.assertNotIn("allow Web -> Report", ctx, "chỉ đưa số, không đưa nội dung đề xuất (TM-109)")
+        self.assertNotIn("allow Web -> Report", ctx, "chỉ đưa số, không đưa nội dung đề xuất (TM-113)")
 
     def test_no_pending_no_line(self):
         out = self.hook("session_start.py", {"session_id": "s2", "cwd": str(self.project), "source": "startup",
@@ -238,7 +238,7 @@ class DoneGateArch(ArchHookBase):
         self.assertEqual(code, 1, out)
         self.assertIn("luật kiến trúc (archctl)", out)
         self.assertIn("Web -> Report", out)
-        self.assertIn("ok = `true`", out, "báo cáo nêu lệnh verify sẽ chạy (TM-110)")
+        self.assertIn("ok = `true`", out, "báo cáo nêu lệnh verify sẽ chạy (TM-114)")
         self.assertEqual([c.split()[0] for c in self.calls()], ["verify", "check"])
         self.assertIn("--strict", self.calls()[1])
 
@@ -248,7 +248,7 @@ class DoneGateArch(ArchHookBase):
         code, out = self.checks(**self.fake_env(0, "0 vi phạm mới\n"))
         self.assertEqual(code, 2, out)
         self.assertNotIn("verify", " ".join(self.calls()))
-        self.assertIn("TM-110", out)
+        self.assertIn("TM-114", out)
 
     def test_missing_archctl_is_not_reported_clean(self):
         code, out = self.checks(PATH=BASE_PATH)

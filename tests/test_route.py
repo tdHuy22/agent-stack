@@ -551,3 +551,156 @@ class SessionCliForToolsWithoutHooks(ProjectFixtures):
         self.assertNotIn("differential-review", data["skills"])
         self.assertIn("security-review", data["skills"])
         self.assertNotIn("c-review", json.dumps(data))
+
+
+class FablePolicy(TempDirTestCase):
+    """Chính sách Fable (GĐ1, 14/11/2026): routing-table.md, mục 7 của SKILL.md và rules.json nói cùng một điều."""
+
+    def table(self):
+        return (REPO / "routing-table.md").read_text(encoding="utf-8")
+
+    def skill(self):
+        return (PLUGIN / "skills" / "task-router" / "SKILL.md").read_text(encoding="utf-8")
+
+    def rule(self, rid):
+        return next(r for r in route.rules()["rules"] if r["id"] == rid)
+
+    def test_table_has_open_session_with_fable_and_no_benchmark(self):
+        text = self.table()
+        start = text.index("## Chính sách Fable")
+        section = text[start:text.index("\n## ", start + 5)]
+        for needle in ("Mở phiên mới bằng Fable high", "dừng ở spec, test khóa và §0", "trên 30 phút",
+                       "Sonnet hay Haiku", "không dùng Fable", "Không đổi model giữa phiên",
+                       "Không đo Fable bằng benchmark", "usage_report.py"):
+            self.assertIn(needle, section)
+
+    def test_skill_section_7_matches_table(self):
+        item = next(line for line in self.skill().splitlines() if line.startswith("7. ")).lower()
+        for needle in ("mở phiên mới bằng fable high", "không đo fable bằng benchmark", "không đổi model giữa phiên",
+                       "dài hơn 30 phút", "không dùng fable"):
+            self.assertIn(needle, item)
+
+    def test_rules_open_session_with_fable_for_long_and_design_work(self):
+        long_agent = self.rule("long-agent")
+        self.assertEqual((long_agent["model"], long_agent["effort"]), ("fable", "high"))
+        self.assertIn("đừng đổi model giữa phiên", long_agent["note"])
+        design = self.rule("design-session")
+        self.assertEqual((design["model"], design["effort"]), ("fable", "high"))
+        self.assertIn("spec", design["note"])
+        self.assertIn("phiên Opus mới", design["note"])
+        self.assertIn("ý kiến thứ hai", self.rule("architecture-critical")["note"])
+
+    def test_design_and_long_prompts_route_to_fable_rules(self):
+        for prompt, rid in (("Mở phiên thiết kế cho project mới, yêu cầu còn mơ hồ, cần viết spec trước", "design-session"),
+                            ("Tính năng lớn mà yêu cầu chưa rõ, làm spec và test khóa trước khi code", "design-session"),
+                            ("Cho agent chạy liên tục cả ngày, không cần hỏi lại", "long-agent")):
+            hit = route.suggest(prompt)
+            self.assertEqual(hit["rule"], rid, prompt)
+            self.assertEqual((hit["model"], hit["effort"]), ("fable", "high"), prompt)
+
+
+class PlanModeHint(ProjectFixtures):
+    """Dòng 🧭 lúc mở phiên gợi ý plan mode (ý 6): mặc định gợi ý khi §0 có việc tiếp theo, chỉ bỏ việc nhỏ."""
+
+    SCEE = ("PR 8-h (chia nhỏ khi làm): D42 phiếu treo (§5 dòng 13/11 thứ tư; chạy `threat-model` trước khi code; "
+            "bản thử và probe ở `Process/2026-11-13_muc6-inter`): test đầu-cuối trên graph thật cho đủ bốn tiêu chí xong")
+    SELF = ("GĐ1 (chính sách Fable, phiên mở bằng kế hoạch) và GĐ3 (archctl vào vòng lặp) song song, hai phiên mới "
+            "mở bằng plan mode, dưới luật GĐ2")
+
+    def hint(self, task, **kw):
+        return route.session_hint(self.python_repo(plan_next=task), **kw)
+
+    def test_real_next_tasks_get_plan_mode_hint(self):
+        for task in (self.SCEE, self.SELF):
+            hint = self.hint(task)
+            self.assertIn("plan mode (Shift+Tab hay /plan)", hint["user"], task)
+            self.assertIn("plan mode (Shift+Tab hay /plan)", hint["context"], task)
+            self.assertTrue(hint["user"].startswith("🧭"))
+
+    def test_hint_survives_the_180_char_clip(self):
+        hint = self.hint(self.SCEE)
+        self.assertLessEqual(len(hint["user"]), 180)
+        self.assertIn("plan mode", hint["user"])
+
+    def test_small_or_progress_tasks_get_no_plan_mode_hint(self):
+        for task in ("Sửa lỗi chính tả trong README", "Tiến độ tới đâu rồi", "Lưu tiến độ", "Làm tiếp"):
+            hint = self.hint(task)
+            self.assertNotIn("plan mode", (hint or {}).get("user", ""), task)
+            self.assertNotIn("plan mode", (hint or {}).get("context", ""), task)
+
+    def test_no_next_task_means_no_plan_mode_hint(self):
+        hint = route.session_hint(self.python_repo())
+        self.assertNotIn("plan mode", hint["user"])
+
+    def test_already_in_plan_mode_is_not_told_again(self):
+        hint = self.hint(self.SCEE, permission_mode="plan")
+        self.assertNotIn("Shift+Tab", hint["user"])
+        self.assertNotIn("Shift+Tab", hint["context"])
+
+    def test_pi_has_no_plan_mode_so_gets_the_plain_plan_step(self):
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"AGENT_STACK_HOST": "pi"}):
+            hint = self.hint(self.SCEE)
+        self.assertNotIn("Shift+Tab", hint["user"])
+        self.assertNotIn("/plan", hint["context"])
+        self.assertIn("kế hoạch phiên", hint["context"])
+        self.assertIn("chờ bạn", hint["context"])
+
+    def test_context_does_not_make_plan_mode_a_fixed_default_or_opusplan(self):
+        ctx = self.hint(self.SCEE)["context"]
+        self.assertNotIn("opusplan", ctx)
+        self.assertIn("khuôn", ctx)  # trỏ tới khuôn kế hoạch phiên của session-keeper
+
+
+class FablePolicyRegressions(TempDirTestCase):
+    """Lỗi review opus·high (14/11/2026) về chính sách Fable: luật mới không lấn luật cũ, phiên Opus đang ấm không bị
+    đẩy sang Fable, tài liệu không tự mâu thuẫn."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["AGENT_STACK_STATE"] = str(self.tmp / "state")
+        self.addCleanup(os.environ.pop, "AGENT_STACK_STATE", None)
+
+    def test_design_session_does_not_steal_boundary_or_small_fixes(self):
+        for prompt, rid in (("Tính năng lớn: tích hợp thanh toán Stripe cho cửa hàng", "feature-boundary"),
+                            ("Dự án mới: sửa lỗi typo trong README", "small-fix")):
+            hit = route.suggest(prompt)
+            self.assertEqual(hit["rule"], rid, prompt)
+        self.assertNotEqual((route.suggest("Project mới cần thêm trang login") or {}).get("rule"), "design-session")
+
+    def test_long_agent_in_a_warm_opus_session_keeps_opus_and_raises_effort(self):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 120)) + ".000Z"
+        usage = {"input_tokens": 2, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 200000,
+                 "cache_creation": {"ephemeral_1h_input_tokens": 500}}
+        path = self.tmp / "t.jsonl"
+        path.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {
+            "model": "claude-opus-5-5", "usage": usage, "content": [{"type": "text", "text": "x"}]}}) + "\n", encoding="utf-8")
+        data = {"session_id": "warm-long", "effort": {"level": "high"}, "transcript_path": str(path)}
+        hit = route.hook_suggestion("Cho agent chạy qua đêm, tự chạy refactor cả module này", data)
+        self.assertIn("/effort xhigh", hit["user"])
+        self.assertNotIn("subagent fable", hit["user"])
+        self.assertNotIn("/model", hit["user"])
+        self.assertIn("mở phiên MỚI bằng fable", hit["context"])
+
+    def test_design_session_in_a_warm_session_does_not_hand_the_whole_job_to_a_fable_subagent(self):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 120)) + ".000Z"
+        usage = {"input_tokens": 2, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 200000,
+                 "cache_creation": {"ephemeral_1h_input_tokens": 500}}
+        path = self.tmp / "d.jsonl"
+        path.write_text(json.dumps({"type": "assistant", "timestamp": stamp, "message": {
+            "model": "claude-opus-5-5", "usage": usage, "content": [{"type": "text", "text": "x"}]}}) + "\n", encoding="utf-8")
+        data = {"session_id": "warm-design", "effort": {"level": "high"}, "transcript_path": str(path)}
+        hit = route.hook_suggestion("Mở phiên thiết kế: yêu cầu chưa rõ, cần làm spec cho tính năng thông báo", data)
+        self.assertNotIn("subagent fable", hit["user"])
+        self.assertNotIn("/model", hit["user"])
+        self.assertIn("mở phiên MỚI bằng fable", hit["context"])
+        self.assertNotEqual((route.suggest("viết spec cho hàm parse_date") or {}).get("rule"), "design-session")
+
+    def test_docs_do_not_contradict_the_fable_policy(self):
+        skill = (PLUGIN / "skills" / "task-router" / "SKILL.md").read_text(encoding="utf-8")
+        item3 = next(x for x in skill.splitlines() if x.startswith("3. "))
+        self.assertNotIn("trên 30 phút thì opus · xhigh", item3)
+        self.assertIn("Fable", item3)
+        for line in (REPO / "routing-table.md").read_text(encoding="utf-8").splitlines():
+            if "opusplan" in line and line.startswith("|"):
+                self.fail(f"bảng còn khuyên opusplan, trái ý 6 (không dùng opusplan): {line[:80]}")

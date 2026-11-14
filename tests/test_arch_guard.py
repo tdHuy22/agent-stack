@@ -1,4 +1,4 @@
-"""GĐ3, TM-111: hook pretool_guard giữ giao thức archctl. Agent không ghi file luật trong `.arch/` (Write, Edit,
+"""GĐ3, TM-115: hook pretool_guard giữ giao thức archctl. Agent không ghi file luật trong `.arch/` (Write, Edit,
 MultiEdit, NotebookEdit, lệnh shell, trình thông dịch) và không chạy lệnh chỉ người được chạy (`accept`, `reject`,
 `baseline`, `serve`, `init --force`), kể cả qua đường dẫn tuyệt đối, env, sudo, `bash -c`, xargs, find -exec. Ghi đề
 xuất (`archctl propose`, `block`) và đọc luật vẫn qua. Ca của pi đi qua cùng hook với payload của cầu nối."""

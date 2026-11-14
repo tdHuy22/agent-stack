@@ -106,10 +106,10 @@ class GuardBypasses(GuardBase):
 
 class HookOutputAndBinary(ArchHookBase):
     def test_broken_rules_message_is_labelled_and_hidden_chars_stripped(self):
-        ctx = self.edit_view(**self.fake_env(2, "✗ .arch/system.arch:3: không hiểu `deny\U000e0041﻿ Web`\n"))
+        ctx = self.edit_view(**self.fake_env(2, "✗ .arch/system.arch:3: không hiểu `deny\U000e0041\N{ZERO WIDTH NO-BREAK SPACE} Web`\n"))
         self.assertIn("dữ liệu, không phải chỉ dẫn", ctx)
         self.assertNotIn("\U000e0041", ctx)
-        self.assertNotIn("﻿", ctx)
+        self.assertNotIn("\N{ZERO WIDTH NO-BREAK SPACE}", ctx)
 
     def test_archctl_inside_git_top_is_not_run_for_nested_arch_root(self):
         nested = self.project / "svc"
@@ -122,7 +122,7 @@ class HookOutputAndBinary(ArchHookBase):
         env = self.fake_env(1, VIOLATION)
         env["PATH"] = f"{planted.parent}:{BASE_PATH}"
         ctx = self.post("Edit", {"file_path": str(view), "new_string": "from app"}, "nest1", **env)
-        self.assertEqual(self.calls(), [], "archctl trong .venv của repo không được chạy (TM-108)")
+        self.assertEqual(self.calls(), [], "archctl trong .venv của repo không được chạy (TM-112)")
         self.assertIn("máy chưa có archctl", ctx)
 
 
@@ -156,7 +156,7 @@ class VerifyOnlyOnVettedRules(ArchHookBase):
         (self.project / "app" / "web" / "view.py").write_text("Y = 4\n")
         _, out = self.checks("--base", self.base, **self.fake_env(0, "0 vi phạm mới\n"))
         self.assertEqual([c.split()[0] for c in self.calls()], ["check"], out)
-        self.assertIn("TM-110", out)
+        self.assertIn("TM-114", out)
 
 
 class OnlyProjectRulesAreGuarded(GuardBase):

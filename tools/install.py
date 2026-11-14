@@ -151,7 +151,7 @@ CRATE_PATH_RE = re.compile(r"[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*")
 
 def cargo_source_problem(entry: dict) -> str | None:
     """Lý do mục cargo-source của vetted.lock sai dạng, hoặc None. Repo, commit, crate lấy từ vetted.lock (đã vet),
-    không từ catalog.json, để catalog không đổi được mã sẽ dựng (TM-107)."""
+    không từ catalog.json, để catalog không đổi được mã sẽ dựng (TM-111)."""
     repo, commit, crate, binary = (entry.get(k) for k in ("repo", "commit", "crate_path", "bin"))
     if not (isinstance(repo, str) and Path(repo).is_absolute()):
         return "repo phải là đường dẫn tuyệt đối"
@@ -801,7 +801,7 @@ class Installer:
             self.run([brew, "install", name], undo=[brew, "uninstall", name])
 
     def install_cargo_source(self, key: str, entry: dict) -> None:
-        """Dựng công cụ Rust từ đúng commit đã vet (TM-107): `git archive <commit>` của repo nguồn vào thư mục tạm
+        """Dựng công cụ Rust từ đúng commit đã vet (TM-111): `git archive <commit>` của repo nguồn vào thư mục tạm
         (không đọc cây làm việc, không ghi vào repo nguồn), rồi `cargo install --locked --offline` với target tạm.
         Binary vào ~/.cargo/bin; gỡ bằng `cargo uninstall`. Đã có trên PATH thì bỏ qua."""
         name, repo, commit = entry["bin"], entry["repo"], entry["commit"]

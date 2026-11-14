@@ -11,7 +11,7 @@ Lệnh:
 Dùng làm thư viện:
   suggest(text)                  -> dict hoặc None (skill progress dùng)
   hook_suggestion(prompt, data)  -> dict {context, user} hoặc None (hook UserPromptSubmit dùng)
-  session_hint(root)             -> dict {context, user} hoặc None (hook SessionStart dùng)
+  session_hint(root, permission_mode) -> dict {context, user} hoặc None (hook SessionStart dùng)
 
 Gợi ý tính cả hồ sơ project (loại code, có test, code nhạy cảm bảo mật) và việc tiếp theo trong §0:
 tin nhắn kiểu "làm tiếp" được định tuyến theo việc tiếp theo trong §0. Lúc mở phiên, project lớn (hoặc có
@@ -318,8 +318,38 @@ def describe(hit: dict) -> str:
     return " · ".join(bits)
 
 
-def session_hint(root):
-    """Gợi ý lúc mở phiên: skill hợp với project và cách làm việc tiếp theo trong §0. None nếu không có gì."""
+PLAN_MODE_PHRASE = "plan mode (Shift+Tab hay /plan)"
+
+
+def plan_mode_skipped(task: str, hit) -> bool:
+    """Việc tiếp theo trong §0 có rõ là nhỏ không, để khỏi gợi ý plan mode. Mặc định là gợi ý (ý 6 của kế hoạch
+    agent-stack theo project, bạn chốt 14/11/2026: luật từ khóa hẹp và sót, nên không đoán "đủ lớn" bằng từ khóa).
+    Bỏ khi luật khớp thuộc loại việc nhỏ (rules.json, mục plan_mode) hay việc quá ngắn; lớp model của GĐ5 sẽ tinh lại."""
+    cfg = rules().get("plan_mode") or {}
+    if not (task or "").strip():
+        return True
+    if hit and hit.get("rule") in (cfg.get("skip_rules") or []):
+        return True
+    return len(task.split()) < int(cfg.get("min_words", 6)) or is_progress_question(task)
+
+
+def plan_mode_hint(permission_mode=None) -> dict:
+    """Câu gợi ý plan mode cho dòng 🧭 (user) và bối cảnh (context). pi không có plan mode nên nhận câu khác."""
+    if A.host() == "pi":
+        return {"user": "kế hoạch phiên trước khi làm",
+                "context": ("Việc tiếp theo trong §0 là việc cỡ vừa trở lên: pi không có plan mode, nên bước đầu viết kế hoạch "
+                            "phiên theo khuôn của skill session-keeper (mục `ke-hoach`: việc, tiêu chí xong, các bước kèm model "
+                            "và effort, lệnh kiểm chứng, ngoài phạm vi, điểm dừng) và chờ bạn trả lời trước khi sửa file.")}
+    return {"user": PLAN_MODE_PHRASE,
+            "context": (f"Việc tiếp theo trong §0 là việc cỡ vừa trở lên: gợi ý người dùng vào {PLAN_MODE_PHRASE} rồi lập kế "
+                        "hoạch phiên theo khuôn của skill session-keeper (mục `ke-hoach`: việc, tiêu chí xong, các bước kèm "
+                        "model và effort, lệnh kiểm chứng, ngoài phạm vi, điểm dừng) trước khi sửa file; chỉ gợi ý, đừng tự "
+                        "vào plan mode.")}
+
+
+def session_hint(root, permission_mode=None):
+    """Gợi ý lúc mở phiên: skill hợp với project và cách làm việc tiếp theo trong §0, kèm gợi ý vào plan mode khi việc
+    đó không rõ là nhỏ (không gợi ý khi phiên đã ở plan mode). None nếu không có gì."""
     root = Path(root).resolve()
     profile = A.project_profile(root)
     if not profile:
@@ -330,7 +360,8 @@ def session_hint(root):
     if hit:
         localize(hit, root)
     gaps = pyramid_gaps(root)
-    if not (labels or ready or hit or gaps):
+    plan = plan_mode_hint() if task and permission_mode != "plan" and not plan_mode_skipped(task, hit) else None
+    if not (labels or ready or hit or gaps or plan):
         return None
     ctx = [f"[agent-stack] Hồ sơ project `{root.name}`: {', '.join(labels) or 'chưa rõ loại'}."]
     if ready:
@@ -348,8 +379,12 @@ def session_hint(root):
         ctx.append(gaps[0])
     if hit:
         ctx.append(f"Việc tiếp theo trong §0 («{A.clip(task, 100)}») → {describe(hit)}.")
+    if plan:
+        ctx.append(plan["context"])
     ctx.append("Dùng các gợi ý này để chọn skill cho từng việc, và cho dòng ➡️ ở cuối mỗi câu trả lời.")
     user = "🧭 " + ", ".join(labels[:3] or [root.name])
+    if plan:  # đặt trước danh sách skill: dòng bị cắt ở 180 ký tự, gợi ý này không được mất
+        user += " · " + plan["user"]
     if ready:
         user += " · skill: " + ", ".join(ready[:3])
     if lsps:
@@ -487,6 +522,14 @@ def hook_suggestion(prompt: str, data: dict):
     own = hit["agent"] in ((rules().get("switch") or {}).get("agents_doing_the_work") or [])
     want_switch = needs_model_switch(hit["model"], now_model) and not own
     advice = switch_advice(hit["model"], usage) if want_switch else None
+    # Luật có cấu hình dự phòng cho phiên đang ấm (long-agent: Fable nên mở phiên mới, không đổi giữa phiên Opus):
+    # đổi model không rẻ thì gợi ý cấu hình dự phòng thay cho việc giao cả việc dài cho subagent.
+    warm = next((r.get("warm_fallback") for r in rules()["rules"] if r["id"] == hit["rule"]), None)
+    if warm and advice and not advice["cheap"]:
+        hit.update(model=warm["model"], model_id=model_name(warm["model"]), effort=warm["effort"],
+                   note=warm.get("note") or hit["note"])
+        want_switch = needs_model_switch(hit["model"], now_model) and not own
+        advice = switch_advice(hit["model"], usage) if want_switch else None
     if advice and advice["cheap"]:
         parts_user.append(f"/model {model_name(hit['model'])} ({advice['why']})")
     elif advice:

@@ -946,7 +946,7 @@ def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
 
 def check_arch_argv(argv: list, cwd: str):
     """Lệnh đơn chạy lệnh archctl chỉ người được chạy (cả qua xargs, find -exec, đường dẫn tuyệt đối), hay ghi, xóa,
-    đổi tên file luật trong `.arch/` (TM-111). `propose`, `block`, `check`, `verify` vẫn qua."""
+    đổi tên file luật trong `.arch/` (TM-115). `propose`, `block`, `check`, `verify` vẫn qua."""
     G = arch_lib()
     where = Path(cwd or ".")
     for i, word in enumerate(argv):
@@ -984,7 +984,7 @@ def arch_rel(full: Path, text: str) -> str:
 
 def arch_named_by_interpreter(command: str, cwd: str):
     """Trình thông dịch hay trình soạn (python -c, node -e, heredoc vào python…) mà chuỗi lệnh nhắc tên một file luật
-    `.arch/<tên>`, khi project có `.arch/system.arch`: chặn (TM-111). Đọc luật thì dùng Read hay `cat`."""
+    `.arch/<tên>`, khi project có `.arch/system.arch`: chặn (TM-115). Đọc luật thì dùng Read hay `cat`."""
     try:
         G = arch_lib()
         if G.find_root(Path(cwd or ".")) is None:

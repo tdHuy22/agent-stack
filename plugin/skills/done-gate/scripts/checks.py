@@ -1402,7 +1402,7 @@ def plan_cross(ctx: Ctx, plan: Plan):
 
 
 def archgate():
-    """Thư viện chung `plugin/lib/archgate.py` (tìm archctl ngoài project, TM-108)."""
+    """Thư viện chung `plugin/lib/archgate.py` (tìm archctl ngoài project, TM-112)."""
     lib = str(Path(__file__).resolve().parents[3] / "lib")
     if lib not in sys.path:
         sys.path.insert(0, lib)
@@ -1413,7 +1413,7 @@ def archgate():
 def arch_rules_unchanged(root: Path, base: str = "HEAD") -> bool:
     """`.arch/system.arch` trên đĩa giống hệt bản ở HEAD và ở `base` (so mã băm blob, nên `assume-unchanged` hay sửa
     trong lúc làm rồi commit không lọt): chỉ khi đó mới chạy `archctl verify`, vì verify chạy lệnh shell khai trong
-    file đó (TM-110). File chưa được git theo dõi, hay không đọc được, thì coi là đổi."""
+    file đó (TM-114). File chưa được git theo dõi, hay không đọc được, thì coi là đổi."""
     git = ["git", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null", "-C", str(root)]
     rel = ".arch/system.arch"
     try:
@@ -1483,7 +1483,7 @@ def arch_runner(binary: str, root: Path, run_verify: bool, timeout: int):
 
 def plan_arch(ctx: Ctx, plan: Plan):
     """Project có `.arch/system.arch`: `archctl check --strict` (vi phạm mới chặn, ở cả file ngoài diff) và
-    `archctl verify` khi file luật không đổi so với HEAD (TM-110). Thiếu archctl thì báo chưa kiểm (mã 2)."""
+    `archctl verify` khi file luật không đổi so với HEAD (TM-114). Thiếu archctl thì báo chưa kiểm (mã 2)."""
     root = ctx.root
     if not (root / ".arch" / "system.arch").is_file() or is_covered(ctx, plan, "*", "arch"):
         return
@@ -1498,7 +1498,7 @@ def plan_arch(ctx: Ctx, plan: Plan):
                           + "; ".join(f"{n} = `{c}`" for n, c in cmds[:8]))
     elif cmds:
         plan.missing.append(("*", "arch", "archctl verify", "bỏ vì `.arch/system.arch` đổi so với HEAD hay base, hay "
-                             "chưa được git theo dõi (TM-110): người dùng xem `archctl diff` rồi tự chạy `archctl "
+                             "chưa được git theo dõi (TM-114): người dùng xem `archctl diff` rồi tự chạy `archctl "
                              "verify`"))
     plan.checks.append(Check("*", "arch", "archctl", cwd=root, block=block_errors, enforced=True, anywhere=True,
                              timeout=1800, inproc=arch_runner(binary, root, run_verify and bool(cmds), 1800)))

@@ -107,3 +107,11 @@
 {"prompt": "repo github này bị lỗi build, debug giúp", "expect": "debug-hard"}
 {"prompt": "sửa lỗi CI trong repo github của mình", "expect": "none"}
 {"prompt": "tạo repo github mới cho project này rồi push code lên", "expect": "none"}
+{"prompt": "Mở phiên thiết kế cho project mới, yêu cầu còn mơ hồ, cần viết spec trước khi code", "expect": "design-session"}
+{"prompt": "Tính năng lớn mà yêu cầu chưa rõ, làm spec và test khóa trước", "expect": "design-session"}
+{"prompt": "We need a design session for a new project, requirements are still vague", "expect": "design-session"}
+{"prompt": "Cho agent chạy liên tục cả ngày, không cần hỏi lại", "expect": "long-agent"}
+{"prompt": "run it autonomous overnight, no need to ask me again", "expect": "long-agent"}
+{"prompt": "Thiết kế kiến trúc: quyết định khó đảo ngược về schema dữ liệu thật, cần ý kiến thứ hai", "expect": "architecture-critical"}
+{"prompt": "Tính năng lớn: tích hợp thanh toán Stripe cho cửa hàng", "expect": "feature-boundary"}
+{"prompt": "Dự án mới: sửa lỗi typo trong README", "expect": "small-fix"}

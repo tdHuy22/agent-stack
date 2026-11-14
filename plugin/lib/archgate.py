@@ -2,11 +2,11 @@
 
 Giao thức của archctl: agent sửa code cho đúng luật; không sửa được thì `archctl propose` hay `archctl block` rồi dừng;
 chỉ người chạy `accept`, `reject`, `baseline`. Thư viện này:
-- tìm gốc project có `.arch/system.arch` và binary `archctl` (bỏ mọi thư mục PATH nằm trong project, TM-108);
+- tìm gốc project có `.arch/system.arch` và binary `archctl` (bỏ mọi thư mục PATH nằm trong project, TM-112);
 - chạy `archctl check` có hạn thời gian, lọc khối vi phạm để đưa về agent (archctl tự in ra stdout và thoát mã 1,
   Claude Code coi là lỗi không chặn nên agent không thấy: đã tái hiện 14/11/2026);
 - đếm đề xuất đang chờ bằng cách đọc `.arch/proposals.arch` (không gọi binary);
-- nhận ra file luật và lệnh chỉ người được chạy (TM-111).
+- nhận ra file luật và lệnh chỉ người được chạy (TM-115).
 """
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def git_top(start, max_depth: int = 40):
 
 def find_binary(root=None):
     """Đường dẫn `archctl` trên PATH, bỏ thư mục tương đối và mọi thư mục nằm trong project `root` hay trong repo git
-    chứa nó (`.venv/bin`, `node_modules/.bin`, `bin/` do repo lạ đặt sẵn không được chạy, TM-108). Repo git là chính
+    chứa nó (`.venv/bin`, `node_modules/.bin`, `bin/` do repo lạ đặt sẵn không được chạy, TM-112). Repo git là chính
     HOME hay chứa HOME (dotfiles) thì chỉ bỏ thư mục trong `root`. `AGENT_STACK_ARCHCTL_BIN` (test) đứng trước, cùng
     luật."""
     override = os.environ.get("AGENT_STACK_ARCHCTL_BIN")
@@ -127,7 +127,7 @@ def run(binary: str, args: list, root: Path, timeout: float):
 
 def clean(line: str) -> str:
     """Bỏ ký tự điều khiển, định dạng (ẩn, đảo chiều, tag), tách dòng, vùng riêng; cắt dòng dài (chữ lấy từ repo, có
-    thể là của người khác, TM-109). Giữ tab."""
+    thể là của người khác, TM-113). Giữ tab."""
     line = "".join(c for c in line.rstrip() if c == "\t" or unicodedata.category(c) not in ("Cc", "Cf", "Zl", "Zp", "Co"))
     return line if len(line) <= MAX_LINE_CHARS else line[:MAX_LINE_CHARS] + "…"
 

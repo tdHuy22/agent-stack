@@ -59,7 +59,7 @@ def main():
     try:  # router: skill hợp với project và cách làm việc tiếp theo
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
         import route  # noqa: E402
-        hint = route.session_hint(root)
+        hint = route.session_hint(root, data.get("permission_mode"))
     except ImportError:
         pass
     # Cảnh báo đặt trên đầu: pi lệch hợp đồng (mỗi lần mở phiên pi), plugin lệch bản đã kiểm duyệt (lúc khởi động)
@@ -97,7 +97,7 @@ def main():
 
 def arch_pending(root) -> tuple:
     """Số đề xuất kiến trúc (archctl propose, block) đang chờ người dùng duyệt trong `.arch/proposals.arch` của project
-    (đọc file, không gọi archctl; chỉ đưa số, không đưa nội dung đề xuất vào context, TM-109). Không có thì rỗng."""
+    (đọc file, không gọi archctl; chỉ đưa số, không đưa nội dung đề xuất vào context, TM-113). Không có thì rỗng."""
     try:
         import archgate  # noqa: E402 (cùng thư mục lib với agentstack)
         top = archgate.find_root(Path(root))

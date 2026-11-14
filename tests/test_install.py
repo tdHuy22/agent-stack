@@ -594,7 +594,7 @@ class InstallTests(TempDirTestCase):
         self.assertEqual(uv_log.read_text().splitlines(), before)
 
     def test_tools_step_builds_cargo_source_from_vetted_commit_only(self):
-        """cargo-source (TM-107): dựng đúng commit ghim trong vetted.lock bằng git archive, không đọc cây làm việc,
+        """cargo-source (TM-111): dựng đúng commit ghim trong vetted.lock bằng git archive, không đọc cây làm việc,
         target tạm, --locked --offline; commit lạ, mục chờ duyệt, catalog tự khai repo thì không dựng."""
         src = self.tmp / "nguon-rust"
         (src / "crates" / "cli").mkdir(parents=True)

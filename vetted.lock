@@ -703,7 +703,7 @@
       },
       "reviews": [],
       "report": "vet-reports/local__archctl@46315651aec0.md",
-      "note": "vet.py ra FAIL (21 rce-pipe, 3 hidden-unicode), đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246) và tài liệu mô tả tấn công; hidden-unicode là xử lý BOM trong bench/*.py. Không crate ngoài (Cargo.lock 2 gói), không build.rs, không proc-macro; mạng chỉ ở `serve` (127.0.0.1, khóa phiên); shell chỉ ở `verify` (lệnh khai trong .arch/system.arch). Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-107). Chưa chạy skill-scanner, SkillSpector (máy chưa cài).",
+      "note": "vet.py ra FAIL (21 rce-pipe, 3 hidden-unicode), đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246) và tài liệu mô tả tấn công; hidden-unicode là xử lý BOM trong bench/*.py. Không crate ngoài (Cargo.lock 2 gói), không build.rs, không proc-macro; mạng chỉ ở `serve` (127.0.0.1, khóa phiên); shell chỉ ở `verify` (lệnh khai trong .arch/system.arch). Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-111). Chưa chạy skill-scanner, SkillSpector (máy chưa cài).",
       "human_review": {
         "status": "approved",
         "at": "2026-11-14T05:00:00Z",
