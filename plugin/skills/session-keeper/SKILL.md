@@ -2,7 +2,7 @@
 name: session-keeper
 description: Lưu và khôi phục trạng thái công việc, để không mất tiến độ khi hết hạn mức, crash, compact hoặc khi đổi sang phiên khác. Cập nhật mục §0 "Đang ở đâu, việc tiếp theo" trong PLAN.md, viết .agent/HANDOFF.md khi bàn giao, và chạy các bước kiểm tra sau khi bị ngắt. Dùng khi người dùng nói lưu tiến độ, dừng phiên, sắp hết limit, bàn giao, handoff, làm tiếp việc dở, resume, hoặc khi project chưa có file kế hoạch.
 when_to_use: lưu lại, checkpoint, save progress, hết hạn mức, usage limit, bàn giao phiên, mở lại phiên, tiếp tục từ hôm qua, tạo PLAN.md
-argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao]"
+argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao | ke-hoach]"
 ---
 
 # Giữ trạng thái công việc trên đĩa
@@ -47,6 +47,19 @@ Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời ngườ
 
 1. Chạy `state.py init`. Script tạo `.agent/PLAN.md` từ mẫu và từ chối nếu project đã có file kế hoạch.
 2. Điền §0 dựa trên những gì đã biết trong cuộc trò chuyện. Hỏi người dùng nếu chưa rõ mục tiêu hay mốc kiểm tra.
+
+## `ke-hoach`: khuôn kế hoạch phiên (dài một màn hình)
+
+Dùng khi phiên làm một việc cỡ vừa trở lên (một giai đoạn, một tính năng, một lỗi khó); câu hỏi nhanh thì không. Dòng 🧭 lúc mở phiên gợi ý vào plan mode (Shift+Tab hay `/plan`) khi §0 có việc tiếp theo. Plan mode không cho sửa file tới khi người dùng duyệt, nên duyệt kế hoạch là duyệt tiêu chí xong trước khi code. pi không có plan mode: viết khuôn này làm bước đầu rồi chờ người dùng trả lời. Model lập kế hoạch là model của phiên (phiên thiết kế dùng Fable high: dừng ở spec, test khóa và §0, code làm ở một phiên Opus mới); không dùng `opusplan`. Khuôn, mỗi mục một đề mục `##`, tên đúng như dưới (hook ExitPlanMode tìm theo tên):
+
+1. `## Việc của phiên`: 1–3 câu, kèm điều không làm nếu dễ nhầm.
+2. `## Tiêu chí xong`: 2–4 mục đánh số, mỗi mục một lệnh phải đạt hay một cặp đầu vào và đầu ra. Lấy từ §0 hay đề xuất; tiêu chí do agent đề xuất thì ghi "(đề xuất, chờ bạn xác nhận)". Duyệt xong, hook ghi mục này vào §0 nếu §0 chưa có tiêu chí.
+3. `## Các bước`: bảng việc, model · effort, subagent cho từng bước (theo task-router; không đổi model giữa phiên, bước cần model khác thì giao subagent).
+4. `## Lệnh kiểm chứng`: các lệnh để trong khối mã, chạy qua `receipt.py run`.
+5. `## Ngoài phạm vi`: việc tách ra phiên khác hay để sau.
+6. `## Điểm dừng`: khi nào cập nhật §0, chạy done-gate, commit; chỗ nào phải hỏi người dùng.
+
+Kế hoạch đủ tiêu chí và lệnh kiểm thì viết ngay; thiếu hai mục đó thì hook nhắc ngay sau khi duyệt. Done-gate cuối phiên so kết quả với đúng các tiêu chí này.
 
 ## Theo dõi việc chạy lâu
 

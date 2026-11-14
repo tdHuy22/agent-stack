@@ -36,6 +36,12 @@
         "hooks": [
           {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post_edit.py"], "timeout": 3}
         ]
+      },
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/plan_exit.py"], "timeout": 3}
+        ]
       }
     ],
     "SubagentStart": [

@@ -33,7 +33,7 @@ Effort là tín hiệu hành vi, không phải trần token cứng: ở mức th
 | 3 | `sonnet · high` | Mặc định cho code và debug rõ đặc tả khi không có test (bạn chốt 10/11/2026); review diff nhỏ; phản biện; văn bản dài | A: Sonnet 5.5 chuyển sang `high` cho việc khó hay dài hơn; `high` hơn `medium` khoảng 2,5 điểm, tốn thêm khoảng 40% (mục 1). Chưa có E |
 | 4 | `opus · medium` | Nghiên cứu sâu; điểm khởi đầu Anthropic khuyên cho hầu hết agent | A: khởi đầu khuyến nghị cho agent |
 | 5 | `opus · high` | Mặc định cho code mơ hồ và debug nhiều file (bạn chốt 10/11/2026); review, bảo mật, kiến trúc, debug không tái hiện được | A, P |
-| 6 | `opus · xhigh` | Việc dài trên 30 phút, phần nhạy cảm, debug bế tắc | A |
+| 6 | `opus · xhigh` | Việc dài trên 30 phút khi phiên đã chạy sẵn bằng Opus (mở phiên mới thì `fable · high`, mục Chính sách Fable), phần nhạy cảm, debug bế tắc | A |
 | 7 | `fable · high` | Khi Opus ở effort cao vẫn chưa đạt; suy luận rất khó, dài hơi | A: Opus 5.5 mặc định ngang Fable 5.1 mặc định với khoảng 1/5 chi phí, nên chỉ lên Fable khi Opus đã thiếu. Fable 5.2 rẻ hơn 5.1 20% (8/40) và mặc định `medium`, nên `high` ở đây cao hơn mặc định một bậc; chưa có số SWE-bench của 5.2 |
 | 8 | `opus · max` hoặc `fable · xhigh` | Audit bảo mật tự chạy tới cùng; bài toán biên giới | A |
 | 9 | `fable · max` | Bài toán biên giới khi mọi bậc dưới đã thất bại | A: dành cho frontier problems |
@@ -45,6 +45,23 @@ Effort là tín hiệu hành vi, không phải trần token cứng: ở mức th
 4. Không có kiểm tra tự động mà lỗi đắt: bắt đầu từ bậc 5 trở lên.
 5. Nghiên cứu và knowledge work: đường cong gần phẳng (Fable 5.1 trên DeepResearch Bench II, `low` đến `high` gần như bằng điểm, chi phí từ 4,66 lên 7,12 USD). Tăng effort ở đây hầu như chỉ tốn thêm; muốn tốt hơn thì đổi model hay cách làm.
 6. Mặc định `high` cho code (bạn chốt 10/11/2026: "mặc định effort high thì tốt hơn"): việc code và debug không có test bắt đầu ở `high` thay cho `medium`. Giữ nguyên: việc có test (`claude-haiku-5-5 · low`, test trượt mới lên `sonnet · high`), hỏi nhanh và sửa nhỏ (`low`), việc tri thức (luật 5), các dòng Fable. Căn cứ A (mục 1); eval của bạn chưa phân biệt được `medium` với `high` (mục 5, 6).
+
+## Chính sách Fable (bạn duyệt 13/11/2026, câu 6 của kế hoạch agent-stack theo project)
+
+Fable 5.2 là model mạnh và đắt nhất (8/40 USD, gấp đôi Opus mỗi token) và ở `high` nó nghĩ trước gần mọi câu trả lời, kể cả lời chào: chênh phí nằm ở token ra và số lần gọi, không ở độ dài hội thoại. Tài liệu Anthropic về Fable 5.2 để Opus 5.5 làm mặc định và chỉ lên Fable khi Opus ở mức cao chưa đạt, và ghi nhận Fable lập kế hoạch, điều phối các model khác tốt. Từ đó:
+
+| Tình huống | Dùng | Vì sao |
+|---|---|---|
+| Phiên thường ngày: code, sửa lỗi, hỏi đáp | Opus 5.5 ở phiên chính (bảng 3 chọn effort, subagent và model cho từng việc con) | Rẻ bằng nửa ở token ra; Anthropic để làm mặc định |
+| Opus ở `high` rồi `xhigh` đã hỏng hai lần trên một việc tách riêng được | Fable `high` làm subagent, đề bài tự đủ | Phiên chính giữ cache; chỉ ghi cache cho đề bài nhỏ |
+| Quyết định khó đảo ngược; review mức cao khi Opus viết | Fable subagent làm ý kiến thứ hai, hay reviewer có sẵn | Khác model người viết |
+| Phiên thiết kế: project mới, tính năng lớn, yêu cầu còn mơ hồ | Mở phiên mới bằng Fable high; phiên dừng ở spec, test khóa và §0, code làm ở một phiên Opus mới | Đầu phiên context nhỏ nên mở bằng Fable gần như không tốn; spec là chỗ suy luận đáng tiền nhất; tách người viết spec khỏi người viết code |
+| Việc tự chạy dài trên 30 phút, bạn không ngồi canh | Mở phiên bằng Fable high, giao phần đọc và phần có test cho subagent Sonnet hay Haiku | Ít lượt, mỗi lượt dài; Fable điều phối tốt |
+| Bảo mật, audit | Opus, không dùng Fable | Bộ lọc an ninh mạng của Fable có thể từ chối hay chuyển model |
+
+- **Không đổi model giữa phiên đang dài**: đổi `/model` ghi lại cả hội thoại vào cache của model mới (phiên 250 nghìn token thêm khoảng 2,5 USD giá niêm yết). Chọn model lúc mở phiên, hay giao subagent.
+- **Không đo Fable bằng benchmark.** Bạn chốt 13/11/2026: Fable rất đắt, chạy bộ đo hay benchmark riêng cho Fable là lãng phí. Chỉ đo từ những lần dùng thật (phiên thiết kế, việc tự chạy dài, lần leo thang từ Opus) qua `python3 tools/usage_report.py` và nhật ký review (`review_log.py summary`); giai đoạn 7 của kế hoạch so hạn mức và kết quả các phiên mở bằng Fable với phiên Opus.
+- Mở phiên bằng plan mode (ý 6 của kế hoạch) dùng model của phiên: phiên thiết kế lập kế hoạch bằng Fable `high`, phiên thường bằng Opus. Không dùng `opusplan`: nó đổi model giữa phiên và để Sonnet làm code, ngược bảng mặc định.
 
 ## 3. Bảng chi tiết theo việc
 
@@ -86,9 +103,9 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 | Tính năng nhiều ca biên (parser, định dạng, lịch, thuật toán) | `sonnet · high` | `opus · high` | — | — | E: cron và diff tối thiểu, sonnet 4/4, Haiku 4.5 0/4 |
 | Code đồng thời, async, khóa | `sonnet · high` | `opus · high` | — | — | E: race và pool asyncio, sonnet 4/4, opus 4/4 |
 | Refactor có test | `sonnet · high` | `opus · high` | — | — | E: 2/2 |
-| Refactor lớn, migration nhiều module, đổi API công khai | `opusplan` (Opus lập kế hoạch, Sonnet thực thi) | `opus · high` | Plan | reuse-best | A: `opusplan`; P |
+| Refactor lớn, migration nhiều module, đổi API công khai | `opus · high`, lập kế hoạch bằng plan mode rồi làm tiếp trong cùng phiên | `opus · xhigh` | Plan | reuse-best | A; P (bỏ chế độ đổi model giữa phiên từ 14/11/2026, xem mục Chính sách Fable) |
 | Viết test | `claude-haiku-5-5 · low` khi project có test | `sonnet · high`, rồi `opus · high` | agent-stack:test-runner | — | E: Haiku 5.5 · low 2/2 (bắt đủ 3/3 lỗi cấy); `tdd` không giúp thêm (mục 8) |
-| Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | `opus · xhigh` hoặc `/effort ultracode` | `fable · high` | — | — | A: `xhigh` cho việc trên 30 phút. Cách chạy (theo `gnhf`, MIT): đặt điều kiện dừng và trần số vòng hoặc token trước khi đi ngủ, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file; sáng ra chọn commit nào giữ |
+| Agent tự chạy dài (trên 30 phút, nhiều file, ít người can thiệp) | mở phiên bằng `fable · high`, giao phần đọc và phần có test cho subagent `sonnet`/`claude-haiku-5-5` (Chính sách Fable); phiên đã chạy sẵn bằng Opus thì `opus · xhigh` hoặc `/effort ultracode`, đừng đổi model | `fable · xhigh` | — | — | A: `xhigh` cho việc trên 30 phút; chính sách Fable do bạn duyệt 13/11/2026. Cách chạy (theo `gnhf`, MIT): đặt điều kiện dừng và trần số vòng hoặc token trước khi đi ngủ, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file; sáng ra chọn commit nào giữ |
 | Việc dài hơi rất khó mà Opus ở `xhigh` vẫn chưa đạt | `fable · high` | `fable · xhigh` | — | — | A |
 
 ### Debug
@@ -116,8 +133,9 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 | Việc | Bắt đầu | Nếu chưa đạt | Subagent | Skill | Căn cứ |
 |---|---|---|---|---|---|
-| Kế hoạch việc vừa (vài file, vài giờ) | `sonnet · high` | `opusplan` | Plan | reuse-best | P |
-| Thiết kế kiến trúc, hệ thống mới | `opus · high` hoặc `opusplan` | `opus · xhigh` | Plan | reuse-best | A: `opusplan`; P |
+| Kế hoạch việc vừa (vài file, vài giờ) | `sonnet · high` | `opus · high` | Plan | reuse-best | P |
+| Thiết kế kiến trúc, hệ thống mới | `opus · high` | `opus · xhigh` | Plan | reuse-best | A; P |
+| Phiên thiết kế: project mới, tính năng lớn, yêu cầu còn mơ hồ | mở phiên mới bằng `fable · high`; dừng ở spec, test khóa và §0; code ở một phiên `opus` mới | `fable · xhigh` | Plan | reuse-best | A (tài liệu Fable 5.2); chính sách Fable do bạn duyệt 13/11/2026, chưa đo: chỉ đo bằng dùng thật |
 | Quyết định khó đảo ngược (schema dữ liệu thật, giao thức, mô hình bảo mật) | `opus · xhigh` | `fable · high` làm ý kiến thứ hai | Plan | reuse-best | P |
 | Bài toán biên giới (thuật toán mới, chứng minh, tối ưu khó) | `fable · high` | `fable · max` | — | — | A |
 | Bạn nói rõ "nghĩ kỹ nhất có thể, không ngại chi phí" | `opus · max` | `fable · max` | — | — | A: `max` không giới hạn token |
@@ -188,7 +206,7 @@ Cột **Bắt đầu** là cấu hình nên dùng trước; **Nếu chưa đạt
 
 ## 7. Còn chưa quyết định bằng số liệu
 
-- `xhigh`, `max` và Fable chưa được đo trên việc của bạn: mọi dòng dùng chúng là A hoặc P. Eval hiện có quá dễ để thấy lợi ích của chúng (sonnet · medium đã đạt hết); cần việc dài hơi trên 30 phút mới đo được.
+- `xhigh`, `max` và Fable chưa được đo trên việc của bạn: mọi dòng dùng chúng là A hoặc P. Eval hiện có quá dễ để thấy lợi ích của chúng (sonnet · medium đã đạt hết); cần việc dài hơi trên 30 phút mới đo được. Riêng Fable: không chạy benchmark hay bộ đo riêng (bạn chốt 13/11/2026, vì Fable rất đắt); chỉ đo từ lần dùng thật, xem mục Chính sách Fable.
 - Các dòng `sonnet · high` (review diff nhỏ, phản biện, văn bản dài, kế hoạch vừa) là phán đoán: chưa so với `sonnet · medium`.
 
 - Đặt `Explore` sang Haiku 5.5 (`explore-lite`) có làm giảm chất lượng các việc coding không? Cần so cấu hình E với A.

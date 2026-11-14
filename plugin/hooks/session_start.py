@@ -59,7 +59,7 @@ def main():
     try:  # router: skill hợp với project và cách làm việc tiếp theo
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
         import route  # noqa: E402
-        hint = route.session_hint(root)
+        hint = route.session_hint(root, data.get("permission_mode"))
     except ImportError:
         pass
     # Cảnh báo đặt trên đầu: pi lệch hợp đồng (mỗi lần mở phiên pi), plugin lệch bản đã kiểm duyệt (lúc khởi động)

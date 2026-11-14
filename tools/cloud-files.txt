@@ -43,6 +43,7 @@ plugin/evals/writing-rewrite/graders/skill-fired.md
 plugin/evals/writing-rewrite/prompt.md
 plugin/hooks/cloud_update.py
 plugin/hooks/hooks.json
+plugin/hooks/plan_exit.py
 plugin/hooks/post_edit.py
 plugin/hooks/pre_compact.py
 plugin/hooks/pretool_client.py

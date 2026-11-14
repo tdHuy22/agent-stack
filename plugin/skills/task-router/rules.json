@@ -104,6 +104,11 @@
     "differential-review": "khi dùng differential-review: ghi báo cáo vào .tmp/ hay thư mục tạm của hệ điều hành, đừng để ở gốc repo; không git checkout (dùng git show <ref>:<file>); đưa báo cáo cho agent-stack:reviewer lọc dương tính giả",
     "static-analysis": "khi dùng static-analysis: gọi skill static-analysis:semgrep, không dùng static-analysis:codeql (chưa cài CodeQL CLI; giấy phép CodeQL chỉ miễn phí cho mã nguồn mở và nghiên cứu); để skill trình kế hoạch quét cho người dùng duyệt; nêu rõ thư mục kết quả trong .tmp/ hay thư mục tạm của hệ điều hành (mặc định của skill là static_analysis_semgrep_N ở gốc repo); đưa phát hiện cho agent-stack:reviewer lọc dương tính giả"
   },
+  "plan_mode": {
+    "_note": "Gợi ý vào plan mode lúc mở phiên (ý 6, bạn chốt 14/11/2026): mặc định gợi ý khi §0 có việc tiếp theo, chỉ bỏ khi luật khớp thuộc loại việc nhỏ hay việc dưới min_words từ. Lớp model của GĐ5 sẽ tinh lại.",
+    "skip_rules": ["small-fix", "quick-question", "progress", "session-save", "docs-lookup", "write-short", "github-repo-question"],
+    "min_words": 6
+  },
   "rules": [
     {
       "id": "vet-third-party",
@@ -399,7 +404,8 @@
         "irreversible",
         "du lieu that"
       ],
-      "only_refine": true
+      "only_refine": true,
+      "note": "quyết định khó đảo ngược: opus · xhigh làm chính, fable · high làm subagent cho ý kiến thứ hai (không đổi model của phiên)"
     },
     {
       "id": "progress",
@@ -805,9 +811,14 @@
     },
     {
       "id": "long-agent",
-      "model": "opus",
-      "effort": "xhigh",
-      "note": "việc tự chạy trên 30 phút; /effort ultracode = xhigh kèm workflow; đặt điều kiện dừng và trần số vòng hoặc token, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file",
+      "model": "fable",
+      "effort": "high",
+      "warm_fallback": {
+        "model": "opus",
+        "effort": "xhigh",
+        "note": "phiên đang chạy bằng model khác Fable với cache còn ấm nên không đổi model giữa phiên: opus · xhigh hay /effort ultracode; đặt điều kiện dừng và trần số vòng hoặc token, mỗi vòng một commit; lần sau việc tự chạy dài thì mở phiên MỚI bằng fable · high"
+      },
+      "note": "việc tự chạy trên 30 phút: mở phiên MỚI bằng fable · high (đừng đổi model giữa phiên), giao phần đọc và phần có test cho subagent sonnet hay haiku; phiên đã chạy sẵn bằng Opus thì opus · xhigh hay /effort ultracode; đặt điều kiện dừng và trần số vòng hoặc token, mỗi vòng một commit, vòng hỏng thì bỏ, ghi chú chung giữa các vòng vào một file",
       "match": [
         "chay qua dem",
         "tu chay",
@@ -819,6 +830,30 @@
         "ultracode",
         "long-running",
         "ca ngay"
+      ]
+    },
+    {
+      "id": "design-session",
+      "model": "fable",
+      "effort": "high",
+      "warm_fallback": {
+        "model": "opus",
+        "effort": "high",
+        "note": "phiên đang chạy bằng model khác với cache còn ấm nên không đổi model giữa phiên: lập kế hoạch bằng plan mode ngay trong phiên này (khuôn ke-hoach của session-keeper); phiên thiết kế lớn thì đề nghị mở phiên MỚI bằng fable · high, dừng ở spec, test khóa và §0"
+      },
+      "agent": "Plan",
+      "skills": [
+        "reuse-best"
+      ],
+      "note": "phiên thiết kế: mở phiên MỚI bằng fable · high; phiên dừng ở spec, test khóa và §0, code làm ở một phiên Opus mới (đừng đổi model giữa phiên)",
+      "match": [
+        "phien thiet ke",
+        "spec truoc khi code",
+        "yeu cau con mo ho",
+        "yeu cau mo ho",
+        "yeu cau chua ro",
+        "yeu cau khong ro",
+        "design session"
       ]
     },
     {
