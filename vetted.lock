@@ -689,25 +689,25 @@
       "kind": "cargo-source",
       "source": "git:/Users/macos/Documents/Claude/archctl",
       "repo": "/Users/macos/Documents/Claude/archctl",
-      "commit": "a82879b60c1e209ea23463bd441e4d4f7b8e0bcc",
+      "commit": "7f06586a2c54c62ca75d9224a135d8da0cecc549",
       "crate_path": "crates/archctl",
       "bin": "archctl",
       "version": "0.1.1",
       "license": "Apache-2.0",
-      "tool": "vet.py/1 + đọc tay",
+      "tool": "vet.py/1 + SkillSpector 2.12.0 + đọc tay",
       "verdict": "REVIEW",
-      "vetted_at": "2026-11-14",
+      "vetted_at": "2026-11-15",
       "redflags": {
-        "critical": 21,
+        "critical": 5,
         "medium": 3
       },
       "reviews": [],
-      "report": "vet-reports/local__archctl@46315651aec0.md",
-      "note": "vet.py ra FAIL (21 rce-pipe, 3 hidden-unicode), đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246) và tài liệu mô tả tấn công; hidden-unicode là xử lý BOM trong bench/*.py. Không crate ngoài (Cargo.lock 2 gói), không build.rs, không proc-macro; mạng chỉ ở `serve` (127.0.0.1, khóa phiên); shell chỉ ở `verify` (lệnh khai trong .arch/system.arch). Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-111). Chưa chạy skill-scanner, SkillSpector (máy chưa cài).",
+      "report": "vet-reports/local__archctl@c2527dd5c8af.md",
+      "note": "Quét cây `git archive` của đúng commit 7f06586 (thứ install.sh dựng; quét thư mục làm việc thì gặp target/bench với 36 repo bên thứ ba nên bỏ). vet.py ra FAIL như bản a82879b, đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246), tài liệu và CI; SkillSpector (lần đầu chạy) báo bench/, docs/, CI, test, không vào binary. Diff a82879b..7f06586 đọc tay: Cargo.lock không đổi, không build.rs, không gọi mạng mới; `verify` vẫn chỉ `sh -c` lệnh khai trong .arch/system.arch, nay có hạn thời gian và dừng cả cây tiến trình con bằng /bin/ps, /bin/kill viết tuyệt đối (TM-90 phía archctl); hook `check --hook` sau Edit/Write/MultiEdit/Bash; `archctl init` vẫn chỉ ghi .claude/settings.json của project. Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-111); nâng từ a82879b qua install.sh (TM-121, TM-122).",
       "human_review": {
         "status": "approved",
-        "at": "2026-11-14T05:00:00Z",
-        "note": "Người dùng chọn 'Duyệt và cài (Recommended)' trong chat 14/11/2026 (GĐ3), sau khi được báo vet.py ra FAIL do báo nhầm và mục ghi REVIEW; xem trước install.sh khớp mô tả thì --apply"
+        "at": "2026-11-15T10:00:00Z",
+        "note": "Người dùng chọn 'Sửa install.sh rồi cài' trong chat 15/11/2026, trả lời câu 'Duyệt archctl 7f06586 và cài theo cách nào?' sau khi được báo vet.py ra FAIL do báo nhầm như bản trước và đọc tay không thấy rủi ro mới; xem trước install.sh khớp mô tả thì --apply"
       }
     },
     "mcp:mcp.deepwiki.com/mcp": {

@@ -164,6 +164,69 @@ def cargo_source_problem(entry: dict) -> str | None:
     return None
 
 
+def cargo_bin_dir(home: Path) -> Path:
+    """Thư mục `cargo install` ghi binary vào, theo thứ tự của cargo: CARGO_INSTALL_ROOT, CARGO_HOME, ~/.cargo.
+    `install.root` trong config của cargo thì không đọc: binary khi đó nằm chỗ khác, nên không được nâng (TM-121)."""
+    root = os.environ.get("CARGO_INSTALL_ROOT") or os.environ.get("CARGO_HOME") or str(home / ".cargo")
+    return Path(root) / "bin"
+
+
+def file_sha256(path: Path) -> str | None:
+    """Mã băm sha256 của một file, đọc từng khúc; không đọc được thì None."""
+    try:
+        digest = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def cargo_built(name: str, repo: str, crate: str) -> dict | None:
+    """Lần dựng còn hiệu lực gần nhất của binary `name` mà install.sh làm từ `repo`/`crate`, theo nhật ký chưa gỡ:
+    {"commit": 12 ký tự đầu, "sha256": mã băm binary lúc dựng, None ở nhật ký cũ}. Chưa dựng thì None (TM-121).
+    Nhật ký cũ chỉ có lệnh `cargo install ... --path <repo>@<12 ký tự>/<crate>` kèm lệnh gỡ `cargo uninstall <tên>`."""
+    try:
+        logs = active_logs()
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):  # nhật ký hỏng hay lạ: coi như chưa dựng
+        return None
+    for log in reversed(logs):
+        try:
+            actions = load_log(log).get("actions") or []
+        except (OSError, ValueError, AttributeError):
+            continue
+        if not isinstance(actions, list):
+            continue
+        for action in reversed(actions):
+            if not isinstance(action, dict):
+                continue
+            short_commit = ""
+            if action.get("type") == "cargo-upgrade":
+                if (action.get("bin"), action.get("repo"), action.get("crate")) != (name, repo, crate):
+                    continue
+                short_commit = str(action.get("commit") or "")[:12]
+            else:
+                cmd, undo = action.get("cmd") or [], action.get("undo") or []
+                if action.get("type") != "cmd" or len(cmd) != 6 or cmd[1:5] != ["install", "--locked", "--offline",
+                                                                                 "--path"] or undo[1:] != ["uninstall", name]:
+                    continue
+                head, tail, where = f"{repo}@", f"/{crate}", str(cmd[5])
+                if where.startswith(head) and where.endswith(tail):
+                    short_commit = where[len(head):-len(tail)]
+            if re.fullmatch(r"[0-9a-f]{12}", short_commit):
+                return {"commit": short_commit, "sha256": action.get("sha256")}
+    return None
+
+
+def replace_file(src: Path, dest: Path) -> None:
+    """Thay `dest` bằng bản chép của `src` qua file tạm cùng thư mục rồi đổi tên (inode mới): ghi đè tại chỗ một
+    binary đã ký trên macOS làm lần chạy sau bị kernel giết."""
+    tmp = dest.with_name(f".{dest.name}.agent-stack-tmp")
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dest)
+
+
 def uv_tool_installed(uv: str, package: str) -> bool | None:
     """`uv tool list` có gói này không (dòng đầu mỗi mục: `<tên> v<bản>`, tên đã chuẩn hóa kiểu PEP 503). Không hỏi
     được uv thì None: bên gọi bỏ qua thay vì cài đè rồi ghi lệnh gỡ."""
@@ -737,7 +800,8 @@ class Installer:
 
     def step_tools(self) -> None:
         """Công cụ dòng lệnh cho các mục đã duyệt (khóa "brew" của mục trong catalog.json), kể cả mục scope project:
-        plugin cài theo project vẫn cần công cụ trên máy. Đã có trên PATH thì bỏ qua."""
+        plugin cài theo project vẫn cần công cụ trên máy. Đã có trên PATH thì bỏ qua, trừ công cụ cargo-source do
+        install.sh dựng mà commit ghim đã đổi: nâng (xem `install_cargo_source`)."""
         self.say("[tools] công cụ dòng lệnh cho các mục đã duyệt")
         catalog = json.loads((HOME_STACK / "catalog.json").read_text(encoding="utf-8"))
         approved = self.approved()
@@ -803,11 +867,35 @@ class Installer:
     def install_cargo_source(self, key: str, entry: dict) -> None:
         """Dựng công cụ Rust từ đúng commit đã vet (TM-111): `git archive <commit>` của repo nguồn vào thư mục tạm
         (không đọc cây làm việc, không ghi vào repo nguồn), rồi `cargo install --locked --offline` với target tạm.
-        Binary vào ~/.cargo/bin; gỡ bằng `cargo uninstall`. Đã có trên PATH thì bỏ qua."""
+        Binary vào ~/.cargo/bin; gỡ bằng `cargo uninstall`. Đã có trên PATH: install.sh đã dựng ở commit khác bản
+        ghim (theo nhật ký) thì nâng, sao lưu bản cũ để `--rollback` trả lại; bản không do install.sh dựng hay đã bị
+        thay sau lần dựng thì không đụng (TM-121)."""
         name, repo, commit = entry["bin"], entry["repo"], entry["commit"]
-        if shutil.which(name):
-            self.say(f"  = {name} đã có ({shutil.which(name)})")
-            return
+        crate = entry["crate_path"]
+        target = cargo_bin_dir(self.home) / name
+        upgrade_from = None
+        # Gốc cargo không nằm trong PATH mà đã có binary: vẫn phải qua kiểm, vì cargo dựng đè không cần --force
+        existing = shutil.which(name) or (str(target) if target.exists() or target.is_symlink() else None)
+        if existing:
+            built = cargo_built(name, repo, crate)
+            try:  # đúng file install.sh dựng: file thường ở gốc cargo (không symlink tới bản khác), PATH gặp nó trước
+                ours = built is not None and not target.is_symlink() and os.path.samefile(existing, target)
+            except OSError:
+                ours = False
+            if not ours or built is None:
+                self.say(f"  = {name} đã có ({existing})")
+                self.say(f"    không phải bản install.sh dựng nên không nâng lên commit ghim {commit[:12]}; muốn dùng "
+                         f"bản ghim thì gỡ bản đang có rồi chạy lại")
+                return
+            if commit.startswith(built["commit"]):
+                self.say(f"  = {name} đã có, đúng commit ghim {commit[:12]} ({existing})")
+                return
+            if built["sha256"] and file_sha256(target) != built["sha256"]:
+                self.say(f"  ! {name} ở {existing} đã bị thay sau lần install.sh dựng {built['commit']}: không nâng "
+                         f"lên {commit[:12]}")
+                self.skipped.append(f"{name}: binary đã bị thay sau lần dựng {built['commit']}")
+                return
+            upgrade_from = built["commit"]
         cargo = os.environ.get("AGENT_STACK_CARGO_BIN") or shutil.which("cargo")
         git_bin = shutil.which("git")
         if not cargo or not git_bin:
@@ -822,12 +910,22 @@ class Installer:
             self.say(f"  ! {repo} không có commit {commit[:12]} đã vet nên không dựng {name} (cho {key})")
             self.skipped.append(f"{name}: thiếu commit đã vet")
             return
-        crate = entry["crate_path"]
+        if upgrade_from:
+            self.say(f"  ↑ nâng {name} từ {upgrade_from} lên {commit[:12]} (sao lưu bản cũ để --rollback trả lại)")
         self.say(f"  $ git -C {repo} archive {commit[:12]} | tar -x -C <thư mục tạm>/src")
         self.say(f"  $ CARGO_TARGET_DIR=<thư mục tạm>/target {cargo} install --locked --offline "
                  f"--path <thư mục tạm>/src/{crate}")
         if not self.apply:
             return
+        backup = self.backup_dir / f"cargo-bin__{name}"  # chỉ dùng khi nâng
+        if upgrade_from:
+            try:
+                self.backup_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(target, backup)
+            except OSError as exc:
+                self.say(f"    lỗi sao lưu {target}: {exc}")
+                self.failures.append(f"sao lưu {name}: {exc}")
+                return
         work = Path(tempfile.mkdtemp(prefix="agent-stack-cargo-"))
         try:
             src = work / "src"
@@ -855,9 +953,23 @@ class Installer:
                 self.say(f"    lỗi ({out.returncode}): {text[-300:]}")
                 self.failures.append(f"cargo install {name}: mã {out.returncode}")
                 return
-            self.record(type="cmd", cmd=[cargo, "install", "--locked", "--offline", "--path",
-                                         f"{repo}@{commit[:12]}/{crate}"],
-                        undo=[cargo, "uninstall", name])
+            built_sha = file_sha256(target)
+            if not upgrade_from:
+                self.record(type="cmd", cmd=[cargo, "install", "--locked", "--offline", "--path",
+                                             f"{repo}@{commit[:12]}/{crate}"],
+                            undo=[cargo, "uninstall", name], bin=name, path=str(target), commit=commit,
+                            sha256=built_sha)
+            elif built_sha is None:  # cargo báo xong mà không thấy binary mới: trả bản cũ, báo lỗi
+                try:
+                    replace_file(backup, target)
+                    restored = "đã trả bản cũ"
+                except OSError as exc:
+                    restored = f"không trả được bản cũ ({exc}), bản cũ ở {backup}"
+                self.say(f"    lỗi: cargo install xong mà không thấy {target}; {restored}")
+                self.failures.append(f"cargo install {name}: không thấy {target}")
+            else:
+                self.record(type="cargo-upgrade", bin=name, repo=repo, crate=crate, path=str(target),
+                            backup=str(backup), from_commit=upgrade_from, commit=commit, sha256=built_sha)
         finally:
             shutil.rmtree(work, ignore_errors=True)
 
@@ -926,6 +1038,10 @@ def describe_action(action: dict) -> tuple:
     if kind == "vendor-dir":
         return "thư mục mới", short(action["path"]), "skill và plugin bên thứ ba, ghim commit (xem `VENDORED.json`)", \
             f"`rm -rf {short(action['path'])}`"
+    if kind == "cargo-upgrade":
+        return "nâng công cụ", short(action["path"]), \
+            f"{action['bin']} {action['from_commit']} → {str(action['commit'])[:12]}", \
+            f"chép lại bản cũ từ `{short(action['backup'])}`"
     if kind == "cmd":
         undo = f"`{cmd_text(action['undo'])}`" if action.get("undo") else "—"
         label = "lệnh claude" if is_claude(action["cmd"]) else "lệnh " + Path(action["cmd"][0]).name
@@ -1182,6 +1298,13 @@ def undo_actions(data: dict, apply: bool) -> tuple:
                     Path(action["path"]).unlink(missing_ok=True)
         elif kind == "cmd" and action.get("undo"):
             print(f"  $ {cmd_text(action['undo'])}")
+            # Công cụ cargo dựng có ghi mã băm: binary khác bản lần này dựng (bị thay, hay lần nâng sau còn hiệu lực)
+            # thì không gỡ, để `cargo uninstall` không xóa bản của người khác (TM-122)
+            current = file_sha256(Path(action["path"])) if action.get("sha256") and action.get("path") else None
+            if apply and current is not None and current != action["sha256"]:
+                errors.append(f"{short(action['path'])} khác bản lần cài này dựng (bị thay, hay đã nâng sau đó); "
+                              f"không gỡ")
+                continue
             if apply:
                 try:
                     out = subprocess.run(action["undo"], capture_output=True, text=True)
@@ -1190,6 +1313,21 @@ def undo_actions(data: dict, apply: bool) -> tuple:
                         errors.append(f"{cmd_text(action['undo'])}: mã {out.returncode}: {text.strip()[:160]}")
                 except OSError as exc:
                     errors.append(f"{cmd_text(action['undo'])}: {exc}")
+        elif kind == "cargo-upgrade":
+            path = Path(action["path"])
+            print(f"  - trả {action['bin']} về bản {action['from_commit']}, chép lại từ {short(action['backup'])}")
+            if not apply:
+                continue
+            current = file_sha256(path)
+            if current is None:
+                notes.append(f"{short(str(path))} không còn nên không trả lại bản {action['from_commit']}")
+            elif current != action.get("sha256"):  # TM-122: đổi sau lần nâng thì không chép đè
+                errors.append(f"{short(str(path))} đã bị thay sau khi nâng; không đụng tới")
+            else:
+                try:
+                    replace_file(Path(action["backup"]), path)
+                except OSError as exc:
+                    errors.append(f"không chép lại được {short(action['backup'])}: {exc}")
         elif kind == "vendor-dir":
             path = Path(action["path"])
             print(f"  - xóa {short(str(path))}")

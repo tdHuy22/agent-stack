@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 12:15 13/11/2026 từ commit `1ad297d` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 17:01 15/11/2026 từ commit `ac54a44` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -635,6 +635,28 @@
 | 2 | lệnh brew | `brew install osv-scanner` |  | `brew uninstall osv-scanner` |
 | 3 | lệnh brew | `brew install biome` |  | `brew uninstall biome` |
 
+## Lần cài 11:38 14/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261114-113711.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261114-113711`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: tools
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh cargo | `cargo install --locked --offline --path /Users/macos/Documents/Claude/archctl@a82879b60c1e/crates/archctl` |  | `cargo uninstall archctl` |
+
+## Lần cài 17:01 15/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261115-170028.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261115-170028`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: tools
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | nâng công cụ | ~/.cargo/bin/archctl | archctl a82879b60c1e → 7f06586a2c54 | chép lại bản cũ từ `~/Documents/Claude/agent-stack/backups/install-20261115-170028/cargo-bin__archctl` |
+
 ## Gỡ toàn bộ
 
 ```bash
@@ -657,5 +679,5 @@ Muốn gỡ riêng một lần cài: `./install.sh --rollback state/install-logs
 
 - Quyết định duyệt trong `vetted.lock` và báo cáo trong `vet-reports/`: đây là hồ sơ kiểm duyệt.
 - `state/`, `.vet-cache/` và các thư mục `backups/install-*`: xóa tay khi không cần nữa.
-- Công cụ bạn tự cài bằng brew (gitleaks, osv-scanner, pyright…): gỡ bằng `brew uninstall <tên>`.
+- Công cụ bạn tự cài bằng brew ngoài install.sh (như gitleaks): gỡ bằng `brew uninstall <tên>`.
 - Cấu hình bạn tự sửa sau khi cài.
