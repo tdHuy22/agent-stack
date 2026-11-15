@@ -107,6 +107,7 @@ def stale_plugin_note(sid: str):
 
 
 def main():
+    t0 = time.time()  # mốc cho hạn chờ lớp model của router (tính từ lúc hook bắt đầu, không từ lúc gọi model)
     data = A.read_hook_input()
     sid = data.get("session_id", "")
     prompt = data.get("prompt", "") or ""
@@ -134,11 +135,17 @@ def main():
                 user.append(long_user)
         except Exception as exc:  # noqa: BLE001
             A.log_event("hook-error", {"hook": "long-session", "error": repr(exc)[:300]})
-        try:  # router (GĐ5): gợi ý skill, model, effort, subagent
+        try:  # router: gợi ý skill, model, effort, subagent; lớp model (GĐ5) khi lớp từ khóa không chắc
             sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
             import route  # noqa: E402
-            flags = route.turn_flags(prompt, data.get("cwd"))
-            suggestion = route.hook_suggestion(prompt, data)
+            with route.one_pass():  # đọc .agent/stack.json và hỏi lớp model một lần cho cả gợi ý và cờ lượt
+                try:
+                    suggestion = route.hook_suggestion(prompt, dict(data, _hook_t0=t0))
+                finally:  # gợi ý lỗi không được làm mất cờ threat model, tiêu chí của lượt
+                    flags = route.turn_flags(prompt, data.get("cwd"))  # dùng lại kết quả hai lớp vừa chấm
+                note = route.prefetch_note(data)  # kết quả nền của lớp model cho §0, khi khác gợi ý lúc mở phiên
+            if note:
+                context.append(note)
             A.record_router(sid, suggestion)  # dải gợi ý của mod giao diện; tự bắt lỗi
             if suggestion:
                 context.append(suggestion["context"])

@@ -109,9 +109,23 @@
     "skip_rules": ["small-fix", "quick-question", "progress", "session-save", "docs-lookup", "write-short", "github-repo-question"],
     "min_words": 6
   },
+  "model_layer": {
+    "_note": "Lớp model của router (GĐ5, plugin/lib/routemodel.py): khi lớp từ khóa không chắc, hỏi model nhỏ qua claude -p xem việc thuộc luật nào (chỉ đọc câu, nhãn hồ sơ, cụm ignore đã duyệt có khớp). Đo 15/11/2026 (evals/router_model_eval.py, trang .agent/trang/router-model-gd5.html): Haiku 5.5 low p90 3,3 giây, Sonnet 5.5 low p90 5,3 giây, vượt hạn 3,2 giây nên không chờ ở mỗi tin; trên tập test Sonnet nâng điểm ròng chấm bước kế hoạch từ -4% lên +62%, làm tệ đi ở việc trong §0, không đủ ngưỡng ở tin nhắn. Bạn chọn: chỉ chấm bước kế hoạch (moments: buoc), Sonnet 5.5 low, chờ tới plan_wait_s.",
+    "enabled": true,
+    "model": "sonnet",
+    "effort": "low",
+    "moments": ["buoc"],
+    "wait_s": 0,
+    "continue_wait_s": 0,
+    "plan_wait_s": 7,
+    "worker_s": 20,
+    "max_workers": 2,
+    "long_words": 25
+  },
   "rules": [
     {
       "id": "vet-third-party",
+      "desc": "kiểm an toàn trước khi cài skill, plugin, MCP server hay marketplace của bên thứ ba",
       "skills": [
         "vet-skill"
       ],
@@ -136,6 +150,7 @@
     },
     {
       "id": "security-review",
+      "desc": "review bảo mật một phần code: lỗ hổng, injection, XSS, CSRF, threat model",
       "agent": "agent-stack:reviewer",
       "skills": [
         "differential-review"
@@ -164,6 +179,7 @@
     },
     {
       "id": "security-critical",
+      "desc": "việc bảo mật nặng: mã hóa, khóa bí mật, thanh toán, sandbox, leo thang quyền",
       "refines": "security-review",
       "model": "opus",
       "effort": "xhigh",
@@ -191,6 +207,7 @@
     },
     {
       "id": "security-audit",
+      "desc": "săn lỗ hổng trên toàn bộ codebase trước khi phát hành, tự chạy tới cùng",
       "refines": "security-review",
       "model": "opus",
       "effort": "max",
@@ -216,6 +233,7 @@
     },
     {
       "id": "code-review",
+      "desc": "review code, PR hay diff lớn trước khi merge",
       "agent": "agent-stack:reviewer",
       "model": "opus",
       "effort": "high",
@@ -232,6 +250,7 @@
     },
     {
       "id": "code-review-small",
+      "desc": "soát một diff nhỏ vài dòng trước khi commit",
       "refines": "code-review",
       "model": "sonnet",
       "effort": "high",
@@ -252,6 +271,7 @@
     },
     {
       "id": "finish-gate",
+      "desc": "chốt việc: kiểm lại cả thay đổi trước khi báo xong hay commit",
       "skills": [
         "done-gate"
       ],
@@ -275,6 +295,7 @@
     },
     {
       "id": "debug-simple",
+      "desc": "sửa lỗi có dấu vết rõ: traceback, exception, test đỏ kèm thông báo lỗi",
       "model": "sonnet",
       "effort": "high",
       "agent": "agent-stack:test-runner",
@@ -299,6 +320,7 @@
     },
     {
       "id": "debug-hard",
+      "desc": "lỗi khó tìm nguyên nhân: crash, race condition, flaky, memory leak, hành vi lạ",
       "model": "opus",
       "effort": "high",
       "match": [
@@ -317,6 +339,7 @@
     },
     {
       "id": "debug-production",
+      "desc": "sự cố trên production hay server, không tái hiện ở máy, hồi quy hiệu năng",
       "refines": "debug-hard",
       "model": "opus",
       "effort": "high",
@@ -338,6 +361,7 @@
     },
     {
       "id": "debug-stuck",
+      "desc": "đã thử sửa nhiều lần mà vẫn chưa ra, đang bế tắc",
       "refines": [
         "debug-hard",
         "debug-production",
@@ -362,6 +386,7 @@
     },
     {
       "id": "architecture",
+      "desc": "thiết kế hệ thống, lập kế hoạch nhiều bước hay nhiều giai đoạn, chiến lược, so sánh đánh đổi",
       "agent": "Plan",
       "skills": [
         "reuse-best"
@@ -385,6 +410,7 @@
     },
     {
       "id": "architecture-critical",
+      "desc": "quyết định khó đảo ngược: schema hay migration dữ liệu, giao thức, mô hình bảo mật",
       "refines": "architecture",
       "model": "opus",
       "effort": "xhigh",
@@ -409,6 +435,7 @@
     },
     {
       "id": "progress",
+      "desc": "hỏi tiến độ: đang ở đâu, việc tiếp theo là gì, còn gì chưa làm",
       "skills": [
         "progress"
       ],
@@ -431,6 +458,7 @@
     },
     {
       "id": "session-save",
+      "desc": "lưu tiến độ, bàn giao, dừng phiên, dọn dẹp để mở phiên mới, sắp hết hạn mức",
       "skills": [
         "session-keeper"
       ],
@@ -452,6 +480,7 @@
     },
     {
       "id": "tests",
+      "desc": "viết test, chạy test, tăng coverage, xem test nào hỏng",
       "agent": "agent-stack:test-runner",
       "skills": [],
       "model": "sonnet",
@@ -475,6 +504,7 @@
     },
     {
       "id": "reuse-best",
+      "desc": "hỏi đã có công cụ, thư viện hay cách làm sẵn chưa trước khi tự viết",
       "skills": [
         "reuse-best"
       ],
@@ -513,6 +543,7 @@
     },
     {
       "id": "github-repo-question",
+      "desc": "hỏi về một repo mã nguồn mở trên GitHub: nó làm gì, kiến trúc ra sao",
       "skills": [
         "remote-mcp"
       ],
@@ -532,6 +563,7 @@
     },
     {
       "id": "research",
+      "desc": "tìm hiểu, tra cứu, so sánh công cụ hay lựa chọn, tổng hợp từ vài nguồn",
       "agent": "agent-stack:researcher",
       "model": "sonnet",
       "effort": "medium",
@@ -552,6 +584,7 @@
     },
     {
       "id": "deep-research",
+      "desc": "nghiên cứu sâu nhiều nguồn, khảo sát toàn diện, viết báo cáo nghiên cứu",
       "refines": "research",
       "model": "opus",
       "effort": "medium",
@@ -569,6 +602,7 @@
     },
     {
       "id": "mechanical",
+      "desc": "việc máy móc lặp lại: đổi tên hàng loạt, format, dịch file, đổi định dạng",
       "model": "haiku",
       "effort": "low",
       "match": [
@@ -587,6 +621,7 @@
     },
     {
       "id": "writing",
+      "desc": "viết hay sửa văn bản cỡ vừa: bài luận, email, blog, viết lại cho tự nhiên",
       "skills": [
         "writing-voice"
       ],
@@ -609,6 +644,7 @@
     },
     {
       "id": "write-long",
+      "desc": "viết tài liệu dài: luận văn, báo cáo dài, tài liệu kỹ thuật, đề cương",
       "refines": "writing",
       "model": "sonnet",
       "effort": "high",
@@ -628,6 +664,7 @@
     },
     {
       "id": "refactor",
+      "desc": "tái cấu trúc code không đổi hành vi: tách hàm, dọn dẹp, bỏ trùng lặp",
       "model": "sonnet",
       "effort": "high",
       "match": [
@@ -642,6 +679,7 @@
     },
     {
       "id": "feature",
+      "desc": "thêm tính năng hay viết code mới cỡ vừa trở lên",
       "skills": [
         "reuse-best"
       ],
@@ -669,6 +707,7 @@
     },
     {
       "id": "feature-boundary",
+      "desc": "tính năng đụng ranh giới tin cậy: đăng nhập, xác thực, phân quyền, mật khẩu, upload, webhook, gọi dịch vụ ngoài, chạy lệnh",
       "refines": "feature",
       "only_refine": true,
       "skills": [
@@ -716,6 +755,7 @@
     },
     {
       "id": "docs-lookup",
+      "desc": "tra cú pháp, cách dùng hàm hay API của một thư viện",
       "model": "sonnet",
       "effort": "low",
       "note": "tra tài liệu mới bằng context7 nếu có, đừng đoán theo trí nhớ",
@@ -735,6 +775,7 @@
     },
     {
       "id": "quick-question",
+      "desc": "câu hỏi ngắn cần giải thích nhanh, không phải làm gì trong repo",
       "model": "sonnet",
       "effort": "low",
       "match": [
@@ -749,6 +790,7 @@
     },
     {
       "id": "small-fix",
+      "desc": "sửa nhỏ: chính tả, một dòng, đổi chữ",
       "model": "sonnet",
       "effort": "low",
       "note": "low dễ bỏ bước tự kiểm tra: yêu cầu chạy test sau khi sửa",
@@ -770,6 +812,7 @@
     },
     {
       "id": "paper-reading",
+      "desc": "đọc hiểu sâu một bài báo khoa học",
       "model": "sonnet",
       "effort": "medium",
       "skills": [
@@ -791,6 +834,7 @@
     },
     {
       "id": "paper-critique",
+      "desc": "phản biện bài báo: claim có đứng vững, bằng chứng có đủ không",
       "refines": "paper-reading",
       "model": "sonnet",
       "effort": "high",
@@ -811,6 +855,7 @@
     },
     {
       "id": "long-agent",
+      "desc": "việc tự chạy dài nhiều giờ không cần hỏi lại",
       "model": "fable",
       "effort": "high",
       "warm_fallback": {
@@ -834,6 +879,7 @@
     },
     {
       "id": "design-session",
+      "desc": "phiên thiết kế khi yêu cầu còn mơ hồ: viết spec trước khi code",
       "model": "fable",
       "effort": "high",
       "warm_fallback": {
@@ -858,6 +904,7 @@
     },
     {
       "id": "frontier",
+      "desc": "bài toán biên giới: chứng minh, thuật toán mới, bài toán mở",
       "model": "fable",
       "effort": "high",
       "note": "chỉ khi opus ở effort cao vẫn chưa đạt; fable · max cho bài biên giới thật sự",
@@ -876,6 +923,7 @@
     },
     {
       "id": "max-explicit",
+      "desc": "người dùng đòi suy nghĩ kỹ nhất có thể, không quan tâm chi phí",
       "model": "opus",
       "effort": "max",
       "note": "nếu chỉ cần cho một lượt, thêm từ ultrathink vào prompt thay vì đổi effort cả phiên",
@@ -893,6 +941,7 @@
     },
     {
       "id": "write-short",
+      "desc": "viết ngắn: tin nhắn, email ngắn, trả lời vài câu",
       "model": "sonnet",
       "effort": "low",
       "skills": [

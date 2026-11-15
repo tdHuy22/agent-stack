@@ -59,7 +59,9 @@ def main():
     try:  # router: skill hợp với project và cách làm việc tiếp theo
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "task-router" / "scripts"))
         import route  # noqa: E402
-        hint = route.session_hint(root, data.get("permission_mode"))
+        with route.one_pass():  # đọc .agent/stack.json một lần
+            hint = route.session_hint(root, data.get("permission_mode"))
+            route.prefetch(root, data)  # lớp model (GĐ5): chạy nền cho việc tiếp theo trong §0, không chờ
     except ImportError:
         pass
     # Cảnh báo đặt trên đầu: pi lệch hợp đồng (mỗi lần mở phiên pi), plugin lệch bản đã kiểm duyệt (lúc khởi động)

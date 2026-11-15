@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Gợi ý skill, subagent, model và effort cho một việc, bằng luật từ khóa (0 token, dưới 50 ms).
+"""Gợi ý skill, subagent, model và effort cho một việc, bằng luật từ khóa (0 token, dưới 50 ms); lớp từ khóa không chắc
+thì có thể hỏi thêm lớp model (GĐ5, plugin/lib/routemodel.py, mục model_layer của rules.json: hiện chỉ khi chấm từng
+bước của kế hoạch phiên vừa duyệt, `--plan-steps`).
 
 Lệnh:
   route.py "mô tả việc" [--project DIR]     in gợi ý dạng JSON; --project thêm skill theo loại project
@@ -25,6 +27,7 @@ nhỏ, hay cache đã hết hạn); còn lại gợi ý giữ model và giao ph�
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -32,6 +35,7 @@ import re
 import shutil
 import sys
 import time
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -42,8 +46,11 @@ import agentstack as A  # noqa: E402
 RULES_PATH = HERE.parents[1] / "rules.json"
 FAMILIES = ("fable", "opus", "sonnet", "haiku")
 # Tin nhắn chỉ bảo làm tiếp (đã bỏ dấu): định tuyến theo việc tiếp theo trong §0.
-CONTINUE_RE = re.compile(r"^(ok[a-z]*[ ,.!]*)?(tiep tuc|lam tiep|tiep di|tiep theo|lam di|buoc tiep theo|"
-                         r"lam buoc tiep theo|continue|go on|next|proceed|keep going)( di| nhe| nha| thoi| nao)?[ .!?]*$")
+# "commit và làm tiếp đi", "làm tiếp việc đi", "Continue from where you left off." (app gửi khi làm tiếp sau khi ngắt)
+# thấy trong nhật ký router 14–15/11/2026.
+CONTINUE_RE = re.compile(r"^(ok[a-z]*[ ,.!]*)?(commit( va| roi)? )?(tiep tuc|lam tiep( viec)?|tiep di|tiep theo|lam di|"
+                         r"buoc tiep theo|lam buoc tiep theo|continue( from where you left off)?|go on|next|proceed|"
+                         r"keep going)( di| nhe| nha| thoi| nao)?[ .!?]*$")
 # Câu hỏi tiến độ cho cờ progress của hook Stop (nhắc hiện cây). Hẹp hơn luật progress của router: "đang do" (bị gây
 # bởi) hay "việc tiếp theo là…" giữa câu lệnh không tính; câu dài coi là việc, không phải câu hỏi.
 PROGRESS_RE = re.compile(r"\b(tien do|lam gi tiep|viec gi tiep|viec tiep theo (la gi|nao)|con (viec |gi )+(chua lam|dang do"
@@ -126,11 +133,32 @@ def protected_phrases() -> tuple:
     return tuple(A.fold(p) for r in rules()["rules"] if r["id"] in ids for p in r["match"])
 
 
+_STACK_MEMO = None  # dict trong one_pass(), None ngoài đó
+
+
+@contextmanager
+def one_pass():
+    """Một lần chạy hook: turn_flags và hook_suggestion đọc `.agent/stack.json` một lần (effective còn ghi bản chụp).
+    Ngoài khối này không nhớ gì, để file đổi giữa hai lần gọi (test, lệnh xem thử) luôn được đọc lại."""
+    global _STACK_MEMO, _MODEL_MEMO
+    _STACK_MEMO, _MODEL_MEMO = {}, {}
+    try:
+        yield
+    finally:
+        _STACK_MEMO = _MODEL_MEMO = None
+
+
 def project_stack(root):
     """Cấu hình `.agent/stack.json` đã gộp với bản chụp đã duyệt (stackcfg.effective), hay None khi project không có."""
     if not root:
         return None
-    return stack_lib().effective(Path(root), protected_phrases())
+    key = str(root)
+    if _STACK_MEMO is not None and key in _STACK_MEMO:
+        return _STACK_MEMO[key]
+    value = stack_lib().effective(Path(root), protected_phrases())
+    if _STACK_MEMO is not None:
+        _STACK_MEMO[key] = value
+    return value
 
 
 def apply_stack(hit, text: str, stack):
@@ -195,7 +223,87 @@ def raise_hit(hit) -> None:
 def suggest_for(text: str, profile=None, stack=None):
     """Như suggest(), thêm skill theo loại project (mục rule_extras của rules.json, ví dụ webapp-testing khi viết test web).
     `stack`: cấu hình project (project_stack) để che từ khóa bỏ qua và nâng lên mức sàn; None thì như cũ."""
-    hit = suggest(text, tuple(stack["cfg"]["ignore"]) if stack else ())
+    return decorate(suggest(text, ignore_mask(stack)), text, profile, stack)
+
+
+def ignore_mask(stack) -> tuple:
+    return tuple(stack["cfg"]["ignore"]) if stack else ()
+
+
+def rule_hit(rule_id: str, layer: str = "model"):
+    """Gợi ý dạng suggest() cho một id luật do lớp model chọn (chưa decorate), hay None khi id lạ."""
+    rule = next((r for r in rules()["rules"] if r["id"] == rule_id), None)
+    if rule is None:
+        return None
+    return {"rule": rule["id"], "model": rule.get("model"), "model_id": model_name(rule.get("model")),
+            "effort": rule.get("effort"), "agent": rule.get("agent"), "skills": list(rule.get("skills", [])),
+            "note": rule.get("note", ""), "matched": [], "layer": layer}
+
+
+def level_rank(hit) -> tuple:
+    """(hạng model, hạng effort) để so hai gợi ý; model nặng ký hơn effort. Thiếu thì hạng thấp nhất."""
+    S = stack_lib()
+    return (S.MODEL_RANK.get((hit or {}).get("model"), -1), S.EFFORT_RANK.get((hit or {}).get("effort"), -1))
+
+
+def candidates(text: str, mask=()) -> list:
+    """[(luật, cụm khớp, điểm)] của mọi luật tự thắng được (không only_refine), điểm giảm dần; che như score()."""
+    raw = folded = A.fold(text or "")
+    for phrase in mask:
+        folded = stack_lib().pattern(phrase).sub(" ", folded)
+    protected = set((rules().get("rule_groups") or {}).get("protected") or []) if mask else set()
+    out = []
+    for rule in rules()["rules"]:
+        if rule.get("only_refine"):
+            continue
+        seen_text = raw if rule["id"] in protected else folded
+        hits = [p for p, pattern in rule["_patterns"] if pattern.search(seen_text)]
+        if hits:
+            out.append((rule, hits, sum(1 + p.count(" ") for p in hits)))
+    out.sort(key=lambda c: (-c[2], c[0]["_order"]))
+    return out
+
+
+def uncertain(text: str, mask=(), long_words: int = 25) -> str:
+    """Lớp từ khóa không chắc thì trả lý do (chuỗi rỗng nếu chắc), để chỉ khi đó mới hỏi lớp model:
+    "khong-khop": không luật nào khớp (sau khi che từ bỏ qua của project);
+    "sat-nut": hai luật đứng đầu bằng điểm mà khác mức (không tính cặp luật gốc và luật tinh chỉnh); chênh một điểm
+    thì không tính, vì cụm dài hơn đã nói rõ loại việc (bộ 117 câu: 4 câu chênh một điểm đều đúng theo luật đứng đầu);
+    "dai-mong": câu từ `long_words` chữ mà chỉ khớp một cụm một chữ."""
+    best, hits = score(text, mask)
+    if best is None:
+        return "khong-khop"
+    cands = candidates(text, mask)
+    chain = {best["id"], *best["_refines"]}
+    others = [c for c in cands if c[0]["id"] not in chain and best["id"] not in c[0]["_refines"]]
+    top = next((c for c in cands if c[0]["id"] in chain), None)
+    if top and others and top[2] <= others[0][2] and level_rank(others[0][0]) != level_rank(best):
+        return "sat-nut"
+    if len((text or "").split()) >= long_words and sum(1 + h.count(" ") for h in hits) <= 1:
+        return "dai-mong"
+    return ""
+
+
+def combine(kw, model_rule):
+    """Gộp gợi ý lớp từ khóa (chưa decorate) với id luật lớp model chọn: theo trọn một luật, lấy luật có mức cao hơn
+    (bằng thì giữ lớp từ khóa). Lớp 1 im lặng (kể cả khi chỉ khớp từ project đã đánh dấu bỏ qua) thì dùng lớp model.
+    Mức sàn của project áp sau, trong decorate(). Chốt chặn TM-126: model chỉ chọn được id trong danh sách cho phép."""
+    if not model_rule or model_rule == "none":
+        return kw
+    mod = rule_hit(model_rule)
+    if mod is None:
+        return kw
+    if kw is None:
+        return mod
+    if level_rank(mod) > level_rank(kw):
+        mod["kw_rule"] = kw["rule"]
+        return mod
+    return kw
+
+
+def decorate(hit, text: str, profile=None, stack=None):
+    """Phần sau khi chọn luật của suggest_for: cấu hình rẻ hơn khi project có test, skill theo loại project, mức sàn
+    của project (apply_stack, cả khi chưa có luật nào: luật project-keyword)."""
     if hit and profile and "tests" in (profile.get("markers") or []):
         # Có test để kiểm thì dùng cấu hình rẻ hơn (mục with_tests của luật); test trượt thì lên bậc cũ.
         cheaper = next((r.get("with_tests") for r in rules()["rules"] if r["id"] == hit["rule"]), None)
@@ -214,6 +322,284 @@ def suggest_for(text: str, profile=None, stack=None):
     if stack:
         hit = apply_stack(hit, text, stack)
     return hit
+
+
+# ---- lớp model (GĐ5): chỉ khi lớp từ khóa không chắc; model chỉ đọc câu, nhãn hồ sơ, cụm ignore có khớp ----
+
+_MODEL_MEMO = None  # dict trong one_pass(): câu → (gợi ý cuối, gợi ý lớp từ khóa, meta lớp model)
+
+
+def model_lib():
+    import routemodel  # noqa: E402 (cùng thư mục lib; chỉ nạp khi cần)
+    return routemodel
+
+
+def profile_labels(profile) -> list:
+    """Nhãn hồ sơ (cố định, theo rules.json) cho prompt của lớp model; không đọc gì của project."""
+    if not profile:
+        return []
+    cfg = rules()
+    out = [(cfg.get("profiles") or {}).get(k, {}).get("label", k) for k in profile.get("kinds") or []]
+    out += [(cfg.get("markers") or {}).get(m, {}).get("label", m) for m in profile.get("markers") or []]
+    return [str(x) for x in out if isinstance(x, str)][:8]
+
+
+def model_job(texts, profile, stack, cfg):
+    """(khóa từng câu, việc cho worker). Từ stack.json chỉ gửi cụm `ignore` đã duyệt có khớp trong câu (TM-126)."""
+    RM = model_lib()
+    S = stack_lib()
+    rs = rules()
+    labels = profile_labels(profile)
+    many = len(texts) > 1
+    ignore_hits = sorted({p for t in texts for p in ignore_mask(stack) if S.contains(A.fold(t), p)})
+    digest = RM.prompt_digest(rs, cfg)
+    keys = [RM.cache_key(cfg, digest, t, [p for p in ignore_hits if S.contains(A.fold(t), p)], labels) for t in texts]
+    job_key = keys[0] if not many else hashlib.sha1("".join(keys).encode()).hexdigest()[:24]
+    job = {"key": job_key, "keys": keys, "count": len(texts), "allowed": [rid for rid, _ in RM.choices(rs, cfg)],
+           "cfg": cfg, "system": RM.system_prompt(rs, cfg, many=many),
+           "user": RM.user_prompt(texts[0] if not many else texts, labels, ignore_hits)}
+    return keys, job
+
+
+def ask_model(texts, profile=None, stack=None, data=None, start=None, spawn=True, wait=None, root=None,
+              moment: str = "tin") -> list:
+    """Kết quả lớp model cho từng câu: [{status, rule?, ms?, key?}]. status: ok, cache (đã có), nen (đã khởi worker,
+    không chờ), qua-han, busy, khong-binary, hay lý do tắt (test, tat-bang-env, tat-trong-luat, khong-tuong-tac).
+    `wait`: số giây chờ tính từ `start` (mặc định wait_s của luật); 0 thì không chờ. Không bao giờ văng lỗi."""
+    texts = list(texts)
+    try:
+        RM = model_lib()
+        cfg = RM.config(rules())
+        reason = RM.disabled_reason(cfg, data if data is not None else {}, moment)
+        if reason:
+            return [{"status": reason} for _ in texts]
+        keys, job = model_job(texts, profile, stack, cfg)
+        allowed, max_age = job["allowed"], cfg["cache_days"] * 86400
+        cached = [RM.read_cache(k, allowed, max_age) for k in keys]
+        if all(cached):
+            return [dict(c, status="cache" if c.get("status") == "ok" else c.get("status"), key=k)
+                    for c, k in zip(cached, keys, strict=True)]
+        if not spawn:
+            return [dict(c, key=k) if c else {"status": "chua-co", "key": k} for c, k in zip(cached, keys, strict=True)]
+        binary = RM.find_binary(project_root=root, cwd=(data or {}).get("cwd"))
+        if not binary:
+            return [{"status": "khong-binary"} for _ in texts]
+        job["binary"] = binary
+        started = RM.spawn(job, cfg)
+        wait_s = cfg["wait_s"] if wait is None else wait
+        if started in ("busy", "error") or wait_s <= 0:
+            status = "nen" if started in ("spawned", "running") else started
+            return [dict(c, key=k) if c else {"status": status, "key": k} for c, k in zip(cached, keys, strict=True)]
+        deadline = (start or time.time()) + wait_s
+        out = []
+        for c, k in zip(cached, keys, strict=True):
+            rec = c or RM.wait(k, deadline, allowed, max_age)
+            out.append(dict(rec, key=k) if rec else {"status": "qua-han", "key": k})
+        return out
+    except Exception as exc:  # noqa: BLE001 (lớp phụ: lỗi thì dùng lớp từ khóa)
+        A.log_event("hook-error", {"hook": "router-model", "error": repr(exc)[:300]})
+        return [{"status": "loi"} for _ in texts]
+
+
+def pick_final(kw, rule_id, text: str, profile=None, stack=None):
+    """(gợi ý cuối, gợi ý chỉ lớp từ khóa), cả hai đã decorate. So mức SAU decorate (cấu hình rẻ khi có test, mức sàn
+    của project): luật model chọn chỉ thắng khi mức cuối của nó cao hơn mức cuối của lớp từ khóa, nên lớp model không
+    bao giờ hạ gợi ý (review GĐ5: so trước decorate thì `with_tests` kéo luật model xuống dưới lớp từ khóa)."""
+    kw_hit = decorate(copy.deepcopy(kw) if kw else None, text, profile, stack)
+    mod = rule_hit(rule_id) if rule_id and rule_id != "none" else None
+    if mod is None:
+        return kw_hit, kw_hit
+    mod_hit = decorate(mod, text, profile, stack)
+    if kw_hit is None or level_rank(mod_hit) > level_rank(kw_hit):
+        if kw_hit:
+            mod_hit["kw_rule"] = kw_hit["rule"]
+        return mod_hit, kw_hit
+    return kw_hit, kw_hit
+
+
+def model_rule(meta) -> str | None:
+    """Id luật dùng được từ kết quả lớp model, hay None."""
+    if not meta or meta.get("status") not in ("ok", "cache"):
+        return None
+    return meta.get("rule") or None
+
+
+def two_layer(text: str, profile=None, stack=None, data=None, start=None, spawn=True, wait=None, root=None,
+              moment: str = "tin"):
+    """(gợi ý cuối, gợi ý chỉ lớp từ khóa, meta lớp model hay None). Lớp từ khóa chắc thì không hỏi model. Cả hai gợi
+    ý đã decorate (mức sàn của project áp sau cùng). Trong one_pass() nhớ theo câu, để cờ lượt và gợi ý chỉ hỏi một lần."""
+    memo = _MODEL_MEMO if spawn else None  # bản chỉ đọc cache (spawn=False) không được che lần hỏi thật
+    if memo is not None and text in memo:
+        return memo[text]
+    mask = ignore_mask(stack)
+    kw = suggest(text, mask)
+    why = uncertain(text, mask, model_lib().config(rules())["long_words"])
+    meta = None
+    if why:
+        meta = dict(ask_model([text], profile, stack, data, start, spawn, wait, root, moment)[0], why=why)
+    hit, kw_hit = pick_final(kw, model_rule(meta), text, profile, stack)
+    out = (hit, kw_hit, meta)
+    if memo is not None:
+        memo[text] = out
+    return out
+
+
+def prefetch_path(session_id: str) -> Path:
+    return A.state_dir() / "router-model" / "sessions" / (hashlib.sha1(session_id.encode()).hexdigest()[:16] + ".json")
+
+
+def prefetch(root, data: dict) -> str:
+    """Hook SessionStart: lớp từ khóa không chắc về việc tiếp theo trong §0 thì khởi worker nền (không chờ), và ghi gợi
+    ý lúc mở phiên để tin đầu tiên biết kết quả nền có khác không. Trả trạng thái lớp model (để test và nhật ký)."""
+    sid = data.get("session_id") or ""
+    try:
+        task = next_task(root) if root else ""
+        if not task or not sid:
+            return ""
+        hit, _, meta = two_layer(task, A.project_profile(root), project_stack(root), data, spawn=True, wait=0,
+                                 root=root, moment="s0")
+    except Exception as exc:  # noqa: BLE001 (việc phụ của hook mở phiên)
+        A.log_event("hook-error", {"hook": "router-prefetch", "error": repr(exc)[:300]})
+        return "loi"
+    meta = meta or {}
+    status = meta.get("status") or "chac"
+    if status == "nen" and meta.get("key"):
+        path = prefetch_path(sid)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            A.prune(path.parent, 2)
+            A.write_json_atomic(path, {"session": sid, "key": meta["key"], "rule": (hit or {}).get("rule"),
+                                       "ts": time.time()})
+        except OSError:
+            pass
+    return status
+
+
+def prefetch_note(data: dict) -> str:
+    """Tin đầu sau khi mở phiên: kết quả nền của lớp model cho việc tiếp theo trong §0 đã có và khác gợi ý lúc mở phiên
+    thì trả một câu cho model (một lần); chưa có thì giữ để tin sau xem (tối đa 30 phút). Không bao giờ văng lỗi."""
+    try:
+        sid = data.get("session_id") or ""
+        if not sid:
+            return ""
+        path = prefetch_path(sid)
+        rec = A.read_json(path, None)
+        if not isinstance(rec, dict) or rec.get("session") != sid:
+            return ""
+        root = A.project_root(data["cwd"]) if data.get("cwd") else None
+        task = next_task(root) if root else ""
+        hit, _, meta = two_layer(task, A.project_profile(root), project_stack(root), spawn=False, wait=0,
+                                 root=root, moment="s0") if task else (None, None, None)
+        if not meta or meta.get("key") != rec.get("key") or time.time() - float(rec.get("ts") or 0) > 1800:
+            path.unlink(missing_ok=True)  # §0 đã đổi hay quá lâu: bỏ
+            return ""
+        if meta.get("status") not in ("ok", "cache", "none", "unparsed", "timeout", "error"):
+            return ""  # worker chưa xong: để tin sau
+        path.unlink(missing_ok=True)
+        if not hit or hit.get("rule") == rec.get("rule"):
+            return ""
+        was = rec.get("rule") or "không gợi ý"
+        return (f"[router] Lớp model vừa chấm việc tiếp theo trong §0 («{A.clip(task, 80)}»): {hit['rule']} → "
+                f"{describe(hit)} (lúc mở phiên: {was}). Đây chỉ là gợi ý; model của phiên có quyền cuối.")
+    except Exception as exc:  # noqa: BLE001
+        A.log_event("hook-error", {"hook": "router-prefetch-note", "error": repr(exc)[:300]})
+        return ""
+
+
+# ---- chấm từng bước của kế hoạch phiên vừa duyệt (hook plan_steps.py gọi qua `--plan-steps`) ----
+
+# Mức khai: "opus·high", "Opus 5.5 · high", "claude-sonnet-5-5 low" (review GĐ5: 11/78 chỗ trong kế hoạch thật có số
+# phiên bản và từng bị bỏ sót).
+LEVEL_RE = re.compile(r"\b(?:claude-)?(haiku|sonnet|opus|fable)(?:[ -]?\d+(?:[.-]\d+)*)?\s*[·•.,\-/ ]?\s*"
+                      r"(low|medium|high|xhigh|max)\b", re.I)
+STEP_ITEM_RE = re.compile(r"^\s*(\d+)[.)]\s+(\S.*)$")
+
+
+def plan_step_rows(plan: str) -> list:
+    """[(số bước, chữ của việc, mức khai (model, effort) hay None)] của mục `## Các bước` (bảng hay danh sách đánh số)."""
+    lines, level, fenced = [], 0, False
+    for line in (plan or "").splitlines():
+        if re.match(r"^\s*(```|~~~)", line):
+            fenced = not fenced
+            continue
+        m = None if fenced else A.HEADING_RE.match(line)
+        if m:
+            if level and len(m.group(1)) <= level:
+                break  # hết mục: đề mục cùng cấp hay cao hơn (đề mục con như "### Giai đoạn 1" vẫn thuộc mục)
+            if not level and "cac buoc" in A.fold(m.group(2)):
+                level = len(m.group(1))
+            continue
+        if level and not fenced:
+            lines.append(line)
+    rows, header = [], None
+    for line in lines:
+        if line.strip().startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(set(c) <= set("-: ") for c in cells):
+                continue
+            if header is None:
+                header = [A.fold(c) for c in cells]
+                continue
+            col_text = next((i for i, h in enumerate(header) if "viec" in h), 1 if len(cells) > 1 else 0)
+            col_lvl = next((i for i, h in enumerate(header) if "model" in h or "effort" in h), None)
+            text = cells[col_text] if col_text < len(cells) else ""
+            lv_cell = cells[col_lvl] if col_lvl is not None and col_lvl < len(cells) else line
+            m = LEVEL_RE.search(lv_cell)
+            rows.append((cells[0] if cells and cells[0] != text else str(len(rows) + 1), text.replace("**", ""),
+                         (m.group(1).lower(), m.group(2).lower()) if m else None))
+        else:
+            m = STEP_ITEM_RE.match(line)
+            if m:
+                lv = LEVEL_RE.search(m.group(2))
+                rows.append((m.group(1), m.group(2).replace("**", ""),
+                             (lv.group(1).lower(), lv.group(2).lower()) if lv else None))
+    return [r for r in rows if len(r[1].split()) >= 3][:30]
+
+
+def score_plan(plan: str, cwd, data: dict | None = None, start: float | None = None) -> str:
+    """Câu cho model của phiên về các bước khai mức dưới sàn của project hay bước bảo mật khai dưới gợi ý; chuỗi rỗng
+    khi không có gì cần nói. Lớp model gộp một lần cho mọi bước không chắc, chờ tới `plan_wait_s`."""
+    rows = plan_step_rows(plan)
+    if not rows:
+        return ""
+    root = A.project_root(cwd) if cwd else None
+    stack = project_stack(root) if root else None
+    profile = A.project_profile(root) if root else None
+    mask = ignore_mask(stack)
+    cfg = model_lib().config(rules())
+    kws = [suggest(text, mask) for _, text, _ in rows]
+    unsure = [i for i, (_, text, _) in enumerate(rows) if uncertain(text, mask, cfg["long_words"])]
+    data = dict(data or {}, cwd=str(cwd)) if cwd else (data or {})
+    metas = dict(zip(unsure, ask_model([rows[i][1] for i in unsure], profile, stack, data, start,
+                                       wait=cfg["plan_wait_s"], root=root, moment="buoc"), strict=True)) if unsure else {}
+    if unsure:
+        statuses = {}
+        for m in metas.values():
+            statuses[m.get("status")] = statuses.get(m.get("status"), 0) + 1
+        A.log_event("plan-steps-model", {"steps": len(rows), "unsure": len(unsure), "status": statuses})
+    S = stack_lib()
+    protected = set((rules().get("rule_groups") or {}).get("protected") or [])
+    notes = []
+    for i, (num, text, declared) in enumerate(rows):
+        hit, kw_hit = pick_final(kws[i], model_rule(metas.get(i)), text, profile, stack)
+        if not hit or not declared or declared[0] not in S.MODEL_RANK or declared[1] not in S.EFFORT_RANK:
+            continue
+        # Bước là việc bảo mật khi MỘT trong hai lớp nhận ra (model nâng sang luật khác nhóm không được che mất)
+        secure = [h for h in (hit, kw_hit) if h and h.get("rule") in protected]
+        want = max(((h.get("model"), h.get("effort")) for h in (hit, kw_hit) if h),
+                   key=lambda lv: (S.MODEL_RANK.get(lv[0], -1), S.EFFORT_RANK.get(lv[1], -1)))
+        floor = tuple(hit["floor"]) if hit.get("floor") else None
+        if floor and not S.at_least(declared, floor):
+            notes.append(f"bước {num} khai {declared[0]} · {declared[1]}, dưới mức sàn {floor[0]} · {floor[1]} của project"
+                         + (f" (khớp {', '.join(repr(m) for m in hit['matched'][:2])})" if hit.get("matched") else ""))
+        elif secure and want[0] in S.MODEL_RANK and want[1] in S.EFFORT_RANK and not S.at_least(declared, want):
+            notes.append(f"bước {num} là việc bảo mật ({secure[-1]['rule']}) mà khai {declared[0]} · {declared[1]}, "
+                         f"router gợi ý {model_name(want[0])} · {want[1]}")
+    if not notes:
+        return ""
+    return ("[router] Chấm các bước của kế hoạch vừa duyệt: " + "; ".join(notes[:6]) + ". Model của phiên có quyền "
+            "cuối: nếu giữ mức đã khai, nói một dòng lý do với người dùng trước khi làm bước đó; nếu nâng, bước cần "
+            "model khác thì giao subagent (không đổi model giữa phiên).")
 
 
 def available_skills() -> dict:
@@ -444,7 +830,8 @@ def session_hint(root, permission_mode=None):
     labels, ready, pending, agents = profile_summary(profile, root)
     task = next_task(root)
     stack = project_stack(root)
-    hit = suggest_for(task, profile, stack) if task else None
+    # Lớp model chỉ đọc kết quả đã có (lần mở phiên trước cùng việc); khởi worker là việc của prefetch() trong hook.
+    hit = two_layer(task, profile, stack, spawn=False, wait=0, root=root, moment="s0")[0] if task else None
     if hit:
         localize(hit, root)
     gaps = pyramid_gaps(root)
@@ -606,20 +993,31 @@ def turn_flags(prompt: str, cwd) -> dict:
     feature-boundary), để hook PreToolUse nhắc chạy threat-model trước khi code; criteria khi việc là tính năng, sửa
     lỗi, refactor hay kiến trúc (CRITERIA_RULES), để hook PreToolUse nhắc ghi tiêu chí xong vào §0 trước khi code;
     progress khi người dùng hỏi tiến độ hay việc tiếp theo (is_progress_question), để hook Stop nhắc hiện cây kế hoạch.
-    Không phụ thuộc việc gợi ý có bị ẩn vì đã nhắc trong giờ qua hay không."""
+    Không phụ thuộc việc gợi ý có bị ẩn vì đã nhắc trong giờ qua hay không. Chỉ so chữ của người dùng (routable_text).
+    Có `.agent/stack.json` thì che từ khóa bỏ qua và nâng theo project: câu chỉ khớp từ khóa riêng hay từ của vùng lõi
+    (luật project-keyword, mức sàn từ sonnet · medium) cũng cần tiêu chí."""
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
+        return {}
+    prompt = A.routable_text(prompt)
+    if not prompt:
         return {}
     root = A.project_root(cwd) if cwd else None
     if is_progress_question(prompt):
         return {"progress": True}
     continuing = bool(root and CONTINUE_RE.match(A.fold(prompt)))
-    hit = suggest((next_task(root) or prompt) if continuing else prompt)
+    text = (next_task(root) or prompt) if continuing else prompt
+    memo = _MODEL_MEMO.get(text) if _MODEL_MEMO is not None else None
+    if memo is not None:  # hook_suggestion đã chấm câu này (cả lớp model): dùng lại, không hỏi model lần hai
+        hits = [h for h in memo[:2] if h]  # cờ của cả gợi ý cuối lẫn lớp từ khóa: lớp model không làm mất cờ
+    else:
+        hits = [suggest_for(text, None, project_stack(root)) if root else suggest(text)]
     flags = {}
-    if hit and hit["rule"] == "feature-boundary":
-        flags["threat_model"] = True
-    if hit and hit["rule"] in CRITERIA_RULES:
-        flags["criteria"] = True
+    for hit in (h for h in hits if h):
+        if hit["rule"] == "feature-boundary":
+            flags["threat_model"] = True
+        if hit["rule"] in CRITERIA_RULES or hit["rule"] == "project-keyword":
+            flags["criteria"] = True
     return flags
 
 
@@ -636,11 +1034,19 @@ ROUTE_LOG = "route-log.jsonl"
 def log_route(seen: dict, data: dict) -> None:
     """Một dòng nhật ký router mỗi tin (cả khi gợi ý bị ẩn vì đã nhắc), để `stack.py learn` so gợi ý với mức thật đã cần
     (effort người dùng đổi ở tin sau, test trượt, review tìm ra lỗi). Chỉ ghi trên máy (state/); câu đã bỏ dấu, cắt
-    200 ký tự. Không bao giờ văng lỗi."""
+    200 ký tự. Các trường rule, model, effort, matched là của lớp từ khóa (learn dùng, nghĩa không đổi); `final` là gợi ý
+    sau khi gộp lớp model khi khác lớp từ khóa, `model` là kết quả lớp model (GĐ5). Không bao giờ văng lỗi."""
     try:
         hit = seen.get("hit") or {}
         root = seen.get("root")
-        A.log_event("route", {
+        final = seen.get("final") or {}
+        meta = seen.get("model")
+        extra = {}
+        if final and final.get("rule") != hit.get("rule"):
+            extra["final"] = {"rule": final.get("rule"), "model": final.get("model"), "effort": final.get("effort")}
+        if meta:
+            extra["model_layer"] = {k: meta.get(k) for k in ("status", "rule", "ms", "why", "key") if meta.get(k)}
+        A.log_event("route", {**extra,
             "session": data.get("session_id", ""), "root": str(root) if root else "",
             "key": stack_lib().repo_key(root) if root else "", "effort_now": (data.get("effort") or {}).get("level"),
             "rule": hit.get("rule"), "model": hit.get("model"), "effort": hit.get("effort"),
@@ -663,6 +1069,9 @@ def _hook_suggestion(prompt: str, data: dict, seen: dict):
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
         return None  # lệnh, hay tin do hệ thống tạo (báo cáo subagent, thông báo nền): không phải việc cần định tuyến
+    prompt = A.routable_text(prompt)  # chỉ chữ của người dùng: bỏ khối nhắc, thẻ <ide_*>, phần dán, khối code
+    if not prompt:
+        return None
     root = A.project_root(data["cwd"]) if data.get("cwd") else None
     text, note = prompt, ""
     if root and CONTINUE_RE.match(A.fold(prompt)):
@@ -672,8 +1081,14 @@ def _hook_suggestion(prompt: str, data: dict, seen: dict):
     seen.update(root=root, text=text)
     if not note and len(prompt.split()) < rules().get("min_words", 4):
         return None
-    hit = suggest_for(text, A.project_profile(root) if root else None, project_stack(root) if root else None)
-    seen["hit"] = hit
+    # Hai lớp: lớp từ khóa không chắc thì hỏi lớp model, chờ tới mốc lúc hook bắt đầu + wait_s (prompt_submit đặt
+    # _hook_t0); quá hạn hay tắt thì dùng lớp từ khóa.
+    # Tin "làm tiếp" (định tuyến theo §0) chờ tới continue_wait_s: kết quả nền lúc mở phiên thường đã có, hay worker
+    # đang chạy cho đúng việc đó. Tin khác chờ tới wait_s (0: chỉ chạy nền, kết quả vào nhật ký).
+    wait = model_lib().config(rules())["continue_wait_s"] if note else None
+    hit, kw_hit, meta = two_layer(text, A.project_profile(root) if root else None, project_stack(root) if root else None,
+                                  data, data.get("_hook_t0"), wait=wait, root=root, moment="s0" if note else "tin")
+    seen.update(hit=kw_hit, final=hit, model=meta)
     if not hit:
         return None
     localize(hit, root)
@@ -740,9 +1155,13 @@ def _hook_suggestion(prompt: str, data: dict, seen: dict):
     if not A.once(f"route-{sid}-{hit['rule']}{raised}", 3600):
         return None  # cùng một gợi ý không nhắc lại trong một giờ
     reason = ", ".join(f"'{m}'" for m in hit["matched"][:3])
+    src = f"khớp {reason}"
+    if hit.get("layer") == "model":  # gợi ý do lớp model chọn (GĐ5)
+        src = ("lớp model chọn, lớp từ khóa không chắc" if not reason else
+               f"lớp model chọn mức cao hơn lớp từ khóa ({hit.get('kw_rule')}), khớp {reason}")
     model_note = (f"model {model_effort(hit)}" + (f", test trượt thì {hit['fallback']}" if hit.get("fallback") else "")
                   if hit["model"] else "")
-    context = (f"[router] Gợi ý cho việc này ({hit['rule']}, khớp {reason}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
+    context = (f"[router] Gợi ý cho việc này ({hit['rule']}, {src}{note}): " + "; ".join(parts_ctx + ([model_note] if model_note else []))
                + ". Đây chỉ là gợi ý. Nếu nên đổi model hoặc effort, nói với người dùng ở cuối câu trả lời, đừng tự đổi."
                + (f" {switch_note}" if switch_note else ""))
     user = f"🧭 router: {hit['rule']} → " + " · ".join(parts_user)
@@ -774,7 +1193,15 @@ def main(argv=None) -> int:
     ap.add_argument("--project", help="thư mục project: thêm skill theo loại project")
     ap.add_argument("--session", nargs="?", const=".", metavar="DIR",
                     help="in hồ sơ project và gợi ý skill lúc mở phiên (cho công cụ không có hook)")
+    ap.add_argument("--plan-steps", action="store_true",
+                    help="đọc kế hoạch phiên từ stdin, in JSON {context} chấm từng bước (hook plan_steps.py gọi)")
+    ap.add_argument("--cwd", help="thư mục làm việc của phiên (với --plan-steps)")
     args = ap.parse_args(argv)
+    if args.plan_steps:
+        start = time.time()
+        context = score_plan(sys.stdin.read()[:20000], args.cwd, {}, start)
+        print(json.dumps({"context": context}, ensure_ascii=False))
+        return 0
     if args.eval:
         return evaluate(args.eval, args.min)
     if args.session is not None:

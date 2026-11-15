@@ -788,7 +788,8 @@ SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER INPUT", "[Subagent hand-back]")
 # Chỉ tính khi đứng đầu tin: người dùng nhắc tới thẻ này giữa câu vẫn là lời của họ. Gồm tin của phiên Claude khác
 # (SendMessage), tin app báo phiên phụ xong lượt và tin theo dõi CI (thấy khi chạy thật ngày 29–30/10/2026).
-AUTOMATED_PREFIXES = ("<agent-message", "<cross-session-message", "<side-sessions-event", "<ci-monitor-event")
+AUTOMATED_PREFIXES = ("<agent-message", "<cross-session-message", "<side-sessions-event", "<ci-monitor-event",
+                      "[Cross-session idle notice]")  # app báo phiên đã hẹn báo đang rảnh (thấy ngày 14/11/2026)
 # Phần app có thể đặt trước các thẻ trên: khối <system-reminder> và dòng "Another Claude session sent a message:".
 # Tin mở đầu của phiên do phiên khác tạo cũng có khối nhắc đứng trước, nhưng sau đó là việc được giao: vẫn là yêu cầu.
 AUTOMATED_LEAD_RE = re.compile(
@@ -1042,6 +1043,28 @@ def own_words(prompt) -> str:
     for pattern in _NOT_OWN_WORDS:
         text = pattern.sub(" ", text)
     return unicodedata.normalize("NFC", text)[-CONSENT_TEXT_MAX:]
+
+
+# Thẻ app chèn vào tin khi trình soạn đang mở file hay chọn đoạn code (thấy ngày 14/11/2026): không phải lời người dùng.
+IDE_TAG_RE = re.compile(r"<(ide_[a-z_]+)\b[^>]*>.*?</\1>", re.S | re.I)
+IDE_LONE_TAG_RE = re.compile(r"</?ide_[a-z_]+\b[^>]*>", re.I)  # thẻ không đóng: chỉ bỏ chính thẻ, giữ chữ sau nó
+# Như _NOT_OWN_WORDS nhưng chỉ bỏ khối đã đóng: router thà so thừa chữ còn hơn mất cả phần sau một dấu ``` lẻ.
+_ROUTE_NOT_OWN = (re.compile(r"<pasted_content\b[^>]*>.*?</pasted_content>", re.S | re.I),
+                  re.compile(r"```.*?```", re.S), re.compile(r"(?m)^[ \t]*>.*$"))
+
+
+def routable_text(prompt) -> str:
+    """Phần chữ router được so: bỏ khối <system-reminder> và dòng "Another Claude session…" đứng đầu, thẻ <ide_*>,
+    phần dán, khối code đã đóng và dòng trích. Không cắt độ dài (own_words giữ 2000 ký tự cuối cho việc đọc lời đồng
+    ý; router mà cắt thì mất yêu cầu nằm ở đầu tin dài, review GĐ5 15/11/2026). Chữ hệ thống chèn vào (tên phiên,
+    đường dẫn file đang mở) từng làm router khớp nhầm luật (nhật ký router 14–15/11/2026)."""
+    import unicodedata
+    if not isinstance(prompt, str):
+        return ""
+    text = IDE_LONE_TAG_RE.sub(" ", IDE_TAG_RE.sub(" ", prompt[AUTOMATED_LEAD_RE.match(prompt).end():]))
+    for pattern in _ROUTE_NOT_OWN:
+        text = pattern.sub(" ", text)
+    return unicodedata.normalize("NFC", text).strip()
 
 
 def _norm_path(path: str) -> str:

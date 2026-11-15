@@ -28,6 +28,17 @@ Thêm `--project <thư mục>` để tính hồ sơ project và `.agent/stack.js
 
 Router không bao giờ gợi ý dưới mức sàn của project. Câu khớp từ khóa riêng mà không khớp luật nào thì ra luật `project-keyword`.
 
+Router chỉ so chữ của người dùng: bỏ khối nhắc của hệ thống đứng đầu tin, thẻ `<ide_*>`, phần dán và khối code.
+
+### Lớp model (chỉ khi chấm bước kế hoạch)
+
+Khi lớp từ khóa không chắc (không khớp luật nào, hai luật đứng đầu bằng điểm mà khác mức, hay câu dài chỉ khớp một chữ), router có thể hỏi một model nhỏ qua `claude -p` (`plugin/lib/routemodel.py`). Model chỉ đọc câu, nhãn hồ sơ project và cụm bỏ qua đã duyệt có trong câu, rồi trả đúng một id luật. Mức, subagent, skill vẫn do luật quyết, và mức sàn của project vẫn áp sau cùng. Model không hạ được gợi ý của lớp từ khóa; nó chỉ được chọn luật không ở mức fable hay max.
+
+Cấu hình ở mục `model_layer` của `rules.json`. Số đo ngày 15/11/2026 ở `.agent/trang/router-model-gd5.html`, đo lại bằng `evals/router_model_eval.py`.
+- Đang bật cho đúng một lúc: sau khi người dùng duyệt kế hoạch phiên. Hook `plan_steps.py` chấm từng bước bằng Sonnet 5.5·low, một lần gọi cho cả nhóm, chờ tối đa 7 giây. Nó chỉ báo bước khai mức dưới sàn của project, hay bước bảo mật khai dưới gợi ý.
+- Tin nhắn và việc tiếp theo trong §0 không dùng lớp model. Lý do: độ trễ vượt 3 giây, và ở §0 model làm gợi ý tệ đi.
+- Tắt cho một phiên: `AGENT_STACK_ROUTER_MODEL=off`.
+
 ## Bước 2: điều chỉnh theo các nguyên tắc sau
 
 Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:

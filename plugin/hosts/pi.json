@@ -58,7 +58,7 @@
       "tool_map": {"write": "Write", "edit": "Edit"},
       "about": "Cầu nối (coding-agents 4447176, 13/11/2026) chỉ chạy khi công cụ không lỗi; edit của pi một chỗ sửa thành Edit, nhiều chỗ thành MultiEdit, details.patch thành tool_response.structuredPatch; additionalContext nối vào cuối kết quả công cụ. Chạy cả trong subagent. Dòng vi phạm archctl (project có .arch/system.arch) đi cùng đường này; bash của pi chưa qua hook này (cầu nối chỉ gửi công cụ có path), nên file ghi bằng lệnh shell trên pi chỉ được kiểm ở done-gate (archctl check --strict)",
       "no_pi_tool": {
-        "ExitPlanMode": "pi không có plan mode, nên không có sự kiện duyệt kế hoạch; plan_exit.py (kiểm kế hoạch phiên, ghi tiêu chí xong vào §0) không chạy trong pi. Khuôn kế hoạch phiên của session-keeper chạy như bước đầu bình thường và chờ người dùng trả lời (GĐ1, 14/11/2026)"
+        "ExitPlanMode": "pi không có plan mode, nên không có sự kiện duyệt kế hoạch; plan_exit.py (kiểm kế hoạch phiên, ghi tiêu chí xong vào §0) và plan_steps.py (GĐ5: router chấm model cho từng bước) không chạy trong pi. Khuôn kế hoạch phiên của session-keeper chạy như bước đầu bình thường và chờ người dùng trả lời (GĐ1, 14/11/2026)"
       },
       "payload": ["tool_name", "tool_input", "tool_response"]
     },

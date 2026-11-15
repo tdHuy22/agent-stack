@@ -1,0 +1,174 @@
+<title>Lớp model của router</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<!--
+  Khuôn của skill reader-page. Chép file này, thay mọi chữ "…" bằng nội dung thật, rồi chạy check_page.py.
+  Giữ các thuộc tính data-*: script kiểm dựa vào chúng. Đổi màu và chữ cho hợp chủ đề theo skill artifact-design.
+  Thứ tự: tóm tắt → nền tảng (bối cảnh, vấn đề, khái niệm, thuật ngữ) → ví dụ → phương án → ví dụ × phương án
+  → ràng buộc → pattern xấu → câu cần chốt → nguồn. Kế hoạch một hướng vẫn giữ đúng một thẻ phương án.
+  Trang không có đề xuất: bỏ từ "Các phương án" tới "Câu cần chốt" và khai loại trên <main>:
+  data-loai="giai-thich" (giải thích), "bao-cao" (báo cáo, kết quả đo, review; cần phần nguồn),
+  "cong-cu" (trang tương tác; cần nút data-xuat chép kết quả về chat).
+-->
+<style>
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<main data-loai="bao-cao">
+  <header>
+    <div class="eyebrow">agent-stack · 15/11/2026 · đã đo, đã chọn</div>
+    <h1>Router có nên hỏi thêm một model nhỏ khi luật từ khóa không chắc?</h1>
+  </header>
+  <section class="summary" data-phan="tom-tat" data-tu-quen="agent-stack, Haiku, Sonnet, Opus, Claude Code">
+    <h2>Tóm tắt</h2>
+    <p>Bộ chọn model của agent-stack gợi ý model và mức suy nghĩ cho mỗi việc bằng luật từ khóa. Ta thử cho nó hỏi thêm một model nhỏ (Haiku hay Sonnet) khi luật không chắc. Gọi model mất khoảng 3 giây mỗi lần, quá lâu để bắt bạn chờ ở mỗi tin nhắn. Trên câu thật, model chỉ giúp rõ ở một chỗ: chấm các bước của kế hoạch phiên vừa duyệt (từ −4% lên +77% điểm ròng với Sonnet). Ở việc tiếp theo trong file kế hoạch, model làm gợi ý tệ đi. Bạn đã chọn: chỉ bật model khi chấm bước kế hoạch, dùng Sonnet, chờ tối đa 7 giây.</p>
+  </section>
+  <section data-phan="nen-tang">
+    <h2>Từ gốc</h2>
+    <h3>Hệ thống đang làm gì</h3>
+    <p>Mỗi khi bạn gửi tin cho Claude Code, một đoạn mã nhỏ chạy trước (gọi là hook) đưa câu của bạn qua bộ chọn model. Bộ chọn so câu với khoảng 36 luật, mỗi luật có danh sách cụm từ khóa và mức gợi ý (ví dụ luật "sửa lỗi có dấu vết rõ" gợi ý Sonnet ở mức suy nghĩ cao). Cách này không tốn gì và chạy dưới 50 mili giây, nhưng hẹp: câu không chứa cụm nào thì bộ chọn im lặng.</p>
+    <h3>Vấn đề hôm nay</h3>
+    <p>Trong 21 tin bạn gửi từ ngày 14/11, có 14 tin không khớp luật nào. Câu dài kiểu "làm tiếp giai đoạn này, đo trước rồi quyết" thường rơi vào nhóm này, dù đó chính là việc cần gợi ý nhất. Kế hoạch ngày 13–14/11 (ý 5, câu 8) đề xuất thêm một lớp: khi luật không chắc, hỏi một model nhỏ, model chỉ đọc câu và cấu hình của project, không đọc cả project. Điều kiện bạn đặt: đo độ trễ trước, đo Haiku và Sonnet trên cùng bộ câu, dùng model rẻ nhất đạt, không model nào đạt thì bỏ.</p>
+    <h3>Cần biết trước</h3>
+    <ol class="ladder">
+      <li><b>Lớp từ khóa và lớp model</b>: lớp từ khóa là bộ luật sẵn có; lớp model là lần hỏi thêm model nhỏ. Model chỉ được chọn một luật trong danh sách, mức gợi ý vẫn do luật quyết, và model không được hạ mức mà luật đã gợi ý. Cần để hiểu: bảng kết quả.</li>
+      <li><b>Câu "không chắc"</b>: câu không khớp luật nào, hai luật đứng đầu bằng điểm mà khác mức, hay câu từ 25 chữ chỉ khớp một chữ. Chỉ những câu này mới được hỏi model. Ví dụ: trong 117 câu của bộ đo cũ, 108 câu có khớp đều là "chắc", nên không câu nào đổi kết quả. Cần để hiểu: vì sao bộ đo cũ không dùng được để so.</li>
+      <li><b>Điểm ròng</b>: mỗi câu được +1 nếu gợi ý đúng mức (hay im lặng khi không cần gợi ý), 0 nếu im lặng, −1 nếu gợi ý sai. Lấy tổng chia số câu. Gợi ý sai bị trừ vì nó kéo bạn đổi model không cần thiết. Ví dụ: 26 câu, 22 đúng, 2 im, 2 sai cho điểm ròng (22 − 2) / 26 = +77%. Cần để hiểu: mọi bảng dưới đây.</li>
+      <li><b>Ba lúc dùng</b>: mỗi tin nhắn; việc tiếp theo ghi trong file kế hoạch lúc mở phiên hay khi bạn gõ "làm tiếp"; các bước của kế hoạch phiên ngay sau khi bạn duyệt. Cần để hiểu: quyết định cuối.</li>
+    </ol>
+    <div data-phan="thuat-ngu">
+      <h3>Thuật ngữ</h3>
+      <dl class="glossary">
+        <dt>GĐ5</dt><dd>Giai đoạn 5 trong kế hoạch "agent-stack theo project": thêm lớp model vào bộ chọn model.</dd>
+        <dt>§0</dt><dd>Mục đầu của file kế hoạch (PLAN.md): đang ở đâu, việc tiếp theo.</dd>
+        <dt>p50, p90</dt><dd>Thời gian mà 50%, 90% số lần gọi xong trong đó. p90 là 3,3 giây nghĩa là 1 lần trong 10 lâu hơn 3,3 giây.</dd>
+        <dt>token</dt><dd>Đơn vị chữ model đọc và viết, khoảng 3–4 ký tự mỗi token.</dd>
+        <dt>low</dt><dd>Mức suy nghĩ thấp nhất của model, dùng cho lần chấm này.</dd>
+      </dl>
+    </div>
+  </section>
+  <section>
+    <h2>Độ trễ: gọi một lần mất bao lâu</h2>
+    <p>Mỗi lần gọi là một tiến trình <code>claude -p</code> riêng. Riêng việc khởi động chương trình đã tốn khoảng 1 giây; phần model trả lời từ 1,2 tới 2,8 giây. Hạn chờ đề xuất là 3,2 giây.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Cấu hình (10 lần gọi tuần tự)</th><th>p50</th><th>p90</th><th>Lâu nhất</th></tr></thead>
+      <tbody>
+        <tr><th>Haiku, prompt đầu</th><td>2,93 giây</td><td>3,74 giây</td><td>4,22 giây</td></tr>
+        <tr><th>Sonnet, prompt đầu</th><td>3,34 giây</td><td>5,60 giây</td><td>12,47 giây</td></tr>
+        <tr><th>Haiku, tắt suy nghĩ ẩn, sửa prompt</th><td>2,89 giây</td><td>3,30 giây</td><td>3,49 giây</td></tr>
+      </tbody>
+    </table></div>
+    <p>Mỗi lần gọi đọc khoảng 2,2 nghìn token, tức phiên con không nạp hướng dẫn hay skill của bạn. Phiên con cũng không chạy hook của agent-stack (0 dòng mở phiên mới trong nhật ký), nên không có vòng lặp gọi nhau. Cả hai model đều vượt hạn 3,2 giây ở p90, nên bạn chọn không bắt chờ ở mỗi tin.</p>
+  </section>
+  <section>
+    <h2>Độ chính xác: trên câu thật</h2>
+    <p>Bộ đo cũ 117 câu được viết cho khớp từ khóa (luật đạt 117/117), nên không so được. Bộ câu thật gồm 163 câu gom từ máy: 91 tin bạn đã gõ, 24 việc tiếp theo trong file kế hoạch của các project, 39 bước trong các kế hoạch phiên đã duyệt, cộng 9 câu "không gợi ý" của bộ cũ. Opus gắn nhãn mức cần thiết mà không thấy đầu ra của bộ chọn; một model khác không biết gì về phiên duyệt lại 48 câu quyết kết quả và sửa 3 nhãn. Chia 40% để chỉnh prompt, 60% để chấm; bảng dưới là phần chấm.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Tập (phần chấm)</th><th>Chỉ luật từ khóa</th><th>Thêm Sonnet</th><th>Thêm Haiku</th></tr></thead>
+      <tbody>
+        <tr><th>Bước kế hoạch, 26 câu, chờ tối đa 7 giây</th><td>−4%</td><td>+77% (22 câu đúng hơn, 1 câu sai hơn)</td><td>+8% (lô 25 bước mất 8,3 giây, quá hạn)</td></tr>
+        <tr><th>Việc tiếp theo trong file kế hoạch, 13 câu</th><td>+31%</td><td>+15%</td><td>0%</td></tr>
+        <tr><th>Tin nhắn, 52 câu, nếu chờ ở mỗi tin</th><td>+31%</td><td>+38%</td><td>+31%</td></tr>
+      </tbody>
+    </table></div>
+    <p>Không câu rủi ro cao nào bị gợi ý dưới mức cần ở bất kỳ cấu hình nào. Nếu bỏ hạn chờ, Haiku chấm bước kế hoạch được +51% trên cả 39 bước, Sonnet +64%: hai model gần ngang về độ đúng, khác nhau ở tốc độ khi chấm cả lô. Sonnet gợi ý cao hơn mức cần từ hai bậc ở 5 trên 26 bước; với việc chấm bước, hook chỉ báo khi bước khai dưới mức, nên phần lớn các ca này không gây nhắc nhầm.</p>
+  </section>
+  <section>
+    <h2>Ví dụ</h2>
+    <div class="examples">
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 1 · Ca thường gặp: bước kế hoạch viết bằng lời</h3>
+        <p>Bước "Gom bộ câu thật vào thư mục trạng thái, chia phần chỉnh và phần chấm" không chứa cụm từ khóa nào, nên luật im lặng (0 điểm). Sonnet xếp nó vào luật "tìm hiểu, tổng hợp" (Sonnet, mức vừa), khớp nhãn (+1). Đa số trong 22 câu đúng hơn là kiểu này.</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 2 · Ca biên: việc của người khác trong file kế hoạch</h3>
+        <p>Nhiều mục "việc tiếp theo" thật ra là việc bạn tự làm hay đang chờ người khác (tự thử tay bản dựng, người duyệt xem 22 cặp dữ liệu). Nhãn đúng là im lặng; luật im lặng (+1), model lại gán một luật (−1). Đây là lý do việc trong file kế hoạch tụt từ +31% xuống +15% với Sonnet, dù prompt đã dặn trả "none".</p>
+      </article>
+      <article class="example" data-vi-du>
+        <h3>Ví dụ 3 · Ca hỏng bắt được khi chạy thật: cả lô bị coi là một việc</h3>
+        <p>Chạy hook chấm bước trên kế hoạch thật của phiên này (9 bước không chắc), Sonnet trả đúng một chữ "architecture" thay vì 9 dòng, nên không đọc được bước nào. Đã sửa prompt lô ("phân loại TỪNG bước", "trả lời đúng 9 dòng"); chạy lại ra 9 dòng trong 3,8 giây. Kết quả hỏng giờ chỉ giữ 60 giây để lần sau hỏi lại.</p>
+      </article>
+    </div>
+  </section>
+  <section>
+    <h2>Quyết định</h2>
+    <p>Theo luật bạn đặt, Sonnet là model rẻ nhất đạt ngưỡng trên tập quyết định (hơn luật từ khóa ít nhất 10 điểm, 0 câu rủi ro cao bị hạ, 108 câu có khớp không đổi). Haiku với prompt mới chỉ vừa qua ngưỡng (+11,5 điểm) nhờ một lô kịp hạn; lô lớn của nó quá 7 giây nên bị bỏ. Ngày 15/11/2026 bạn chọn: chỉ bật lớp model khi chấm bước kế hoạch, Sonnet ở mức thấp, chờ tối đa 7 giây; tin nhắn và việc tiếp theo trong file kế hoạch không gọi model. Mã cho hai lúc kia vẫn có, tắt bằng cấu hình, để đo lại ở giai đoạn 7.</p>
+  </section>
+  <section data-phan="nguon">
+    <h2>Nguồn</h2>
+    <ul>
+      <li><code>python3 evals/router_model_eval.py report --split test --decide buoc</code> (bảng độ chính xác; <code>--mode khong-han</code> cho số bỏ hạn chờ; <code>--decide s0,buoc</code> cho thiết kế ba lúc).</li>
+      <li><code>state/router-eval/latency.jsonl</code>, <code>results-haiku.jsonl</code>, <code>results-sonnet.jsonl</code>, <code>labels.jsonl</code>, <code>review-out.jsonl</code> (chỉ trên máy, ngoài git: có câu của bạn).</li>
+      <li><code>evals/router_real_set.py</code> (gom bộ câu), <code>plugin/lib/routemodel.py</code> (lớp model), <code>plugin/skills/task-router/rules.json</code> mục <code>model_layer</code> (cấu hình đã chọn).</li>
+      <li>Kế hoạch: <code>.agent/trang/agent-stack-theo-project.html</code>, ý 5 và câu 8; §0 của <code>PLAN.md</code>.</li>
+    </ul>
+  </section>
+</main>

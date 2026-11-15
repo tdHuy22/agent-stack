@@ -44,6 +44,7 @@ plugin/evals/writing-rewrite/prompt.md
 plugin/hooks/cloud_update.py
 plugin/hooks/hooks.json
 plugin/hooks/plan_exit.py
+plugin/hooks/plan_steps.py
 plugin/hooks/post_edit.py
 plugin/hooks/pre_compact.py
 plugin/hooks/pretool_client.py
@@ -61,6 +62,7 @@ plugin/hosts/pi_host.py
 plugin/lib/agentstack.py
 plugin/lib/archgate.py
 plugin/lib/client_place.py
+plugin/lib/routemodel.py
 plugin/lib/stackcfg.py
 plugin/lib/testlock.py
 plugin/skills/aside-web/SKILL.md
