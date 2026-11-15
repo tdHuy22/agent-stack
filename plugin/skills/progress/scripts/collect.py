@@ -78,9 +78,14 @@ def router():
     try:
         sys.path.insert(0, str(HERE.parents[2] / "task-router" / "scripts"))
         import route  # noqa: E402
-        return route.suggest
     except ImportError:
         return None
+
+    def suggest(text, root=None):
+        # Cây tiến độ cũng không gợi ý dưới mức sàn của project (.agent/stack.json); xem thử, không ghi bản chụp.
+        stack = route.stack_lib().effective(root, route.protected_phrases(), write=False) if root else None
+        return route.suggest_for(text, None, stack) if stack else route.suggest(text)
+    return suggest
 
 
 # ---------------------------------------------------------------- tín hiệu
@@ -295,7 +300,8 @@ def rank(d: dict) -> list:
         item = {"tier": tier, "label": TIER_LABEL[tier], "text": text, "why": why}
         if suggest:
             try:
-                item["route"] = suggest(text.replace(STALE_HINT, ""))  # lời chỉ cách gỡ không phải việc cần định tuyến
+                # lời chỉ cách gỡ không phải việc cần định tuyến
+                item["route"] = suggest(text.replace(STALE_HINT, ""), d.get("root"))
             except Exception:  # noqa: BLE001
                 pass
         out.append(item)

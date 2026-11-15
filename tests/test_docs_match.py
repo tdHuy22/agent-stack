@@ -39,7 +39,9 @@ PATH_RE = re.compile(r"(?<![\w./~${}-])(?:" + re.escape(REPO_PREFIX) + r")?((?:"
 HELP_FLAG_RE = re.compile(r"(?<![\w-])(--?[A-Za-z][\w-]*)")
 # File agent-stack tạo trong mọi project (bàn giao, kế hoạch, trang, giọng văn): tài liệu nhắc chúng như quy ước của
 # project đang làm, không phải file của repo này.
-AGENT_CONVENTIONS = (".agent/HANDOFF.md", ".agent/PLAN.md", ".agent/.gitignore", ".agent/trang/", ".agent/giong-van/")
+# File quy ước trong từng project (không có trong chính agent-stack): stack.json là cấu hình project của GĐ4.
+AGENT_CONVENTIONS = (".agent/HANDOFF.md", ".agent/PLAN.md", ".agent/.gitignore", ".agent/trang/", ".agent/giong-van/",
+                     ".agent/stack.json")
 
 
 def code_spans(text: str, is_html: bool) -> list:

@@ -143,7 +143,8 @@ def done_gate_gate(root: Path, turn: dict, changed: list):
     # commit thì không bị ép chốt lại toàn bộ diff cũ.
     top = (A.git_out(root, "rev-parse", "--show-prefix") or "").strip()
     mine = set(changed) | {top + c for c in changed}
-    result = risk.assess(*risk.fresh_since_mark([c for c in changes if c["path"] in mine], A.done_gate_mark(root)))
+    result = risk.assess(*risk.fresh_since_mark([c for c in changes if c["path"] in mine], A.done_gate_mark(root)),
+                         project=risk.project_risk(root))
     return None if result["empty"] or result["level"] == "thap" else result
 
 

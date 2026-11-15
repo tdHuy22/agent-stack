@@ -201,6 +201,17 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         found = arch_named_by_interpreter(command, cwd) or arch_fed_to_shell(command, cwd)
         if found:
             return found
+    if any(n in command for n in STACK_SNAP_NAMES) or ("stack.py" in command and "approve" in command):
+        found = stack_named_by_interpreter(command)
+        if found:
+            return found
+    if "find" in command:
+        try:
+            found = stack_find_check(command, cwd)
+        except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
+            found = None
+        if found:
+            return found
     temp_vars = mktemp_vars(command)
     for argv in simple_commands(command):
         if Path(argv[0]).name in ("cd", "pushd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
@@ -272,6 +283,16 @@ def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""
         arch = None
     if arch:
         return arch
+    try:
+        stack = check_stack_argv(argv, cwd, session_id)
+    except Exception as exc:  # noqa: BLE001 (lỗi phần stack.json không được tắt các chốt chặn khác)
+        try:
+            lib().log_event("hook-error", {"hook": "pretool_guard.stack", "error": repr(exc)[:300]})
+        except Exception:  # noqa: BLE001
+            pass
+        stack = None
+    if stack:
+        return stack
     words = positional(args)
     if prog == "claude" and words[:2] in (["plugin", "install"], ["plugin", "i"]) and len(words) > 2:
         plugin = words[2]
@@ -904,6 +925,289 @@ def check_unlock(rest: list, where: Path, session_id: str):
                     "cho người dùng vì sao test cần đổi; họ trả lời như vậy thì chạy lại đúng lệnh này.")
 
 
+# Bản chụp cấu hình project đã duyệt (.agent/stack.json, GĐ4) nằm trong state/stack-approved/ (TM-119): chỉ
+# `stack.py approve` (qua lời duyệt của người dùng) hay hook (khi file chỉ siết) được ghi. Tên dưới đây trong lệnh trình
+# thông dịch thì chặn (dò theo tên, như sổ khóa test).
+STACK_SNAP_NAMES = ("stack-approved", "save_snapshot", "APPROVED_DIR", "snapshot_path")
+STACK_SNAP_REASON = ("agent-stack: `state/stack-approved/` là bản chụp cấu hình project người dùng đã duyệt; chỉ đổi qua "
+                     "`stack.py approve <mã mục>` sau khi người dùng duyệt đúng mục đó. Ghi, xóa hay dời nó (kể cả dời "
+                     "cả thư mục state/) là tự duyệt việc nới.")
+STACK_HIDDEN_REASON = ("agent-stack: `stack.py approve` chỉ chạy trực tiếp (`python3 …/stack.py approve <mã mục>`) để hook "
+                       "kiểm lời duyệt của người dùng; chạy qua xargs, find -exec, heredoc, chuỗi đưa vào shell hay "
+                       "`python -c` thì không kiểm được nên bị chặn.")
+STACK_REMOVERS = {"rm", "rmdir", "unlink", "shred", "trash"}
+STACK_VALUE_FLAGS = {"--project", "--item", "--remove"}
+FIND_LEAD_FLAGS = {"-H", "-L", "-P"}
+FIND_LEAD_VALUE_FLAGS = {"-D", "-O"}
+
+
+def removed_paths(argv: list, where: Path) -> list:
+    """Đường dẫn bị xóa hay dời đi (không tính đích): mọi tham số của rm, rmdir…; nguồn của mv; điểm bắt đầu của find
+    khi find có -delete hay -exec, -ok (bỏ qua -H, -L, -P, -D x, -O x đứng đầu). find chỉ đọc thì không tính."""
+    prog = Path(argv[0]).name
+    if prog in STACK_REMOVERS:
+        names = [a for a in argv[1:] if not a.startswith("-")]
+    elif prog == "mv":
+        names = positional(argv[1:], {"-t", "--target-directory", "-S", "--suffix"})
+        target_flag = any(a in ("-t", "--target-directory") or a.startswith("--target-directory=")
+                          or (a.startswith("-t") and len(a) > 2) for a in argv[1:])
+        names = names if target_flag else names[:-1]  # `mv -t dir a b`: mọi tham số vị trí là nguồn
+    elif prog == "find" and find_destructive(argv):
+        names = find_starts(argv)
+    else:
+        return []
+    return [p for p in (target_path(where, n) for n in names) if p is not None]
+
+
+FIND_READ_ONLY = {"cat", "wc", "ls", "stat", "grep", "head", "tail", "echo", "file", "du", "printf", "md5", "shasum",
+                  "sha256sum", "realpath", "readlink", "basename", "dirname", "test", "["}
+
+
+def find_starts(argv: list) -> list:
+    """Điểm bắt đầu của find (bỏ qua -H, -L, -P, -D x, -O x, -Dx, -O3 đứng đầu); không có thì `.`."""
+    i = 1
+    while i < len(argv) and (argv[i] in FIND_LEAD_FLAGS or argv[i] in FIND_LEAD_VALUE_FLAGS
+                             or re.fullmatch(r"-O\d+|-D\S+", argv[i])):
+        i += 2 if argv[i] in FIND_LEAD_VALUE_FLAGS else 1
+    names = []
+    while i < len(argv) and not argv[i].startswith(("-", "(", "!", ")")):
+        names.append(argv[i])
+        i += 1
+    return names or ["."]
+
+
+def find_destructive(argv: list) -> bool:
+    """find có -delete, hay -exec, -ok chạy lệnh không thuộc nhóm chỉ đọc (wc, ls, stat, grep…)."""
+    if "-delete" in argv:
+        return True
+    return any(sub and Path(sub[0]).name not in FIND_READ_ONLY for sub in launched_commands(argv))
+
+
+def find_argvs(command: str) -> list:
+    """argv của từng lệnh find trong chuỗi, tách bằng shlex trên chuỗi gốc: dấu ngoặc `\\(`, `'('` của find không
+    làm vỡ lệnh như ở simple_commands. Hết lệnh ở |, ||, &&, & hay ; nằm ngoài -exec."""
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return []
+    out, current, in_exec = [], None, False
+    for tok in tokens:
+        if current is None:
+            if Path(tok).name == "find":
+                current, in_exec = [tok], False
+            continue
+        if in_exec and tok in (";", "+"):
+            current.append(tok)
+            in_exec = False
+            continue
+        if not in_exec and (tok in ("|", "||", "&&", "&") or tok.endswith(";")):
+            if tok.endswith(";") and tok != ";":
+                current.append(tok[:-1])
+            out.append(current)
+            current = None
+            continue
+        current.append(tok)
+        if tok in FIND_ACTIONS:
+            in_exec = True
+    if current:
+        out.append(current)
+    return out
+
+
+def stack_find_check(command: str, cwd: str):
+    """Lượt riêng cho find (TM-119): xóa hay dời bản chụp đã duyệt, hay chạy stack.py hộ, kể cả khi lệnh có dấu ngoặc,
+    hay khi điểm bắt đầu là thư mục cha của state/ mà lệnh nhắc tới stack-approved hay state."""
+    where = Path(cwd or ".")
+    for argv in find_argvs(command):
+        if stack_hidden(argv):
+            return "deny", STACK_HIDDEN_REASON
+        if not find_destructive(argv):
+            continue
+        for full in removed_paths(argv, where):
+            if in_stack_snapshots(full, ancestors=True):
+                return "deny", STACK_SNAP_REASON
+            try:
+                above = full.resolve() in lib().state_dir().resolve().parents
+            except (OSError, RuntimeError, ValueError):
+                above = False
+            if above and any("stack-approved" in a or re.search(r"(^|/)state(/|$)", a) for a in argv[1:]):
+                return "deny", STACK_SNAP_REASON
+    return None
+
+
+def in_stack_snapshots(full: Path, ancestors: bool = False) -> bool:
+    """`full` nằm trong state/stack-approved/; `ancestors`: hay là chính thư mục state/ (`rm -r state`, `mv state x`).
+    Thư mục cao hơn (repo, home) để cổng lệnh không đảo ngược (`rm -r` ngoài thư mục tạm) hỏi người dùng."""
+    try:
+        state = lib().state_dir().resolve()
+        snap = (state / "stack-approved").resolve()
+        target = full.resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return target == snap or snap in target.parents or (ancestors and target == state)
+
+
+def stack_subcommand(argv: list):
+    """("approve", phần sau stack.py) khi argv chạy thẳng stack.py của skill project-setup (hay qua trình chạy như
+    python3, uv run) với lệnh con approve ở bất kỳ vị trí nào (cờ đặt trước vẫn tính); lệnh con khác thì (tên, phần
+    sau); (None, []) khi stack.py không phải lệnh được chạy."""
+    first = Path(argv[0]).name
+    if first in FILE_OPS or not (first == "stack.py" or RUNNER_RE.match(first)):
+        return None, []
+    at = next((i for i, a in enumerate(argv) if Path(a).name == "stack.py"), None)
+    if at is None:  # `python3 -m stack …` (chạy từ thư mục scripts, hay qua PYTHONPATH)
+        at = next((i + 1 for i, a in enumerate(argv[:-1]) if a == "-m" and STACK_MODULE_RE.match(argv[i + 1])), None)
+    if at is None:  # `python3 -mstack …`
+        at = next((i for i, a in enumerate(argv) if a.startswith("-m") and STACK_MODULE_RE.match(a[2:])), None)
+    if at is None:
+        return None, []
+    rest = argv[at + 1:]
+    words = positional(rest, STACK_VALUE_FLAGS)
+    if "approve" in words:
+        return "approve", rest
+    return (words[0] if words else ""), rest
+
+
+STACK_MODULE_RE = re.compile(r"^(?:[\w.]+\.)?stack$")
+STACK_IMPORT_RE = re.compile(r"\b(?:import|from)\s+(?:[\w.]+\.)?stack\b|__import__|importlib|import_module|runpy|"
+                             r"stack\.py")
+STACK_FAN_OUT = {"xargs", "parallel", "find"}  # lệnh con lấy tham số từ stdin hay từ file tìm được: không kiểm được
+STACK_PREFIXES = {"env", "nohup", "timeout", "sudo", "nice", "time", "watch", "exec", "command", "builtin",
+                  "caffeinate", "script", "stdbuf", "ionice"}
+XARGS_VALUE_FLAGS = {"-I", "-i", "-n", "-P", "-L", "-l", "-s", "-d", "-E", "-e", "-a", "-j", "--jobs"}
+FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir"}
+
+
+def launched_commands(argv: list) -> list:
+    """Các lệnh con mà argv sẽ chạy hộ: sau `-exec` của find, lệnh của xargs, parallel, và lệnh sau các tiền tố như
+    env, timeout, nohup. Rỗng khi argv không chạy hộ gì."""
+    prog = Path(argv[0]).name
+    out = []
+    if prog == "find":
+        for i, a in enumerate(argv):
+            if a in FIND_ACTIONS:
+                end = next((j for j in range(i + 1, len(argv)) if argv[j] in (";", "+", "\\;")), len(argv))
+                out.append(argv[i + 1:end])
+    elif prog in ("xargs", "parallel"):
+        i = 1
+        while i < len(argv) and argv[i].startswith("-"):
+            i += 2 if argv[i] in XARGS_VALUE_FLAGS else 1
+        out.append(argv[i:])
+    elif prog in STACK_PREFIXES:
+        i = 1
+        while i < len(argv) and (argv[i].startswith("-") or "=" in argv[i] or re.fullmatch(r"[\d.]+[smhd]?", argv[i])):
+            i += 1
+        out.append(argv[i:])
+    return [x for x in out if x]
+
+
+def stack_hidden(argv: list) -> bool:
+    """stack.py chạy hộ mà hook không kiểm được lời duyệt: qua xargs, parallel, find -exec (bất kể lệnh con, vì tham số
+    đến từ stdin hay từ file tìm được); `approve` sau tiền tố env, timeout…; hay trong mã chạy như code (`sh -c "…"`,
+    `python -c "…"` có stack.py, import stack, runpy). Đọc file (`grep approve …/stack.py`, `find … -name stack.py
+    -exec grep …`) thì không tính."""
+    prog = Path(argv[0]).name
+    if stack_subcommand(argv)[0] is not None:
+        return False
+    names_stack = any("stack.py" in a or STACK_MODULE_RE.match(a) for a in argv[1:])
+    for sub in launched_commands(argv):
+        kind = stack_subcommand(sub)[0]
+        if kind is not None and (prog in STACK_FAN_OUT or kind == "approve"):
+            return True
+        # `find … -name stack.py -exec python3 {} approve …`, `… | xargs -I{} python3 {} approve`: stack.py do find
+        # hay stdin đưa vào chỗ {}, không có tên trong lệnh con
+        runs_code = sub and (RUNNER_RE.match(Path(sub[0]).name) or Path(sub[0]).name in STACK_SHELLS)
+        if prog in STACK_FAN_OUT and names_stack and runs_code and (
+                any(x in ("{}", "%") for x in sub) or any("approve" in x for x in sub)):
+            return True
+        if sub and stack_hidden(sub):
+            return True
+    if not any("approve" in a for a in argv):
+        return False
+    as_code = prog in STACK_SHELLS or (bool(RUNNER_RE.match(prog) or prog in LOCK_WRITERS)
+                                       and any(a in ("-c", "-e", "--eval") for a in argv[1:]))
+    return as_code and any(STACK_IMPORT_RE.search(a) and Path(a).name != "stack.py" for a in argv[1:])
+
+
+STACK_SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish", "eval", "source", "."}
+
+
+def stack_piped_to_shell(command: str) -> bool:
+    """Chuỗi lệnh có `stack.py` và approve mà có một lệnh shell trần (không `-c`, không tham số: đọc lệnh từ stdin, như
+    `echo '… stack.py approve all' | sh`). Chữ nằm trong dấu nháy của commit message không tạo ra lệnh shell nào."""
+    if "stack.py" not in command or "approve" not in command:
+        return False
+    for a in simple_commands(command):
+        if not a:
+            continue
+        if Path(a[0]).name in SHELLS and not any(SHELL_C_RE.match(x) for x in a[1:]) and not positional(a[1:], set()):
+            return True
+        # xargs, parallel đưa chữ từ stdin vào shell hay trình thông dịch (`… | xargs -I{} sh -c {}`)
+        if Path(a[0]).name in ("xargs", "parallel") and any(
+                sub and (Path(sub[0]).name in STACK_SHELLS or RUNNER_RE.match(Path(sub[0]).name))
+                for sub in launched_commands(a)):
+            return True
+    return False
+
+
+def check_stack_argv(argv: list, cwd: str, session_id: str):
+    """`stack.py approve <mã mục>…` chỉ qua khi tin người dùng mở lượt này bảo duyệt đúng các mục đó (TM-119), một lần
+    mỗi tin; lệnh ghi, xóa, dời `state/stack-approved/` (hay thư mục chứa nó) thì chặn."""
+    where = Path(cwd or ".")
+    prog = Path(argv[0]).name
+    for full, _ in write_targets(argv, where):
+        if in_stack_snapshots(full, ancestors=prog in STACK_REMOVERS):
+            return "deny", STACK_SNAP_REASON
+    for full in removed_paths(argv, where):  # `rm -rf state`, `mv state x`, `find -L state -delete`
+        if in_stack_snapshots(full, ancestors=True):
+            return "deny", STACK_SNAP_REASON
+    if stack_hidden(argv):
+        return "deny", STACK_HIDDEN_REASON
+    sub, rest = stack_subcommand(argv)
+    if sub != "approve":
+        return None
+    words = positional(rest, STACK_VALUE_FLAGS)
+    words.remove("approve")
+    items = words
+    if not items:
+        return None
+    A = lib()
+    project = where
+    for i, arg in enumerate(rest[:-1]):
+        if arg == "--project":
+            project = target_path(where, rest[i + 1]) or where
+    key = f"{project} stack-approve {' '.join(sorted(items))}"
+    if session_id and A.turn_consent(session_id, key, "approve", tuple(items), use=True):
+        return None
+    example = f"duyệt hết {items[0][4:]}" if items[0].startswith("all:") else f"duyệt {items[0]}"
+    return "deny", (f"agent-stack: `stack.py approve {' '.join(items)}` là nới cấu hình project (.agent/stack.json), chỉ chạy "
+                    f"khi tin người dùng vừa gửi bảo duyệt đúng mục đó (ví dụ \"{example}\"). Dừng ở đây, "
+                    "đừng chạy lại trong lượt này: đưa người dùng mục đó kèm lý do và bằng chứng (`stack.py check`); họ "
+                    "trả lời như vậy thì chạy lại đúng lệnh này.")
+
+
+def stack_named_by_interpreter(command: str):
+    """Trình thông dịch hay trình soạn mà chuỗi lệnh nhắc tới bản chụp đã duyệt (python -c, heredoc…): chặn."""
+    try:
+        def interp(argv) -> bool:
+            name = Path(argv[0]).name if argv else ""
+            return bool(RUNNER_RE.match(name) or name in LOCK_WRITERS) and stack_subcommand(argv)[0] is None
+
+        named = any(interp(a) and any(n in x for x in a[1:] for n in STACK_SNAP_NAMES) for a in simple_commands(command))
+        for m in HEREDOC_RE.finditer(command):
+            head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+            if any(n in m.group(0) for n in STACK_SNAP_NAMES) and any(interp(a) for a in simple_commands(head)):
+                named = True
+            if ("stack.py" in m.group(0) or STACK_IMPORT_RE.search(m.group(0))) and "approve" in m.group(0) and any(  # heredoc đưa `stack.py approve` vào shell
+                    Path(a[0]).name in STACK_SHELLS or interp(a) for a in simple_commands(head) if a):
+                return "deny", STACK_HIDDEN_REASON
+        if stack_piped_to_shell(command):
+            return "deny", STACK_HIDDEN_REASON
+    except Exception:  # noqa: BLE001
+        return None
+    return ("deny", STACK_SNAP_REASON) if named else None
+
+
 def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
     """Lệnh đơn đụng sổ khóa hay test đã khóa (TM-102..104). `receipt.py unlock` qua cổng đồng ý của người dùng."""
     sub, rest = receipt_subcommand(argv)
@@ -1116,6 +1420,8 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
             return "deny", ARCH_FILE_REASON.format(rel=arch_rel(full, path))
     except Exception:  # noqa: BLE001
         pass
+    if in_stack_snapshots(full):
+        return "deny", STACK_SNAP_REASON
     locked = check_locked_write(tool, tool_input, full, session_id)
     if locked:
         return locked

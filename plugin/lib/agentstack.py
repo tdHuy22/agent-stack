@@ -1014,6 +1014,7 @@ CONSENT_VERBS = {  # việc → các cách gọi tên (một token, chữ thư�
     "rebase": {"rebase"},
     "rm": {"xóa", "xoá", "rm", "delete", "remove"},
     "unlock": {"unlock", "mở-khóa"},  # "mở khóa" được gộp thành một token trong text_consents
+    "approve": {"duyệt", "approve"},  # duyệt mục nới của .agent/stack.json (stack.py approve, TM-119)
 }
 _UNLOCK_TAIL = {"test", "tests", "file", "cho", "khóa"}  # "mở khóa test tests/test_x.py"
 _UNLOCK_RE = re.compile(r"\b(?:mở|gỡ|bỏ)\s+kh(?:óa|oá)\b")
@@ -1066,6 +1067,8 @@ def text_consents(text: str, verb: str, targets=()) -> bool:
     names = CONSENT_VERBS.get(verb)
     if not names or not isinstance(text, str):
         return False
+    if verb == "approve":
+        return _approve_consents(text, names, targets)
     paths = []
     for target in targets:
         if not isinstance(target, str) or re.search(r"[$`~*?\[]", target) or not _norm_path(target):
@@ -1100,6 +1103,69 @@ def text_consents(text: str, verb: str, targets=()) -> bool:
             continue  # ngoài việc rm, đích chỉ là tên được phép nêu (repo, nhánh), không bắt buộc
         return True
     return False
+
+
+_APPROVE_LEAD = {"tôi", "mình", "em", "anh", "đã", "xin", "vậy"}
+# Từ được đứng sau "duyệt" ngoài tên mục (đã bỏ dấu): tên loại mục, từ đệm. Từ khác (như "plan", "chạy") thì mệnh đề
+# không phải lời duyệt mục nới, để "duyệt plan rồi chạy test đi" không thành duyệt `ignore:test`.
+_APPROVE_TAIL = {"muc", "cac", "nay", "ca", "hai", "ba", "do", "nhe", "nha", "di", "luon", "giup", "gium", "cho", "va", "and",
+                 "item", "items", "ignore", "bo", "qua", "keyword", "tu", "khoa", "area", "vung", "floor", "san", "tool",
+                 "cong", "cu", "min_risk", "rui", "ro", "toi", "thieu", "noi", "lai", "ma", "hash"}
+# Phủ định hay loại trừ trong mệnh đề: không tính là lời duyệt ("duyệt mọi mục trừ ignore:schema").
+_APPROVE_NEG = {"khong", "dung", "chua", "tru", "nhung", "except", "not", "no", "but", "without", "ngoai", "never"}
+_APPROVE_ALL_RE = re.compile(r"(?<!\S)(het|tat ca|all)(?!\S)")
+_APPROVE_ID_RE = re.compile(r"^(keyword|ignore|area|floor|tool):\S+$")  # mã mục khác nêu cùng tin
+
+
+def _approve_consents(text: str, names: set, targets) -> bool:
+    """Tin có bảo duyệt đủ mọi mục `targets` (mã mục nới của stack.json, như `ignore:schema`, `keyword:ro nhan`,
+    `min_risk`, hay `all:<mã băm>`) không: mỗi mục được nêu (đủ mã, hay phần sau dấu hai chấm, bỏ dấu, trọn từ) sau tên
+    việc trong một mệnh đề không kết bằng ?, không có từ phủ định hay loại trừ, trước tên việc chỉ có từ đồng ý, sau
+    tên việc chỉ có tên mục và từ đệm. `all:<mã băm>`: tin phải có "hết" (tất cả, all) và đúng mã băm của danh sách
+    mục chờ mà `stack.py check` in ra, để mục thêm sau khi người dùng xem không lọt vào."""
+    import unicodedata
+    targets = [t for t in targets if isinstance(t, str) and t.strip()]
+    if not targets:
+        return False
+    text = unicodedata.normalize("NFC", text).lower()
+    named = set()
+    prev_ok = False  # mệnh đề trước là lời duyệt: "duyệt ignore:schema, keyword:ro nhan" (danh sách qua dấu phẩy)
+    for clause, end in re.findall(r"((?:[^.!?;,\n]|\.(?!\s|$))+)([.!?;,\n]?)", text):
+        ok, prev = False, prev_ok
+        prev_ok = False
+        if "?" in end:
+            continue
+        words = [w.strip(_CONSENT_STRIP) for w in clause.split()]
+        words = [w for w in words if w]
+        at = next((i for i, w in enumerate(words) if w in names), None)
+        if at is None and prev and words:
+            at = -1  # mệnh đề nối tiếp danh sách: mọi từ phải là mã mục hay từ đệm (kiểm ở dưới)
+        if at is None or any(w not in _CONSENT_LEAD and w not in _APPROVE_LEAD for w in words[:max(at, 0)]):
+            continue
+        tail_words = [fold(w) for w in words[at + 1:]]
+        if any(w in _APPROVE_NEG for w in (fold(x) for x in words)):
+            continue
+        tail = " ".join(tail_words)
+        found, hit_words = set(), set()
+        full_ids = any(_APPROVE_ID_RE.match(w) for w in tail_words)  # đã ghi mã đủ: chỉ nhận đúng mã, không tên ngắn
+        for t in targets:
+            key = fold(t.strip().lower())
+            if key.startswith("all:"):
+                if _APPROVE_ALL_RE.search(tail) and key[4:] and key[4:] in tail_words:
+                    found.add(t)
+                    hit_words |= {key[4:], "het", "all", "tat", "ca"}
+                continue
+            short = key.split(":", 1)[-1].strip()
+            for k in ((key,) if full_ids and ":" in key else (key, short)):
+                # so trọn từ (cách nhau khoảng trắng): ignore:research-level không nêu ignore:research
+                if k and re.search(r"(?<!\S)" + re.escape(k) + r"(?!\S)", tail):
+                    found.add(t)
+                    hit_words |= set(k.split()) | {key}
+        if all(w in _APPROVE_TAIL or w in hit_words or _APPROVE_ID_RE.match(w) for w in tail_words):  # từ lạ: không tính
+            named |= found
+            ok = True
+        prev_ok = ok
+    return all(t in named for t in targets)
 
 
 def turn_consent(session_id, use_key: str, verb: str, targets=(), use: bool = False, gate_key: str = "") -> bool:

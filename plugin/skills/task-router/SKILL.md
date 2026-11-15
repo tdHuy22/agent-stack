@@ -20,6 +20,14 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/route.py" "<mô tả việc>"
 
 Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py`.
 
+Thêm `--project <thư mục>` để tính hồ sơ project và `.agent/stack.json` của project đó. File này do skill `project-setup` sinh, gồm:
+- từ khóa riêng kèm mức;
+- từ khóa bỏ qua (chỉ có tác dụng khi người dùng đã duyệt);
+- vùng lõi;
+- mức sàn theo nhóm luật.
+
+Router không bao giờ gợi ý dưới mức sàn của project. Câu khớp từ khóa riêng mà không khớp luật nào thì ra luật `project-keyword`.
+
 ## Bước 2: điều chỉnh theo các nguyên tắc sau
 
 Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:

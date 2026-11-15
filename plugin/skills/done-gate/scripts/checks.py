@@ -1585,7 +1585,28 @@ def build_plan(ctx: Ctx) -> Plan:
         plan.missing.append((name, "lint", tool, f"agent-stack chưa có công cụ cho {name} ({len(files)} file đổi); "
                                                  "ghi lệnh kiểm vào Mốc kiểm tra của project"))
     plan_cross(ctx, plan)
+    plan_stack_tools(ctx, plan)
     return plan
+
+
+def stack_tools(root: Path) -> list:
+    """Tên công cụ kiểm project khai trong `.agent/stack.json` (GĐ4), sau khi gộp với bản chụp đã duyệt (bỏ công cụ là
+    nới, cần duyệt). Chỉ nhận tên có trong INSTALL, không bao giờ chạy lệnh lấy từ file (TM-120)."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+        import stackcfg  # noqa: E402
+        stack = stackcfg.effective(root, write=False)
+        return sorted(t for t in (stack["cfg"]["tools"] if stack else {}) if t in INSTALL)
+    except Exception:  # noqa: BLE001 (phần phụ)
+        return []
+
+
+def plan_stack_tools(ctx: Ctx, plan: Plan) -> None:
+    """Công cụ project khai là có sẵn mà máy không có: tính là thiếu (mã 2), không báo đạt."""
+    named = {m[2] for m in plan.missing}
+    for tool in stack_tools(ctx.root):
+        if tool not in named and not find_bin(tool, ctx.root):
+            plan.missing.append(("project", "stack.json", tool, INSTALL[tool]))
 
 
 def make_ctx(root: Path, base: str = "HEAD", offline: bool = False, all_files: bool = False):

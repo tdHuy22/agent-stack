@@ -205,11 +205,36 @@ def change_kind(c: dict) -> str:
     return kind(c["path"], bool(page))
 
 
+def project_risk(root):
+    """Phần rủi ro trong `.agent/stack.json` của project (GĐ4): {core: [thư mục lõi, tương đối với gốc git], min_risk},
+    lấy từ cấu hình đã gộp với bản chụp đã duyệt (nới chưa duyệt thì không có tác dụng). None khi không có hay lỗi."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+        import stackcfg  # noqa: E402
+        stack = stackcfg.effective(Path(root), write=False)
+        if not stack:
+            return None
+        top, _ = stackcfg.git_dir(Path(stack["base"]))
+        try:
+            prefix = Path(stack["base"]).resolve().relative_to(Path(top).resolve()).as_posix() if top else "."
+        except ValueError:
+            prefix = "."
+        core = sorted({(p if prefix == "." else f"{prefix}/{p}") for a in stack["cfg"]["areas"].values()
+                       for p in a["paths"]})
+        return {"core": core, "min_risk": stack["cfg"].get("min_risk")}
+    except Exception:  # noqa: BLE001 (phần phụ: lỗi ở đây không được làm mất cách chấm cũ)
+        return None
+
+
+LEVELS = ("thap", "vua", "cao")
+
+
 def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, limits=None,
-           writer_guessed=False) -> dict:
+           writer_guessed=False, project=None) -> dict:
     """Chấm điểm từ danh sách {path, added, deleted, text}. added là None với file nhị phân. File trong `reviewed`
     đã qua chốt việc, `text` chỉ còn dòng mới: bỏ luật theo đường dẫn cho chúng (hook Stop dùng).
-    writer, rereview, limits: để chọn reviewer (xem review_plan)."""
+    writer, rereview, limits: để chọn reviewer (xem review_plan). project: project_risk() của `.agent/stack.json`
+    (thư mục lõi lên mức cao, mức tối thiểu)."""
     result = {"level": "thap", "score": 0, "files": len(changes), "added": 0, "deleted": 0,
               "by_kind": dict.fromkeys(KIND_NAMES, 0), "reasons": [], "hotspots": [], "empty": not changes}
     if not changes:
@@ -244,6 +269,11 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
         paths = [c["path"] for c in changes if c["path"] not in reviewed and pattern.search(c["path"].lower())]
         if paths:
             hit(points, reason, paths)
+    core = (project or {}).get("core") or []
+    core_paths = [c["path"] for c in changes if c["path"] not in reviewed
+                  and any(c["path"] == p or c["path"].startswith(p + "/") for p in core)]
+    if core_paths:
+        hit(4, "đụng thư mục lõi của project (.agent/stack.json)", core_paths)
     secret_paths = [c["path"] for c in changes if any(r.search(c.get("text") or "") for r in SECRET_RULES)]
     if secret_paths:
         hit(4, "có thể lộ secret trong dòng thêm vào", secret_paths)
@@ -278,6 +308,10 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
     if crossed and level == "thap":
         level = "vua"
         reasons.append("đụng ranh giới tin cậy: " + ", ".join(name for name, _ in crossed))
+    floor = (project or {}).get("min_risk")
+    if floor in LEVELS and LEVELS.index(level) < LEVELS.index(floor):
+        level = floor
+        reasons.append("mức tối thiểu của project (.agent/stack.json)")
     result.update(boundaries=[{"kind": name, "paths": paths} for name, paths in crossed],
                   threat_model_updated=any(c["path"] == THREAT_MODEL_REL or c["path"].endswith("/" + THREAT_MODEL_REL)
                                            for c in changes))
@@ -717,7 +751,8 @@ def main(argv=None) -> int:
     guessed = bool(writer) and not args.writer
     try:
         changes = collect(args.root, args.base)
-        options = {"writer": writer, "rereview": args.new, "limits": limits, "writer_guessed": guessed}
+        options = {"writer": writer, "rereview": args.new, "limits": limits, "writer_guessed": guessed,
+                   "project": project_risk(args.root)}
         result = (assess(*fresh_since_mark(changes, previous_mark(args.root)), **options) if args.new
                   else assess(changes, **options))
     except NotARepo:

@@ -69,17 +69,24 @@ def rules() -> dict:
     return data
 
 
-def score(text: str):
+def score(text: str, mask=()):
     """Trả về (luật tốt nhất, các cụm khớp) hoặc (None, []).
 
     Luật có "refines": <id hoặc danh sách id> là bản nặng hơn của luật gốc (ví dụ review bảo mật phần mã hóa so với
     review bảo mật). Khi luật gốc thắng mà luật tinh chỉnh cũng khớp ít nhất một cụm, luật tinh chỉnh được chọn.
-    Luật có "only_refine": true không tự thắng được, chỉ áp qua luật gốc."""
-    folded = A.fold(text)
+    Luật có "only_refine": true không tự thắng được, chỉ áp qua luật gốc. `mask`: cụm (đã bỏ dấu) project đánh dấu bỏ
+    qua trong `.agent/stack.json`, che bằng khoảng trắng trước khi so. Luật nhóm protected (bảo mật) luôn chấm trên
+    chữ chưa che, để cụm bỏ qua chồng một phần lên cụm bảo mật ("code review" trong "secure code review") không che
+    được luật bảo mật."""
+    raw = folded = A.fold(text)
+    for phrase in mask:
+        folded = stack_lib().pattern(phrase).sub(" ", folded)
+    protected = set((rules().get("rule_groups") or {}).get("protected") or []) if mask else set()
     best, best_hits, best_score = None, [], 0
     found = {}
     for rule in rules()["rules"]:
-        hits = [phrase for phrase, pattern in rule["_patterns"] if pattern.search(folded)]
+        seen_text = raw if rule["id"] in protected else folded
+        hits = [phrase for phrase, pattern in rule["_patterns"] if pattern.search(seen_text)]
         # Cụm nhiều chữ đặc hiệu hơn, nên nặng ký hơn.
         total = sum(1 + phrase.count(" ") for phrase in hits)
         if hits:
@@ -99,8 +106,8 @@ def score(text: str):
     return best, best_hits
 
 
-def suggest(text: str):
-    rule, hits = score(text or "")
+def suggest(text: str, mask=()):
+    rule, hits = score(text or "", mask)
     if not rule:
         return None
     return {"rule": rule["id"], "model": rule.get("model"), "model_id": model_name(rule.get("model")),
@@ -108,9 +115,87 @@ def suggest(text: str):
             "agent": rule.get("agent"), "skills": rule.get("skills", []), "note": rule.get("note", ""), "matched": hits}
 
 
-def suggest_for(text: str, profile=None):
-    """Như suggest(), thêm skill theo loại project (mục rule_extras của rules.json, ví dụ webapp-testing khi viết test web)."""
-    hit = suggest(text)
+def stack_lib():
+    import stackcfg  # noqa: E402 (cùng thư mục lib với agentstack; chỉ nạp khi cần)
+    return stackcfg
+
+
+def protected_phrases() -> tuple:
+    """Cụm (đã bỏ dấu) của các luật nhóm protected: `ignore` của project không được che chúng."""
+    ids = set((rules().get("rule_groups") or {}).get("protected") or [])
+    return tuple(A.fold(p) for r in rules()["rules"] if r["id"] in ids for p in r["match"])
+
+
+def project_stack(root):
+    """Cấu hình `.agent/stack.json` đã gộp với bản chụp đã duyệt (stackcfg.effective), hay None khi project không có."""
+    if not root:
+        return None
+    return stack_lib().effective(Path(root), protected_phrases())
+
+
+def apply_stack(hit, text: str, stack):
+    """Nâng gợi ý lên mức sàn của project: từ khóa riêng và từ của vùng lõi khớp trong câu, mức sàn của nhóm luật.
+    Không bao giờ hạ. Câu không khớp luật nào mà khớp từ khóa hay vùng thì ra luật `project-keyword`. Chỉ đưa vào
+    gợi ý cụm đã khớp trong câu người dùng gõ, không đưa chữ khác của file (TM-117)."""
+    S = stack_lib()
+    cfg = stack["cfg"]
+    folded = A.fold(text or "")
+    sources, words = [], []
+    for key, kw in cfg["keywords"].items():
+        if S.contains(folded, key):
+            sources.append((kw["model"], kw["effort"]))
+            words.append(key)
+    for area in cfg["areas"].values():
+        for word in area["words"]:
+            if S.contains(folded, word):
+                sources.append((area["model"], area["effort"]))
+                words.append(word)
+    if hit:
+        groups = rules().get("rule_groups") or {}
+        for group, floor in cfg["floors"].items():
+            if hit["rule"] in (groups.get(group) or []):
+                sources.append((floor["model"], floor["effort"]))
+    if not sources:
+        return hit
+    floor = sources[0]
+    for level in sources[1:]:
+        floor = S.lvl_max(floor, level)
+    if hit is None:
+        return {"rule": "project-keyword", "model": floor[0], "model_id": model_name(floor[0]), "effort": floor[1],
+                "agent": None, "skills": [], "note": "", "matched": list(dict.fromkeys(words)), "raised": True,
+                "floor": list(floor)}
+    hit["matched"] = hit["matched"] + [w for w in dict.fromkeys(words) if w not in hit["matched"]]
+    hit["floor"] = list(floor)
+    raise_hit(hit)
+    return hit
+
+
+def raise_hit(hit) -> None:
+    """Nâng model, effort của `hit` lên `hit["floor"]` (tại chỗ). Dòng "test trượt thì …" bỏ khi mức dự phòng không còn
+    cao hơn mức sau khi nâng."""
+    S = stack_lib()
+    floor = hit.get("floor")
+    if not floor:
+        return
+    model, effort = S.raise_to(hit.get("model"), hit.get("effort"), tuple(floor))
+    if (model, effort) == (hit.get("model"), hit.get("effort")):
+        return
+    hit.update(model=model, model_id=model_name(model), effort=effort, raised=True)
+    base = next((r for r in rules()["rules"] if r["id"] == hit["rule"]), None)
+    if not hit.get("fallback") or base is None:
+        return
+    # Mức dự phòng ("test trượt thì …") cũng không dưới sàn; không còn cao hơn mức đã nâng thì bỏ.
+    b_model, b_effort = S.raise_to(base.get("model"), base.get("effort"), tuple(floor))
+    if b_model in S.MODEL_RANK and b_effort in S.EFFORT_RANK and S.at_least((model, effort), (b_model, b_effort)):
+        hit.pop("fallback")
+    else:
+        hit["fallback"] = f"{model_name(b_model)} · {b_effort}"
+
+
+def suggest_for(text: str, profile=None, stack=None):
+    """Như suggest(), thêm skill theo loại project (mục rule_extras của rules.json, ví dụ webapp-testing khi viết test web).
+    `stack`: cấu hình project (project_stack) để che từ khóa bỏ qua và nâng lên mức sàn; None thì như cũ."""
+    hit = suggest(text, tuple(stack["cfg"]["ignore"]) if stack else ())
     if hit and profile and "tests" in (profile.get("markers") or []):
         # Có test để kiểm thì dùng cấu hình rẻ hơn (mục with_tests của luật); test trượt thì lên bậc cũ.
         cheaper = next((r.get("with_tests") for r in rules()["rules"] if r["id"] == hit["rule"]), None)
@@ -126,6 +211,8 @@ def suggest_for(text: str, profile=None):
         status = available_skills()
         extras = [x for x in extras if status.get(x) != "khi cần"]  # skill chỉ cài khi cần thì không gợi ý
         hit["skills"] = list(dict.fromkeys(hit["skills"] + extras))
+    if stack:
+        hit = apply_stack(hit, text, stack)
     return hit
 
 
@@ -328,8 +415,8 @@ def plan_mode_skipped(task: str, hit) -> bool:
     cfg = rules().get("plan_mode") or {}
     if not (task or "").strip():
         return True
-    if hit and hit.get("rule") in (cfg.get("skip_rules") or []):
-        return True
+    if hit and hit.get("rule") in (cfg.get("skip_rules") or []) and not hit.get("raised"):
+        return True  # project nâng mức (.agent/stack.json) thì không coi là việc nhỏ
     return len(task.split()) < int(cfg.get("min_words", 6)) or is_progress_question(task)
 
 
@@ -356,12 +443,14 @@ def session_hint(root, permission_mode=None):
         return None
     labels, ready, pending, agents = profile_summary(profile, root)
     task = next_task(root)
-    hit = suggest_for(task, profile) if task else None
+    stack = project_stack(root)
+    hit = suggest_for(task, profile, stack) if task else None
     if hit:
         localize(hit, root)
     gaps = pyramid_gaps(root)
     plan = plan_mode_hint() if task and permission_mode != "plan" and not plan_mode_skipped(task, hit) else None
-    if not (labels or ready or hit or gaps or plan):
+    notes = stack_notes(root, profile, stack) if stack else None
+    if not (labels or ready or hit or gaps or plan or notes):
         return None
     ctx = [f"[agent-stack] Hồ sơ project `{root.name}`: {', '.join(labels) or 'chưa rõ loại'}."]
     if ready:
@@ -381,10 +470,14 @@ def session_hint(root, permission_mode=None):
         ctx.append(f"Việc tiếp theo trong §0 («{A.clip(task, 100)}») → {describe(hit)}.")
     if plan:
         ctx.append(plan["context"])
+    if notes:
+        ctx += notes[0]
     ctx.append("Dùng các gợi ý này để chọn skill cho từng việc, và cho dòng ➡️ ở cuối mỗi câu trả lời.")
     user = "🧭 " + ", ".join(labels[:3] or [root.name])
     if plan:  # đặt trước danh sách skill: dòng bị cắt ở 180 ký tự, gợi ý này không được mất
         user += " · " + plan["user"]
+    if notes and notes[1]:
+        user += " · " + " · ".join(notes[1])
     if ready:
         user += " · skill: " + ", ".join(ready[:3])
     if lsps:
@@ -394,6 +487,48 @@ def session_hint(root, permission_mode=None):
     if hit:
         user += " · việc tiếp theo → " + describe(hit)
     return {"context": " ".join(ctx), "user": A.clip(user, 180)}
+
+
+SETUP_CMD = "python3 ~/Documents/Claude/agent-stack/plugin/skills/project-setup/scripts/stack.py"
+
+
+def stack_notes(root: Path, profile: dict, stack: dict):
+    """([câu cho agent], [mẩu cho dòng 🧭]) về `.agent/stack.json`: mục sai dạng, mục nới chưa duyệt, hồ sơ đã đổi so với
+    lúc chạy project-setup, đề xuất từ nhật ký router. Chỉ số đếm và nhãn cố định, không chép chữ của file (TM-117)."""
+    S = stack_lib()
+    ctx, user = [], []
+    if stack.get("lost"):
+        ctx.append("[agent-stack] Bản chụp cấu hình đã duyệt của project này (state/stack-approved/) đã mất: router đang "
+                   "dùng `.agent/stack.json` hiện tại như lần đầu gặp (trừ từ khóa bỏ qua). Báo người dùng; mục nới "
+                   "đã duyệt trước đây cần duyệt lại.")
+        user.append("⚠ mất bản chụp stack.json")
+    if stack.get("first"):
+        cfg = stack["cfg"]
+        n = sum(len(cfg[k]) for k in ("keywords", "areas", "floors", "tools")) + bool(cfg.get("min_risk"))
+        ctx.append(f"[agent-stack] Lần đầu thấy `.agent/stack.json` của project này trên máy: {n} mục siết (từ khóa, vùng "
+                   "lõi, mức sàn, công cụ, mức rủi ro tối thiểu) có tác dụng ngay. Báo người dùng một dòng và đề nghị xem "
+                   f"bằng `{SETUP_CMD} check`, vì file đến từ repo.")
+        user.append(f"stack.json mới: {n} mục siết")
+    if stack["problems"]:
+        ctx.append(f"[agent-stack] `.agent/stack.json` có {len(stack['problems'])} mục sai dạng, router bỏ qua: xem bằng "
+                   f"`{SETUP_CMD} check`.")
+    if stack["pending"]:
+        n = len(stack["pending"])
+        ctx.append(f"[agent-stack] `.agent/stack.json` có {n} mục nới (hạ mức, bỏ mục, thêm từ khóa bỏ qua) chưa được "
+                   "người dùng duyệt trên máy này, nên router chưa dùng. Xem bằng `" + SETUP_CMD + " check`; người dùng "
+                   "duyệt bằng một tin \"duyệt <mã mục>\" thì chạy `stack.py approve <mã mục>` (skill project-setup).")
+        user.append(f"⏸ {n} mục nới chờ duyệt (stack.json)")
+    drift = S.fingerprint_drift(stack["cfg"].get("fingerprint"), S.fingerprint(profile, root))
+    if drift:
+        ctx.append("[agent-stack] Hồ sơ project đã đổi so với lúc chạy project-setup (" + ", ".join(drift) + "): đề xuất "
+                   "người dùng chạy lại phần đó của skill project-setup.")
+        user.append("hồ sơ đổi: " + ", ".join(drift))
+    learned = S.learn_count(root)
+    if learned:
+        ctx.append(f"[agent-stack] Nhật ký router có {learned} đề xuất sửa `.agent/stack.json` (cùng kiểu lệch từ 3 lần): "
+                   f"xem bằng `{SETUP_CMD} learn`, đưa người dùng duyệt từng mục.")
+        user.append(f"{learned} đề xuất cho stack.json")
+    return (ctx, user) if ctx else None
 
 
 def family(model) -> str:
@@ -495,7 +630,36 @@ def is_progress_question(prompt: str) -> bool:
             and bool(PROGRESS_RE.search(SAVE_PROGRESS_RE.sub(" ", text))))
 
 
+ROUTE_LOG = "route-log.jsonl"
+
+
+def log_route(seen: dict, data: dict) -> None:
+    """Một dòng nhật ký router mỗi tin (cả khi gợi ý bị ẩn vì đã nhắc), để `stack.py learn` so gợi ý với mức thật đã cần
+    (effort người dùng đổi ở tin sau, test trượt, review tìm ra lỗi). Chỉ ghi trên máy (state/); câu đã bỏ dấu, cắt
+    200 ký tự. Không bao giờ văng lỗi."""
+    try:
+        hit = seen.get("hit") or {}
+        root = seen.get("root")
+        A.log_event("route", {
+            "session": data.get("session_id", ""), "root": str(root) if root else "",
+            "key": stack_lib().repo_key(root) if root else "", "effort_now": (data.get("effort") or {}).get("level"),
+            "rule": hit.get("rule"), "model": hit.get("model"), "effort": hit.get("effort"),
+            "matched": hit.get("matched") or [], "raised": bool(hit.get("raised")), "fallback": bool(hit.get("fallback")),
+            "text": A.fold(A.redact_secrets(seen.get("text") or ""))[:200]}, ROUTE_LOG)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def hook_suggestion(prompt: str, data: dict):
+    seen = {}
+    try:
+        return _hook_suggestion(prompt, data, seen)
+    finally:
+        if seen:
+            log_route(seen, data)
+
+
+def _hook_suggestion(prompt: str, data: dict, seen: dict):
     prompt = (prompt or "").strip()
     if not prompt or prompt[0] in "/!#" or A.is_automated_prompt(prompt):
         return None  # lệnh, hay tin do hệ thống tạo (báo cáo subagent, thông báo nền): không phải việc cần định tuyến
@@ -505,9 +669,11 @@ def hook_suggestion(prompt: str, data: dict):
         task = next_task(root)
         if task:
             text, note = task, f", theo việc tiếp theo trong §0: «{A.clip(task, 80)}»"
+    seen.update(root=root, text=text)
     if not note and len(prompt.split()) < rules().get("min_words", 4):
         return None
-    hit = suggest_for(text, A.project_profile(root) if root else None)
+    hit = suggest_for(text, A.project_profile(root) if root else None, project_stack(root) if root else None)
+    seen["hit"] = hit
     if not hit:
         return None
     localize(hit, root)
@@ -528,6 +694,7 @@ def hook_suggestion(prompt: str, data: dict):
     if warm and advice and not advice["cheap"]:
         hit.update(model=warm["model"], model_id=model_name(warm["model"]), effort=warm["effort"],
                    note=warm.get("note") or hit["note"])
+        raise_hit(hit)  # cấu hình dự phòng cũng không được dưới mức sàn của project
         want_switch = needs_model_switch(hit["model"], now_model) and not own
         advice = switch_advice(hit["model"], usage) if want_switch else None
     if advice and advice["cheap"]:
@@ -568,7 +735,9 @@ def hook_suggestion(prompt: str, data: dict):
         parts_ctx.append(hit["note"])
     if not parts_user:
         return None  # model, effort đã khớp và không có skill/agent để gợi ý
-    if not A.once(f"route-{sid}-{hit['rule']}", 3600):
+    # Gợi ý đã nâng theo project mang mức trong khóa: lần nâng lên mức khác không bị lần nhắc trước của cùng luật che.
+    raised = f"-{hit['model']}-{hit['effort']}" if hit.get("raised") else ""
+    if not A.once(f"route-{sid}-{hit['rule']}{raised}", 3600):
         return None  # cùng một gợi ý không nhắc lại trong một giờ
     reason = ", ".join(f"'{m}'" for m in hit["matched"][:3])
     model_note = (f"model {model_effort(hit)}" + (f", test trượt thì {hit['fallback']}" if hit.get("fallback") else "")
@@ -620,7 +789,9 @@ def main(argv=None) -> int:
         return 0
     text = args.text or sys.stdin.read()
     root = A.project_root(Path(args.project).expanduser().resolve()) if args.project else None
-    hit = suggest_for(text, A.project_profile(root) if root else None)
+    # Lệnh xem thử: đọc stack.json nhưng không ghi bản chụp đã duyệt.
+    stack = stack_lib().effective(root, protected_phrases(), write=False) if root else None
+    hit = suggest_for(text, A.project_profile(root) if root else None, stack)
     print(json.dumps(localize(hit, root) if hit else hit, ensure_ascii=False, indent=2))
     return 0
 

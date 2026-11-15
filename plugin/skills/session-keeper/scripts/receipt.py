@@ -154,7 +154,7 @@ def assessed_level(root: Path, base: str) -> str:
     """Mức rủi ro của thay đổi so với `base` theo risk.py; không chấm được thì "vua" (khóa còn hơn bỏ sót)."""
     try:
         risk = risk_module()
-        return risk.assess(risk.collect(root, base))["level"]
+        return risk.assess(risk.collect(root, base), project=risk.project_risk(root))["level"]
     except Exception:  # noqa: BLE001
         return "vua"
 

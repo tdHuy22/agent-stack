@@ -909,5 +909,48 @@
         "vai cau"
       ]
     }
-  ]
+  ],
+  "rule_groups": {
+    "_note": "Nhóm luật cho .agent/stack.json của project (GĐ4): `floors` nâng sàn theo nhóm; nhóm protected không bao giờ bị `ignore` che (stackcfg.blocks_protected).",
+    "protected": [
+      "security-review",
+      "security-critical",
+      "security-audit",
+      "vet-third-party",
+      "feature-boundary"
+    ],
+    "debug": [
+      "debug-simple",
+      "debug-hard",
+      "debug-production",
+      "debug-stuck",
+      "tests"
+    ],
+    "feature": [
+      "feature",
+      "feature-boundary",
+      "refactor"
+    ],
+    "architecture": [
+      "architecture",
+      "architecture-critical"
+    ],
+    "review": [
+      "code-review",
+      "code-review-small",
+      "finish-gate"
+    ],
+    "code": [
+      "feature",
+      "feature-boundary",
+      "refactor",
+      "debug-simple",
+      "debug-hard",
+      "debug-production",
+      "debug-stuck",
+      "tests",
+      "architecture",
+      "architecture-critical"
+    ]
+  }
 }
