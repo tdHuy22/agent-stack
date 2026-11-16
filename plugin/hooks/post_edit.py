@@ -5,7 +5,8 @@ additionalContext, không có gì thì im lặng. Luôn thoát 0.
 1. Project có `.arch/system.arch`: chạy `archctl check <file>` (Bash: `--changed`), đưa dòng vi phạm về agent ngay
    lượt sửa file (`plugin/lib/archgate.py`). Hook mà `archctl init` sinh thoát mã 1 nên agent không thấy (tái hiện
    14/11/2026). Bash chỉ chạy khi cây làm việc đổi và chỉ báo khối chưa báo trong lượt; thiếu archctl thì nhắc một
-   lần mỗi phiên.
+   lần mỗi phiên. Project đã có hook `archctl check --hook` (bản `archctl init` mới) phủ công cụ vừa chạy thì bỏ phần mà
+   hook đó đã kiểm, để vi phạm không bị báo hai lần (`archgate.project_hook_covers`).
 2. Linter nhanh (ruff, shellcheck; thiếu thì kiểm cú pháp) trên đúng file vừa sửa: lỗi ở dòng vừa sửa (hay lỗi cú
    pháp ở bất kỳ đâu). Phần kiểm nằm ở `quick_lint` của skills/done-gate/scripts/checks.py (cùng bộ đọc output với
    done-gate bước 4).
@@ -177,11 +178,30 @@ def remember(turn: dict, sid: str, lines_by_root: list, fp) -> list:
     return fresh
 
 
+def settings_project():
+    """Thư mục mà app nạp `.claude/settings*.json` (`CLAUDE_PROJECT_DIR`), hay None khi không phải Claude Code: pi không
+    chạy hook trong file đó, nên không có hook archctl nào báo thay (TM-133)."""
+    return (os.environ.get("CLAUDE_PROJECT_DIR") or None) if A.host() == "claude-code" else None
+
+
+def small_file(path: Path) -> bool:
+    """File không quá MAX_BYTES: payload của Edit chứa cả file, trên 16 MiB thì hook của archctl bỏ qua."""
+    try:
+        return path.stat().st_size <= MAX_BYTES
+    except OSError:
+        return False
+
+
 def arch_note(data: dict, path, what: str) -> str:
     """Lời báo của archctl sau lần sửa file `path` (rỗng nếu project không có `.arch/system.arch` hay không có gì để
-    báo): kiểm đúng file đó và ghi lại khối đã báo trong lượt."""
+    báo): kiểm đúng file đó và ghi lại khối đã báo trong lượt. Hook của archctl chỉ tìm gốc từ file khi file nằm dưới
+    `cwd`, nên chỉ bỏ khi đúng vậy."""
     root = archgate.find_root(path.parent)
     if root is None or archgate.ARCH_DIR in [p.casefold() for p in path.parts]:
+        return ""
+    project = settings_project()
+    if project and Path(os.path.realpath(path)).is_relative_to(os.path.realpath(data.get("cwd") or os.getcwd())) \
+            and small_file(path) and archgate.project_hook_covers(project, data.get("tool_name") or "", root):
         return ""
     sid = data.get("session_id") or ""
     status, lines = archgate.check_paths(root, [path], ARCH_TIMEOUT)
@@ -216,6 +236,9 @@ def arch_note_bash(data: dict) -> str:
         r = archgate.find_root(f.parent)
         if r is not None and r not in roots:
             roots.append(r)
+    project = settings_project()
+    if here is not None and fp is not None and project and archgate.project_hook_covers(project, "Bash", here):
+        roots.remove(here)  # hook của archctl kiểm gốc của cwd (cần `git status` chạy được); gốc lồng khác thì không
     lines_all, by_root, status_all, complete = [], [], "ok", len(roots) <= 3
     for root in roots[:3]:
         status, lines = archgate.check_paths(root, [], ARCH_TIMEOUT / max(1, min(3, len(roots))))

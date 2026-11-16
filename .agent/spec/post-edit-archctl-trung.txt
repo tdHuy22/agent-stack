@@ -1,0 +1,8 @@
+# GĐ6 việc thật A: post_edit bỏ báo vi phạm kiến trúc trùng khi project đã có hook của `archctl init` · mức cao (hook chạy mọi phiên) · nháp từ phiên GĐ6, threat model TM-133..TM-135
+S1: Khi hook chạy dưới Claude Code và thư mục project của phiên (`CLAUDE_PROJECT_DIR`) có hook PostToolUse `archctl check --hook` (do `archctl init` sinh) trong `.claude/settings.json` hay `.claude/settings.local.json` với matcher phủ công cụ vừa chạy, thì post_edit không gọi archctl cho lần sửa đó (Edit, Write, MultiEdit với file nằm trong thư mục làm việc; Bash với gốc có luật của thư mục làm việc), để vi phạm không bị báo hai lần.
+S2: Khi project chỉ có hook kiểu cũ (`archctl check --changed`), hook gọi archctl bằng đường dẫn thay vì tên `archctl`, archctl đầu tiên trên PATH nằm trong project, hay không có hook archctl nào, thì post_edit vẫn gọi archctl và báo vi phạm như trước.
+S3: Khi hook archctl của project có matcher không phủ công cụ vừa chạy (ví dụ chỉ `Edit|Write` mà công cụ là Bash hay MultiEdit) thì post_edit vẫn báo cho công cụ đó.
+S4: Khi file settings của project hỏng, quá lớn, không phải file thường hay là symlink trỏ ra ngoài project thì post_edit coi như không có hook archctl, vẫn báo, và không văng lỗi.
+S5: Khi hook chạy dưới pi (`AGENT_STACK_HOST=pi`) hay không có `CLAUDE_PROJECT_DIR` thì post_edit vẫn báo như trước, vì hook trong `.claude/settings*.json` không chạy ở đó.
+S6: Khi file vừa sửa nằm ngoài thư mục làm việc (hook archctl không kiểm file đó), hay lệnh Bash đổi file thuộc một gốc có luật khác gốc của thư mục làm việc (monorepo), thì post_edit vẫn kiểm và báo phần đó.
+S7: Khi máy không có archctl mà project có hook như S1 thì post_edit vẫn nhắc thiếu archctl một lần mỗi phiên như trước.
