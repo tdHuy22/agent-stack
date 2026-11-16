@@ -2,6 +2,12 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 16/11/2026 22:43
+
+### Từ §0 của `PLAN.md`: Xong
+
+- **Xong (15/11/2026): GĐ5 lớp model của router** (kế hoạch phiên bạn duyệt 15/11; tiêu chí đạt 4/4, chưa push). (1) Đo trước: `claude -p` từ hook, p90 Haiku 5.5·low 3,3 giây (sau khi tắt suy nghĩ ẩn), Sonnet 5.5·low 5,3 giây, vượt hạn 3,2 giây; khởi động CLI khoảng 1 giây mỗi lần; phiên con không chạy hook (0 dòng SessionStart). (2) Bộ câu thật 163 câu trên máy (`state/router-eval/`, ngoài git), nhãn Opus không thấy đầu ra router, model khác duyệt độc lập 48 câu sửa 3; điểm ròng tập test: bước kế hoạch từ −4% lên +77% với Sonnet (Haiku +8% vì lô 25 bước 8,3 giây quá hạn 7 giây; bỏ hạn thì Haiku +51%, Sonnet +64% trên 39 bước), việc tiếp theo §0 tệ đi (+31% → +15%), tin nhắn nếu chờ +7,7 điểm (dưới ngưỡng); 0 câu rủi ro cao bị hạ; 108 câu có khớp của bộ 117 không đổi. (3) Bạn chọn: chỉ chấm bước kế hoạch, Sonnet 5.5·low, chờ ≤ 7 giây (`rules.json` `model_layer.moments: [buoc]`); tin nhắn và §0 có code nhưng tắt. Hook mới `plan_steps.py` (ExitPlanMode, gọi `route.py --plan-steps` bằng subprocess, ngoại lệ có chủ ý của luật import), `plugin/lib/routemodel.py` (worker tách phiên, cache, chặn lặp TM-123..127), router chỉ so chữ người dùng (`A.routable_text`), `turn_flags` đọc `stack.json`. Trang `.agent/trang/router-model-gd5.html`; đo lại `python3 evals/router_model_eval.py report`. Bằng chứng: tái hiện hook chấm bước trên kế hoạch thật (bắt lỗi Sonnet trả một id cho cả lô, đã sửa prompt lô), test mới 3 file (khóa mức cao), review kép opus·xhigh + sonnet·xhigh và differential-review (14 lỗi gộp, sửa hết) rồi sonnet·high xem lại (1 lỗi thấp, đã sửa). Đã gọi model 239/480 lần trần đã duyệt.
+
 ## Đợt 16/11/2026 (dời tay khi chốt GĐ6 phần máy, §0 dài 17K)
 
 ### Từ §0 của `PLAN.md`: lịch sử GĐ6 và hai mục Xong 15/11
