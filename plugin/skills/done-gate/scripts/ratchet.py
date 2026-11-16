@@ -2,7 +2,10 @@
 agent tự nhận. Siết (agent tự làm): thêm test, thêm hàm test hay thêm assert ở cuối hàm của test đã khóa (testlock.compare),
 khóa thêm, nâng ngưỡng. Nới (người dùng
 duyệt): sửa hay xóa test đã khóa, mở khóa không có bản ghi duyệt, sửa tay sổ khóa, hạ ngưỡng, sửa hay xóa dòng spec có
-sẵn, nới assert hay thêm skip. Spec và code đổi trong cùng một thay đổi thì đỏ.
+sẵn, nới assert hay thêm skip. Thêm dòng ở cuối spec là siết; với spec theo lát, dòng thêm chưa được duyệt thì đỏ ở
+mức cao, 🟡 (`pending`) ở mức khác (S8). Spec và code đổi trong cùng một thay đổi thì đỏ, trừ
+spec theo lát (`.agent/spec/<slug>.txt`, GĐ6) đã khóa và mọi dòng đã được người dùng duyệt (sổ duyệt của specbook; mức
+cao chỉ tính câu "duyệt spec", mức vừa tính cả duyệt kế hoạch).
 
 So file trên đĩa với sổ khóa (không phụ thuộc hook, TM-102) và sổ hiện tại với sổ ở base (TM-103).
 """
@@ -11,9 +14,11 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+import specbook as SB  # noqa: E402
 import testlock as TL  # noqa: E402
 
 SPEC_RE = re.compile(r"(^|/)\.agent/specs?/|(^|/)specs?/[^/]+\.(md|html|feature|ya?ml)$|(^|/)spec[^/]*\.(md|html)$|"
@@ -27,6 +32,12 @@ THRESHOLD_RE = re.compile(r"([A-Za-z_][\w.-]*)[\"']?\s*[:=]\s*[\"']?(\d+(?:\.\d+
 THRESHOLD_WORDS = {"threshold", "thresholds", "min", "max", "minimum", "maximum", "limit", "budget", "coverage", "under"}
 UPPER_WORDS = {"max", "maximum", "limit", "budget"}  # tăng các ngưỡng này là nới; còn lại giảm là nới
 COMMENT_RE = re.compile(r"^\s*(#|//|;|--(?!\w))")
+SLICE_SPEC_RE = re.compile(r"(^|/)\.agent/spec/[^/]+\.txt$")  # spec theo lát: có sổ duyệt từng dòng (GĐ6)
+PAGE_DIR_RE = re.compile(r"(^|/)\.agent/trang/")  # trang cho người đọc (kể cả trang duyệt spec) không phải spec
+
+
+def is_spec(path: str) -> bool:
+    return bool(SPEC_RE.search(path.lower())) and not PAGE_DIR_RE.search(path)
 
 
 def key_words(key: str) -> set:
@@ -100,14 +111,70 @@ def entry_matches_file(top: Path, rel: str, entry: dict) -> bool:
             and (entry.get("py") or {}).get("items") == (fresh.get("py") or {}).get("items"))
 
 
+def slice_spec_gaps(top: Path, path: str, book: dict, level, approved: dict) -> list:
+    """Lý do spec theo lát `path` chưa đủ để đổi cùng code (S7): chưa khóa hay bị nới, dòng sai mẫu, dòng chưa được
+    người dùng duyệt (mức cao chỉ tính câu "duyệt spec"). Rỗng khi đủ."""
+    entry = book["files"].get(path)
+    state = TL.status(top, path, entry) if entry else None
+    if state not in ("same", "added"):
+        return ["file spec chưa khóa (`receipt.py lock --red` cùng test viết trước)" if entry is None
+                else "file spec đã khóa nhưng bị sửa hay xóa"]
+    if state == "added":
+        return ["file spec có dòng thêm sau lần khóa: khóa lại (`receipt.py lock --red`) rồi người dùng duyệt"]
+    try:
+        parsed = SB.parse((top / path).read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return ["không đọc được file spec"]
+    gaps = [f"dòng {e['lineno']} sai mẫu" for e in parsed["errors"]]
+    need = {"duyet-spec"} if level == "cao" else set(SB.SOURCES)
+    missing = [x["id"] for x in parsed["lines"] if not (approved.get(SB.line_hash(x["id"], x["text"]), set()) & need)]
+    if missing:
+        how = "bằng câu \"duyệt spec <mã>\" (mức cao)" if level == "cao" else "(kế hoạch hay câu \"duyệt spec <mã>\")"
+        gaps.append(f"dòng chưa được người dùng duyệt {how}: {', '.join(missing[:8])}"
+                    + (f" và {len(missing) - 8} dòng khác" if len(missing) > 8 else ""))
+    if not parsed["lines"]:
+        gaps.append("file spec không có dòng nào")
+    return gaps
+
+
+def net_lines(c: dict) -> tuple:
+    """(dòng bị xóa, dòng thêm) không trống của file spec `c`, bỏ các cặp dòng git diff xóa rồi thêm lại y nguyên (gặp
+    khi dòng cuối ở base thiếu ký tự xuống dòng): cặp đó không phải sửa, cũng không phải thêm."""
+    removed = [ln.rstrip() for ln in (c.get("removed") or "").splitlines() if ln.strip()]
+    added = [ln.rstrip() for ln in (c.get("text") or "").splitlines() if ln.strip()]
+    same = Counter(removed) & Counter(added)
+
+    def drop(lines):
+        left, out = Counter(same), []
+        for ln in lines:
+            if left[ln] > 0:
+                left[ln] -= 1
+            else:
+                out.append(ln)
+        return out
+    return drop(removed), drop(added)
+
+
+def unapproved_appends(added: list, approved: dict, need: set) -> list:
+    """Dòng thêm vào spec theo lát mà chưa được duyệt bằng nguồn trong `need` (S8): id của dòng, và số dòng sai mẫu
+    (dòng sai mẫu không duyệt được)."""
+    parsed = SB.parse("\n".join(added))
+    out = [x["id"] for x in parsed["lines"] if not (approved.get(SB.line_hash(x["id"], x["text"]), set()) & need)]
+    if parsed["errors"]:
+        out.append(f"{len(parsed['errors'])} dòng sai mẫu (xem `spec.py check`)")
+    return out
+
+
 def base_book(top: Path, base: str | None) -> dict:
     text = git_text(top, "show", f"{base or 'HEAD'}:{TL.LOCK_REL}")
     return TL.parse(text) if text else TL.empty()
 
 
-def classify(root, changes: list, base: str | None = None, kind=None, weakening=None) -> dict:
-    """{"loosen", "approved", "tighten", "red", "verdict"}; verdict: "do" (có nới chưa duyệt hay spec + code cùng đổi),
-    "vang" (chỉ nới đã duyệt), "xanh" (chỉ siết), "" (không có gì để nói)."""
+def classify(root, changes: list, base: str | None = None, kind=None, weakening=None, level=None) -> dict:
+    """{"loosen", "approved", "tighten", "red", "pending", "verdict"}; verdict: "do" (có nới chưa duyệt, spec + code
+    cùng đổi, hay dòng spec chưa duyệt ở mức cao), "vang" (nới đã duyệt, hay dòng spec chưa duyệt ở mức khác), "xanh"
+    (chỉ siết), "" (không có gì để nói). `level`: mức risk.py chấm cho diff, để biết nguồn duyệt spec theo lát nào được
+    tính."""
     root = Path(root)
     top_text = git_text(root, "rev-parse", "--show-toplevel")
     top = Path(top_text.strip()) if top_text and top_text.strip() else root
@@ -164,7 +231,9 @@ def classify(root, changes: list, base: str | None = None, kind=None, weakening=
     locked = set(now["files"]) | set(before["files"])
     for c in changes:
         path = c["path"]
-        if kind(path) == "test" and path not in locked and (c.get("added") or 0) > 0 and not c.get("removed"):
+        # Spec theo lát nằm dưới `.agent/spec/` nên `kind` xếp là test; nó được xét riêng ở dưới (S8).
+        if (kind(path) == "test" and path not in locked and (c.get("added") or 0) > 0 and not c.get("removed")
+                and not SLICE_SPEC_RE.search(path)):
             tighten.append(f"thêm test {path}")
     if weakening:
         weakening(changes, lambda _pts, reason, paths: loosen.append(
@@ -174,29 +243,62 @@ def classify(root, changes: list, base: str | None = None, kind=None, weakening=
     loosen += loose
     tighten += tight
 
-    specs = [c for c in changes if SPEC_RE.search(c["path"].lower())]
+    specs = [c for c in changes if is_spec(c["path"])]
+    approved_lines = SB.approved(top) if any(SLICE_SPEC_RE.search(c["path"]) for c in specs) else {}
+    pending = []
+    net = {c["path"]: net_lines(c) for c in specs}
     for c in specs:
-        if (c.get("removed") or "").strip():
+        removed, added = net[c["path"]]
+        if removed:
             loosen.append(f"đổi spec {c['path']}: dòng có sẵn bị sửa hay xóa")
-    code = [c["path"] for c in changes if kind(c["path"]) == "code" and not SPEC_RE.search(c["path"].lower())
+        elif added:
+            # S8: dòng thêm ở cuối spec theo lát chỉ là siết khi đã duyệt; chưa duyệt thì đỏ ở mức cao (chỉ tính câu
+            # "duyệt spec"), 🟡 ở mức khác, kể cả khi diff không có code.
+            waiting = (unapproved_appends(added, approved_lines, {"duyet-spec"} if level == "cao" else set(SB.SOURCES))
+                       if SLICE_SPEC_RE.search(c["path"]) else [])
+            if not waiting:
+                tighten.append(f"thêm {len(added)} dòng vào cuối spec {c['path']}")
+                continue
+            more = f" và {len(waiting) - 8} dòng khác" if len(waiting) > 8 else ""
+            shown = f"{c['path']} ({', '.join(waiting[:8])}{more})"
+            if level == "cao":
+                red.append(f"thêm dòng spec chưa được người dùng duyệt bằng câu \"duyệt spec <mã>\" (mức cao): {shown}")
+            else:
+                pending.append(shown)
+    code = [c["path"] for c in changes if kind(c["path"]) == "code" and not is_spec(c["path"])
             and c["path"] != TL.LOCK_REL]
     if specs and code:
-        red.append(f"spec và code đổi trong cùng một thay đổi: {', '.join(c['path'] for c in specs[:3])} cùng "
-                   f"{', '.join(code[:3])}" + (f" và {len(code) - 3} file khác" if len(code) > 3 else ""))
+        unready = []
+        for c in specs:
+            path = c["path"]
+            if SLICE_SPEC_RE.search(path) and not net[path][0]:
+                gaps = slice_spec_gaps(top, path, now, level, approved_lines)
+                if gaps:
+                    unready.append(f"{path} ({'; '.join(gaps)})")
+            else:
+                unready.append(path)
+        if unready:
+            red.append(f"spec và code đổi trong cùng một thay đổi: {', '.join(unready[:3])} cùng "
+                       f"{', '.join(code[:3])}" + (f" và {len(code) - 3} file khác" if len(code) > 3 else ""))
 
-    verdict = "do" if loosen or red else "vang" if approved else "xanh" if tighten else ""
-    return {"loosen": loosen, "approved": approved, "tighten": tighten, "red": red, "verdict": verdict}
+    verdict = "do" if loosen or red else "vang" if approved or pending else "xanh" if tighten else ""
+    return {"loosen": loosen, "approved": approved, "tighten": tighten, "red": red, "pending": pending,
+            "verdict": verdict}
 
 
 def render(r: dict) -> list:
     if not r or not r.get("verdict"):
         return []
+    pending = r.get("pending") or []
     head = {"do": "🔴 có nới chưa được duyệt: đưa vào \"Cần bạn quyết\", đề xuất cho người dùng, không tự quyết",
-            "vang": "🟡 chỉ có nới đã được người dùng duyệt: nêu lại trong báo cáo",
+            "vang": ("🟡 có dòng spec chưa duyệt: nêu trong báo cáo, mời người dùng duyệt (trang `spec.py page` rồi "
+                     "\"duyệt spec <mã>\", hay mục `## Spec` của kế hoạch)" if pending else
+                     "🟡 chỉ có nới đã được người dùng duyệt: nêu lại trong báo cáo"),
             "xanh": "🟢 chỉ siết"}[r["verdict"]]
     lines = [f"Bánh cóc: {head}"]
     lines += [f"- 🔴 nới: {x}" for x in r["loosen"]]
     lines += [f"- 🔴 {x}" for x in r["red"]]
+    lines += [f"- 🟡 dòng spec chưa duyệt: {x}" for x in pending]
     lines += [f"- 🟡 nới đã duyệt: {x}" for x in r["approved"]]
     lines += [f"- 🟢 siết: {x}" for x in r["tighten"][:8]]
     if len(r["tighten"]) > 8:

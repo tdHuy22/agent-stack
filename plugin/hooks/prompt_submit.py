@@ -124,6 +124,35 @@ def main():
         if stale_ctx:
             context.append(stale_ctx)
             user.append(stale_user)
+        try:  # duyệt spec (GĐ6, S5, TM-128): chỉ lời của chính người dùng, mã khớp đúng một file spec
+            if (prompt.strip() and not A.is_automated_prompt(prompt) and not A.is_command_prompt(prompt)
+                    and not A.non_interactive(data)):
+                import specbook
+                said = specbook.approval_text(prompt)
+                results = specbook.approve_from_prompt(said, data.get("cwd"))
+                if not results and specbook.mentions_approval(prompt):
+                    context.append("[agent-stack] Tin có cụm \"duyệt spec <mã>\" nhưng hook chưa ghi bản duyệt: câu là "
+                                   "câu hỏi, có phủ định hay loại trừ (trừ, nhưng … Sn), nằm trong phần dán, khối code, "
+                                   "khối hệ thống hay brief của phiên khác. Đừng coi là đã duyệt; nhờ người dùng nhắn "
+                                   "lại đúng câu `duyệt spec <mã>` nếu họ muốn duyệt.")
+                for code, rec in results:
+                    if rec:
+                        context.append(f"[agent-stack] Đã ghi bản duyệt spec `{rec['path']}` ({len(rec['lines'])} "
+                                       f"dòng, mã {code}) theo lời người dùng; bánh cóc của done-gate tính các dòng "
+                                       "này là đã duyệt.")
+                        texts = rec.get("texts", [])
+                        shown = " | ".join(specbook.shown_line(sid, text) for sid, text in texts[:20])
+                        if len(texts) > 20:
+                            shown += f" | … và {len(texts) - 20} dòng nữa (xem {rec['path']})"
+                        user.append(f"📝 Đã ghi bản duyệt spec {rec['path']} ({len(rec['lines'])} dòng): {shown}"
+                                    " (sai dòng nào thì báo agent, đừng code tiếp)")
+                    else:
+                        context.append(f"[agent-stack] Người dùng nhắn duyệt spec {code} nhưng mã không khớp đúng một "
+                                       "file trong .agent/spec/ (sai mã, file đã sửa sau khi dựng trang, hay hai file "
+                                       "trùng nội dung): chưa ghi bản duyệt. Dựng lại trang (`spec.py page <slug>`) "
+                                       "và báo người dùng mã mới.")
+        except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)
+            A.log_event("hook-error", {"hook": "spec-approve", "error": repr(exc)[:300]})
         try:  # nơi người dùng gõ: chỉ đánh dấu, hook PreToolUse đọc khi tin đã vào transcript (xem client_place)
             client_place.mark_pending(data)
         except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)

@@ -1,8 +1,8 @@
 ---
 name: session-keeper
-description: Lưu và khôi phục trạng thái công việc, để không mất tiến độ khi hết hạn mức, crash, compact hoặc khi đổi sang phiên khác. Cập nhật mục §0 "Đang ở đâu, việc tiếp theo" trong PLAN.md, viết .agent/HANDOFF.md khi bàn giao, và chạy các bước kiểm tra sau khi bị ngắt. Dùng khi người dùng nói lưu tiến độ, dừng phiên, sắp hết limit, bàn giao, handoff, làm tiếp việc dở, resume, hoặc khi project chưa có file kế hoạch.
-when_to_use: lưu lại, checkpoint, save progress, hết hạn mức, usage limit, bàn giao phiên, mở lại phiên, tiếp tục từ hôm qua, tạo PLAN.md
-argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao | ke-hoach]"
+description: Lưu và khôi phục trạng thái công việc, để không mất tiến độ khi hết hạn mức, crash, compact hoặc khi đổi sang phiên khác. Cập nhật mục §0 "Đang ở đâu, việc tiếp theo" trong PLAN.md, viết .agent/HANDOFF.md khi bàn giao, và chạy các bước kiểm tra sau khi bị ngắt. Có khuôn kế hoạch phiên và bước spec theo lát cho việc từ mức vừa (spec "khi … thì …", test viết trước ở context mới rồi khóa). Dùng khi người dùng nói lưu tiến độ, dừng phiên, sắp hết limit, bàn giao, handoff, làm tiếp việc dở, resume, lập kế hoạch phiên, viết spec, hoặc khi project chưa có file kế hoạch.
+when_to_use: lưu lại, checkpoint, save progress, hết hạn mức, usage limit, bàn giao phiên, mở lại phiên, tiếp tục từ hôm qua, tạo PLAN.md, spec theo lát, viết spec, khi … thì …, test viết trước, khóa đỏ
+argument-hint: "[luu | tiep-tuc | ban-giao | khoi-tao | ke-hoach | spec]"
 ---
 
 # Giữ trạng thái công việc trên đĩa
@@ -58,8 +58,22 @@ Dùng khi phiên làm một việc cỡ vừa trở lên (một giai đoạn, m�
 4. `## Lệnh kiểm chứng`: các lệnh để trong khối mã, chạy qua `receipt.py run`.
 5. `## Ngoài phạm vi`: việc tách ra phiên khác hay để sau.
 6. `## Điểm dừng`: khi nào cập nhật §0, chạy done-gate, commit; chỗ nào phải hỏi người dùng.
+7. `## Spec` (việc từ mức vừa): các dòng `- Sn: Khi … thì …` của lát sắp làm (mục `spec` dưới). Duyệt kế hoạch là duyệt các dòng này: hook ghi chúng vào sổ duyệt, nguồn "kế hoạch".
 
 Kế hoạch đủ tiêu chí và lệnh kiểm thì viết ngay; thiếu hai mục đó thì hook nhắc ngay sau khi duyệt. Done-gate cuối phiên so kết quả với đúng các tiêu chí này.
+
+## `spec`: spec theo lát (việc từ mức vừa)
+
+Spec là vài câu nói phần mềm phải làm gì, dạng "khi … thì …", chỉ cho phần sắp làm (một lát), không cho cả hệ thống. Test viết từ spec trước khi có code, ở context mới, rồi bị khóa để người viết code không sửa được. Mức thấp (sửa chữ, tài liệu, thay đổi nhỏ) bỏ qua mục này. Script: `python3 "${CLAUDE_SKILL_DIR}/scripts/spec.py" check|page|status --project <thư mục>` (biến chưa được thay thì dùng `~/Documents/Claude/agent-stack/plugin/skills/session-keeper/scripts/spec.py`).
+
+1. **Viết spec** vào `.agent/spec/<slug>.txt` (slug kebab-case): 2–8 dòng `Sn: Khi|Nếu|Trong khi … thì …`, số thứ tự tăng dần, dòng `#` là chú thích. Mỗi dòng một hành vi người dùng thấy, kiểm được bằng test, kể cả nhánh bị từ chối. Chỉ ghi thêm ở cuối: sửa hay xóa dòng có sẵn là nới, phải người dùng duyệt.
+2. **Duyệt**: mức vừa thì đặt các dòng vào mục `## Spec` của kế hoạch phiên; người dùng duyệt kế hoạch là hook ghi bản duyệt, rồi chép nguyên chữ (cả số thứ tự) vào file spec. Mức cao, và pi (không có plan mode): sau khi viết file, chạy `spec.py page <slug>`, đưa trang `.agent/trang/<slug>-spec.html` cho người dùng (`SendUserFile`, `display: "render"`); họ dán "duyệt spec <mã>" vào chat thì hook `prompt_submit` ghi bản duyệt. Không tự ghi sổ duyệt (`state/spec-approvals.json`): hook chặn, và bánh cóc chỉ tính bản duyệt có dấu khớp từng dòng.
+3. **Test viết trước, ở context mới**: giao subagent `agent-stack:test-writer` với model theo dòng "Người viết test đề nghị" của `risk.py` (mức vừa: sonnet · medium; mức cao: khác họ người viết code, Opus viết thì sonnet · high, Fable, Sonnet hay Haiku viết thì opus · high). Prompt tự đủ: các dòng spec kèm slug, giao diện đã chốt (lệnh, hàm, đầu vào, đầu ra, mã thoát), file test được viết, lệnh chạy test. Mỗi test mang dấu `spec:<slug>#Sn`; test phải trượt vì tính năng chưa có, không vì lỗi trong chính test.
+4. **Khóa đỏ, trước khi viết code**: `python3 <receipt.py> lock --red --level <vua|cao> --tests <file test…> -- <lệnh test>`. Mã 1: test đạt ngay trên code hiện tại, chưa phải test viết trước; mã 3: đã có file code đổi so với base (file đổi từ lát trước thì nêu bằng `--allow <file>`, được ghi vào bằng chứng). File spec đổi trong lát được khóa cùng.
+5. **Viết code** cho test xanh, không sửa test (hook nhắc ở mức vừa, chặn ở mức cao). Thêm dòng spec hay thêm test là siết: dùng Edit hay Write (lệnh shell ghi vào file khóa luôn bị chặn), rồi khóa lại và xin duyệt lại dòng mới (dòng thêm chưa duyệt: bánh cóc 🔴 ở mức cao, 🟡 ở mức khác).
+6. **Xanh**: `python3 <receipt.py> run -- <lệnh test>` đạt và `spec.py check` thoát mã 0 (mỗi dòng có test mang dấu, test đó đã khóa).
+7. **Dọn sau khi xanh**: chạy skill `simplify` của Claude Code, dặn chỉ sửa file không phải test và không đổi hành vi; xong thì chạy lại lệnh test khóa và mốc kiểm tra qua `receipt.py run`. pi không có skill này: tự soát code vừa viết theo cùng các mục (dùng lại, gọn, hiệu quả), rồi chạy lại test.
+8. **Mức cao**: done-gate chạy `mutation.py` trên dòng vừa đổi (chỉ để báo, không chặn).
 
 ## Theo dõi việc chạy lâu
 

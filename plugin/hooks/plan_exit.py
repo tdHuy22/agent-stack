@@ -71,16 +71,30 @@ def clean(text: str, limit: int = MAX_ITEM) -> str:
     return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
-def criteria_items(body) -> list:
-    """Các mục đánh số hay gạch đầu dòng của mục tiêu chí, dòng thụt vào ngay sau được nối vào mục trước."""
-    items = []
+def indent(line: str) -> int:
+    return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip())
+
+
+HTML_COMMENT_RE = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
+
+
+def raw_criteria(body) -> list:
+    """Các mục đánh số hay gạch đầu dòng của mục tiêu chí, chưa cắt; dòng thụt vào sâu hơn mục đầu (kể cả ý con có
+    gạch đầu dòng, S11) được nối vào mục trước, không thành tiêu chí riêng."""
+    items, top = [], None
     for line in body or []:
         m = ITEM_RE.match(line)
-        if m:
+        if m and (top is None or indent(line) <= top):
+            top = indent(line) if top is None else top
             items.append(m.group(1))
         elif items and line.strip() and line[:1] in " \t":
-            items[-1] += " " + line.strip()
-    return [x for x in (clean(i) for i in items) if x][:MAX_ITEMS]
+            items[-1] += " " + (m.group(1) if m else line.strip())
+    return items[:MAX_ITEMS]
+
+
+def criteria_items(body) -> list:
+    """Tiêu chí đã làm sạch và cắt ở MAX_ITEM ký tự (raw_criteria)."""
+    return [x for x in (clean(i) for i in raw_criteria(body)) if x][:MAX_ITEMS]
 
 
 def has_command(body) -> bool:
@@ -192,6 +206,18 @@ def main():
         missing.append("mục `## Tiêu chí xong` (2–4 mục, mỗi mục một lệnh phải đạt hay một cặp đầu vào và đầu ra)")
     if not has_command(find_section(parts, "lenh kiem")):
         missing.append("mục `## Lệnh kiểm chứng` có lệnh (khối mã hay chữ trong dấu huyền)")
+    clipped = [n for n, raw in enumerate(raw_criteria(body), 1) if len(re.sub(r"\s+", " ", raw).strip()) > MAX_ITEM]
+    spec_rec = None
+    # Mục `## Spec` chỉ tính phần người dùng thấy lúc duyệt: bỏ chú thích HTML (F8); phiên không người (`claude -p`)
+    # thì không có ai duyệt, không ghi.
+    visible = HTML_COMMENT_RE.sub("", plan)
+    spec_body = next((b for name, b in sections(visible) if name.strip() == "spec"), None)
+    if spec_body is not None and not A.non_interactive(data):  # S6: duyệt kế hoạch có `## Spec` là duyệt các dòng đó
+        try:
+            import specbook
+            spec_rec = specbook.approve_plan(cwd, spec_body)
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "plan_exit.spec", "error": repr(exc)[:300]})
     root = A.project_root(cwd)
     status, where = "", ""
     if items:
@@ -215,6 +241,14 @@ def main():
         context = (f"[agent-stack] §0 của `{where}` đã có tiêu chí xong (của việc trước hay việc khác), hook không ghi đè tiêu "
                    "chí của kế hoạch vừa duyệt. Hỏi người dùng nên thay hay giữ; done-gate sẽ so kết quả với tiêu chí đang "
                    "ở §0.")
+    if wrote and clipped:  # S11: tiêu chí gộp ý con dài quá trần thì bị cắt; báo để chép tay phần còn lại
+        context += (f" Tiêu chí {', '.join(str(n) for n in clipped)} dài quá {MAX_ITEM} ký tự nên bị cắt khi ghi vào "
+                    "§0: chép tay phần bị cắt từ kế hoạch vào §0.")
+    if spec_rec:
+        context = (context + " " if context else "") + (
+            f"[agent-stack] Đã ghi {len(spec_rec['lines'])} dòng của mục `## Spec` vào sổ duyệt spec (nguồn: kế "
+            "hoạch). Chép đúng nguyên chữ từng dòng, cả số thứ tự, vào `.agent/spec/<slug>.txt` thì bánh cóc của "
+            "done-gate tính là đã duyệt ở mức vừa; mức cao còn cần trang `spec.py page` và câu \"duyệt spec <mã>\".")
     system = f"📝 Đã ghi tiêu chí xong vào §0 ({wrote})" if wrote else ""
     A.emit("PostToolUse", context, system)
 

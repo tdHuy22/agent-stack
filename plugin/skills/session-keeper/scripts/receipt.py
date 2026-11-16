@@ -24,6 +24,13 @@ Lệnh:
       Khóa test: chạy fails-before, mã 0 thì ghi sha256 và dấu từng dòng của mỗi file test vào `.agent/test-lock.json`
       của repo, kèm mức risk.py chấm (thấp: không khóa; --level chỉ nâng). Thêm dòng vào test khóa là siết (khóa lại
       được); sửa hay xóa là nới: hook nhắc (mức vừa) hay chặn (mức cao), done-gate báo đỏ.
+  receipt.py lock --red --level vua|cao [--project DIR] [--base REF] [--tests FILE...] [--spec FILE...]
+                  [--allow PATH...] [--label TÊN] [--timeout GIÂY] -- <lệnh test> [tham số...]
+      Khóa đỏ (GĐ6, test viết trước code): chạy lệnh một lần trên cây hiện tại; test phải trượt (đạt thì mã 1) và
+      chưa có file code nào đổi so với REF, kể cả file mới chưa track (có thì mã 3; `--allow` nêu file code đã đổi từ
+      lát trước, được ghi kèm mã băm). Khóa file test và file spec (`.agent/spec/` đổi, cộng `--spec`) kèm bằng chứng
+      `red`: loại trượt (assert hay thiếu), dòng trượt đầu, commit gốc. Không ghi biên nhận (lần chạy đỏ không phải
+      biên nhận trượt). Bằng chứng xanh sau khi có code: `receipt.py run -- <lệnh test>` đạt, sổ khóa không đổi.
   receipt.py locks [--project DIR]
       Liệt kê test đã khóa và file nào đã bị sửa.
   receipt.py unlock [--project DIR] --reason "<lời người dùng>" FILE...
@@ -202,7 +209,8 @@ def cmd_lock(root: Path, label: str, cmd: list, base: str, tests, links, timeout
             continue
         old = book["files"].get(rel) or {}
         keep = old.get("level") if LEVEL_ORDER.get(old.get("level"), -1) > LEVEL_ORDER[level] else level
-        book["files"][rel] = TL.entry_for(data, keep, cmd=cmd, base=result["base"], label=label)
+        extra = {"red": old["red"]} if old.get("red") else {}  # giữ bằng chứng viết trước của lần khóa đỏ
+        book["files"][rel] = TL.entry_for(data, keep, cmd=cmd, base=result["base"], label=label, **extra)
         locked.append(f"{rel} ({keep})")
     try:
         TL.save(top, book)
@@ -210,6 +218,139 @@ def cmd_lock(root: Path, label: str, cmd: list, base: str, tests, links, timeout
         print(f"[receipt] KHÔNG ghi được sổ khóa ({exc})")
         return 2
     print(f"[receipt] đã khóa {len(locked)} file test vào {TL.LOCK_REL}: {', '.join(locked)}. Commit sổ cùng thay đổi.")
+    return 0
+
+
+SPEC_DIR = ".agent/spec/"
+RED_LINE_RE = re.compile(r"AssertionError|^FAIL:|^--- FAIL:|^E\s+|panicked at|expect\(received\)|Error\b", re.M)
+
+
+def red_evidence(output: str):
+    """(loại trượt, dòng trượt đầu) của lần chạy đỏ: "thieu" khi chỉ thấy lỗi thiếu import, tên, lệnh hay fixture
+    (như fails_before.verdict), "assert" khi thấy trượt ở assert, "khac" khi không nhận ra (risk.py cảnh báo: có thể là
+    lỗi môi trường hay test cũ đang trượt, không phải test viết trước)."""
+    import fails_before as FB
+    lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+    if FB.SETUP_ERROR_RE.search(output) and not FB.ASSERT_FAIL_RE.search(output):
+        return "thieu", next((ln for ln in lines if FB.SETUP_ERROR_RE.search(ln)), lines[-1] if lines else "")
+    if not FB.ASSERT_FAIL_RE.search(output):
+        return "khac", next((ln for ln in lines if RED_LINE_RE.search(ln)), lines[-1] if lines else "")
+    hit = next((ln for ln in lines if re.search(r"AssertionError|panicked at|expect\(received\)|^E\s+", ln)), None)
+    return "assert", hit or next((ln for ln in lines if RED_LINE_RE.search(ln)), lines[-1] if lines else "")
+
+
+def repo_rel(root: Path, top: Path, name: str):
+    try:
+        return (root / name).resolve().relative_to(top.resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_lock_red(root: Path, label: str, cmd: list, base: str, tests, specs, allow, timeout: float, level) -> int:
+    """Khóa test viết trước code (S3, S4 của spec gd6-spec-theo-lat). Mã: 0 đã khóa; 1 test đạt trên cây hiện tại
+    (chưa phải test viết trước); 2 đầu vào sai hay lệnh không chạy được; 3 đã có code đổi, sổ hỏng hay test khóa bị
+    nới."""
+    import fails_before as FB
+    TL = testlock()
+    top = git_top(root)
+    if top is None:
+        print("[receipt] không khóa được: cần git repo")
+        return 2
+    if level not in ("vua", "cao"):
+        print("[receipt] lock --red cần --level vua|cao (lúc này diff chỉ có test nên risk.py sẽ chấm thấp)")
+        return 2
+    book = TL.load(top)
+    if book.get("broken"):
+        print(f"[receipt] không khóa: {TL.LOCK_REL} hỏng hay quá lớn, ghi đè sẽ mất các khóa cũ.")
+        return 3
+    loose = [rel for rel, entry in book["files"].items() if TL.status(top, rel, entry) in ("changed", "deleted")]
+    if loose:
+        print("[receipt] không khóa: file đã khóa bị sửa hay xóa (nới): " + ", ".join(loose[:5])
+              + ". Đề xuất cho người dùng duyệt rồi `receipt.py unlock`, hoặc trả file về như cũ.")
+        return 3
+    try:
+        sha = FB.git(top, "rev-parse", "--verify", "-q", base + "^{commit}").decode().strip()
+        current = FB.current_files(top)
+        changed, deleted = FB.diff(FB.base_entries(top, sha), current)
+    except FB.Problem as exc:
+        print(f"[receipt] không khóa được: {exc}")
+        return 2
+    risk = risk_module()
+    allowed = {}
+    for name in allow or []:
+        rel = repo_rel(root, top, name)
+        if rel is None or rel not in current:
+            print(f"[receipt] --allow {name}: không thấy file trong repo")
+            return 2
+        allowed[rel] = TL.digest(current[rel][1])
+    spec_rels = set()
+    risk = risk_module()
+    for name in specs or []:
+        rel = repo_rel(root, top, name)
+        if rel is None or rel not in current:
+            print(f"[receipt] --spec {name}: không thấy file trong repo")
+            return 2
+        if risk.kind(rel) == "code":  # file code không phải spec: nêu nó bằng --allow để được ghi vào bằng chứng
+            print(f"[receipt] --spec {name}: là file code, không phải spec; file code đổi từ lát trước thì nêu bằng "
+                  "--allow (được ghi mã băm vào bằng chứng)")
+            return 2
+        spec_rels.add(rel)
+    spec_rels |= {p for p in changed if p.startswith(SPEC_DIR)}
+    code = sorted(p for p in set(changed) | deleted
+                  if p not in allowed and p not in spec_rels and p != TL.LOCK_REL and risk.kind(p) == "code")
+    if code:
+        print("[receipt] không khóa đỏ: đã có file code đổi so với " + base + " (test phải viết trước code): "
+              + ", ".join(code[:8]) + (f" và {len(code) - 8} file khác" if len(code) > 8 else "")
+              + ". File đổi từ lát trước thì nêu bằng --allow <file> (được ghi vào bằng chứng).")
+        return 3
+    if tests:
+        picked = []
+        for name in tests:
+            rel = repo_rel(root, top, name)
+            if rel is None or rel not in current:
+                print(f"[receipt] --tests {name}: không thấy file trong repo")
+                return 2
+            picked.append(rel)
+    else:
+        picked = sorted(p for p in changed if risk.kind(p) == "test" and p not in spec_rels)
+    if not picked:
+        print(f"[receipt] không thấy file test nào đổi so với {base}; nêu bằng --tests <file>")
+        return 2
+    import fails_before as FB  # noqa: F811 (đọc rõ: run dùng chung với fails-before)
+    exit_code, output, seconds = FB.run(cmd, root, timeout)
+    if exit_code in FB.SETUP_CODES:
+        print(FB.tail(output))
+        print(f"[receipt] không khóa: lệnh {FB.SETUP_CODES[exit_code]} (mã {exit_code})")
+        return 2
+    if exit_code == 0:
+        print(FB.tail(output))
+        print("[receipt] không khóa đỏ: test đạt ngay trên code hiện tại, nên chưa phải test viết trước (test phải "
+              "trượt trước khi có code). Sửa test cho đúng spec.")
+        return 1
+    kind, line = red_evidence(output)
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    red = {"kind": kind, "line": A.clip(line, 300), "base": sha, "ts": now}
+    if allowed:
+        red["allowed"] = [{"path": p, "sha256": d} for p, d in sorted(allowed.items())]
+    locked = []
+    for rel in sorted(set(picked) | spec_rels):
+        if not TL.safe_rel(rel):
+            continue
+        old = book["files"].get(rel) or {}
+        keep = old.get("level") if LEVEL_ORDER.get(old.get("level"), -1) > LEVEL_ORDER[level] else level
+        book["files"][rel] = TL.entry_for(current[rel][1], keep, cmd=cmd, base=sha, label=label, red=red)
+        locked.append(f"{rel} ({keep})")
+    try:
+        TL.save(top, book)
+    except OSError as exc:
+        print(f"[receipt] KHÔNG ghi được sổ khóa ({exc})")
+        return 2
+    print(FB.tail(output))
+    what = {"assert": "trượt ở assert", "thieu": "trượt vì thiếu import, tên hay fixture (code chưa có)",
+            "khac": "trượt mà không nhận ra ở assert hay thiếu import (xem output: lỗi môi trường hay test cũ đang "
+                    "trượt thì không phải test viết trước)"}[kind]
+    print(f"[receipt] đã khóa đỏ (viết trước) {len(locked)} file vào {TL.LOCK_REL}: {', '.join(locked)} · {what} · "
+          f"{seconds:.1f} giây · không ghi biên nhận. Dòng trượt đầu: {A.clip(line, 160)}")
     return 0
 
 
@@ -226,7 +367,8 @@ def cmd_locks(root: Path) -> int:
              "deleted": "bị xóa (nới, cần duyệt)"}
     print(f"Test đã khóa ({TL.LOCK_REL}):")
     for rel, entry in sorted(book["files"].items()):
-        print(f"- {rel}: mức {entry['level']}, khóa {ago(entry.get('ts'))}, {names[TL.status(top, rel, entry)]}")
+        red = " (khóa đỏ: viết trước code)" if entry.get("red") else ""
+        print(f"- {rel}: mức {entry['level']}, khóa {ago(entry.get('ts'))}{red}, {names[TL.status(top, rel, entry)]}")
     return 0
 
 
@@ -459,20 +601,21 @@ def cmd_show(root: Path, as_json: bool) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Biên nhận kiểm tra gắn với nội dung code.")
+    # Không nhận cờ viết tắt (`--lab` thành `--label`): hook pretool_guard đọc lệnh bên trong theo tên cờ đầy đủ.
+    ap = argparse.ArgumentParser(description="Biên nhận kiểm tra gắn với nội dung code.", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    run = sub.add_parser("run", help="chạy lệnh kiểm tra và ghi biên nhận")
+    run = sub.add_parser("run", help="chạy lệnh kiểm tra và ghi biên nhận", allow_abbrev=False)
     run.add_argument("--project", default=".")
     run.add_argument("--label", help="tên lần kiểm tra (mặc định: chính câu lệnh)")
     run.add_argument("--timeout", type=float, default=1800)
     run.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh> [tham số...]")
-    show = sub.add_parser("show", help="xem các biên nhận đã ghi")
+    show = sub.add_parser("show", help="xem các biên nhận đã ghi", allow_abbrev=False)
     show.add_argument("--project", default=".")
     show.add_argument("--json", action="store_true")
-    forget = sub.add_parser("forget", help="xoá biên nhận theo tên")
+    forget = sub.add_parser("forget", help="xoá biên nhận theo tên", allow_abbrev=False)
     forget.add_argument("--project", default=".")
     forget.add_argument("labels", nargs="+", metavar="TÊN")
-    fb = sub.add_parser("fails-before", help="chứng minh test mới bắt được lỗi: trượt trước bản sửa, đạt sau")
+    fb = sub.add_parser("fails-before", help="chứng minh test mới bắt được lỗi: trượt trước bản sửa, đạt sau", allow_abbrev=False)
     fb.add_argument("--project", default=".")
     fb.add_argument("--base", default="HEAD", help="commit ngay trước bản sửa (mặc định HEAD, khi chưa commit)")
     fb.add_argument("--tests", nargs="+", metavar="FILE", help="file test (mặc định: file test đổi so với --base)")
@@ -481,22 +624,27 @@ def main(argv=None) -> int:
     fb.add_argument("--label", help="tên biên nhận (mặc định: fails-before + câu lệnh)")
     fb.add_argument("--timeout", type=float, default=1800, help="giới hạn mỗi phía, giây")
     fb.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh test> [tham số...]")
-    lock = sub.add_parser("lock", help="khóa test sau khi fails-before chứng minh trượt trên code cũ")
+    lock = sub.add_parser("lock", help="khóa test sau khi fails-before chứng minh trượt trên code cũ", allow_abbrev=False)
     lock.add_argument("--project", default=".")
     lock.add_argument("--base", default="HEAD", help="commit ngay trước bản sửa (mặc định HEAD, khi chưa commit)")
     lock.add_argument("--tests", nargs="+", metavar="FILE", help="file test (mặc định: file test đổi so với --base)")
     lock.add_argument("--link", action="append", metavar="PATH", help="như fails-before")
     lock.add_argument("--level", choices=("vua", "cao"), help="nâng mức khóa (không hạ dưới mức risk.py chấm)")
+    lock.add_argument("--red", action="store_true",
+                      help="khóa đỏ: test viết trước code, phải trượt trên cây hiện tại (cần --level)")
+    lock.add_argument("--spec", nargs="+", metavar="FILE", help="với --red: khóa thêm file spec này")
+    lock.add_argument("--allow", nargs="+", metavar="PATH",
+                      help="với --red: file code đã đổi từ lát trước, không chặn khóa, được ghi vào bằng chứng")
     lock.add_argument("--label", help="tên biên nhận (mặc định: lock + câu lệnh)")
     lock.add_argument("--timeout", type=float, default=1800, help="giới hạn mỗi phía, giây")
     lock.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh test> [tham số...]")
-    locks = sub.add_parser("locks", help="xem test đã khóa và file nào đã bị sửa")
+    locks = sub.add_parser("locks", help="xem test đã khóa và file nào đã bị sửa", allow_abbrev=False)
     locks.add_argument("--project", default=".")
-    unlock = sub.add_parser("unlock", help="bỏ khóa test (nới): chỉ khi người dùng đã duyệt")
+    unlock = sub.add_parser("unlock", help="bỏ khóa test (nới): chỉ khi người dùng đã duyệt", allow_abbrev=False)
     unlock.add_argument("--project", default=".")
     unlock.add_argument("--reason", required=True, help="lời duyệt của người dùng")
     unlock.add_argument("files", nargs="+", metavar="FILE")
-    prune = sub.add_parser("prune", help="xoá biên nhận trượt của test đã bị xoá khỏi project")
+    prune = sub.add_parser("prune", help="xoá biên nhận trượt của test đã bị xoá khỏi project", allow_abbrev=False)
     prune.add_argument("--project", default=".")
     prune.add_argument("--dry-run", action="store_true", help="chỉ in, không xoá")
     args = ap.parse_args(argv)
@@ -519,6 +667,11 @@ def main(argv=None) -> int:
         return cmd_fails_before(root, label, command, args.base, args.tests, args.link, args.timeout)
     if args.cmd == "lock":
         label = args.label or A.clip("lock: " + " ".join(command), 80)
+        if args.red:
+            return cmd_lock_red(root, label, command, args.base, args.tests, args.spec, args.allow, args.timeout,
+                                args.level)
+        if args.spec or args.allow:
+            ap.error("--spec và --allow chỉ dùng với --red")
         return cmd_lock(root, label, command, args.base, args.tests, args.link, args.timeout, args.level)
     return cmd_run(root, args.label or A.clip(" ".join(command), 80), command, args.timeout)
 

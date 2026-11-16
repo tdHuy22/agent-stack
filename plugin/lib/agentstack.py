@@ -1427,7 +1427,7 @@ def _done_gate_path(root: Path) -> Path:
 DONE_GATE_RUNS = 20  # số lần chấm gần nhất giữ lại (thời điểm, mức) để hook Stop biết mức cao nhất trong lượt
 
 
-def mark_done_gate(root, files=None, level=None, removed=None, asserts=None) -> None:
+def mark_done_gate(root, files=None, level=None, removed=None, asserts=None, shelf=None) -> None:
     """risk.py (bước 3 của done-gate) ghi lúc nó chạy cho project này: dấu băm các dòng thêm vào và dòng bị xóa lúc
     đó theo từng file, các dòng assert của file test (dấu băm, có chặt không), và mức rủi ro vừa chấm, để hook Stop
     biết lượt đã chốt việc chưa, ở mức nào, và ở lượt sau chỉ chấm phần mới."""
@@ -1437,8 +1437,8 @@ def mark_done_gate(root, files=None, level=None, removed=None, asserts=None) -> 
         path.parent.mkdir(mode=0o700, exist_ok=True)
         now = time.time()
         runs = [r for r in done_gate_mark(top).get("runs") or [] if isinstance(r, dict)]
-        if level:
-            runs.append({"ts": now, "level": level})
+        if level:  # level: mức phần vừa chấm (hook Stop đọc); shelf: mức bánh cóc đã dùng (risk.py --new, GĐ6)
+            runs.append({"ts": now, "level": level, **({"shelf": shelf} if shelf else {})})
         write_json_atomic(path, {"ts": now, "root": str(top), "files": files or {},
                                  "removed": removed or {}, "asserts": asserts or {},
                                  "runs": runs[-DONE_GATE_RUNS:]})

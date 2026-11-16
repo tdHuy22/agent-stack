@@ -204,6 +204,9 @@ def parse(text) -> dict:
             out["broken"] = True
             continue
         clean = {k: v for k, v in entry.items() if k in ("sha256", "lines", "level", "ts", "cmd", "base", "label")}
+        red = clean_red(entry.get("red"))
+        if red:
+            clean["red"] = red
         py = entry.get("py")
         if (isinstance(py, dict) and isinstance(py.get("v"), str) and isinstance(py.get("items"), list)
                 and all(_strs(x, 6) for x in py["items"])):
@@ -214,6 +217,24 @@ def parse(text) -> dict:
         if isinstance(a, dict) and safe_rel(a.get("path")) and all(
                 isinstance(a.get(k, ""), str) for k in ("sha256", "ts", "reason", "action", "level")):
             out["approvals"].append(a)
+    return out
+
+
+# Lần chạy đỏ trượt ở assert, vì thiếu import, tên, lệnh, fixture, hay không nhận ra (khac: risk.py cảnh báo).
+RED_KINDS = ("assert", "thieu", "khac")
+
+
+def clean_red(red):
+    """Bằng chứng khóa đỏ (`receipt.py lock --red`: test viết trước, trượt trên cây lúc khóa) đã ép kiểu; sai dạng thì
+    None (mục khóa vẫn giữ, chỉ mất bằng chứng viết trước)."""
+    if not (isinstance(red, dict) and red.get("kind") in RED_KINDS
+            and all(isinstance(red.get(k), str) for k in ("line", "base", "ts"))):
+        return None
+    out = {"kind": red["kind"], "line": red["line"][:300], "base": red["base"][:64], "ts": red["ts"][:40]}
+    allowed = red.get("allowed")
+    if isinstance(allowed, list):
+        out["allowed"] = [{"path": a["path"], "sha256": a["sha256"]} for a in allowed[:50]
+                          if isinstance(a, dict) and safe_rel(a.get("path")) and isinstance(a.get("sha256"), str)]
     return out
 
 

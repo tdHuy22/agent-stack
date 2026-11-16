@@ -61,7 +61,7 @@ PLUGIN_ARMS = (STACK, NOHOOKS, NOAGENTS)  # bản mà plugin phải được n�
 SUBAGENT_ARMS = (STACK, NOHOOKS)        # bản mà subagent riêng của agent-stack phải hiện ra
 # Các cặp so sánh: ba bản so với bản trơn, và hai phép bớt (bỏ hook, bỏ subagent) so với bản đủ.
 PAIRS = ((PLAIN, STACK), (PLAIN, NOHOOKS), (PLAIN, NOAGENTS), (NOHOOKS, STACK), (NOAGENTS, STACK))
-STACK_AGENTS = ("reviewer", "researcher", "test-runner", "explore-lite", "cold-reader")  # plugin/agents/*.md
+STACK_AGENTS = ("reviewer", "researcher", "test-runner", "explore-lite", "cold-reader", "test-writer")  # plugin/agents/*.md
 
 MODULE = "agent_stack_agents"
 HARBOR_VERSION = "0.25.0"   # ghim (TM-75); tuf.sh cài đúng bản này và kiểm sha256 của wheel

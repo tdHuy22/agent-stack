@@ -1099,6 +1099,17 @@
     "test:tests/test_guard.py::IrreversibleGuard.test_each_irreversible_command_is_stopped_once"
    ],
    "note": "Hook chặn git push lần đầu; chỉ qua khi người dùng nhắn đúng việc đó."
+  },
+  {
+   "id": "P30",
+   "file": "CLAUDE.md",
+   "anchor": "`mutation.py` (done-gate) chép repo vào thư mục tạm",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_mutation.py::WorkingCopy",
+    "test:tests/test_mutation.py::TimeCap"
+   ],
+   "note": "Test kiểm mutmut chạy trong bản chép dưới thư mục tạm của hệ điều hành, bản chép bị xóa khi xong và khi quá giờ, thư mục làm việc không đổi."
   }
  ]
 }

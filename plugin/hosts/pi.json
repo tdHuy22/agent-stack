@@ -82,7 +82,7 @@
     },
     "no_pi_tool": ["NotebookEdit", "MultiEdit"],
     "drop_fields": ["model", "effort", "maxTurns", "color", "disallowedTools"],
-    "use": ["explore-lite", "cold-reader", "researcher", "reviewer", "test-runner"],
+    "use": ["explore-lite", "cold-reader", "researcher", "reviewer", "test-runner", "test-writer"],
     "skip": {}
   },
   "skills": {

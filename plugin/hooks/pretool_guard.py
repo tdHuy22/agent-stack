@@ -197,6 +197,15 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         found = lock_named_by_interpreter(command, cwd)
         if found:
             return found
+    # Lọc trước trên chuỗi đã bỏ dấu nháy, gạch chéo như shell sẽ bỏ; casefold vì hệ thống file macOS không phân biệt
+    # hoa thường.
+    if "spec-appr" in re.sub(r"[\"'\\\\]", "", command).casefold() or "specbook" in command:
+        try:
+            found = spec_book_bash(command, cwd)
+        except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
+            found = None
+        if found:
+            return found
     if ".arch" in command.casefold() or "archctl" in command.casefold():
         found = arch_named_by_interpreter(command, cwd) or arch_fed_to_shell(command, cwd)
         if found:
@@ -713,9 +722,19 @@ FILE_OPS = {"cp", "mv", "rm", "ln", "install", "tee", "sed", "gsed", "perl", "ca
             "rsync", "git"}
 RECEIPT_SAFE = {"run", "show", "forget", "fails-before", "prune", "lock", "locks"}  # tự ghi sổ đúng cách hay chỉ đọc
 UNLOCK_CONSENTS = "unlock-consents.json"
+SPEC_BOOK = "spec-approvals"  # state/spec-approvals.json: sổ duyệt spec (GĐ6, TM-128), chỉ hook ghi
+SPEC_BOOK_REASON = ("agent-stack: `state/spec-approvals.json` là sổ duyệt spec. Chỉ hook ghi: prompt_submit khi chính "
+                    "người dùng nhắn \"duyệt spec <mã>\", plan_exit khi người dùng duyệt kế hoạch có mục `## Spec`. "
+                    "Agent ghi, sửa, dời hay xóa sổ là tự duyệt spec; cần duyệt thì dựng trang (`spec.py page`) và "
+                    "đưa mã cho người dùng.")
 RUNNER_RE = re.compile(r"^(python[\d.]*|uv|uvx|env|pipx|pyenv|poetry|pdm|hatch|rye)$")
 # Cờ của receipt.py nhận giá trị: lệnh bên trong là phần còn lại sau chúng (argparse REMAINDER, có hay không `--`).
-RECEIPT_VALUE_FLAGS = {"--project", "--label", "--timeout", "--base", "--link", "--tests", "--level", "--reason"}
+RECEIPT_VALUE_FLAGS = {"--project", "--label", "--timeout", "--base", "--link", "--tests", "--level", "--reason",
+                       "--spec", "--allow"}
+RECEIPT_MULTI_FLAGS = {"--tests", "--spec", "--allow"}  # nargs="+" của receipt.py: nuốt tới cờ kế tiếp
+# Tên sổ duyệt sau khi shell bỏ dấu nháy, gạch chéo (`spec-approval"s".json` thành `spec-approvals.json`), hay còn glob.
+SPEC_BOOK_TOKEN_RE = re.compile(r"spec-appr[^/\s]{0,8}\.json|spec-appr[^/\s]*[*?\[]", re.I)
+SPEC_WRITE_API_RE = re.compile(r"\b(approve_code|approve_plan|approve_from_prompt|add_record|book_path)\b")
 
 
 def testlock_lib():
@@ -741,9 +760,9 @@ def receipt_inner(rest: list) -> list:
     """Lệnh mà `receipt.py run|fails-before|lock` sẽ chạy: phần còn lại sau các cờ có giá trị, bỏ `--` đứng đầu."""
     i = 0
     while i < len(rest) and rest[i].startswith("-") and rest[i] != "--":
-        flag = rest[i].split("=", 1)[0]
-        i += 2 if flag in RECEIPT_VALUE_FLAGS and "=" not in rest[i] else 1
-        if flag == "--tests":  # nargs="+": nuốt tới cờ kế tiếp
+        flag, inline = rest[i].split("=", 1)[0], "=" in rest[i]
+        i += 2 if flag in RECEIPT_VALUE_FLAGS and not inline else 1
+        if flag in RECEIPT_MULTI_FLAGS and not inline:  # nargs="+": nuốt tới cờ kế tiếp (`--spec=x` chỉ một giá trị)
             while i < len(rest) and not rest[i].startswith("-"):
                 i += 1
     inner = rest[i:]
@@ -852,6 +871,50 @@ def locked_hit(full: Path, how: str, session_id: str, change: str = "changed"):
     turn["lock_nudged"] = nudged + [key]
     A.save_turn(session_id, turn)
     return "deny", msg
+
+
+def is_spec_book(full: Path) -> bool:
+    """`full` là sổ duyệt spec, kể cả qua symlink mang tên khác hay viết hoa khác (hệ thống file macOS không phân biệt
+    hoa thường, TM-128)."""
+    try:
+        book = lib().state_dir().resolve() / (SPEC_BOOK + ".json")
+        target = full.resolve()
+        if target == book or (target.exists() and book.exists() and os.path.samefile(target, book)):
+            return True
+        return target.name.casefold() == book.name and str(target.parent).casefold() == str(book.parent).casefold()
+    except (OSError, RuntimeError, ValueError):
+        return full.name.casefold() == SPEC_BOOK + ".json"
+
+
+def spec_book_bash(command: str, cwd: str):
+    """Chặn (S5, TM-128): ghi vào sổ duyệt spec qua chuyển hướng hay lệnh thao tác file; trình thông dịch, trình soạn
+    nêu tên sổ (kể cả tên che bằng dấu nháy, gạch chéo, glob); trình thông dịch gọi hàm ghi của specbook. Lệnh chỉ nhắc
+    tên (git commit -m, git grep, awk tìm chữ, pytest -k) hay chỉ đọc (cat, jq) thì cho qua."""
+    where = Path(cwd or ".")
+    writers = (FILE_OPS - {"cat", "git"}) | LOCK_WRITERS
+
+    def interp(name: str) -> bool:
+        return bool(RUNNER_RE.match(name) or name in LOCK_WRITERS)
+
+    for argv in simple_commands(command):
+        if not argv or Path(argv[0]).name == "git":
+            continue  # git không ghi được sổ ngoài repo; `git show … > sổ` vẫn bị bắt ở đích chuyển hướng bên dưới
+        name = Path(argv[0]).name
+        if (name in writers or interp(name)) and any(SPEC_BOOK_TOKEN_RE.search(a) for a in argv[1:]):
+            return "deny", SPEC_BOOK_REASON
+        if interp(name) and any("specbook" in a for a in argv[1:]) and any(SPEC_WRITE_API_RE.search(a)
+                                                                          for a in argv[1:]):
+            return "deny", SPEC_BOOK_REASON
+    for argv in simple_commands(command):
+        if argv and any(SPEC_BOOK_TOKEN_RE.search(text) or SPEC_BOOK in text for _, text in write_targets(argv, where)):
+            return "deny", SPEC_BOOK_REASON
+    for m in HEREDOC_RE.finditer(command):  # thân heredoc đưa vào trình thông dịch
+        head = command[command.rfind("\n", 0, m.start()) + 1:m.start()]
+        body = m.group(0)
+        risky = SPEC_BOOK_TOKEN_RE.search(body) or ("specbook" in body and SPEC_WRITE_API_RE.search(body))
+        if risky and any(a and interp(Path(a[0]).name) for a in simple_commands(head)):
+            return "deny", SPEC_BOOK_REASON
+    return None
 
 
 def lock_named_by_interpreter(command: str, cwd: str):
@@ -1422,6 +1485,8 @@ def check_write(tool_input: dict, cwd: str, session_id: str, tool: str = "Write"
         pass
     if in_stack_snapshots(full):
         return "deny", STACK_SNAP_REASON
+    if is_spec_book(full):
+        return "deny", SPEC_BOOK_REASON
     locked = check_locked_write(tool, tool_input, full, session_id)
     if locked:
         return locked

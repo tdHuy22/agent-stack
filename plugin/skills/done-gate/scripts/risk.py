@@ -389,6 +389,134 @@ def reviewers_for(level: str, side: str, security=False, crypto=False, rereview=
     return [("opus", "high"), ("sonnet", "high")] if side == "fable" else [("opus", "high")]
 
 
+def test_writer_for(level: str, side: str) -> str:
+    """Người viết test trước code (subagent test-writer, bước spec theo lát GĐ6) cho mức rủi ro và họ model người viết
+    code: mức vừa chỉ cần context mới; mức cao phải khác họ người viết (Opus viết thì Sonnet, còn lại Opus). Kiểm tự
+    động (khóa đỏ, mutation) nên dùng được model rẻ hơn ở mức vừa. Mức thấp: không cần."""
+    if level == "thap":
+        return ""
+    if level == "vua":
+        return "sonnet · medium, context mới (subagent test-writer)"
+    if side == "opus":
+        return "sonnet · high, khác họ người viết code (subagent test-writer)"
+    if side in WRITER_FAMILIES:
+        return "opus · high, khác họ người viết code (subagent test-writer)"
+    return ("khác họ người viết code: Opus viết thì sonnet · high, Fable, Sonnet hay Haiku viết thì opus · high "
+            "(subagent test-writer)")
+
+
+def spec_report(root, changes: list, level: str, side: str, base=None):
+    """Mục Spec (GĐ6, S12) cho diff mức vừa trở lên có đổi code: file spec theo lát trong diff (số dòng, dòng đã duyệt
+    theo nguồn, dòng chưa duyệt, số dòng có test khóa), các bản duyệt đang được tính (để người dùng nhận ra bản lạ),
+    test khóa đỏ (viết trước code) và cảnh báo về bằng chứng của chúng, spec có sẵn chưa duyệt khi diff không có spec,
+    người viết test đề nghị, cờ thiếu spec. Chỉ để báo: không đổi mức rủi ro hay kết luận bánh cóc. Không áp dụng thì
+    None."""
+    if level not in ("vua", "cao"):
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+    import specbook as SB
+    import testlock as TL
+    spec_re = re.compile(r"(^|/)\.agent/spec/[^/]+\.txt$")
+    code = [c for c in changes if change_kind(c) == "code" and c["path"] != TL.LOCK_REL
+            and not c["path"].startswith(".agent/")]
+    if not code:
+        return None
+    out = git(Path(root), "rev-parse", "--show-toplevel")
+    top = Path(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else Path(root)
+    book, approved = TL.load(top), SB.approved(top)
+    need = {"duyet-spec"} if level == "cao" else set(SB.SOURCES)
+
+    def describe(rel: str):
+        try:
+            parsed = SB.parse((top / rel).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            return None
+        hashes = {x["id"]: SB.line_hash(x["id"], x["text"]) for x in parsed["lines"]}
+        return parsed, hashes
+
+    files, counted = [], set()
+    for c in changes:
+        if not spec_re.search(c["path"]):
+            continue
+        got = describe(c["path"])
+        if got is None:
+            continue
+        parsed, hashes = got
+        counted |= set(hashes.values())
+        marks = SB.markers(top, Path(c["path"]).stem)
+        seen = {sid: approved.get(h, set()) for sid, h in hashes.items()}
+        files.append({"path": c["path"], "lines": len(parsed["lines"]), "errors": len(parsed["errors"]),
+                      "approved_user": sum(1 for x in seen.values() if "duyet-spec" in x),
+                      "approved_plan": sum(1 for x in seen.values() if "ke-hoach" in x),
+                      "unapproved": [sid for sid, x in seen.items() if not (x & need)],
+                      "tests_locked": sum(1 for x in parsed["lines"] if marks.get(x["id"])
+                                          and all(f in book["files"] for f in marks[x["id"]]))})
+    here = str(Path(top).resolve())
+    approvals = []
+    for r in SB.load_approvals():
+        try:
+            same = str(Path(str(r.get("top"))).resolve()) == here
+        except (OSError, RuntimeError, ValueError):
+            same = False
+        if same and counted & {h for h in r["lines"] if isinstance(h, str)}:
+            approvals.append({"ts": str(r.get("ts") or "?"), "source": r.get("source"),
+                              "path": r.get("path") or "(kế hoạch)"})
+    red_locked = sorted(c["path"] for c in changes if (book["files"].get(c["path"]) or {}).get("red")
+                        and not spec_re.search(c["path"]))
+    warnings = []
+    base_sha = git(Path(root), "rev-parse", "--verify", "-q", (base or "HEAD") + "^{commit}").stdout.strip()
+    for rel in red_locked:
+        red = book["files"][rel]["red"]
+        if base_sha and red.get("base") and red["base"] != base_sha:
+            warnings.append(f"{rel}: khóa đỏ trên commit {red['base'][:10]}, khác base {base_sha[:10]} của việc "
+                            "(code có thể đã commit trước khi khóa)")
+        if red.get("allowed"):
+            warnings.append(f"{rel}: khóa đỏ có file code đổi từ trước (--allow): "
+                            + ", ".join(a["path"] for a in red["allowed"][:5]))
+        if red.get("kind") == "khac":
+            warnings.append(f"{rel}: kind khác: không nhận ra test trượt ở đâu (lỗi môi trường hay test cũ đang trượt "
+                            "thì không phải test viết trước)")
+    elsewhere = []
+    if not files:
+        for path in SB.spec_files(top):
+            rel = path.relative_to(top).as_posix()
+            got = describe(rel)
+            if got is None:
+                continue
+            ids = [sid for sid, h in got[1].items() if not (approved.get(h, set()) & need)]
+            if ids:
+                elsewhere.append({"path": rel, "ids": ids})
+    return {"files": files, "red_locked": red_locked, "missing": not files and not red_locked,
+            "test_writer": test_writer_for(level, side), "approvals": approvals, "red_warnings": warnings,
+            "unapproved_elsewhere": elsewhere}
+
+
+def spec_lines(spec) -> list:
+    if not spec:
+        return []
+    lines = ["Spec:"]
+    for f in spec["files"]:
+        lines.append(f"- {f['path']}: {f['lines']} dòng, {f['approved_user']} duyệt bằng câu duyệt spec, "
+                     f"{f['approved_plan']} qua kế hoạch, {f['tests_locked']} có test khóa"
+                     + (f", {f['errors']} dòng sai mẫu" if f["errors"] else "")
+                     + (f"; chưa duyệt: {', '.join(f['unapproved'][:10])}" if f.get("unapproved") else ""))
+    for a in (spec.get("approvals") or [])[:8]:
+        lines.append(f"- bản duyệt được tính: {a['source']} lúc {a['ts']} ({a['path']}); bạn không duyệt lần này thì "
+                     "báo ngay")
+    if spec["red_locked"]:
+        lines.append("- Test khóa đỏ (viết trước code): " + ", ".join(spec["red_locked"][:8])
+                     + (f" và {len(spec['red_locked']) - 8} file khác" if len(spec["red_locked"]) > 8 else ""))
+    lines += [f"- cảnh báo: {w}" for w in (spec.get("red_warnings") or [])[:8]]
+    for e in (spec.get("unapproved_elsewhere") or [])[:5]:
+        lines.append(f"- spec có sẵn chưa duyệt: {e['path']} ({', '.join(e['ids'][:8])}); code của lát đó cần dòng "
+                     "đã duyệt")
+    if spec["missing"]:
+        lines.append("- thiếu spec: thay đổi mức vừa trở lên có đổi code mà diff không có file spec theo lát "
+                     "(`.agent/spec/<slug>.txt`) lẫn test khóa đỏ nào (skill session-keeper, mục spec); nêu trong báo cáo")
+    lines.append(f"- Người viết test đề nghị: {spec['test_writer']}")
+    return lines
+
+
 def window_pct(limits, window: str, now: float):
     """Phần trăm đã dùng của một cửa sổ hạn mức trong state/limits.json, hay None (không có, hay đã qua giờ reset:
     số cũ hơn lúc reset không còn đúng). Trước giờ reset, số cũ là cận dưới nên vẫn dùng được để so ngưỡng."""
@@ -657,6 +785,7 @@ def render(r: dict, base: str = "HEAD") -> str:
                                                 "; nếu chưa có mục cho việc này, chạy skill threat-model trước bước review")
                      + ", rồi đưa các mục cho reviewer kiểm từng chốt chặn.")
     lines += shelf
+    lines += spec_lines(r.get("spec"))
     lines.append(f"Review đề nghị: {r['review']}")
     if r.get("ask"):
         choices = r.get("choices") or ["chỉ một reviewer sonnet·high (rẻ hơn)"]
@@ -761,10 +890,23 @@ def main(argv=None) -> int:
     except GitError as exc:
         print(f"Không chấm được: {exc}. Kiểm lại --base hoặc trạng thái repo.")
         return 2
-    result["ratchet"] = ratchet_of(args.root, changes, args.base)
+    # `--new` chấm mức của riêng phần mới; bánh cóc và mục Spec xét cả diff nên không được dùng mức thấp hơn lần chấm
+    # trước của cùng việc (review GĐ6: sửa nhỏ rồi chạy --new làm luật "mức cao chỉ tính câu duyệt spec" yếu đi).
+    shelf = result["level"]
+    if args.new:
+        prev = previous_mark(args.root)
+        runs = prev.get("runs") if isinstance(prev.get("runs"), list) else []
+        earlier = [prev.get("level")] + [r.get("shelf") or r.get("level") for r in runs[-1:] if isinstance(r, dict)]
+        shelf = max([shelf] + [x for x in earlier if x in LEVELS], key=LEVELS.index)
+    result["ratchet"] = ratchet_of(args.root, changes, args.base, shelf)
+    try:
+        result["spec"] = spec_report(args.root, changes, shelf, writer_side(writer), args.base)
+    except Exception as exc:  # noqa: BLE001 (mục Spec chỉ để báo, lỗi không được làm hỏng việc chấm rủi ro)
+        result["spec"] = None
+        result["spec_error"] = repr(exc)[:200]
     # Diff rỗng (thường do quên --base sau khi commit) thì không ghi dấu: dấu rỗng sẽ làm hook Stop tưởng đã chốt việc.
-    if changes:
-        mark_ran(args.root, changes, result["level"])
+    if changes:  # mức phần vừa chấm cho hook Stop; mức bánh cóc riêng, để lần `--new` sau không tụt (review GĐ6)
+        mark_ran(args.root, changes, result["level"], shelf=shelf)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=1))
     else:
@@ -772,13 +914,13 @@ def main(argv=None) -> int:
     return 0
 
 
-def ratchet_of(root, changes, base=None) -> dict:
+def ratchet_of(root, changes, base=None, level=None) -> dict:
     """Bánh cóc trên cả diff (kể cả khi --new): siết hay nới, theo diff và sổ khóa test (ratchet.py). Lỗi bất ngờ thì
     nói rõ là chưa xét được, không làm hỏng việc chấm rủi ro."""
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import ratchet
-        return ratchet.classify(root, changes, base, kind=kind, weakening=weakening)
+        return ratchet.classify(root, changes, base, kind=kind, weakening=weakening, level=level)
     except Exception as exc:  # noqa: BLE001
         return {"verdict": "loi", "error": repr(exc)[:200], "loosen": [], "approved": [], "tighten": [], "red": []}
 
@@ -790,7 +932,7 @@ def line_hashes(text: str) -> list:
                    for line in text.splitlines() if line.strip()})
 
 
-def mark_ran(root, changes=(), level=None) -> None:
+def mark_ran(root, changes=(), level=None, shelf=None) -> None:
     """Ghi dấu "đã chốt việc" cho project, kèm mức vừa chấm và dấu băm các dòng thêm vào, dòng bị xóa và assert của
     file test lúc đó theo từng file, để hook Stop chỉ chấm phần mới ở lượt sau và biết lượt cần bằng chứng tới đâu.
     Thiếu thư viện agent-stack thì bỏ qua."""
@@ -804,7 +946,7 @@ def mark_ran(root, changes=(), level=None) -> None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
         import agentstack
         agentstack.mark_done_gate(
-            Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes}, level=level,
+            Path(root).resolve(), {c["path"]: line_hashes(c.get("text") or "") for c in changes}, level=level, shelf=shelf,
             removed={c["path"]: line_hashes(c["removed"]) for c in changes if c.get("removed")}, asserts=asserts)
     except Exception:  # noqa: BLE001
         pass

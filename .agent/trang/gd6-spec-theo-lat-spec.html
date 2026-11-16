@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duyệt spec</title>
+<style>
+:root { --bg:#f5f6f3; --panel:#fff; --fg:#1f2421; --muted:#5c665f; --line:#d8ddd6; --accent:#2f6a52;
+  --ok:#2f6a52; --ok-soft:#e1eee7; --warn:#8a5a12; --warn-soft:#f8edd8; --code-bg:#eceee9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#151916; --panel:#1d221f; --fg:#e3e8e4;
+  --muted:#9aa69e; --line:#313a34; --accent:#79c2a2; --ok:#79c2a2; --ok-soft:#203a2f; --warn:#e0b260;
+  --warn-soft:#3a2f1a; --code-bg:#111512; color-scheme:dark } }
+* { box-sizing:border-box }
+body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, "Segoe UI", sans-serif; margin:0;
+  padding:24px max(16px, env(safe-area-inset-left, 0px)) 64px }
+main { max-width:860px; margin:0 auto; display:grid; gap:28px }
+h1, h2 { margin:0; line-height:1.25 }
+code, pre { font-family:ui-monospace, Menlo, monospace; font-size:.92em; background:var(--code-bg); border-radius:4px;
+  padding:1px 5px; overflow-wrap:anywhere }
+pre { padding:10px; white-space:pre-wrap }
+ol.lines { list-style:none; padding:0; margin:0; display:grid; gap:12px }
+ol.lines li { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+  display:grid; gap:6px }
+ol.lines label { display:flex; gap:10px; align-items:flex-start; cursor:pointer }
+ol.lines input[type=checkbox] { margin-top:5px; width:18px; height:18px; flex:none }
+ol.lines label > code { flex:none; white-space:nowrap }
+samp.dong { font-family:inherit; font-size:1em; overflow-wrap:anywhere }
+.meta { color:var(--muted); font-size:.9em }
+.ok { color:var(--ok) } .warn { color:var(--warn) }
+textarea { width:100%; min-height:2.4em; font:inherit; border:1px solid var(--line); border-radius:6px; padding:6px;
+  background:var(--bg); color:var(--fg) }
+button { font:inherit; padding:10px 16px; border-radius:8px; border:0; background:var(--accent); color:var(--panel);
+  cursor:pointer }
+</style>
+</head>
+<body data-ma="1fa946c72564" data-slug="gd6-spec-theo-lat">
+<main data-loai="cong-cu">
+<header><h1>Duyệt spec <code>gd6-spec-theo-lat</code></h1>
+<p class="meta">File <code>.agent/spec/gd6-spec-theo-lat.txt</code> · mã băm <code>1fa946c72564</code> · 12 dòng</p></header>
+<section data-phan="tom-tat">
+<p>Mỗi dòng dưới đây nói phần mềm phải làm gì trong một tình huống, dạng "khi … thì …". Test được viết từ chính các
+dòng này trước khi có code, rồi bị khóa để người viết code không sửa được. Đọc từng dòng, đánh dấu dòng đúng, ghi góp
+ý cho dòng sai. Đủ hết thì bấm nút và dán câu <code>duyệt spec 1fa946c72564</code> vào chat; còn góp ý thì nút chép danh
+sách cần sửa.</p>
+</section>
+<section><h2>Các dòng</h2><ol class="lines">
+<li><label><input type="checkbox" data-id="S1"> <code>S1</code> <samp class="dong">Khi `spec.py check` gặp dòng không theo mẫu `Sn: Khi|Nếu|Trong khi … thì …`, hay số thứ tự trùng hoặc lùi, thì thoát mã 1 và nêu số dòng.</samp></label><div class="meta">Test: <code>tests/test_spec_cli.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S1" aria-label="Góp ý cho dòng S1" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S2"> <code>S2</code> <samp class="dong">Khi một dòng spec không có test nào mang dấu `spec:&lt;slug&gt;#Sn`, hay file test đó chưa khóa, thì `spec.py check` thoát mã 1.</samp></label><div class="meta">Test: <code>tests/test_spec_cli.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S2" aria-label="Góp ý cho dòng S2" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S3"> <code>S3</code> <samp class="dong">Khi `receipt.py lock --red` thấy test đạt trên code hiện tại, hay đã có file code đổi so với base, thì không khóa và thoát mã khác 0.</samp></label><div class="meta">Test: <code>tests/test_lock_red.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S3" aria-label="Góp ý cho dòng S3" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S4"> <code>S4</code> <samp class="dong">Khi `lock --red` thành công thì file test và file spec vào sổ khóa với mức đã nêu (chỉ nâng, không hạ), kèm loại trượt (assert hay thiếu import) và dòng trượt đầu tiên; lần chạy đỏ không thành biên nhận trượt.</samp></label><div class="meta">Test: <code>tests/test_lock_red.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S4" aria-label="Góp ý cho dòng S4" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S5"> <code>S5</code> <samp class="dong">Khi chính bạn nhắn &quot;duyệt spec &lt;8 ký tự đầu mã băm&gt;&quot; khớp một file spec thì hook ghi bản duyệt các dòng của file đó. Khi agent tự ghi vào sổ duyệt thì bị chặn.</samp></label><div class="meta">Test: <code>tests/test_spec_hooks.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S5" aria-label="Góp ý cho dòng S5" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S6"> <code>S6</code> <samp class="dong">Khi kế hoạch được duyệt có mục `## Spec` thì hook ghi các dòng đó vào sổ duyệt với nguồn &quot;kế hoạch&quot;. Kế hoạch không có mục đó thì không thêm lời nhắc nào.</samp></label><div class="meta">Test: <code>tests/test_spec_hooks.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S6" aria-label="Góp ý cho dòng S6" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S7"> <code>S7</code> <samp class="dong">Khi spec và code đổi trong cùng một thay đổi thì bánh cóc đỏ, trừ khi file spec đã khóa và mọi dòng của nó đã duyệt (mức cao chỉ tính duyệt bằng &quot;duyệt spec&quot;).</samp></label><div class="meta">Test: <code>tests/test_spec_ratchet.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S7" aria-label="Góp ý cho dòng S7" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S8"> <code>S8</code> <samp class="dong">Khi một dòng spec có sẵn bị sửa hay xóa thì bánh cóc 🔴 nới; khi thêm dòng ở cuối thì 🟢 siết nếu dòng đó đã được người dùng duyệt, chưa duyệt thì 🔴 ở mức cao và 🟡 ở mức thấp hay vừa, kể cả khi diff không có code.</samp></label><div class="meta">Test: <code>tests/test_spec_ratchet.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S8" aria-label="Góp ý cho dòng S8" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S9"> <code>S9</code> <samp class="dong">Khi `mutation.py` chạy trên thay đổi Python thì chạy mutmut chỉ trên dòng đổi, trong bản chép ở thư mục tạm, xóa bản chép khi xong, và luôn thoát mã 0 kèm dòng trạng thái. Thiếu công cụ hay quá giờ thì dòng trạng thái ghi &quot;chưa chạy: &lt;lý do&gt;&quot;.</samp></label><div class="meta">Test: <code>tests/test_mutation.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S9" aria-label="Góp ý cho dòng S9" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S10"> <code>S10</code> <samp class="dong">Khi `spec.py page` dựng trang thì mọi chữ đi qua `html.escape`, trang qua `check_page.py`, và trang nằm ở `.agent/trang/&lt;slug&gt;-spec.html`, ngoài đường dẫn spec.</samp></label><div class="meta">Test: <code>tests/test_spec_cli.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S10" aria-label="Góp ý cho dòng S10" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S11"> <code>S11</code> <samp class="dong">Khi mục Tiêu chí xong của kế hoạch có ý con thụt lề dưới một tiêu chí thì hook ghi ý con vào chung tiêu chí đó trong §0, không tính thành tiêu chí riêng.</samp></label><div class="meta">Test: <code>tests/test_spec_hooks.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S11" aria-label="Góp ý cho dòng S11" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S12"> <code>S12</code> <samp class="dong">Khi `risk.py` chấm thay đổi mức vừa trở lên có đổi code thì in mục Spec (file spec trong diff, số dòng đã duyệt theo nguồn, test khóa đỏ, người viết test đề nghị: mức cao thì khác họ model người viết code), và nêu thiếu spec khi diff không có file spec nào lẫn test khóa đỏ nào.</samp></label><div class="meta">Test: <code>tests/test_spec_ratchet.py</code>, <code>tests/test_spec_review_fixes.py</code> · <span class="ok">đã duyệt bằng câu duyệt spec</span></div><textarea data-note="S12" aria-label="Góp ý cho dòng S12" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li>
+</ol></section>
+
+<section><h2>Chép về chat</h2>
+<p>Câu duyệt chỉ có tác dụng khi chính bạn gõ hay dán vào chat, và chỉ cho đúng nội dung file lúc dựng trang: sửa
+file thì mã đổi, phải duyệt lại.</p>
+<p><button type="button" data-xuat>Chép kết quả</button></p>
+<pre id="ket-qua" aria-live="polite">duyệt spec 1fa946c72564</pre>
+</section>
+</main>
+<script>
+(function () {
+  var code = document.body.getAttribute('data-ma');
+  var slug = document.body.getAttribute('data-slug');
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input[data-id]'));
+  var out = document.getElementById('ket-qua');
+  function build() {
+    var notes = [];
+    boxes.forEach(function (b) {
+      var id = b.getAttribute('data-id');
+      var note = document.querySelector('textarea[data-note="' + id + '"]').value.trim();
+      if (!b.checked || note) { notes.push(id + ': ' + (note || 'chưa đồng ý')); }
+    });
+    if (!notes.length) { return 'duyệt spec ' + code; }
+    return 'Chưa duyệt spec ' + slug + ' (mã ' + code + '). Cần sửa:\n' + notes.join('\n');
+  }
+  function show() { out.textContent = build(); }
+  boxes.forEach(function (b) { b.addEventListener('change', show); });
+  Array.prototype.forEach.call(document.querySelectorAll('textarea'), function (t) {
+    t.addEventListener('input', show);
+  });
+  document.querySelector('[data-xuat]').addEventListener('click', function () {
+    var text = build();
+    out.textContent = text;
+    try { navigator.clipboard.writeText(text); } catch (e) { /* không chép được thì chép tay từ khung */ }
+  });
+  show();
+})();
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@ plugin/agents/explore-lite.md
 plugin/agents/researcher.md
 plugin/agents/reviewer.md
 plugin/agents/test-runner.md
+plugin/agents/test-writer.md
 plugin/evals/finish-gate/graders/skill-fired.md
 plugin/evals/finish-gate/prompt.md
 plugin/evals/handoff-cross-tool/graders/skill-fired.md
@@ -63,12 +64,14 @@ plugin/lib/agentstack.py
 plugin/lib/archgate.py
 plugin/lib/client_place.py
 plugin/lib/routemodel.py
+plugin/lib/specbook.py
 plugin/lib/stackcfg.py
 plugin/lib/testlock.py
 plugin/skills/aside-web/SKILL.md
 plugin/skills/aside-web/scripts/aside_web.py
 plugin/skills/done-gate/SKILL.md
 plugin/skills/done-gate/scripts/checks.py
+plugin/skills/done-gate/scripts/mutation.py
 plugin/skills/done-gate/scripts/ratchet.py
 plugin/skills/done-gate/scripts/review_log.py
 plugin/skills/done-gate/scripts/risk.py
@@ -90,6 +93,7 @@ plugin/skills/reuse-best/scripts/scout.py
 plugin/skills/session-keeper/SKILL.md
 plugin/skills/session-keeper/scripts/fails_before.py
 plugin/skills/session-keeper/scripts/receipt.py
+plugin/skills/session-keeper/scripts/spec.py
 plugin/skills/session-keeper/scripts/state.py
 plugin/skills/session-keeper/scripts/watch_change.py
 plugin/skills/session-keeper/templates/HANDOFF.md

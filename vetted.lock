@@ -621,94 +621,194 @@
       "verdict": "REVIEW",
       "vetted_at": "2026-10-01"
     },
-    "brew:ruff": {
-      "kind": "brew-tool",
-      "source": "brew:ruff",
-      "license": "MIT",
-      "tool": "manual",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-11-13",
-      "redflags": {},
-      "reviews": [],
-      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+    "boxed/mutmut": {
+      "archived": false,
       "human_review": {
-        "status": "approved",
-        "at": "2026-11-12T22:30:00Z",
-        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply"
-      }
-    },
-    "brew:shellcheck": {
-      "kind": "brew-tool",
-      "source": "brew:shellcheck",
-      "license": "GPL-3.0",
-      "tool": "manual",
+        "at": "2026-11-16T02:24:13Z",
+        "note": "Bạn duyệt 16/11/2026 qua câu hỏi trong phiên GĐ6: \"Duyệt, cài vào .venv-mutmut\" (venv riêng trong repo, requirements có mã băm, ghim setuptools build; chỉ chạy mutmut trong bản chép tạm, TM-129).",
+        "status": "approved"
+      },
+      "license": "BSD-3-Clause",
+      "license_files": [
+        "LICENSE: độc quyền (all rights reserved)"
+      ],
+      "pushed_at": "2026-11-07",
+      "redflags": {
+        "medium": 1
+      },
+      "ref": "2.5.1",
+      "report": "vet-reports/boxed__mutmut@bdd8c37e512c.md",
+      "reviews": [
+        {
+          "at": "2026-11-16T02:09:16Z",
+          "by": "claude (subagent đọc tay 16/11)",
+          "recommend": "có-điều-kiện",
+          "sha": "bdd8c37e512c47d8ccf7933eba901b97da7c707a",
+          "text": "Đọc tay mutmut/__init__.py, __main__.py, cache.py, setup.py ở bdd8c37 (tag 2.5.1, khớp giờ tải PyPI 2024-08-15T13:55). Không gọi mạng, không đọc file ngoài cwd, không eval/exec, không chuỗi điều khiển model. Dấu hiệu đều báo nhầm hoặc là tính năng: rm trong Makefile (đích dev, không vào sdist); long-base64 .travis.yml là biến 'secure' mã hóa của Travis; setup.py chỉ đọc file, lệnh git nằm trong lệnh tùy chọn tag/release_check không tự chạy; shell=True ở __init__.py:783/820 là pre/post_mutation do người dùng cấu hình, :1016 chỉ nhánh Windows (macOS chạy runner bằng shlex.split không qua shell, :1026). Rủi ro thật theo thiết kế: import mutmut_config.py từ cwd (:42), đọc [tool.mutmut]/setup.cfg và chạy lệnh trong đó, sửa file nguồn tại chỗ (.bak rồi move lại, :690-699, :816; bị SIGKILL thì file còn đột biến), báo cáo html không escape. Chỉ chạy trên repo tin cậy, cây git sạch hoặc bản chép. Điều kiện: sdist PyPI chỉ có sdist nên uv tool install chạy setup.py của mutmut và glob2 (glob2 chưa vet); chưa so sdist PyPI với tag GitHub; catalog uv_tool không ghim được whatthepatch==0.0.6 và phụ thuộc bắc cầu. Giấy phép BSD-3-Clause (vet.py đoán 'độc quyền' là nhầm do câu All rights reserved của BSD)."
+        },
+        {
+          "at": "2026-11-16T02:15:33Z",
+          "by": "claude (subagent so sdist 16/11)",
+          "recommend": "có-điều-kiện",
+          "sha": "bdd8c37e512c47d8ccf7933eba901b97da7c707a",
+          "text": "So sdist PyPI mutmut-2.5.1.tar.gz (sha256 d8fea253..., khớp JSON PyPI và requirements.txt) với commit bdd8c37: mọi file mã (mutmut/*.py, setup.py, tests/*.py, requirements.txt, MANIFEST.in, README, LICENSE) trùng từng byte. Chỉ khác phần setuptools sinh: PKG-INFO (thân bằng README), mutmut.egg-info/ (entry_points chỉ có console_scripts mutmut = mutmut.__main__:climain, requires.txt khớp setup.py), và setup.cfg bị setuptools viết lại (bỏ chú thích, đổi khoảng trắng, thêm [egg_info]); so bằng configparser thì giá trị giống hệt. sdist thiếu vài file của git (tests/conftest.py, tests/testdata, docs) là bình thường. Đọc lại setup.py của sdist: chỉ đọc file, git chỉ trong lệnh tag/release_check không tự chạy. Cài thử: uv pip install --require-hashes -r requirements.txt chạy được với sdist (băm của .tar.gz được kiểm; đổi băm thì 'Hash mismatch'), nhưng build isolation tải setuptools mới nhất (84.2.1) từ PyPI không ghim băm; thêm --build-constraints với setuptools==84.2.1 --hash thì băm được kiểm (băm sai thì lỗi). File cài vào site-packages trùng sdist; không có .pth hay script lạ. mutmut version ra 2.5.1."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "bdd8c37e512c47d8ccf7933eba901b97da7c707a",
+      "source": "github:boxed/mutmut",
+      "spector": {
+        "counts": {
+          "high": 8,
+          "low": 21,
+          "medium": 11
+        },
+        "score": 88,
+        "status": "ok",
+        "version": "2.12.0"
+      },
+      "stars": 1544,
+      "subpath": "",
+      "tool": "vet.py/1",
       "verdict": "REVIEW",
-      "vetted_at": "2026-11-13",
-      "redflags": {},
-      "reviews": [],
-      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
-      "human_review": {
-        "status": "approved",
-        "at": "2026-11-12T22:30:00Z",
-        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply"
-      }
-    },
-    "brew:osv-scanner": {
-      "kind": "brew-tool",
-      "source": "brew:osv-scanner",
-      "license": "Apache-2.0",
-      "tool": "manual",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-11-13",
-      "redflags": {},
-      "reviews": [],
-      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
-      "human_review": {
-        "status": "approved",
-        "at": "2026-11-13T08:00:00Z",
-        "note": "Người dùng duyệt trong chat 13/11/2026 ('làm 2 việc đã chọn', việc T.1 trong PLAN §0); gửi tên và phiên bản thư viện tới osv.dev (TM-98)"
-      }
+      "vetted_at": "2026-11-16"
     },
     "brew:biome": {
+      "human_review": {
+        "at": "2026-11-13T08:00:00Z",
+        "note": "Người dùng chọn 'Biome qua install.sh' trong chat 13/11/2026 (linter TS cho plugin/hooks/ui.tsx, không dùng npm)",
+        "status": "approved"
+      },
       "kind": "brew-tool",
-      "source": "brew:biome",
       "license": "Apache-2.0 OR MIT",
-      "tool": "manual",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-11-13",
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
       "redflags": {},
       "reviews": [],
-      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "source": "brew:biome",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13"
+    },
+    "brew:osv-scanner": {
       "human_review": {
-        "status": "approved",
         "at": "2026-11-13T08:00:00Z",
-        "note": "Người dùng chọn 'Biome qua install.sh' trong chat 13/11/2026 (linter TS cho plugin/hooks/ui.tsx, không dùng npm)"
-      }
+        "note": "Người dùng duyệt trong chat 13/11/2026 ('làm 2 việc đã chọn', việc T.1 trong PLAN §0); gửi tên và phiên bản thư viện tới osv.dev (TM-98)",
+        "status": "approved"
+      },
+      "kind": "brew-tool",
+      "license": "Apache-2.0",
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "redflags": {},
+      "reviews": [],
+      "source": "brew:osv-scanner",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13"
+    },
+    "brew:ruff": {
+      "human_review": {
+        "at": "2026-11-12T22:30:00Z",
+        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply",
+        "status": "approved"
+      },
+      "kind": "brew-tool",
+      "license": "MIT",
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "redflags": {},
+      "reviews": [],
+      "source": "brew:ruff",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13"
+    },
+    "brew:shellcheck": {
+      "human_review": {
+        "at": "2026-11-12T22:30:00Z",
+        "note": "Người dùng duyệt trong chat 12/11/2026 ('cài đi', câu 3 trang kiểm tĩnh); vẫn xem kế hoạch install.sh trước --apply",
+        "status": "approved"
+      },
+      "kind": "brew-tool",
+      "license": "GPL-3.0",
+      "note": "Công cụ dòng lệnh từ Homebrew core, không phải skill, plugin hay MCP: không quét bằng vet.py; cài và gỡ qua install.sh (bước tools).",
+      "redflags": {},
+      "reviews": [],
+      "source": "brew:shellcheck",
+      "tool": "manual",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-13"
     },
     "cargo:archctl": {
-      "kind": "cargo-source",
-      "source": "git:/Users/macos/Documents/Claude/archctl",
-      "repo": "/Users/macos/Documents/Claude/archctl",
+      "bin": "archctl",
       "commit": "7f06586a2c54c62ca75d9224a135d8da0cecc549",
       "crate_path": "crates/archctl",
-      "bin": "archctl",
-      "version": "0.1.1",
+      "human_review": {
+        "at": "2026-11-15T10:00:00Z",
+        "note": "Người dùng chọn 'Sửa install.sh rồi cài' trong chat 15/11/2026, trả lời câu 'Duyệt archctl 7f06586 và cài theo cách nào?' sau khi được báo vet.py ra FAIL do báo nhầm như bản trước và đọc tay không thấy rủi ro mới; xem trước install.sh khớp mô tả thì --apply",
+        "status": "approved"
+      },
+      "kind": "cargo-source",
       "license": "Apache-2.0",
-      "tool": "vet.py/1 + SkillSpector 2.12.0 + đọc tay",
-      "verdict": "REVIEW",
-      "vetted_at": "2026-11-15",
+      "note": "Quét cây `git archive` của đúng commit 7f06586 (thứ install.sh dựng; quét thư mục làm việc thì gặp target/bench với 36 repo bên thứ ba nên bỏ). vet.py ra FAIL như bản a82879b, đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246), tài liệu và CI; SkillSpector (lần đầu chạy) báo bench/, docs/, CI, test, không vào binary. Diff a82879b..7f06586 đọc tay: Cargo.lock không đổi, không build.rs, không gọi mạng mới; `verify` vẫn chỉ `sh -c` lệnh khai trong .arch/system.arch, nay có hạn thời gian và dừng cả cây tiến trình con bằng /bin/ps, /bin/kill viết tuyệt đối (TM-90 phía archctl); hook `check --hook` sau Edit/Write/MultiEdit/Bash; `archctl init` vẫn chỉ ghi .claude/settings.json của project. Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-111); nâng từ a82879b qua install.sh (TM-121, TM-122).",
       "redflags": {
         "critical": 5,
         "medium": 3
       },
-      "reviews": [],
+      "repo": "/Users/macos/Documents/Claude/archctl",
       "report": "vet-reports/local__archctl@c2527dd5c8af.md",
-      "note": "Quét cây `git archive` của đúng commit 7f06586 (thứ install.sh dựng; quét thư mục làm việc thì gặp target/bench với 36 repo bên thứ ba nên bỏ). vet.py ra FAIL như bản a82879b, đọc tay hạ xuống REVIEW vì đều báo nhầm: rce-pipe nằm trong test chống chèn lệnh (discover.rs:1390, tests/verify.rs:246), tài liệu và CI; SkillSpector (lần đầu chạy) báo bench/, docs/, CI, test, không vào binary. Diff a82879b..7f06586 đọc tay: Cargo.lock không đổi, không build.rs, không gọi mạng mới; `verify` vẫn chỉ `sh -c` lệnh khai trong .arch/system.arch, nay có hạn thời gian và dừng cả cây tiến trình con bằng /bin/ps, /bin/kill viết tuyệt đối (TM-90 phía archctl); hook `check --hook` sau Edit/Write/MultiEdit/Bash; `archctl init` vẫn chỉ ghi .claude/settings.json của project. Dựng từ đúng commit ghim bằng git archive, --locked --offline (TM-111); nâng từ a82879b qua install.sh (TM-121, TM-122).",
+      "reviews": [],
+      "source": "git:/Users/macos/Documents/Claude/archctl",
+      "tool": "vet.py/1 + SkillSpector 2.12.0 + đọc tay",
+      "verdict": "REVIEW",
+      "version": "0.1.1",
+      "vetted_at": "2026-11-15"
+    },
+    "cscorley/whatthepatch": {
+      "archived": false,
       "human_review": {
-        "status": "approved",
-        "at": "2026-11-15T10:00:00Z",
-        "note": "Người dùng chọn 'Sửa install.sh rồi cài' trong chat 15/11/2026, trả lời câu 'Duyệt archctl 7f06586 và cài theo cách nào?' sau khi được báo vet.py ra FAIL do báo nhầm như bản trước và đọc tay không thấy rủi ro mới; xem trước install.sh khớp mô tả thì --apply"
-      }
+        "at": "2026-11-16T02:24:13Z",
+        "note": "Bạn duyệt 16/11/2026 qua câu hỏi trong phiên GĐ6: \"Duyệt, cài vào .venv-mutmut\" (venv riêng trong repo, requirements có mã băm, ghim setuptools build; chỉ chạy mutmut trong bản chép tạm, TM-129).",
+        "status": "approved"
+      },
+      "license": "MIT",
+      "license_files": [
+        "LICENSE: MIT"
+      ],
+      "pushed_at": "2026-10-28",
+      "redflags": {},
+      "ref": "0.0.6",
+      "report": "vet-reports/cscorley__whatthepatch@f262c7e2fdaa.md",
+      "reviews": [
+        {
+          "at": "2026-11-16T02:09:16Z",
+          "by": "claude (subagent đọc tay 16/11)",
+          "recommend": "có-điều-kiện",
+          "sha": "f262c7e2fdaac9bbecb130251b255dc40d1da35c",
+          "text": "Đọc tay whatthepatch/*.py và setup.py ở f262c7e (tag 0.0.6 nhẹ, commit 2019-07-20 trùng ngày tải PyPI). patch.py chỉ dùng re và namedtuple, không I/O. apply.py có subprocess.call tới chương trình patch với đường dẫn tạm đoán trước /tmp/wtp-<hash> (CWE-377, lỗi thật) nhưng chỉ khi apply_diff(use_patch=True); mutmut chỉ gọi parse_patch nên không chạm tới. setup.py chỉ đọc README. Không mạng, không đọc khóa, không chuỗi điều khiển model. Ít sao (78) nhưng là thư viện phân tích diff nhỏ, thuần Python, có wheel. MIT. Điều kiện: chỉ dùng như phụ thuộc parse_patch của mutmut --use-patch-file; catalog uv_tool hiện không ghim được ==0.0.6 (with chỉ nhận tên gói)."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "f262c7e2fdaac9bbecb130251b255dc40d1da35c",
+      "source": "github:cscorley/whatthepatch",
+      "spector": {
+        "counts": {
+          "low": 1,
+          "medium": 1
+        },
+        "score": 12,
+        "status": "ok",
+        "version": "2.12.0"
+      },
+      "stars": 78,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-16"
     },
     "mcp:mcp.deepwiki.com/mcp": {
       "human_review": {
@@ -794,6 +894,51 @@
       },
       "verdict": "REVIEW",
       "vetted_at": "2026-10-28"
+    },
+    "miracle2k/python-glob2": {
+      "archived": false,
+      "human_review": {
+        "at": "2026-11-16T02:24:13Z",
+        "note": "Bạn duyệt 16/11/2026 qua câu hỏi trong phiên GĐ6: \"Duyệt, cài vào .venv-mutmut\" (venv riêng trong repo, requirements có mã băm, ghim setuptools build; chỉ chạy mutmut trong bản chép tạm, TM-129).",
+        "status": "approved"
+      },
+      "license": "BSD-2-Clause",
+      "license_files": [
+        "LICENSE: độc quyền (all rights reserved)"
+      ],
+      "pushed_at": "2021-08-01",
+      "redflags": {},
+      "ref": "ef4b58f0d2a6eb0197446ab4b047cc45e4c60500",
+      "report": "vet-reports/miracle2k__python-glob2@ef4b58f0d2a6.md",
+      "reviews": [
+        {
+          "at": "2026-11-16T02:13:20Z",
+          "by": "claude (subagent vet glob2 16/11)",
+          "recommend": "có-điều-kiện",
+          "sha": "ef4b58f0d2a6eb0197446ab4b047cc45e4c60500",
+          "text": "Bản 0.7 khớp commit ef4b58f (master, commit lúc 2019-06-10T23:33:59Z, 11 giây sau giờ tải PyPI 23:33:48), không khớp tag v0.7 (43abdc5, vẫn __version__=(0,6), chỉ khác số phiên bản và CHANGES). sdist PyPI glob2-0.7.tar.gz (sha256 85c3dbd0..., khớp JSON PyPI và requirements.txt) trùng từng byte với ef4b58f, trừ PKG-INFO, glob2.egg-info/ và đoạn [egg_info] trong setup.cfg do setuptools sinh. Đọc tay setup.py, glob2/__init__.py, impl.py, fnmatch.py, compat.py, test.py. setup.py chạy lúc cài (chỉ có sdist): chỉ import os, re, setuptools; eval(match.group(1)) chạy đúng chuỗi '(0, 7)' lấy từ glob2/__init__.py của chính sdist, không lấy từ mạng hay biến môi trường; không subprocess, không cmdclass, không ghi file. Thư viện thuần stdlib, chỉ os.listdir/isdir/islink/lexists và re; không mạng, không exec, không đọc khóa, không ký tự ẩn, không chuỗi điều khiển model. compat.py là công thức lru_cache của ActiveState (Py3 không dùng). Lỗi chức năng, không phải bảo mật: glob() truyền tham số theo vị trí lệch (recursive nhận chỗ norm_paths), '\\Z' gây DeprecationWarning. mutmut chỉ gọi glob() trong __main__.py:347,351 để tìm thư mục test. Ít sao (125), ngừng phát triển từ 2019. Giấy phép BSD-2-Clause (vet.py đoán 'độc quyền' là nhầm). Điều kiện: chỉ dùng như phụ thuộc của mutmut 2.5.1, cài từ requirements.txt có --require-hashes."
+        }
+      ],
+      "scanner": {
+        "status": "bỏ qua (không có SKILL.md)",
+        "version": null
+      },
+      "sha": "ef4b58f0d2a6eb0197446ab4b047cc45e4c60500",
+      "source": "github:miracle2k/python-glob2",
+      "spector": {
+        "counts": {
+          "high": 1,
+          "low": 2
+        },
+        "score": 32,
+        "status": "ok",
+        "version": "2.12.0"
+      },
+      "stars": 125,
+      "subpath": "",
+      "tool": "vet.py/1",
+      "verdict": "REVIEW",
+      "vetted_at": "2026-11-16"
     },
     "obra/superpowers": {
       "archived": false,

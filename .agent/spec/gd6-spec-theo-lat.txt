@@ -1,0 +1,13 @@
+# GĐ6: spec theo lát cho mọi project · mức cao · kế hoạch phiên bạn duyệt 16/11/2026
+S1: Khi `spec.py check` gặp dòng không theo mẫu `Sn: Khi|Nếu|Trong khi … thì …`, hay số thứ tự trùng hoặc lùi, thì thoát mã 1 và nêu số dòng.
+S2: Khi một dòng spec không có test nào mang dấu `spec:<slug>#Sn`, hay file test đó chưa khóa, thì `spec.py check` thoát mã 1.
+S3: Khi `receipt.py lock --red` thấy test đạt trên code hiện tại, hay đã có file code đổi so với base, thì không khóa và thoát mã khác 0.
+S4: Khi `lock --red` thành công thì file test và file spec vào sổ khóa với mức đã nêu (chỉ nâng, không hạ), kèm loại trượt (assert hay thiếu import) và dòng trượt đầu tiên; lần chạy đỏ không thành biên nhận trượt.
+S5: Khi chính bạn nhắn "duyệt spec <8 ký tự đầu mã băm>" khớp một file spec thì hook ghi bản duyệt các dòng của file đó. Khi agent tự ghi vào sổ duyệt thì bị chặn.
+S6: Khi kế hoạch được duyệt có mục `## Spec` thì hook ghi các dòng đó vào sổ duyệt với nguồn "kế hoạch". Kế hoạch không có mục đó thì không thêm lời nhắc nào.
+S7: Khi spec và code đổi trong cùng một thay đổi thì bánh cóc đỏ, trừ khi file spec đã khóa và mọi dòng của nó đã duyệt (mức cao chỉ tính duyệt bằng "duyệt spec").
+S8: Khi một dòng spec có sẵn bị sửa hay xóa thì bánh cóc 🔴 nới; khi thêm dòng ở cuối thì 🟢 siết nếu dòng đó đã được người dùng duyệt, chưa duyệt thì 🔴 ở mức cao và 🟡 ở mức thấp hay vừa, kể cả khi diff không có code.
+S9: Khi `mutation.py` chạy trên thay đổi Python thì chạy mutmut chỉ trên dòng đổi, trong bản chép ở thư mục tạm, xóa bản chép khi xong, và luôn thoát mã 0 kèm dòng trạng thái. Thiếu công cụ hay quá giờ thì dòng trạng thái ghi "chưa chạy: <lý do>".
+S10: Khi `spec.py page` dựng trang thì mọi chữ đi qua `html.escape`, trang qua `check_page.py`, và trang nằm ở `.agent/trang/<slug>-spec.html`, ngoài đường dẫn spec.
+S11: Khi mục Tiêu chí xong của kế hoạch có ý con thụt lề dưới một tiêu chí thì hook ghi ý con vào chung tiêu chí đó trong §0, không tính thành tiêu chí riêng.
+S12: Khi `risk.py` chấm thay đổi mức vừa trở lên có đổi code thì in mục Spec (file spec trong diff, số dòng đã duyệt theo nguồn, test khóa đỏ, người viết test đề nghị: mức cao thì khác họ model người viết code), và nêu thiếu spec khi diff không có file spec nào lẫn test khóa đỏ nào.

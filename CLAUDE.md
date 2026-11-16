@@ -23,6 +23,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
   - Test mô phỏng bản chép plugin nằm ngoài repo (như `~/.claude/plugins/cache`) dùng thư mục tạm của hệ điều hành và tự xóa.
   - `checks.py` (done-gate) chép file vừa đổi vào thư mục tạm của hệ điều hành cho gitleaks quét, và để file `.class` của `javac` ở đó, rồi tự xóa: script chạy ở mọi project (cùng lý do với `receipt.py fails-before`).
   - `receipt.py fails-before` dựng code trước bản sửa trong thư mục tạm của hệ điều hành rồi tự xóa, vì lệnh chạy ở mọi project, và `.tmp/` của project khác có thể chưa bị git bỏ qua (bạn chọn 04/11/2026).
+  - `mutation.py` (done-gate) chép repo vào thư mục tạm của hệ điều hành cho mutmut chạy, rồi tự xóa, kể cả khi quá giờ: mutmut sửa file tại chỗ và nạp `mutmut_config.py` của thư mục đang chạy (TM-129). mutmut nằm trong `.venv-mutmut/` của repo (bạn duyệt 16/11/2026), cài bằng `mutation.py setup`.
 - Docstring và chú thích viết tiếng Việt, ngắn. Tên biến và hàm viết tiếng Anh.
 
 ## Skill
