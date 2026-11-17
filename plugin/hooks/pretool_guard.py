@@ -39,7 +39,7 @@ CONTINUATION_RE = re.compile(r"(?<!\\)((?:\\\\)*)\\\n")
 SHELL_C_RE = re.compile(r"^-[a-zA-Z]*c[a-zA-Z]*$")  # bash -c, -lc, -ec
 HEREDOC_RE = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1([^\n]*)\n.*?\n[ \t]*\2[ \t]*(?=\n|$)", re.S)
 ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-PREFIXES = {"sudo", "env", "command", "exec", "time", "nohup", "nice", "timeout", "!"}
+PREFIXES = {"sudo", "env", "command", "builtin", "exec", "time", "nohup", "nice", "timeout", "!"}
 # Từ khóa shell đứng đầu một lệnh đơn (`if git push; then rm -rf x; fi`, `for d in a; do …; done`, `{ git push; }`).
 KEYWORDS = {"if", "then", "elif", "else", "do", "while", "until", "{"}
 # Cờ cần giá trị của các lệnh bọc (`sudo -u root rm -rf x`, `env -u X git push`, `timeout -s KILL 30 git push`).
@@ -70,6 +70,10 @@ RM_SCRATCH_NAMES = {".tmp", "tmp", "build", "dist", "node_modules", "__pycache__
                     ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 MKTEMP_RE = re.compile(r"(?:^|[\s;&|(])([A-Za-z_][A-Za-z0-9_]*)=[\"']?\$\(\s*mktemp\b([^)]*)\)")
 GLOB_CHARS = "*?[{"
+# Thư mục chạy không biết trước (`cd t*`, `--cwd $PWD/tests`): glob, biến hay lệnh con. Phần có biến, lệnh con thì giá trị
+# có thể là bất cứ đâu (cả đường dẫn tuyệt đối).
+DIR_UNKNOWN = GLOB_CHARS + "$`"
+DIR_OPAQUE = "$`()"
 REPORT_RE = re.compile(r"differential[_-]?review", re.I)
 OS_TEMP = ("/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/")
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".php", ".rs", ".c",
@@ -222,14 +226,20 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         if found:
             return found
     temp_vars = mktemp_vars(command)
+    oldpwd, stack = None, []
     for argv in simple_commands(command):
-        if Path(argv[0]).name in ("cd", "pushd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
-            if len(argv) == 2 and argv[1] != "-":
-                cwd = str(Path(cwd or ".") / Path(argv[1]).expanduser())
+        if Path(argv[0]).name in ("cd", "pushd", "popd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
+            cwd, oldpwd, stack = change_dir(argv, cwd, oldpwd, stack)
             continue
         result = check_argv(argv, cwd, temp_vars, session_id)
         if result:
             results.append(result)
+        try:
+            unknown = unknown_dir_check(argv, cwd, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
+        except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
+            unknown = None
+        if unknown:
+            results.append(unknown)
     denied = [r for r in results if r[0] == "deny"]
     if denied:
         return denied[0]
@@ -238,6 +248,31 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         results = [r[:3] + (None,) if r[0] == "confirm" else r for r in results]
     gated = [r for r in results if r[0] in ("audit", "confirm")]
     return (gate_user(gated, session_id) if gated else None) or next((r for r in results if r[0] == "ask"), None)
+
+
+def change_dir(argv: list, cwd: str, oldpwd, stack: list) -> tuple:
+    """(thư mục chạy, OLDPWD, chồng pushd) sau `cd`, `pushd`, `popd` trong chuỗi lệnh: bỏ chuyển hướng, cờ -L -P -e -@ và
+    `--`. Không đoán được (`cd -`, `popd` khi chuỗi chưa đổi thư mục, `pushd +1`, nhiều tham số) thì thành `$OLDPWD` để
+    `unknown_dir_check` xét. `cd` không tham số giữ thư mục cũ như trước."""
+    prog = Path(argv[0]).name
+    args = drop_redirects(argv[1:])
+    while args and re.fullmatch(r"-[LPe@]+", args[0]):
+        args = args[1:]
+    args = args[1:] if args[:1] == ["--"] else args
+    here = cwd or "."
+    unknown = str(Path(here) / "$OLDPWD")
+    if prog == "popd":
+        return (stack[-1] if stack and not args else unknown), here, stack[:-1]
+    if prog == "cd" and not args:
+        return cwd, oldpwd, stack
+    if len(args) != 1 or (args[0] != "-" and args[0][:1] in ("+", "-")):
+        new = unknown
+    elif args[0] == "-":
+        new = oldpwd or unknown
+    else:  # os.path.expanduser không ném lỗi với `~user` không có (Path.expanduser ném, làm hook sập, tắt mọi chốt chặn)
+        target = os.path.expanduser(args[0])
+        new = unknown if target.startswith("~") else str(Path(here) / target)
+    return new, here, (stack + [here] if prog == "pushd" else stack)
 
 
 def changes_remote(argv: list) -> bool:
@@ -311,7 +346,7 @@ def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""
     if prog == "claude" and words[:3] == ["plugin", "marketplace", "add"] and len(words) > 3:
         source = words[3].rstrip("/")
         home = lib().home_dir()
-        if home and Path(source).expanduser().resolve() in (home.resolve(), (home / "vendor").resolve()):
+        if home and Path(os.path.expanduser(source)).resolve() in (home.resolve(), (home / "vendor").resolve()):
             return None
         return "ask", (f"agent-stack: thêm marketplace `{source}` làm mọi plugin trong đó cài được, dù chưa qua "
                        "vet-skill. Người dùng xác nhận trước khi thêm.")
@@ -330,7 +365,7 @@ def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""
         while args and args[0].startswith("-"):  # tùy chọn chung của git: -C <thư mục>, -c <khóa=giá trị>, --no-pager
             if args[0] in GIT_OPTS_WITH_VALUE and len(args) >= 2:
                 if args[0] == "-C":
-                    where = where / Path(args[1]).expanduser()
+                    where = where / os.path.expanduser(args[1])  # `~user` không có: không ném lỗi
                 args = args[2:]
             else:
                 args = args[1:]
@@ -786,7 +821,10 @@ def receipt_run_dir(rest: list, where: Path) -> Path:
     base = Path(os.path.expanduser(str(where)))
     if values.get("--cwd"):
         return base / os.path.expanduser(values["--cwd"])
-    return lib().project_root(base / os.path.expanduser(values.get("--project") or "."))
+    project = values.get("--project") or "."
+    if any(ch in project for ch in DIR_UNKNOWN):  # `--project $P`: không đoán gốc, để `unknown_dir_check` xét
+        return base / os.path.expanduser(project)
+    return lib().project_root(base / os.path.expanduser(project))
 
 
 def target_path(where: Path, target: str):
@@ -1454,6 +1492,58 @@ def locked_inside(TL, folder: Path) -> list:
         return []  # project không có sổ khóa: hành vi như cũ
     prefix = "" if rel in (".", "") else rel + "/"
     return [top / p for p in [*TL.load(top)["files"], TL.LOCK_REL] if p.startswith(prefix)]
+
+
+def unknown_dir_pattern(full: str):
+    """(thư mục biết chắc phía trước, mẫu glob) cho đích `full` có glob, biến hay lệnh con trong đường dẫn. Glob giữ
+    nguyên; từ biến, lệnh con hay `..` sau chỗ không biết trở về trước thành `*`, vì giá trị có thể là đường dẫn tuyệt
+    đối. None khi đường dẫn biết rõ."""
+    parts = full.split("/")
+    first = next((i for i, p in enumerate(parts) if any(ch in p for ch in DIR_UNKNOWN)), None)
+    if first is None:
+        return None
+    cut = max((i for i, p in enumerate(parts) if any(ch in p for ch in DIR_OPAQUE) or (p == ".." and i > first)),
+              default=None)
+    anchor = Path("/".join(parts[:first]) or "/").resolve()  # `/var` → `/private/var`, như gốc repo trong sổ
+    head, rest = (str(anchor).rstrip("/"), parts[first:]) if cut is None else ("*", parts[cut + 1:])
+    return anchor, "/".join([head] + [p for p in rest if p not in ("", ".")])
+
+
+def unknown_dir_check(argv: list, cwd: str, session_id: str = ""):
+    """Thư mục chạy không biết trước (`cd t*`, `--cwd $PWD/tests`, `--project $P`): đích tương đối của lệnh ghi, xóa
+    khớp test đã khóa hay sổ khóa khi coi phần không biết là bất kỳ thì hỏi người dùng, thay vì cho qua vì đường dẫn
+    chữ không trùng mục nào. So mẫu với các mục sổ của project chứa phần biết chắc, không quét đĩa (TM-106). Đích có
+    biến (`rm "$f"`) hay tuyệt đối thì không xét ở đây (TM-143)."""
+    where = os.path.expanduser(cwd or ".")
+    where = os.path.join(os.getcwd(), where) if not os.path.isabs(where) else where  # không gộp `..`: `cd "$X/.."`
+    if not any(ch in where for ch in DIR_UNKNOWN):
+        return None
+    import fnmatch
+    TL = testlock_lib()
+    for full, text in write_targets(argv, Path(where)):
+        found = None if any(ch in text for ch in DIR_OPAQUE) or text.startswith(("/", "~")) else \
+            unknown_dir_pattern(str(full))
+        if found is None:
+            continue
+        anchor, pattern = found
+        top = TL.find_top(anchor)
+        if top is None or not (top / TL.LOCK_REL).is_file():
+            continue
+        pats = [q for p in brace_expand(pattern) for q in (p, p.rstrip("/") + "/*")]  # đích có thể là thư mục
+        for cand in [top / rel for rel in TL.load(top)["files"]] + [top / TL.LOCK_REL]:
+            if not any(fnmatch.fnmatchcase(str(cand), p) for p in pats):
+                continue
+            rel = cand.relative_to(top).as_posix()
+            why = ("agent-stack: hook không biết thư mục chạy lệnh này (`cd`, `pushd`, `--cwd` hay `--project` có "
+                   f"glob, biến hay lệnh con), mà đích `{text}` có thể là `{rel}`")
+            fix = ("Viết thẳng đường dẫn thư mục (không glob, không biến) để hook kiểm được. Người dùng chỉ đồng ý khi "
+                   "chắc lệnh không đụng file đó.")
+            if TL.is_lock_file(cand):
+                return "ask", f"{why}, sổ khóa test (chỉ sửa bằng `receipt.py lock` hay `unlock`). {fix}"
+            hit = locked_hit(cand, f"lệnh shell `{Path(argv[0]).name}`", session_id)
+            if hit:
+                return "ask", f"{why}, test đã khóa; xóa hay ghi đè test khóa là nới. {fix}"
+    return None
 
 
 def check_locked_write(tool: str, tool_input: dict, full: Path, session_id: str):
