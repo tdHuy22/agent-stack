@@ -66,7 +66,7 @@ SECURITY_REASONS = {PATH_RULES[0][2], "có thể lộ secret trong dòng thêm v
 # Ranh giới tin cậy tính là đụng bảo mật (done-gate bước 5: xác thực, mã hóa, input, chạy lệnh, dữ liệu nhạy cảm).
 # "Gọi ra ngoài" và "thêm dependency" không kéo review kép, để tiết kiệm hạn mức.
 SECURITY_BOUNDARIES = {"input từ bên ngoài", "xác thực, phân quyền", "dữ liệu nhạy cảm",
-                       "chạy mã, lệnh hay đường dẫn từ input"}
+                       "chạy mã, lệnh hay đường dẫn từ input", "ghi trong threat model"}
 
 # Nới test, hay gặp ở vòng sửa cho test đạt: assert chặt (so bằng, so đúng đối tượng, đòi lỗi) đổi thành dạng lỏng
 # hơn, bớt assert, thêm skip. Chỉ xét file test, bỏ dòng chú thích (comment một assert là bỏ nó).
@@ -151,7 +151,17 @@ def boundaries(changes: list, reviewed=frozenset()) -> list:
                      and text_re.search(c.get("text") or ""))]
         if paths:
             out.append((name, paths))
+    # Agent đã ghi mối đe dọa mới cho thay đổi có code: chính nó khai đây là ranh giới tin cậy, kể cả khi chốt chặn đặt
+    # tên theo miền mà các mẫu trên không bắt được (MW1 của SCEE: `doi_khoa`, `PolicyChuaKhoa`).
+    model = [c["path"] for c in changes if is_threat_model(c["path"]) and (c.get("added") or 0) > 0
+             and (c.get("text") or "").strip()]
+    if model and any(change_kind(c) == "code" for c in changes):
+        out.append(("ghi trong threat model", model))
     return out
+
+
+def is_threat_model(path: str) -> bool:
+    return at_rel(path, THREAT_MODEL_REL)
 
 
 class NotARepo(Exception):
@@ -174,7 +184,25 @@ def kind(path: str, page: bool = False) -> str:
         return "doc"
     if Path(name).suffix in PAGE_EXT and (page or re.search(r"(^|/)\.agent/", p)):
         return "doc"
+    if agent_meta(p):
+        return "doc"
     return "code"
+
+
+def agent_meta(path: str) -> bool:
+    """File trạng thái của agent trong `.agent/` (stack.json, sổ khóa test, bản vá bàn giao): không phải code. Trừ
+    `.agent/spec/` (spec theo lát) và file có đuôi mã nguồn, để code giấu trong `.agent/` vẫn bị chấm (TM-142)."""
+    p = path.lower()
+    return bool(AGENT_DIR_RE.search(p)) and not SPEC_FILE_RE.search(p) and Path(p).suffix not in SOURCE_EXT
+
+
+AGENT_DIR_RE = re.compile(r"(^|/)\.agent/")
+SPEC_FILE_RE = re.compile(r"(^|/)\.agent/spec/")
+
+
+def at_rel(path: str, rel: str) -> bool:
+    """`path` (tính từ gốc repo) là file `rel` của project ở gốc hay ở thư mục con."""
+    return path == rel or path.endswith("/" + rel)
 
 
 # Tài liệu mà sửa sau bước kiểm chứng không làm cũ biên nhận: hẹp hơn kind() == "doc", vì nhắc thừa một lần còn hơn
@@ -187,6 +215,8 @@ FIXTURE_DIR_RE = re.compile(r"(^|/)(tests?|spec|__tests__|samples?|fixtures?|tes
 def doc_only(path: str, top: Path | None = None) -> bool:
     """File chỉ là tài liệu: sửa nó sau bước kiểm chứng không làm cũ biên nhận (receipt.py, hook Stop). `top`: gốc
     repo, để đọc dấu trang cho người đọc của file HTML nằm ngoài .agent/, docs/ (như HUONG-DAN.html ở gốc repo)."""
+    if agent_meta(path):
+        return True
     if Path(path).suffix.lower() not in RECEIPT_DOC_EXT or FIXTURE_DIR_RE.search(path.lower()):
         return False
     return kind(path, bool(top) and reader_page(Path(top) / path)) == "doc"
@@ -304,6 +334,12 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
         reasons.append("có file nhị phân, không đọc được nội dung: " + ", ".join(binary[:3]))
 
     level = "cao" if score >= 4 else "vua" if score >= 2 else "thap"
+    # Mức khai lúc khóa test (`receipt.py lock --red --level cao`) là mức của lát việc: diff có code thì không chấm thấp
+    # hơn, kể cả khi phần lớn diff là test (MW1 của SCEE bị chấm vừa vì vậy).
+    declared = [c["path"] for c in changes if "cao" in (c.get("lock_levels") or ())]
+    if declared and code_lines > 0 and level != "cao":
+        level = "cao"
+        reasons.append(f"mức đã khai lúc khóa test: cao ({declared[0]})")
     crossed = boundaries(changes, reviewed)
     if crossed and level == "thap":
         level = "vua"
@@ -313,8 +349,7 @@ def assess(changes: list, reviewed=frozenset(), writer=None, rereview=False, lim
         level = floor
         reasons.append("mức tối thiểu của project (.agent/stack.json)")
     result.update(boundaries=[{"kind": name, "paths": paths} for name, paths in crossed],
-                  threat_model_updated=any(c["path"] == THREAT_MODEL_REL or c["path"].endswith("/" + THREAT_MODEL_REL)
-                                           for c in changes))
+                  threat_model_updated=any(is_threat_model(c["path"]) for c in changes))
     crypto = [c["path"] for c in changes
               if c["path"] not in reviewed and change_kind(c) != "test" and CRYPTO_RE.search(c["path"].lower())]
     secure = bool(security or crypto or any(name in SECURITY_BOUNDARIES for name, _ in crossed))
@@ -733,7 +768,34 @@ def collect(root, base: str | None = None) -> list:
         changes.append({"path": path, "added": len(text.splitlines()), "deleted": 0, "text": text[:MAX_TEXT],
                         "page": Path(path).suffix.lower() in PAGE_EXT and bool(READER_PAGE_RE.search(text)),
                         "content": text if kind(path) == "test" else None})
+    TL = testlock()
+    for c in changes:
+        if at_rel(c["path"], TL.LOCK_REL):
+            c["lock_levels"] = lock_levels(root, ref, c["path"], top / c["path"])
     return sorted(changes, key=lambda c: c["path"])
+
+
+def testlock():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+    import testlock as TL
+    return TL
+
+
+def lock_levels(root: Path, ref: str, rel: str, path: Path) -> list:
+    """Các mức của mục khóa file test thêm hay đổi so với `ref` (bỏ qua thời điểm ghi), để assess biết mức đã khai.
+    File spec khóa cùng lát nhưng không phải nơi khai mức của test."""
+    TL = testlock()
+    old = git(root, "show", f"{ref}:{rel}")
+    before = TL.parse(old.stdout)["files"] if old.returncode == 0 else {}
+    try:
+        now = TL.parse(path.read_bytes())["files"]
+    except OSError:
+        now = {}
+
+    def bare(entry):
+        return {k: v for k, v in entry.items() if k != "ts"}
+    return sorted({e["level"] for name, e in now.items()
+                   if kind(name) == "test" and not SPEC_FILE_RE.search(name) and bare(e) != bare(before.get(name) or {})})
 
 
 def test_content(path: Path):

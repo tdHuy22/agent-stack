@@ -1,0 +1,11 @@
+# Tám quan sát sau GĐ6, lát công cụ (quan sát 2, 3, 4, 5, 6, 8) · mức cao · 17/11/2026
+# Kế hoạch: ~/.claude/plans/background-from-the-session-flickering-flurry.md. Threat model: TM-142 (S9).
+S1: Khi file đổi nằm trong `.agent/` mà không thuộc `.agent/spec/` (như `.agent/stack.json` chưa được git theo dõi, `.agent/test-lock.json`, `.agent/ban-giao/x.patch`) thì `risk.kind` không xếp nó là code, `receipt.py lock --red` không đòi `--allow` cho nó, và risk.py không cộng nó vào số dòng code.
+S2: Khi sau một lần `receipt.py run` chỉ có file trong `.agent/` (ngoài `.agent/spec/`) đổi thì biên nhận đó vẫn được báo là khớp code hiện tại.
+S3: Khi diff có đổi code và có thêm dòng vào `.agent/threat-model.md` thì risk.py báo diff đụng ranh giới tin cậy và chấm ít nhất mức vừa.
+S4: Khi diff có đổi code và `.agent/test-lock.json` có mục khóa mức cao được thêm hay đổi so với base thì risk.py chấm mức cao, lý do nêu mức đã khai lúc khóa test.
+S5: Khi chạy `receipt.py run`, `fails-before` hay `lock` với `--cwd <thư mục trong project>` thì lệnh chạy trong thư mục đó và `receipt.py show` in thư mục chạy cạnh biên nhận; khi `--cwd` ra ngoài project thì receipt.py thoát mã 2; khi không có `--cwd` mà thư mục hiện tại khác gốc project thì receipt.py in thư mục chạy trước output của lệnh.
+S6: Khi `receipt.py lock` khóa lại một file test đã khóa mà file chỉ có dòng thêm, và fails-before không kết luận vì trước bản sửa test trượt do thiếu import hay tên, thì receipt.py vẫn ghi các dòng thêm vào sổ khóa với mã 0, giữ mức và bằng chứng `red` cũ, và ghi kết luận của fails-before vào mục khóa.
+S7: Khi một file test đã khóa có dòng thêm mà chưa khóa lại thì bánh cóc báo 🟡 kèm lệnh khóa lại, không báo 🟢.
+S8: Khi một lần chạy mutmut song song của mutation.py trượt ở lần chạy test gốc, chưa kiểm đột biến nào, mà vẫn còn giờ thì mutation.py chạy lại lần đó một mình đúng một lần; lần chạy lại đạt thì phần của nó được tính như thường (không `partial`) và `notes` ghi là đã chạy lại.
+S9: Khi file trong `.agent/` có đuôi mã nguồn (như `.agent/x.py`, `.agent/hooks/a.sh`) thì `risk.kind` vẫn xếp nó là code và biên nhận coi nó là code, như file ngoài `.agent/`.

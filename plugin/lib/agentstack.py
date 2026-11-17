@@ -1588,6 +1588,62 @@ def foreign_files(root: Path, session_id, since: float, files: list, own_transcr
             if any(_mentions(t, root, rel, writes_only=True) for t in others)
             and not _mentions(mine, root, rel, writes_only=False)}
 
+SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
+FF_REFLOG, FF_WORKTREES, FF_COMMITS = 30, 8, 500
+
+
+def ff_foreign_commits(root: Path, since: float) -> set:
+    """Commit mà cây làm việc này chỉ tua nhanh tới (reflog HEAD ghi "Fast-forward" sau `since`) và tới được từ HEAD
+    của worktree khác mà một phiên agent-stack khác đang làm (có bản ghi lượt với root ở đó): phiên đó tự chốt việc
+    trong worktree của nó. Worktree không có phiên khác (agent tự tạo) thì vẫn tính cho phiên này (TM-140). Chỉ chạy
+    lệnh git chỉ đọc; lỗi hay thiếu dữ liệu thì rỗng, tức tính như cũ (TM-141)."""
+    try:
+        reflog = git_out(root, "reflog", "show", "-n", str(FF_REFLOG), "--date=unix", "--format=%H %gd %gs", "HEAD")
+        rows = [line.split(" ", 2) for line in (reflog or "").splitlines()]
+        ranges = []
+        for i, row in enumerate(rows[:-1]):
+            stamp = re.match(r"^HEAD@\{(\d+)\}$", row[1]) if len(row) == 3 else None
+            old = rows[i + 1][0]
+            if (stamp and int(stamp.group(1)) >= int(since) and row[2].endswith(": Fast-forward")
+                    and SHA_RE.match(row[0]) and SHA_RE.match(old)):
+                ranges.append((old, row[0]))
+        if not ranges:
+            return set()
+        top = Path((git_out(root, "rev-parse", "--show-toplevel") or "").strip() or root).resolve()
+        trees, path = [], None
+        for line in (git_out(root, "worktree", "list", "--porcelain") or "").splitlines():
+            if line.startswith("worktree "):
+                path = Path(line[9:]).resolve()
+            elif line.startswith("HEAD ") and path and path != top and SHA_RE.match(line[5:].strip()):
+                trees.append((path, line[5:].strip()))
+        if not trees:
+            return set()
+        # Phiên khác: bản ghi lượt có transcript thật (bản ghi viết tay thì không) mà "chủ" (cây sâu nhất chứa root của
+        # bản ghi, trong cây này và các worktree khác) là worktree khác: worktree lồng dưới cây chính
+        # (`.claude/worktrees/<tên>`) vẫn là của nó, bản ghi của chính phiên ở cây lồng không biến cây cha thành phiên khác.
+        trees = trees[:FF_WORKTREES]
+        owners = set()
+        for rec_path in list((state_dir() / TURN_DIR).glob("*.json"))[:200]:
+            rec = read_json(rec_path)
+            if not (isinstance(rec, dict) and isinstance(rec.get("root"), str) and isinstance(rec.get("transcript"), str)
+                    and Path(rec["transcript"]).is_file()):
+                continue
+            r = Path(rec["root"]).resolve()
+            holders = [c for c in [top, *(tree for tree, _ in trees)] if c == r or c in r.parents]
+            if holders:
+                owners.add(max(holders, key=lambda c: len(c.parts)))
+        heads = [sha for tree, sha in trees if tree in owners]
+        foreign = set()
+        for old, new in ranges if heads else ():
+            brought = (git_out(root, "rev-list", f"--max-count={FF_COMMITS}", f"{old}..{new}") or "").split()
+            reach = (git_out(root, "rev-list", f"--max-count={FF_COMMITS}", *heads, f"^{old}") or "").split()
+            foreign |= set(brought) & set(reach)
+        return foreign
+    except Exception as exc:  # noqa: BLE001
+        log_event("hook-error", {"hook": "ff_foreign_commits", "error": repr(exc)[:300]})
+        return set()
+
+
 def changed_since(root: Path, since: float, edited_only: bool = False) -> list:
     """File trong project đổi sau thời điểm `since`: file chưa commit có mtime mới hơn, cộng file trong các commit
     tạo sau đó. Bỏ file kế hoạch và chính LAST-TURN.md. File đã xóa không xét được thời điểm nên bỏ qua.
@@ -1615,12 +1671,16 @@ def changed_since(root: Path, since: float, edited_only: bool = False) -> list:
                 found.append(rel)
         except OSError:
             continue
-    log = git_out(root, "-c", "core.quotePath=false", "log", "-n", "20", "--format=@%ct", "--name-only",
+    log = git_out(root, "-c", "core.quotePath=false", "log", "-n", "20", "--format=@%ct %H", "--name-only",
                   "--relative") or ""
-    recent = False
+    recent, foreign = False, None
     for line in log.splitlines():
         if line.startswith("@"):
-            recent = line[1:].strip().isdigit() and int(line[1:].strip()) >= int(since)
+            stamp, _, sha = line[1:].strip().partition(" ")
+            recent = stamp.isdigit() and int(stamp) >= int(since)
+            if recent:
+                foreign = ff_foreign_commits(root, since) if foreign is None else foreign
+                recent = sha.strip() not in foreign
         elif line.strip() and recent and line.strip() not in skip and line.strip() not in found:
             if edited_only:
                 try:

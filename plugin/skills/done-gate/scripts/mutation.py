@@ -103,15 +103,21 @@ def runner_for(option, book: dict, changed) -> str:
         return option
     cmds = []
     for rel, entry in sorted(book["files"].items()):
-        cmd = entry.get("cmd")
-        if rel in changed and isinstance(cmd, list) and cmd and all(isinstance(x, str) for x in cmd) and cmd not in cmds:
-            cmds.append(cmd)
+        cmd, cwd = entry.get("cmd"), entry.get("cwd")
+        if not (rel in changed and isinstance(cmd, list) and cmd and all(isinstance(x, str) for x in cmd)):
+            continue
+        # Mục khóa ghi bằng `--cwd`: chạy lệnh test trong thư mục đó (tương đối với project, không ra ngoài).
+        where = cwd if isinstance(cwd, str) and cwd not in ("", ".") and ".." not in Path(cwd).parts \
+            and not Path(cwd).is_absolute() else None
+        if (cmd, where) not in cmds:
+            cmds.append((cmd, where))
     if not cmds:
         raise Skip("không biết lệnh test: nêu --cmd \"<lệnh test>\", hay khóa test trước (`receipt.py lock --red`) để sổ "
                    "khóa có lệnh")
-    if len(cmds) == 1:
-        return shlex.join(cmds[0])
-    return shlex.join(["sh", "-c", " && ".join(shlex.join(c) for c in cmds)])
+    if len(cmds) == 1 and cmds[0][1] is None:
+        return shlex.join(cmds[0][0])
+    parts = [(f"cd {shlex.quote(where)} && " if where else "") + shlex.join(cmd) for cmd, where in cmds]
+    return shlex.join(["sh", "-c", " && ".join(f"({p})" if len(cmds) > 1 else p for p in parts)])
 
 
 def text_lines(data: bytes) -> list:
@@ -240,6 +246,23 @@ def kill_group(proc) -> None:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         pass
+
+
+def baseline_failed(w: dict) -> bool:
+    """Lần chạy trượt ngay ở lần chạy test gốc: mutmut in "don't run cleanly" và dừng trước khi đột biến gì."""
+    return w["code"] is not None and bool(w["code"] & 1) and "cleanly" in (w["output"] or "")
+
+
+def retry_alone(w: dict, mutmut: Path, deadline: float, started: float) -> None:
+    """Chạy lại một mình lần chạy `w` (cùng hạn chót). Chỉ thay kết quả khi lần chạy lại thật sự kiểm được đột biến;
+    không thì giữ lần trượt, phần đó vẫn tính là chưa kiểm. Ghi `retry_ok` cho dòng ghi chú."""
+    (w["cwd"] / ".mutmut-cache").unlink(missing_ok=True)
+    code, output = finish_group(start_group(w["cmd"], w["cwd"], w["log"]), deadline, w["log"])
+    restore_backups(w["cwd"], w["targets"])
+    res = collect(mutmut, w["cwd"])
+    w["retry_ok"] = code is not None and not code & 1 and bool(res["total"])
+    if w["retry_ok"]:
+        w.update(code=code, output=output, res=res, seconds=time.monotonic() - started)
 
 
 def start_group(cmd: list, cwd: Path, log: Path):
@@ -498,6 +521,9 @@ def run(args) -> dict:
         for w in workers:
             restore_backups(w["cwd"], w["targets"])
             w["res"] = collect(info["mutmut"], w["cwd"])
+        for w in workers:  # trượt ở lần chạy test gốc khi máy bận (nhiều lần chạy song song): chạy lại một mình, một lần
+            if baseline_failed(w) and time.monotonic() < deadline:
+                retry_alone(w, info["mutmut"], deadline, started)
     finally:
         mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})  # SIGTERM lúc dọn: chờ dọn xong mới nhận
         try:
@@ -529,6 +555,11 @@ def run(args) -> dict:
     # bit 1 của mã thoát: mutmut lỗi nặng (baseline trượt, sập giữa chừng). Thoát 0 mà không có đột biến là hợp lệ
     # (nhóm chỉ có import, def, docstring).
     failed = [w for w in workers if w["code"] is not None and w["code"] & 1]
+    for w in workers:
+        if "retry_ok" in w:
+            res["notes"].append(f"lần chạy mutmut của {', '.join(w['targets'][:3])} trượt ở lần chạy test gốc (máy bận?), "
+                                "đã chạy lại một mình: "
+                                + ("đạt, phần đó đã kiểm" if w["retry_ok"] else "vẫn chưa kiểm được"))
     for w in failed:
         tail = " ".join(w["output"].strip().splitlines()[-2:])[-200:]
         spans = line_ranges((rel[len(prefix):], n) for rel, lines in w["group"].items() for n in lines)

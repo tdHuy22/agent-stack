@@ -204,6 +204,8 @@ def parse(text) -> dict:
             out["broken"] = True
             continue
         clean = {k: v for k, v in entry.items() if k in ("sha256", "lines", "level", "ts", "cmd", "base", "label")}
+        # Thư mục chạy lệnh test (`--cwd`) và kết luận fails-before khi khóa lại phần thêm mà không chứng minh được.
+        clean.update({k: entry[k][:500] for k in ("cwd", "fails_before") if isinstance(entry.get(k), str)})
         red = clean_red(entry.get("red"))
         if red:
             clean["red"] = red

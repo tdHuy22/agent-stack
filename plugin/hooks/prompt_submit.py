@@ -151,6 +151,17 @@ def main():
                                        "file trong .agent/spec/ (sai mã, file đã sửa sau khi dựng trang, hay hai file "
                                        "trùng nội dung): chưa ghi bản duyệt. Dựng lại trang (`spec.py page <slug>`) "
                                        "và báo người dùng mã mới.")
+                # Câu gần đúng ("duyệt spec MW1 (mã …)", "duyệt <mã>", "duyệt" trần khi có trang chờ): nói câu cần gõ
+                # cho cả người dùng lẫn agent. Chỉ báo, không ghi gì (TM-139).
+                if not results or any(rec is None for _, rec in results):
+                    waiting = specbook.hint_specs(said, data.get("cwd"), bool(results))
+                    if waiting:
+                        hint = specbook.approval_hint(waiting)
+                        context.append("[agent-stack] Người dùng có vẻ muốn duyệt spec nhưng câu không đúng mẫu nên hook "
+                                       "chưa ghi bản duyệt. Đừng coi là đã duyệt; nói nguyên văn câu cần gửi, thành "
+                                       f"một tin riêng khi agent đã dừng lượt: {hint}")
+                        user.append("📝 Chưa ghi bản duyệt spec: hook chỉ ghi khi bạn gửi đúng câu, thành một tin riêng "
+                                    f"khi agent đã dừng lượt. Câu cần gửi: {hint}")
         except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)
             A.log_event("hook-error", {"hook": "spec-approve", "error": repr(exc)[:300]})
         try:  # nơi người dùng gõ: chỉ đánh dấu, hook PreToolUse đọc khi tin đã vào transcript (xem client_place)

@@ -202,6 +202,11 @@ def tail(output: str) -> str:
     return "\n".join(output.rstrip().splitlines()[-TAIL_LINES:])
 
 
+# Đầu kết luận khi phía trước bản sửa trượt vì thiếu ký hiệu; kết quả báo bằng cờ `missing_symbol` (receipt.py lock
+# dựa vào cờ đó để khóa lại phần test thêm).
+MISSING_VERDICT = "? không kết luận được: trước bản sửa trượt vì thiếu import"
+
+
 def verdict(before: int, after: int, before_out: str = "", home: str | None = None, probed: bool = True):
     """(mã thoát, kết luận). `home`: lý do môi trường nạp code từ thư mục làm việc thật, nếu có; `probed`: đã dò
     được môi trường của lệnh chưa (lệnh bọc ngoài như `sh -c`, `npm test` thì không)."""
@@ -221,7 +226,7 @@ def verdict(before: int, after: int, before_out: str = "", home: str | None = No
     setup = SETUP_ERROR_RE.search(before_out)
     if setup and not ASSERT_FAIL_RE.search(before_out):
         line = next((ln.strip() for ln in before_out.splitlines() if SETUP_ERROR_RE.search(ln)), setup.group(0))
-        return 2, (f"? không kết luận được: trước bản sửa trượt vì thiếu import, tên, lệnh hay fixture, không phải ở "
+        return 2, (f"{MISSING_VERDICT}, tên, lệnh hay fixture, không phải ở "
                    f"assert ({line[:120]}); test cần gọi hành vi của bản sửa qua code đã có ở commit gốc")
     return 0, f"✓ test bắt được lỗi: trước bản sửa trượt (mã {before}), sau bản sửa đạt"
 
@@ -298,9 +303,10 @@ def env_points_home(top: Path, cmd, cwd: Path, env=None, links=()):
     return None, True
 
 
-def fails_before(root: Path, cmd: list, base: str, tests, links, timeout: float, is_test) -> dict:
+def fails_before(root: Path, cmd: list, base: str, tests, links, timeout: float, is_test, cwd=None) -> dict:
     """Chạy hai phía và trả kết quả (exit, verdict, output, seconds, base, tests, before_exit, after_exit).
-    `is_test(đường dẫn tính từ gốc repo)` chọn file test khi không nêu `tests`. Lỗi đầu vào ném Problem."""
+    `is_test(đường dẫn tính từ gốc repo)` chọn file test khi không nêu `tests`; `cwd`: thư mục chạy lệnh (trong
+    project, mặc định `root`), chạy ở chỗ tương ứng trong cây tạm. Lỗi đầu vào ném Problem."""
     top_out = subprocess.run(GIT + ["-C", str(root), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
     if top_out.returncode != 0:
         raise Problem("không phải git repo: cần lịch sử git để dựng code trước bản sửa")
@@ -311,7 +317,7 @@ def fails_before(root: Path, cmd: list, base: str, tests, links, timeout: float,
         raise Problem(f"không tìm thấy commit {base}") from None
     entries, current = base_entries(top, sha), current_files(top)
     changed, deleted = diff(entries, current)
-    sub = root.resolve().relative_to(top.resolve()).as_posix()
+    sub = Path(cwd or root).resolve().relative_to(top.resolve()).as_posix()
     if not changed and not deleted:
         raise Problem(f"không có thay đổi nào so với {base}: bản sửa đã commit thì thêm --base <commit ngay trước "
                       "bản sửa>")
@@ -365,4 +371,5 @@ def fails_before(root: Path, cmd: list, base: str, tests, links, timeout: float,
     output = ("--- trước bản sửa ---\n" + tail(b_out) + "\n--- sau bản sửa ---\n" + tail(a_out) + "\n"
               + "\n".join(lines))
     return {"exit": code, "verdict": text, "output": output, "seconds": b_sec + a_sec, "base": sha,
-            "tests": sorted(picked), "before_exit": b_code, "after_exit": a_code, "lines": lines}
+            "tests": sorted(picked), "before_exit": b_code, "after_exit": a_code, "lines": lines,
+            "missing_symbol": code == 2 and text.startswith(MISSING_VERDICT)}

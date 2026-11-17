@@ -179,7 +179,7 @@ def classify(root, changes: list, base: str | None = None, kind=None, weakening=
     top_text = git_text(root, "rev-parse", "--show-toplevel")
     top = Path(top_text.strip()) if top_text and top_text.strip() else root
     kind = kind or (lambda p: "test" if re.search(r"(^|/)tests?/|test_|_test\.", p) else "code")
-    loosen, approved, tighten, red = [], [], [], []
+    loosen, approved, tighten, red, relock = [], [], [], [], []
     now, before = TL.load(top), base_book(top, base)
     if now.get("broken"):
         loosen.append(f"sổ khóa {TL.LOCK_REL} hỏng hay quá lớn: không biết test nào đang khóa (sổ bị sửa tay?)")
@@ -225,8 +225,10 @@ def classify(root, changes: list, base: str | None = None, kind=None, weakening=
             loosen.append(f"sửa test đã khóa {rel} (mức {entry['level']}): dòng cũ bị sửa hay xóa")
         elif state == "deleted":
             loosen.append(f"xóa test đã khóa {rel} (mức {entry['level']})")
-        elif state == "added":
-            tighten.append(f"thêm test vào test đã khóa {rel} (chưa khóa lại)")
+        elif state == "added":  # dòng thêm chưa vào sổ thì sửa nó về sau không ai thấy: nhắc khóa lại (🟡)
+            relock.append(f"{rel}: thêm test vào file đã khóa mà chưa khóa lại; chạy `receipt.py lock -- <lệnh test>` (test "
+                          "thêm đạt cả trên commit gốc, hay đã commit, thì thêm `--base <commit trước code mà test kiểm>`; không commit nào "
+                          "làm test trượt, như test cho hành vi cũ, thì nêu trong báo cáo, không phải lỗi)")
 
     locked = set(now["files"]) | set(before["files"])
     for c in changes:
@@ -281,25 +283,30 @@ def classify(root, changes: list, base: str | None = None, kind=None, weakening=
             red.append(f"spec và code đổi trong cùng một thay đổi: {', '.join(unready[:3])} cùng "
                        f"{', '.join(code[:3])}" + (f" và {len(code) - 3} file khác" if len(code) > 3 else ""))
 
-    verdict = "do" if loosen or red else "vang" if approved or pending else "xanh" if tighten else ""
+    verdict = "do" if loosen or red else "vang" if approved or pending or relock else "xanh" if tighten else ""
     return {"loosen": loosen, "approved": approved, "tighten": tighten, "red": red, "pending": pending,
-            "verdict": verdict}
+            "relock": relock, "verdict": verdict}
 
 
 def render(r: dict) -> list:
     if not r or not r.get("verdict"):
         return []
-    pending = r.get("pending") or []
+    pending, relock = r.get("pending") or [], r.get("relock") or []
+    if pending:
+        yellow = ("🟡 có dòng spec chưa duyệt: nêu trong báo cáo, mời người dùng duyệt (trang `spec.py page` rồi "
+                  "\"duyệt spec <mã>\", hay mục `## Spec` của kế hoạch)")
+    elif relock and not r["approved"]:
+        yellow = "🟡 có test thêm vào file đã khóa mà chưa khóa lại: khóa lại trước khi báo xong"
+    else:
+        yellow = "🟡 chỉ có nới đã được người dùng duyệt: nêu lại trong báo cáo"
     head = {"do": "🔴 có nới chưa được duyệt: đưa vào \"Cần bạn quyết\", đề xuất cho người dùng, không tự quyết",
-            "vang": ("🟡 có dòng spec chưa duyệt: nêu trong báo cáo, mời người dùng duyệt (trang `spec.py page` rồi "
-                     "\"duyệt spec <mã>\", hay mục `## Spec` của kế hoạch)" if pending else
-                     "🟡 chỉ có nới đã được người dùng duyệt: nêu lại trong báo cáo"),
-            "xanh": "🟢 chỉ siết"}[r["verdict"]]
+            "vang": yellow, "xanh": "🟢 chỉ siết"}[r["verdict"]]
     lines = [f"Bánh cóc: {head}"]
     lines += [f"- 🔴 nới: {x}" for x in r["loosen"]]
     lines += [f"- 🔴 {x}" for x in r["red"]]
     lines += [f"- 🟡 dòng spec chưa duyệt: {x}" for x in pending]
     lines += [f"- 🟡 nới đã duyệt: {x}" for x in r["approved"]]
+    lines += [f"- 🟡 {x}" for x in relock]
     lines += [f"- 🟢 siết: {x}" for x in r["tighten"][:8]]
     if len(r["tighten"]) > 8:
         lines.append(f"- 🟢 và {len(r['tighten']) - 8} chỗ siết khác")

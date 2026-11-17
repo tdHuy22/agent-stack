@@ -17,7 +17,6 @@ Lệnh:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import html
 import os
 import sys
@@ -28,8 +27,6 @@ HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parents[3] / "lib"))
 import specbook as SB  # noqa: E402
 import testlock as TL  # noqa: E402
-
-CODE_LEN = 12  # trang hiện 12 ký tự mã (hook nhận từ 8): khó giả hơn nhiều so với 8 (TM-131)
 
 
 def resolve_targets(top: Path, project: Path, names) -> list | None:
@@ -221,6 +218,8 @@ sách cần sửa.</p>
 <section><h2>Chép về chat</h2>
 <p>Câu duyệt chỉ có tác dụng khi chính bạn gõ hay dán vào chat, và chỉ cho đúng nội dung file lúc dựng trang: sửa
 file thì mã đổi, phải duyệt lại.</p>
+<p>Gửi nguyên văn câu <code>duyệt spec {e(code)}</code> thành một tin riêng, khi agent đã dừng lượt: tin gửi lúc agent
+đang chạy có thể không qua hook nên không được ghi; câu thêm chữ khác (như tên lát hay "mã") cũng không được ghi.</p>
 <p><button type="button" data-xuat>Chép kết quả</button></p>
 <pre id="ket-qua" aria-live="polite">duyệt spec {e(code)}</pre>
 </section>
@@ -237,11 +236,11 @@ def cmd_page(top: Path, slug: str) -> int:
         print(f"[spec] không thấy file spec {SB.SPEC_DIR}/{slug}.txt")
         return 2
     data = path.read_bytes()
-    code = hashlib.sha256(data).hexdigest()[:CODE_LEN]
+    code = SB.spec_code(data)
     parsed = SB.parse(data.decode("utf-8", "replace"))
     book, approved = TL.load(top), SB.approved(top)
     rel = f"{SB.SPEC_DIR}/{slug}.txt"
-    page = top / ".agent" / "trang" / f"{slug}-spec.html"
+    page = SB.page_path(top, slug)
     # Không ghi xuyên symlink (repo lạ có thể để sẵn `.agent/trang/<slug>-spec.html` trỏ ra ngoài), như TM-109.
     for part in (top / ".agent", page.parent, page):
         if part.is_symlink():
@@ -260,7 +259,8 @@ def cmd_page(top: Path, slug: str) -> int:
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
-    print(f"[spec] trang duyệt: mã {code}; người dùng dán `duyệt spec {code}` vào chat để duyệt")
+    print(f"[spec] trang duyệt: mã {code}. Nói nguyên văn với người dùng: gửi `duyệt spec {code}` thành một tin riêng "
+          "khi agent đã dừng lượt (tin gửi lúc agent đang chạy có thể không qua hook; câu thêm chữ khác không được ghi)")
     print(str(page))
     return 0
 

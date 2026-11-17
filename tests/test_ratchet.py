@@ -82,8 +82,9 @@ class Ratchet(TempDirTestCase):
         self.put("tests/test_calc.py", TEST + "\n    def test_neg(self):\n        self.assertEqual(add(-1, -1), -2)\n")
         self.put("tests/test_more.py", TEST.replace("class T", "class U"))
         r = self.risk()
-        self.assertEqual(r.get("verdict"), "xanh", r)
-        self.assertTrue(any("thêm test vào test đã khóa tests/test_calc.py" in x for x in r["tighten"]), r)
+        # gd6-qs-cong-cu S7 (bạn mở khóa 17/11/2026): dòng thêm vào file đã khóa mà chưa khóa lại là 🟡 nhắc khóa lại
+        self.assertEqual(r.get("verdict"), "vang", r)
+        self.assertTrue(any("tests/test_calc.py" in x and "receipt.py lock" in x for x in r["relock"]), r)
         self.assertTrue(any("thêm test tests/test_more.py" in x for x in r["tighten"]), r)
 
     def test_hand_edited_lock_book_without_approval_is_red(self):

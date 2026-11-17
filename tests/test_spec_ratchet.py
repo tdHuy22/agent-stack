@@ -276,7 +276,7 @@ class SpecSection(SpecRatchetBase):
         # spec:gd6-spec-theo-lat#S12
         self.spec_diff()
         self.put("tests/test_x.py", TEST_BODY)
-        self.lock("tests/test_x.py")
+        self.lock("tests/test_x.py", level="vua")  # gd6-qs-cong-cu S4: mục khóa mức cao nâng diff có code lên cao
         self.approve(LINES[:1], "duyet-spec")
         self.approve(LINES[1:], "ke-hoach")
         full = self.run_risk()
@@ -291,6 +291,15 @@ class SpecSection(SpecRatchetBase):
         text = self.run_risk(as_json=False)
         self.assertTrue(self.section_lines(text), text)
         self.assertIn(SPEC_REL, text)
+
+    def test_high_lock_of_a_test_raises_a_code_diff_to_high(self):
+        # spec:gd6-qs-cong-cu#S4 (cùng cảnh như trên, khóa test ở mức cao: mức khai lúc khóa là mức của lát)
+        self.spec_diff()
+        self.put("tests/test_x.py", TEST_BODY)
+        self.lock("tests/test_x.py", level="cao")
+        full = self.run_risk()
+        self.assertEqual(full["level"], "cao", full["reasons"])
+        self.assertTrue(any("khóa test" in r for r in full["reasons"]), full["reasons"])
 
     def test_lists_red_locked_tests_only(self):
         # spec:gd6-spec-theo-lat#S12

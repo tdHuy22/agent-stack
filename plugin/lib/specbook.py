@@ -243,6 +243,73 @@ def shown_line(sid: str, text: str, limit: int = 200) -> str:
     return clean if len(clean) <= limit else clean[:limit - 1] + "…"
 
 
+CODE_LEN = 12  # trang hiện 12 ký tự mã (hook nhận từ 8): khó giả hơn nhiều so với 8 (TM-131)
+HEX_RE = re.compile(r"(?<![0-9a-z])[0-9a-f]{8,64}(?![0-9a-z])")
+# Từ được đứng cạnh "duyệt" trong tin chỉ là lời đồng ý (đã bỏ dấu). Không dùng bộ từ đồng ý của lệnh git
+# (agentstack._CONSENT_LEAD) vì bộ đó có cả động từ như push, reset, commit.
+_BARE_OK = {"duyet", "ok", "oke", "okay", "yes", "dong", "y", "nhe", "nha", "di", "roi", "a", "vang", "da", "luon"}
+
+
+def spec_code(data: bytes) -> str:
+    """Mã duyệt của một file spec: đầu sha256 của đúng nội dung file (trang và hook dùng chung)."""
+    return hashlib.sha256(data).hexdigest()[:CODE_LEN]
+
+
+def page_path(top, slug: str) -> Path:
+    """Trang duyệt của spec `slug` (spec.py page dựng)."""
+    return Path(top) / ".agent" / "trang" / f"{slug}-spec.html"
+
+
+def pending_specs(top) -> list:
+    """[{path, code, page}] của file spec còn dòng chưa duyệt bằng câu duyệt; `page`: trang duyệt đã dựng cho đúng
+    nội dung hiện tại (trang có mã). Chỉ đọc, để hook nói người dùng câu cần gõ (TM-139)."""
+    done = approved(top)
+    out = []
+    for path in spec_files(top):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        lines = parse(data.decode("utf-8", "replace"))["lines"]
+        if lines and all("duyet-spec" in done.get(line_hash(x["id"], x["text"]), ()) for x in lines):
+            continue
+        code = spec_code(data)
+        page = page_path(top, path.stem)
+        try:
+            built = (page.is_file() and not page.is_symlink() and page.stat().st_size <= 2_000_000
+                     and code.encode() in page.read_bytes())
+        except OSError:
+            built = False
+        out.append({"path": path.relative_to(Path(top)).as_posix(), "code": code, "page": built})
+    return out
+
+
+def _words(text: str) -> list:
+    """Các từ (đã bỏ dấu, chữ thường) của một tin."""
+    return re.findall(r"[a-z0-9]+", A.fold(unicodedata.normalize("NFC", text or "")).lower())
+
+
+def hint_specs(said: str, cwd, unrecorded: bool) -> list:
+    """Spec cần nói câu duyệt cho người dùng khi hook không ghi được bản duyệt. Chỉ xét lời của chính người dùng
+    (`said`, đã bỏ phần dán, khối hệ thống, brief: TM-128): tin gần đúng ("duyệt" kèm "spec" hay kèm mã hex, hay mã
+    không khớp: `unrecorded`) thì mọi spec chờ duyệt; tin chỉ gồm lời đồng ý có "duyệt" thì spec chờ duyệt đã dựng
+    trang. Chỉ đọc, không ghi gì (TM-139)."""
+    words = _words(said)
+    if "duyet" not in words and not unrecorded:
+        return []
+    near = unrecorded or "spec" in words or bool(HEX_RE.search(" ".join(words)))
+    bare = not near and len(words) <= 4 and all(w in _BARE_OK for w in words)
+    top = git_top(cwd) if (near or bare) and cwd else None
+    waiting = pending_specs(top) if top else []
+    return [s for s in waiting if s["page"]] if bare else waiting
+
+
+def approval_hint(specs: list) -> str:
+    """Câu cần gõ cho từng spec chờ duyệt, theo tên lát: không nêu đường dẫn file spec khi chưa ghi gì (để không ai
+    tưởng đã ghi bản duyệt cho file đó)."""
+    return "; ".join(f"spec {Path(s['path']).stem}: `duyệt spec {s['code']}`" for s in specs)
+
+
 def approval_text(prompt) -> str:
     """Phần chữ được đọc lời duyệt spec: rỗng khi tin là brief của phiên do phiên khác mở; bỏ khối hệ thống chèn vào,
     thẻ <ide_*>, phần dán, khối code, dòng trích (TM-128)."""

@@ -730,7 +730,7 @@ SPEC_BOOK_REASON = ("agent-stack: `state/spec-approvals.json` là sổ duyệt s
 RUNNER_RE = re.compile(r"^(python[\d.]*|uv|uvx|env|pipx|pyenv|poetry|pdm|hatch|rye)$")
 # Cờ của receipt.py nhận giá trị: lệnh bên trong là phần còn lại sau chúng (argparse REMAINDER, có hay không `--`).
 RECEIPT_VALUE_FLAGS = {"--project", "--label", "--timeout", "--base", "--link", "--tests", "--level", "--reason",
-                       "--spec", "--allow"}
+                       "--spec", "--allow", "--cwd"}
 RECEIPT_MULTI_FLAGS = {"--tests", "--spec", "--allow"}  # nargs="+" của receipt.py: nuốt tới cờ kế tiếp
 # Tên sổ duyệt sau khi shell bỏ dấu nháy, gạch chéo (`spec-approval"s".json` thành `spec-approvals.json`), hay còn glob.
 SPEC_BOOK_TOKEN_RE = re.compile(r"spec-appr[^/\s]{0,8}\.json|spec-appr[^/\s]*[*?\[]", re.I)
@@ -767,6 +767,26 @@ def receipt_inner(rest: list) -> list:
                 i += 1
     inner = rest[i:]
     return inner[1:] if inner[:1] == ["--"] else inner
+
+
+def receipt_run_dir(rest: list, where: Path) -> Path:
+    """Thư mục receipt.py sẽ chạy lệnh bên trong: `--cwd` (tính từ thư mục hiện tại), không có thì gốc project của
+    `--project` (mặc định thư mục hiện tại), như `run_place_arg` của receipt.py. Đường dẫn tương đối trong lệnh bên
+    trong tính từ đây, không từ thư mục của hook."""
+    values = {}
+    i = 0
+    while i < len(rest) and rest[i].startswith("-") and rest[i] != "--":
+        flag, inline, value = rest[i].partition("=")
+        if flag in ("--cwd", "--project"):
+            values[flag] = value if inline else (rest[i + 1] if i + 1 < len(rest) else "")
+        i += 2 if flag in RECEIPT_VALUE_FLAGS and not inline else 1
+        if flag in RECEIPT_MULTI_FLAGS and not inline:
+            while i < len(rest) and not rest[i].startswith("-"):
+                i += 1
+    base = Path(os.path.expanduser(str(where)))
+    if values.get("--cwd"):
+        return base / os.path.expanduser(values["--cwd"])
+    return lib().project_root(base / os.path.expanduser(values.get("--project") or "."))
 
 
 def target_path(where: Path, target: str):
@@ -1279,7 +1299,7 @@ def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
         return check_unlock(rest, where, session_id)
     if sub in ("run", "fails-before", "lock"):  # `receipt.py run [--] rm tests/x.py`: xét lệnh bên trong
         inner = receipt_inner(rest)
-        found = check_bash(shlex.join(inner), str(where), session_id) if inner else None
+        found = check_bash(shlex.join(inner), str(receipt_run_dir(rest, where)), session_id) if inner else None
         if found and found[0] in ("deny", "ask"):
             return found
     TL = testlock_lib()
