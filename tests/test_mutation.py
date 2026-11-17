@@ -484,7 +484,13 @@ class Results(MutationBase):
         self.status_line(out)
         self.assertIn("calc.py:6", out.stdout)
         self.assertIn("newmod.py:2", out.stdout)
-        self.assertNotIn("calc.py:4", out.stdout, "mutant bị diệt không được liệt kê là sống")
+        listed = [ln for ln in out.stdout.splitlines() if ln.startswith("- sống:")]
+        self.assertTrue(listed, out.stdout)
+        self.assertFalse([ln for ln in listed if "calc.py:4" in ln], "mutant bị diệt không được liệt kê là sống")
+        last = [ln for ln in out.stdout.splitlines() if ln.startswith("Mutation:")][-1]
+        self.assertNotIn("calc.py:4", last, "phần ngoặc dòng cuối chỉ nêu đột biến sống")
+        warn = [ln for ln in out.stdout.splitlines() if "ngoài dòng đổi" in ln]
+        self.assertTrue([ln for ln in warn if "calc.py:4" in ln], "đột biến ngoài dòng đổi nằm ở dòng ⚠, không ở dòng sống")
 
 
 class TimeCap(MutationBase):
