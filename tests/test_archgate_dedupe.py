@@ -612,5 +612,198 @@ class ReviewRoundOneFixes(ArchDedupeBase):
         self.expect_reported("Edit", ctx, target=big)
 
 
+class MutationGapsOfJobA(ArchDedupeBase):
+    """Thêm sau mutation của việc A (17/11/2026, `.tmp/mut-a.json`: 149 đột biến, 22 sống): phủ phần test còn thiếu.
+    Ba đột biến sống không phủ vì tương đương (đổi mà hành vi không đổi):
+    - `archgate.py:177` mặc định `timeout` 30 → 31: thiếu `timeout` chỉ cần mặc định từ 1 trở lên, 30 hay 31 như nhau.
+    - `post_edit.py:204` `or ""` → `or "XXXX"`: tên công cụ thiếu không khớp matcher nào, trừ matcher đúng `XXXX`.
+    - `archgate.py:131` đọc `MAX_SETTINGS_BYTES + 2` thay `+ 1`: `len(raw) <= MAX` chỉ đúng khi file không quá MAX, đọc
+      thừa một byte nữa không đổi kết quả (thấy khi viết test này; danh sách ban đầu ghi 20, thực ra 22 với ba cái này).
+    Các ca bỏ gọi archctl kiểm thêm là hook không ghi `hook-error`: hook sập rồi im lặng trông giống bỏ có chủ ý.
+    """
+
+    def assert_no_hook_error(self):
+        log = self.state / "events.jsonl"
+        self.assertNotIn("hook-error", log.read_text(encoding="utf-8") if log.exists() else "")
+
+    def counts(self, command):
+        self.put(config(command=command))
+        self.expect_skipped(self.run_tool("Edit", self.env_for()))
+        self.assert_no_hook_error()
+
+    def does_not_count(self, command):
+        self.put(config(command=command))
+        self.expect_reported("Edit", self.run_tool("Edit", self.env_for()))
+        self.assert_no_hook_error()
+
+    # ---- cách shlex tách lệnh: `archgate.py:151-155` ----
+    def test_punctuation_glued_to_a_word_is_split_off_so_the_command_does_not_count(self):
+        # spec:post-edit-archctl-trung#S2
+        # Nếu shlex không coi `;`, `&&`, `|`, `>` là dấu riêng thì `x;echo` thành tên thư mục hợp lệ.
+        for command in ("archctl check --hook --root x;echo", "archctl check --hook --root .>/dev/null",
+                        "archctl check --hook --root=x&&true", "archctl check --root a|cat --hook",
+                        "archctl check --hook --root x&", "archctl check --hook --root x</dev/null",
+                        "archctl check --hook --root=x;true", "archctl check --hook;echo", "archctl check --hook&&true"):
+            with self.subTest(command=command):
+                self.does_not_count(command)
+
+    def test_root_value_with_characters_outside_shlex_word_characters_still_counts(self):
+        # spec:post-edit-archctl-trung#S1
+        # Chỉ tách theo dấu cách (whitespace_split): `:`, `@`, `,`, `+`, `%` không thuộc bộ ký tự chữ mặc định của shlex.
+        for command in ("archctl check --hook --root /opt/my:proj", "archctl check --root proj@2 --hook",
+                        "archctl check --hook --root a,b", "archctl check --hook --root=/srv/a+b", "archctl check --hook --root 50%"):
+            with self.subTest(command=command):
+                self.counts(command)
+
+    def test_unbalanced_quote_or_trailing_backslash_does_not_count(self):
+        # spec:post-edit-archctl-trung#S2
+        for command in ("archctl check --hook '", 'archctl check --hook "', "archctl check --hook --root 'x",
+                        'archctl check --hook --root "a b', "archctl check --hook \\", "archctl 'check --hook"):
+            with self.subTest(command=command):
+                self.does_not_count(command)
+
+    # ---- dạng `--root`: `archgate.py:162-165` ----
+    def test_root_as_a_separate_word_is_parsed_and_extra_words_after_it_do_not_count(self):
+        # spec:post-edit-archctl-trung#S2
+        # `--root <path>` tách bằng dấu cách đứng trước cờ khác, hay lặp, hay kèm từ thừa: phải báo, không được sập.
+        for command in ("archctl check --root . --hook --bogus", "archctl check --hook --root . --root .",
+                        "archctl check --root a --root b --hook", "archctl check --root . --hook extra",
+                        "archctl check --root . --root=. --hook", "archctl check --root=. --root . --hook",
+                        "archctl check --root . --bogus --hook"):
+            with self.subTest(command=command):
+                self.does_not_count(command)
+
+    def test_root_as_a_separate_word_counts_in_either_order(self):
+        # spec:post-edit-archctl-trung#S1
+        for command in ("archctl check --root . --hook", "archctl check --hook --root .",
+                        "archctl check --root /abs/path --hook", "archctl check --hook --root a/b",
+                        "archctl check --root=. --hook", "archctl check --hook --root=a/b"):
+            with self.subTest(command=command):
+                self.counts(command)
+
+    def test_root_followed_by_a_flag_does_not_take_it_as_the_value(self):
+        # spec:post-edit-archctl-trung#S2
+        for command in ("archctl check --root -x --hook", "archctl check --hook --root --strict",
+                        "archctl check --root - --hook", "archctl check --root -- --hook"):
+            with self.subTest(command=command):
+                self.does_not_count(command)
+
+    def test_empty_root_value_does_not_count(self):
+        # spec:post-edit-archctl-trung#S2
+        for command in ("archctl check --hook --root=", "archctl check --root= --hook", "archctl check --hook --root ''",
+                        'archctl check --root "" --hook'):
+            with self.subTest(command=command):
+                self.does_not_count(command)
+
+    # ---- biên đúng giới hạn ----
+    def test_command_of_exactly_the_length_cap_counts_but_one_more_character_does_not(self):
+        # spec:post-edit-archctl-trung#S4
+        prefix = "archctl check --hook --root "
+        for size, counted in ((999, True), (1000, True), (1001, False), (1002, False)):
+            command = prefix + "a" * (size - len(prefix))
+            self.assertEqual(len(command), size)
+            with self.subTest(size=size):
+                self.counts(command) if counted else self.does_not_count(command)
+
+    def test_settings_of_exactly_the_size_cap_is_read_but_one_more_byte_is_not(self):
+        # spec:post-edit-archctl-trung#S4
+        cap = 262_144
+        cfg = config()
+        cfg["pad"] = ""
+        base = len(json.dumps(cfg).encode())
+        for name in ("settings.json", "settings.local.json"):
+            for size, read in ((cap - 1, True), (cap, True), (cap + 1, False), (cap + 2, False)):
+                cfg["pad"] = "x" * (size - base)
+                text = json.dumps(cfg)
+                self.assertEqual(len(text.encode()), size)
+                self.put_raw(text, name)
+                with self.subTest(name=name, size=size):
+                    ctx = self.run_tool("Edit", self.env_for())
+                    self.expect_skipped(ctx) if read else self.expect_reported("Edit", ctx)
+                    self.assert_no_hook_error()
+            (self.project / ".claude" / name).unlink()
+
+    def test_timeout_of_exactly_one_second_counts_but_less_than_one_does_not(self):
+        # spec:post-edit-archctl-trung#S2
+        for value, counted in ((1, True), (1.0, True), (2, True), (1.5, True), (0.99, False), (0.5, False), (-1, False)):
+            cfg = config()
+            cfg["hooks"]["PostToolUse"][0]["hooks"][0]["timeout"] = value
+            self.put(cfg)
+            with self.subTest(timeout=value):
+                ctx = self.run_tool("Edit", self.env_for())
+                self.expect_skipped(ctx) if counted else self.expect_reported("Edit", ctx)
+                self.assert_no_hook_error()
+
+    def edit_file_of_size(self, size, name="edge.py"):
+        """Gửi payload Edit cho file đúng `size` byte (thêm dòng chú thích ngắn, không gây lỗi linter)."""
+        data = NEW_TEXT.encode()
+        pad = size - len(data)
+        data += (b"##\n" if pad % 2 else b"") + b"#\n" * ((pad - (pad % 2) * 3) // 2)
+        self.assertEqual(len(data), size)
+        target = self.project / "app" / "web" / name
+        target.write_bytes(data)
+        self.log.unlink(missing_ok=True)
+        ctx = self.post_at(self.project, "Edit", {"file_path": str(target), "new_string": NEW_TEXT.strip()}, self.sid(),
+                           **self.env_for())
+        return ctx, target
+
+    def test_file_of_exactly_the_size_cap_counts_as_small_but_one_more_byte_does_not(self):
+        # spec:post-edit-archctl-trung#S6
+        self.put(config())
+        cap = 2_000_000
+        for size, small in ((cap - 1, True), (cap, True), (cap + 1, False)):
+            with self.subTest(size=size):
+                ctx, target = self.edit_file_of_size(size)
+                self.expect_skipped(ctx) if small else self.expect_reported("Edit", ctx, target=target)
+                self.assert_no_hook_error()
+
+    # ---- nhánh lỗi hệ thống ----
+    def test_file_that_cannot_be_stat_ed_is_still_checked_by_post_edit(self):
+        # spec:post-edit-archctl-trung#S6
+        # Không đọc được kích thước thì không chắc hook của archctl kiểm đủ: vẫn gọi archctl.
+        self.put(config())
+        gone = self.project / "app" / "web" / "gone.py"
+        self.assertFalse(gone.exists())
+        self.log.unlink(missing_ok=True)
+        ctx = self.post_at(self.project, "Edit", {"file_path": str(gone), "new_string": NEW_TEXT.strip()}, self.sid(),
+                           **self.env_for())
+        self.expect_reported("Edit", ctx, target=gone)
+
+
+class TrustedRootDirect(unittest.TestCase):
+    """`archgate._trusted` kiểm trực tiếp: ca file của root (uid 0) cần quyền root để dựng thật, nên dùng `os.stat` giả."""
+
+    def lib(self):
+        import importlib
+        import sys
+
+        from tests._util import PLUGIN
+        if str(PLUGIN / "lib") not in sys.path:
+            sys.path.insert(0, str(PLUGIN / "lib"))
+        return importlib.import_module("archgate")
+
+    def test_root_that_cannot_be_stat_ed_is_untrusted(self):
+        # spec:post-edit-archctl-trung#S6
+        from pathlib import Path
+        archgate = self.lib()
+        for root in (Path("/nonexistent-agent-stack-trusted-root/project"), Path("/tmp/agent-stack-nul\0byte")):
+            with self.subTest(root=repr(str(root))):
+                self.assertIs(archgate._trusted(root), False)
+
+    def test_only_files_owned_by_me_or_root_and_not_world_writable_are_trusted(self):
+        # spec:post-edit-archctl-trung#S6
+        import types
+        from pathlib import Path
+        from unittest import mock
+        archgate = self.lib()
+        me = os.geteuid()
+        stranger = next(uid for uid in (1, 2, 12345) if uid not in (me, 0))
+        for uid, mode, trusted in ((me, 0o40755, True), (0, 0o40755, True), (stranger, 0o40755, False),
+                                   (me, 0o40757, False), (0, 0o40777, False), (stranger, 0o40777, False)):
+            fake = lambda path, uid=uid, mode=mode: types.SimpleNamespace(st_mode=mode, st_uid=uid)
+            with self.subTest(uid=uid, mode=oct(mode)), mock.patch.object(archgate.os, "stat", side_effect=fake):
+                self.assertIs(archgate._trusted(Path("/p")), trusted)
+
+
 if __name__ == "__main__":
     unittest.main()
