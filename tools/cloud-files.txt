@@ -72,6 +72,7 @@ plugin/skills/aside-web/scripts/aside_web.py
 plugin/skills/done-gate/SKILL.md
 plugin/skills/done-gate/scripts/checks.py
 plugin/skills/done-gate/scripts/mutation.py
+plugin/skills/done-gate/scripts/mutation_select.py
 plugin/skills/done-gate/scripts/ratchet.py
 plugin/skills/done-gate/scripts/review_log.py
 plugin/skills/done-gate/scripts/risk.py
