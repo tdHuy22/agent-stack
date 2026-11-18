@@ -15,9 +15,16 @@ vài lần chạy song song, mỗi lần một bản chép (S3, S4). Đột bi�
 file đang đột biến dở được trả về bản gốc trước khi đọc kết quả (S5), và đột biến chưa chạy tới có vị trí và ước thời gian
 còn cần (S6).
 
+Chọn test theo dòng (spec `mutation-chon-test`, TM-143–145): lệnh test dạng `python3 -m unittest <module…>` thì trước
+khi đột biến, `mutation_select.py trace` chạy test một lần có ghi vết (cả tiến trình Python con) trong một bản chép
+riêng, ra bảng dòng → test; mỗi bản chép có `mutmut_config.py` đặt lệnh của đột biến thành các test đi qua dòng đó
+(`-f`), và mutmut chạy với `--rerun-all` (sống với lệnh thu hẹp thì chạy lại cả lệnh), nên số bắt, số sống bằng cách cũ.
+Tắt (chạy cả lệnh cho mọi đột biến) khi `--no-select`, lệnh khác dạng, project có `mutmut_config.py`, hay ghi vết lỗi.
+Tiến trình canh `mutation_select.py reap` giết các nhóm tiến trình và xóa bản chép khi script bị giết, kể cả SIGKILL.
+
 Lệnh:
   mutation.py [--project DIR] [--base REF] [--cmd "<lệnh test>"] [--timeout GIÂY] [--mutmut PATH] [--link PATH...]
-              [--jobs N] [--json]
+              [--jobs N] [--no-select] [--json]
       Lệnh test: `--cmd`, không thì `cmd` trong sổ khóa của các file test đã khóa có trong diff. mutmut: `--mutmut`,
       biến AGENT_STACK_MUTMUT, rồi `<agent-stack>/.venv-mutmut/bin/mutmut`. Số lần chạy song song: `--jobs N` (tối đa
       bằng số dòng code thêm), không thì min(4, số lõi/2, số dòng code thêm/10), ít nhất 1. `--timeout` là hạn chung.
@@ -50,6 +57,7 @@ IMPORT_ERROR = None
 try:  # bản cài hỏng cũng phải thoát 0 với dòng trạng thái (S9)
     import agentstack as A
     import fails_before as FB
+    import mutation_select as MS
     import risk
     import testlock as TL
 except Exception as exc:  # noqa: BLE001
@@ -234,6 +242,9 @@ def tests_dir(cwd: Path, book: dict, prefix: str) -> str:
 
 
 RUNNING: list = []  # tiến trình mutmut đang chạy, để SIGTERM và finally giết cả nhóm (TM-129)
+PGID_FILE: list = []  # file ghi nhóm tiến trình cho tiến trình canh (TM-145), một phần tử khi đang chạy
+TRACE_SHARE = 0.3  # phần hạn chung dành cho bước ghi vết (ít nhất TRACE_MIN giây)
+TRACE_MIN = 120.0
 
 
 def kill_group(proc) -> None:
@@ -272,7 +283,63 @@ def start_group(cmd: list, cwd: Path, log: Path):
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 start_new_session=True)
     RUNNING.append(proc)
+    for path in PGID_FILE:  # nhóm của tiến trình mới (pgid = pid vì start_new_session) cho tiến trình canh
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"{proc.pid}\n")
+        except OSError:
+            pass
     return proc
+
+
+def start_reaper(tmp: Path):
+    """Tiến trình canh tách session, không giữ pipe nào của script: script chết thì nó giết các nhóm ghi trong
+    `tmp/pgids` và xóa `tmp` (TM-145, S6)."""
+    PGID_FILE[:] = [tmp / MS.PGIDS]
+    try:
+        return subprocess.Popen([sys.executable, str(HERE.parent / "mutation_select.py"), "reap", "--parent",
+                                 str(os.getpid()), "--dir", str(tmp)], stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        return None
+
+
+def unittest_argv(runner: str):
+    """Đối số của `python3 -m unittest <module…>` (S1), hay None khi lệnh khác dạng (sh -c, pytest, discover)."""
+    try:
+        argv = shlex.split(runner)
+    except ValueError:
+        return None
+    if len(argv) < 4 or not re.fullmatch(r"python(3(\.\d+)*)?", Path(argv[0]).name) or argv[1:3] != ["-m", "unittest"]:
+        return None
+    rest = argv[3:]
+    if "discover" in rest or not any(not a.startswith("-") for a in rest):
+        return None
+    return argv
+
+
+def trace_step(args, info: dict, tmp: Path, deadline: float):
+    """(chuỗi `selection`, đường dẫn bảng dòng → test hay None, python của lệnh test). Ghi vết trong bản chép riêng."""
+    if args.no_select:
+        return "tắt: --no-select", None, None
+    argv = unittest_argv(info["runner"])
+    if argv is None:
+        return "tắt: lệnh test không phải dạng `python3 -m unittest <module…>`", None, None
+    if os.path.lexists(info["top"] / info["sub"] / "mutmut_config.py"):
+        return "tắt: project đã có mutmut_config.py (mutmut nạp nó, không ghi đè)", None, None
+    cwd = build_tree(info, tmp / "trace")
+    out, log = tmp / "trace-map.json", tmp / "trace.log"
+    targets = [rel[len(info["prefix"]):] for rel in info["py"]]
+    cmd = [argv[0], str(HERE.parent / "mutation_select.py"), "trace", "--out", str(out), "--targets", ",".join(targets),
+           "--site", str(tmp / "trace-site"), "--", *argv[3:]]
+    limit = min(deadline, time.monotonic() + max(TRACE_MIN, args.timeout * TRACE_SHARE))
+    code, _ = finish_group(start_group(cmd, cwd, log), limit, log)
+    shutil.rmtree(tmp / "trace", ignore_errors=True)
+    if code is None:
+        return "tắt: bước ghi vết quá giờ", None, None
+    if code != 0 or not out.is_file():
+        return f"tắt: bước ghi vết lỗi (mã {code}: test trượt khi ghi vết, không ghi được dòng nào, hay mọi dòng có test trượt khi chạy một mình hoặc không nạp lại được theo tên)", None, None
+    return "theo dòng", out, argv[0]
 
 
 def finish_group(proc, deadline: float, log: Path):
@@ -491,6 +558,8 @@ def run(args) -> dict:
     previous = signal.signal(signal.SIGTERM, on_term)
     started = time.monotonic()
     workers = []
+    reaper = start_reaper(tmp)
+    selection = "tắt: chưa tới bước ghi vết"
     try:
         added = added_lines(info["py"], info["entries"], info["blobs"], info["current"], tmp / "diff")
         if not added:
@@ -500,6 +569,7 @@ def run(args) -> dict:
                           "thể lệch" for rel in added if re.search(rb"\r(?!\n)", info["current"][rel][1])]
         code = sum(1 for rel, lines in added.items() for n in lines if is_code(texts[rel][n - 1]))
         deadline = started + args.timeout
+        selection, trace_map, python = trace_step(args, info, tmp, deadline)
         first = None
         for i, group in enumerate(split_lines(added, texts, jobs_for(args.jobs, code))):
             base = tmp / f"w{i}"
@@ -509,9 +579,13 @@ def run(args) -> dict:
             patch.write_text(make_patch(group, texts, prefix), encoding="utf-8")
             targets = [rel[len(prefix):] for rel in sorted(group)]
             guard_targets(base / info["top"].name, cwd, targets)
+            extra = []
+            if trace_map is not None:  # chỉ trong bản chép; project có mutmut_config.py thì đã tắt chọn (TM-144)
+                (cwd / "mutmut_config.py").write_text(MS.config_text(str(trace_map), python), encoding="utf-8")
+                extra = ["--rerun-all"]
             workers.append({"cwd": cwd, "targets": targets, "log": base / "mutmut-run.log", "group": group, "cmd": [
                 str(info["mutmut"]), "run", "--paths-to-mutate", ",".join(targets), "--runner", info["runner"],
-                "--use-patch-file", str(patch), "--tests-dir", tests_dir(cwd, info["book"], prefix)]})
+                "--use-patch-file", str(patch), "--tests-dir", tests_dir(cwd, info["book"], prefix), *extra]})
         info["current"] = info["blobs"] = None  # nội dung cả repo không cần giữ trong lúc chờ mutmut
         for w in workers:
             w["proc"] = start_group(w["cmd"], w["cwd"], w["log"])
@@ -531,6 +605,10 @@ def run(args) -> dict:
                 kill_group(proc)
                 RUNNING.remove(proc)
             shutil.rmtree(tmp, ignore_errors=True)
+            PGID_FILE.clear()
+            if reaper is not None:  # thư mục tạm đã xóa: tiến trình canh không còn việc
+                reaper.kill()
+                reaper.wait()
         finally:
             signal.signal(signal.SIGTERM, previous)
             signal.pthread_sigmask(signal.SIG_SETMASK, mask)
@@ -549,6 +627,7 @@ def run(args) -> dict:
             tested = max(0, part["total"] - part["untested"])
             estimate = max(estimate, math.ceil(part["untested"] * w["seconds"] / (tested + 1)))
     res.update(notes=info["notes"], files=info["py"], runner=info["runner"], jobs=len(workers), outside=outside,
+               selection=selection,
                unreached=line_ranges(unreached), unreached_known=all(w["res"]["known"] for w in workers),
                estimate_seconds=estimate, seconds=round(time.monotonic() - started, 1))
     output = "\n".join(w["output"] for w in workers)
@@ -633,6 +712,9 @@ def summary(res: dict) -> list:
     if len(survived) > MAX_LISTED:
         lines.append(f"- và {len(survived) - MAX_LISTED} đột biến sống khác")
     lines += outside_lines(res) + unreached_lines(res)
+    selection = res.get("selection") or ""
+    if selection.startswith("tắt: ") and selection != "tắt: --no-select":
+        lines.append(f"- chọn test tắt: {selection[len('tắt: '):]} (mỗi đột biến chạy cả lệnh test)")
     where = ", ".join(f"{s['file']}:{s['line']}" for s in survived[:MAX_LISTED])
     counts = (f"{res['total']} đột biến trên dòng đổi, {res['killed']} bị bắt, {len(survived)} sống"
               + (f", {res['timeout']} quá giờ" if res.get("timeout") else "")
@@ -687,6 +769,7 @@ def main(argv=None) -> int:
         ap.add_argument("--mutmut", help="đường dẫn mutmut (mặc định: .venv-mutmut của agent-stack)")
         ap.add_argument("--link", action="append", metavar="PATH", help="nối thư mục bị git bỏ qua, như .venv")
         ap.add_argument("--jobs", type=int, help="số lần chạy mutmut song song (mặc định: tự chọn theo cỡ diff)")
+        ap.add_argument("--no-select", action="store_true", help="không chọn test theo dòng: mỗi đột biến chạy cả lệnh")
         ap.add_argument("--json", action="store_true")
         args = ap.parse_args(argv)
         if args.jobs is not None and args.jobs < 1:
