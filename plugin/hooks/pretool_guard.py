@@ -226,20 +226,18 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         if found:
             return found
     temp_vars = mktemp_vars(command)
-    oldpwd, stack = None, []
+    states = [(cwd, None, [])]
     for argv in simple_commands(command):
         if Path(argv[0]).name in ("cd", "pushd", "popd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
-            cwd, oldpwd, stack = change_dir(argv, cwd, oldpwd, stack)
+            states = next_dirs(argv, states)
             continue
-        result = check_argv(argv, cwd, temp_vars, session_id)
-        if result:
-            results.append(result)
-        try:
-            unknown = unknown_dir_check(argv, cwd, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
-        except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
-            unknown = None
-        if unknown:
-            results.append(unknown)
+        for here in dict.fromkeys(st[0] for st in states):
+            result = check_argv(argv, here, temp_vars, session_id)
+            try:
+                unknown = unknown_dir_check(argv, here, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
+            except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
+                unknown = None
+            results += [r for r in (result, unknown) if r and r not in results]
     denied = [r for r in results if r[0] == "deny"]
     if denied:
         return denied[0]
@@ -248,6 +246,19 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         results = [r[:3] + (None,) if r[0] == "confirm" else r for r in results]
     gated = [r for r in results if r[0] in ("audit", "confirm")]
     return (gate_user(gated, session_id) if gated else None) or next((r for r in results if r[0] == "ask"), None)
+
+
+def next_dirs(argv: list, states: list) -> list:
+    """Các trạng thái (thư mục chạy, OLDPWD, chồng pushd) có thể có sau `cd`, `pushd`, `popd`. Lệnh không đoán được
+    (`cd -`, `popd` khi chồng rỗng, `cd t*`, `~user` không có) có thể thất bại và đứng nguyên, mà sau `;` lệnh tiếp vẫn
+    chạy: giữ cả thư mục cũ để `popd; rm tests/x.py` vẫn bị chặn như trước. Tối đa 8 trạng thái."""
+    out = {}
+    for cwd, oldpwd, stack in states:
+        new = change_dir(argv, cwd, oldpwd, stack)
+        out.setdefault((new[0], new[1], tuple(new[2])), new)
+        if "$OLDPWD" in new[0] or any(ch in a for a in argv[1:] for ch in GLOB_CHARS):
+            out.setdefault((cwd, oldpwd, tuple(stack)), (cwd, oldpwd, stack))
+    return list(out.values())[:8]
 
 
 def change_dir(argv: list, cwd: str, oldpwd, stack: list) -> tuple:
@@ -859,7 +870,8 @@ def write_targets(argv: list, where: Path) -> list:
     words = [a for a in positional(drop_redirects(args), set()) if a != "--"]
     if prog in ("mv", "cp", "install", "ln", "rsync") and len(words) >= 2:
         dest = target_path(where, words[-1])
-        if dest is not None and is_dir(dest):  # `cp x.py tests/`: đích là tests/x.py, không phải cả thư mục
+        if dest is not None and (is_dir(dest) or words[-1] in (".", "./") or words[-1].endswith("/")):
+            # `cp x.py tests/`, `cp x.py .`: đích là tests/x.py, không phải cả thư mục (kể cả thư mục không biết trước)
             out += [(dest, Path(w).name) for w in words[:-1]]
         else:
             out.append((where, words[-1]))
@@ -1332,14 +1344,15 @@ def stack_named_by_interpreter(command: str):
 def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
     """Lệnh đơn đụng sổ khóa hay test đã khóa (TM-102..104). `receipt.py unlock` qua cổng đồng ý của người dùng."""
     sub, rest = receipt_subcommand(argv)
-    where = Path(cwd or ".")
+    where, pending = Path(cwd or "."), None
     if sub == "unlock":
         return check_unlock(rest, where, session_id)
     if sub in ("run", "fails-before", "lock"):  # `receipt.py run [--] rm tests/x.py`: xét lệnh bên trong
         inner = receipt_inner(rest)
         found = check_bash(shlex.join(inner), str(receipt_run_dir(rest, where)), session_id) if inner else None
-        if found and found[0] in ("deny", "ask"):
+        if found and found[0] == "deny":
             return found
+        pending = found if found and found[0] == "ask" else None  # `receipt.py run … -- x > sổ`: phần ngoài vẫn xét
     TL = testlock_lib()
     prog = Path(argv[0]).name
     targets = write_targets(argv, where)
@@ -1366,7 +1379,7 @@ def check_locked_bash(argv: list, cwd: str, session_id: str = ""):
                     return hit
         except (OSError, RuntimeError, ValueError):
             continue
-    return None
+    return pending
 
 
 def check_arch_argv(argv: list, cwd: str):
@@ -1540,8 +1553,7 @@ def unknown_dir_check(argv: list, cwd: str, session_id: str = ""):
                    "chắc lệnh không đụng file đó.")
             if TL.is_lock_file(cand):
                 return "ask", f"{why}, sổ khóa test (chỉ sửa bằng `receipt.py lock` hay `unlock`). {fix}"
-            hit = locked_hit(cand, f"lệnh shell `{Path(argv[0]).name}`", session_id)
-            if hit:
+            if TL.lookup(cand):  # không gọi locked_hit: nó ghi lời nhắc mức vừa của lượt mà câu hỏi không tới Claude
                 return "ask", f"{why}, test đã khóa; xóa hay ghi đè test khóa là nới. {fix}"
     return None
 

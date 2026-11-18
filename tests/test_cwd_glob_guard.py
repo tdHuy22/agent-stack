@@ -115,14 +115,15 @@ class UnknownRunDir(GuardBase):
         for cmd in ["cd \"$X/..\" && rm test_b.py", f"{R} run --cwd \"$X/..\" -- rm test_b.py",
                     "pushd \"$X\" >/dev/null && rm test_b.py", "cd \"$X\" 2>/dev/null && rm test_b.py",
                     "cd t* >/dev/null && rm test_b.py", "cd -- \"$X\" && rm test_b.py", "cd -L \"$X\" && rm test_b.py",
-                    "builtin cd \"$X\" && rm test_b.py", "cd - && rm test_b.py", "popd && rm tests/test_b.py",
+                    "builtin cd \"$X\" && rm test_b.py", "cd - && rm test_b.py",
                     "cd tests && popd && rm tests/test_b.py"]:
             with self.subTest(cmd=cmd):
                 self.assertAsks(cmd, "u9", "tests/test_b.py")
         # Chồng pushd và OLDPWD trong cùng chuỗi lệnh thì biết chắc thư mục: chặn như thư mục biết rõ.
         for cmd in ["cd tests >/dev/null && rm test_b.py", "cd -P tests && rm test_b.py",
                     "pushd tests > /dev/null && rm test_b.py", "cd -- tests && rm test_b.py",
-                    "pushd tests && popd && rm tests/test_b.py", "cd tests && cd /tmp && cd - && rm test_b.py"]:
+                    "pushd tests && popd && rm tests/test_b.py", "cd tests && cd /tmp && cd - && rm test_b.py",
+                    "popd && rm tests/test_b.py"]:  # review 18/11: popd thất bại thì đứng nguyên, rm vẫn chạy
             with self.subTest(cmd=cmd):
                 out = self.bash(cmd, "u9")
                 self.assertEqual(out and out[0], "deny", cmd)
@@ -139,8 +140,11 @@ class UnknownRunDir(GuardBase):
             with self.subTest(cmd=cmd):
                 out = self.bash(cmd, "u10")
                 self.assertEqual(out and out[0], "deny", cmd)
+        # Review 18/11: `cd` tới `~user` không có thì thất bại, đứng nguyên; lệnh sau `;` vẫn chạy nên chặn hẳn.
         for cmd in ["cd ~nosuchuser_zz; rm tests/test_b.py", "pushd ~nosuchuser_zz/x >/dev/null; rm tests/test_b.py"]:
             with self.subTest(cmd=cmd):
-                self.assertAsks(cmd, "u10", "tests/test_b.py")
+                out = self.bash(cmd, "u10")
+                self.assertEqual(out and out[0], "deny", cmd)
+        self.assertAsks("cd ~nosuchuser_zz && rm test_b.py", "u10", "tests/test_b.py")
         out = self.bash("claude plugin marketplace add ~nosuchuser_zz/market", "u10")
         self.assertEqual(out and out[0], "ask")

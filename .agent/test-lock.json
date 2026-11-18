@@ -40,6 +40,14 @@
    "reason": "mở khóa tests/test_ratchet.py tests/test_spec_ratchet.py (bạn nhắn 17/11/2026, để sửa theo S4, S7 của gd6-qs đã duyệt)",
    "sha256": "d1288f9c063499e90bb5c2d7ca0f70b3947ad2a13d390d6ff0861edf85035df0",
    "ts": "2026-11-17T20:26:04+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_cwd_glob_guard.py",
+   "reason": "mở khóa tests/test_cwd_glob_guard.py (bạn nhắn 18/11): cd/popd/pushd thất bại đứng nguyên thì chặn, không chỉ hỏi",
+   "sha256": "d05593430a65863bc2211d0a0d7ccc35f3ed5514ad7594a5075829739bd2bc04",
+   "ts": "2026-11-18T18:00:21+07:00"
   }
  ],
  "files": {
@@ -3347,14 +3355,14 @@
    "ts": "2026-11-14T15:47:59+07:00"
   },
   "tests/test_cwd_glob_guard.py": {
-   "base": "0d86a4f839f3062c3bfe41f9422fc4b751bd1637",
+   "base": "017aa0d5d8ba140395288d0ebbf2015c7b8ffd68",
    "cmd": [
     "python3",
     "-m",
     "unittest",
     "tests.test_cwd_glob_guard"
    ],
-   "label": "lock: python3 -m unittest tests.test_cwd_glob_guard",
+   "label": "khóa lại cwd-glob 18/11",
    "level": "cao",
    "lines": [
     "8f52d3c007db",
@@ -3461,14 +3469,15 @@
     "84ce186081b4",
     "1174cbe02a84",
     "9ba96808dc96",
-    "e52dbe5d7820",
+    "2e22c655d4ac",
     "76067a13f23b",
     "591b1fd027c7",
     "95556a4f6088",
     "ecb845239fa8",
     "f686a8781f9b",
     "5e6bab0ffc96",
-    "ae54ae34703e",
+    "4d7d66cf5edf",
+    "31af4e10746b",
     "591b1fd027c7",
     "8af8b6bdd4d4",
     "a990987b79a7",
@@ -3484,9 +3493,12 @@
     "591b1fd027c7",
     "eee49d7d7493",
     "a990987b79a7",
+    "710af5523b05",
     "dcb6b009c88d",
     "591b1fd027c7",
-    "335d586abcbc",
+    "eee49d7d7493",
+    "a990987b79a7",
+    "91fcc7d81c51",
     "7f9688d7041a",
     "9ab67f6e27fd"
    ],
@@ -3631,24 +3643,188 @@
      [
       "def",
       "UnknownRunDir.test_review_dotdot_redirects_flags_and_dir_stack",
-      "4dcdc6e7155a4027",
+      "f480b7c0caf2ac36",
       "",
       "2187118136dc2503",
-      "e11834a5d874db28,17a85b7ce0ba181d,9fc2fdb07de0a283,12e1db84108f0cab"
+      "e11834a5d874db28,86e8de58f88c14d0,0d557acf0e46b1b9,12e1db84108f0cab"
      ],
      [
       "def",
       "UnknownRunDir.test_unknown_user_home_does_not_crash_the_hook",
-      "9c75e5072cad969c",
+      "04ccb2b057a4802b",
       "",
       "dc36cd451bb3da35",
-      "068c61fc23bb60f7,d6ce31483b1932c6,34974c3a5723badd,318e8d1ee076daa2,cc94ebbe88428878a"
+      "068c61fc23bb60f7,d6ce31483b1932c6,940e011a13f8c198,178079cdc5392845a,318e8d1ee076daa2,cc94ebbe88428878a"
      ]
     ],
     "v": "3.11"
    },
-   "sha256": "d05593430a65863bc2211d0a0d7ccc35f3ed5514ad7594a5075829739bd2bc04",
-   "ts": "2026-11-17T21:27:48+07:00"
+   "sha256": "3e51d0364b45b0cc71c33264a26bb71dba887eca4ed2f30f0b514588626503a8",
+   "ts": "2026-11-18T18:00:59+07:00"
+  },
+  "tests/test_cwd_glob_guard_review.py": {
+   "base": "017aa0d5d8ba140395288d0ebbf2015c7b8ffd68",
+   "cmd": [
+    "python3",
+    "-m",
+    "unittest",
+    "tests.test_cwd_glob_guard_review"
+   ],
+   "label": "review cwd-glob 18/11",
+   "level": "cao",
+   "lines": [
+    "c0a0c8a7127b",
+    "ba5c43518669",
+    "69e72f30f953",
+    "0f83fcec5daf",
+    "10a1e35678b4",
+    "5afa042eee68",
+    "a5662a72db57",
+    "075ed2d6407a",
+    "427885a193ac",
+    "dcf8c9d3e912",
+    "b42e5ec972df",
+    "dc6d14560de5",
+    "d34b96441757",
+    "314349d86191",
+    "567e5fad2c17",
+    "b9e9eb7bd827",
+    "7850bc19d21e",
+    "cefd5c26fe81",
+    "9b23fa9c23e8",
+    "9fa82ce0e090",
+    "5c78288d9e8b",
+    "764856182652",
+    "540b63e8a925",
+    "19840d433306",
+    "cf04ba96fa80",
+    "e9d322656707",
+    "831e928ae397",
+    "ed346cc3864e",
+    "4880a0ee489d",
+    "e7d450b3c793",
+    "591b1fd027c7",
+    "56a5bfbf9cb5",
+    "9269bfe41f7d",
+    "28c9085ba308",
+    "37e889e8fc55",
+    "591b1fd027c7",
+    "0d443327e2ac",
+    "144f14575ddf",
+    "a1c6a6cf4de3",
+    "dd1464ea05e4",
+    "e9d322656707",
+    "b188d8ec2bbc",
+    "251f3661a0f5",
+    "ec42535500f5",
+    "7e183343a4e2",
+    "591b1fd027c7",
+    "54e421b135ca",
+    "cc8095e3a198"
+   ],
+   "py": {
+    "items": [
+     [
+      "import",
+      "",
+      "37c8ee1ef982a849",
+      "base",
+      "",
+      ""
+     ],
+     [
+      "import",
+      "",
+      "f25d4dd916d0a242",
+      "git",
+      "",
+      ""
+     ],
+     [
+      "import",
+      "",
+      "491b40e0a31dde8e",
+      "GuardBase",
+      "",
+      ""
+     ],
+     [
+      "import",
+      "",
+      "cfe9cd16384f2b16",
+      "write_lock",
+      "",
+      ""
+     ],
+     [
+      "stmt",
+      "",
+      "e6db383f03263f81",
+      "R",
+      "",
+      ""
+     ],
+     [
+      "class",
+      "UnknownRunDirReview",
+      "4be138a9cf630a12",
+      "UnknownRunDirReview",
+      "",
+      ""
+     ],
+     [
+      "stmt",
+      "UnknownRunDirReview.",
+      "287edd7ce5abc0e0",
+      "",
+      "",
+      ""
+     ],
+     [
+      "def!",
+      "UnknownRunDirReview.setUp",
+      "80c81a4aa24bf514",
+      "",
+      "27b046b3d6db04c8",
+      "88e2dd044e22621b,e8af9b0f700c4b9d,574cfff36670e191,1fb5cd87c0bb1019,02f2a73285723500,64b554e2f1a97f07,e8a5ce6ccd42afd6,91e8c5c1a11f65e7,591975c035de0e89,68cdf9ea8f42474d"
+     ],
+     [
+      "def",
+      "UnknownRunDirReview.test_question_does_not_use_up_medium_level_nudge",
+      "d17dbe00f44afe4a",
+      "",
+      "c7627de3ba10a059",
+      "c2991a431ba71a80,f7708533664ac9eba,2436620fade6d13a,b5e4c5d17b61d181a"
+     ],
+     [
+      "def",
+      "UnknownRunDirReview.test_failed_dir_change_keeps_old_dir",
+      "43c79c8948187606",
+      "",
+      "3a8c27885dcc680a",
+      "289420d9ccccd0a5,0f4b5b2d4787a39a,86088ca3b0ba63f8"
+     ],
+     [
+      "def",
+      "UnknownRunDirReview.test_outer_redirect_to_lock_book_still_denied",
+      "b06fac741884c89e",
+      "",
+      "4b2a02c0e22514d8",
+      "a7ede6518ee320bd,4c7d7ad1abf9d07a,b5e4c5d17b61d181a"
+     ],
+     [
+      "def",
+      "UnknownRunDirReview.test_copy_into_dot_after_unknown_cd_does_not_ask",
+      "ad3f7dadf302af66",
+      "",
+      "202e7af37a47d626",
+      "7dbc49e1083a5198,43c5fa48dbaa6ab1,2b9a8a2b563525d7a"
+     ]
+    ],
+    "v": "3.11"
+   },
+   "sha256": "c27180f6655463fcd974a4513c820c58e01d4d551da115c1266b10c1261d85ad",
+   "ts": "2026-11-18T17:57:01+07:00"
   },
   "tests/test_gd6_qs_cong_cu.py": {
    "base": "dbae333379fef029731b1629be3850dda9a03df4",
