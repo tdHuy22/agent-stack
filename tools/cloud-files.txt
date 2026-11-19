@@ -87,6 +87,7 @@ plugin/skills/project-setup/scripts/stack.py
 plugin/skills/reader-page/SKILL.md
 plugin/skills/reader-page/mau.html
 plugin/skills/reader-page/scripts/check_page.py
+plugin/skills/recursive-session/SKILL.md
 plugin/skills/remote-mcp/SKILL.md
 plugin/skills/remote-mcp/scripts/call.py
 plugin/skills/reuse-best/SKILL.md
