@@ -251,11 +251,17 @@ class NonPythonAndNewFiles(NarrowBase):
         out = self.narrow("run")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
 
-    def test_deleted_file_takes_every_test_touching_it(self):
+    def test_deleted_file_runs_the_full_suite(self):
+        # test có thể chỉ kiểm `exists()` của file (os.stat không để lại vết): xóa hay đổi tên thì chạy cả bộ
         (self.proj / "pkg" / "data.json").unlink()
         plan = self.plan()
-        self.assertIn("file bị xóa", self.reasons(plan))
-        self.assertIn("tests.test_mul", plan["names"])
+        self.assertEqual(plan["mode"], "full", self.reasons(plan))
+        self.assertIn("file bị xóa hay đổi tên", self.reasons(plan))
+
+    def test_renamed_file_runs_the_full_suite(self):
+        (self.proj / "pkg" / "data.json").rename(self.proj / "pkg" / "data2.json")
+        plan = self.plan()
+        self.assertEqual(plan["mode"], "full", self.reasons(plan))
 
 
 class StaleTrace(NarrowBase):

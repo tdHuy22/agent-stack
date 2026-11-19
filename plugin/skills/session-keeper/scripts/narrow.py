@@ -677,6 +677,11 @@ class Selector:
             else:
                 self.full.append(f"{rel}: file mới, không test nào chạm thư mục {parent or '.'}")
             return
+        if nb is None and not mod and not (self.root / rel).is_symlink():
+            # Test có thể chỉ kiểm file còn đó (`exists()`, `is_file()`): `os.stat` không phát sự kiện audit nên vết
+            # không thấy ai kiểm. Xóa hay đổi tên file hiếm, nên chạy cả bộ.
+            self.full.append(f"{rel}: file bị xóa hay đổi tên, test có thể chỉ kiểm sự tồn tại của nó")
+            return
         got = self.touch(rel)
         if nb is None:
             got |= self.listed(rel)
