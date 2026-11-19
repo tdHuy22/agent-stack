@@ -33,6 +33,7 @@
       "no_pi_tool": {
         "MultiEdit": "pi không có công cụ sửa nhiều chỗ một lần; edit của pi đi qua Edit",
         "NotebookEdit": "pi không có công cụ sửa notebook",
+        "Monitor": "công cụ chạy lệnh nền của Claude Code (chỉ xét lệnh xóa ổ đĩa); pi chạy lệnh qua bash",
         "mcp__ccd_turn__.*": "công cụ của app Claude Desktop (pretool_client.py), pi không có"
       },
       "payload": ["tool_name", "tool_input"]
