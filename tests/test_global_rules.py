@@ -121,8 +121,9 @@ RULES = [
      [(SHARED, ["Chỉ dừng lại hỏi ở năm loại dưới đây", "việc khác tự quyết và ghi lý do trong báo cáo"])]),
     ("D1a", "loại 1: xóa dữ liệu hay file ngoài thư mục tạm",
      [(SHARED, ["1. Không đảo ngược được: xóa dữ liệu hay file ngoài thư mục tạm"]),
-      (GUARD, ["Lệnh xóa ổ đĩa (việc G, 19/11/2026): `diskutil erase*`", "`newfs*`, `mkfs*`",
-               "`dd` có `of=/dev/disk*` hay `/dev/rdisk*`: chặn hẳn"])]),
+      # Bạn chốt 19/11/2026: chỉ chặn diskutil (dd, newfs, mkfs cần root).
+      (GUARD, ["Lệnh xóa ổ đĩa (việc G, 19/11/2026): `diskutil erase*`", "`apfs deleteContainer`/`deleteVolume`/`eraseVolume`: chặn hẳn",
+               "Chỉ `diskutil` (bạn chốt 19/11/2026)"])]),
     ("D1b", "loại 1: đổi lịch sử git (reset --hard, push --force, amend hay rebase commit đã đẩy)",
      [(SHARED, ["đổi lịch sử git (`reset --hard`, `push --force`, `amend` hay `rebase` commit đã đẩy)"])]),
     ("D1c", "loại 1: đổi schema hay dữ liệu thật",

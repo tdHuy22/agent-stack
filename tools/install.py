@@ -13,7 +13,7 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
               terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
-  deny        thêm luật permissions.deny chặn lệnh xóa ổ đĩa (diskutil erase*, newfs*, mkfs*, dd of=/dev/disk*)
+  deny        thêm luật permissions.deny chặn lệnh xóa ổ đĩa của diskutil (erase*, zeroDisk, partitionDisk…)
               vào ~/.claude/settings.json, giữ luật cũ; lớp hai sau hook pretool_guard.py (việc G, TM-150)
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh. MCP từ xa
               (kind mcp-remote): `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt và định
@@ -51,11 +51,12 @@ from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
 STEPS = ("rules", "plugin", "pi", "statusline", "autocontinue", "deny", "catalog", "tools")
-# Luật deny cho lệnh xóa ổ đĩa (bước deny). Hook pretool_guard.py bắt cả dạng viết khác; luật này là lớp hai.
+# Luật deny cho lệnh xóa ổ đĩa của diskutil (bước deny; dd, newfs, mkfs cần root nên không chặn, bạn chốt 19/11).
+# Hook pretool_guard.py bắt cả dạng viết khác; luật này là lớp hai.
 DISK_DENY_RULES = tuple(f"Bash({pre}{cmd})" for pre in ("", "sudo ") for cmd in (
     "diskutil erase*", "diskutil secureErase*", "diskutil zeroDisk*", "diskutil randomDisk*", "diskutil partitionDisk*",
     "diskutil reformat*", "diskutil apfs deleteContainer*", "diskutil apfs deleteVolume*", "diskutil apfs eraseVolume*",
-    "diskutil ap deleteContainer*", "diskutil ap deleteVolume*", "diskutil ap eraseVolume*", "newfs*", "mkfs*", "dd *of=/dev/disk*", "dd *of=/dev/rdisk*"))
+    "diskutil ap deleteContainer*", "diskutil ap deleteVolume*", "diskutil ap eraseVolume*"))
 MARKETPLACE = "agent-stack-local"
 VENDOR_MARKETPLACE = "agent-stack-vendor-local"
 VENDOR_PLUGIN = "agent-stack-vendor"

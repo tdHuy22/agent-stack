@@ -1,4 +1,4 @@
-"""Việc G mục 3 (19/11/2026): lệnh xóa ổ đĩa (`diskutil erase*`, `newfs*`, `mkfs*`, `dd of=/dev/disk*`) bị chặn hẳn ở
+"""Việc G mục 3 (19/11/2026): lệnh xóa ổ đĩa của `diskutil` (`erase*`, `zeroDisk`, `partitionDisk`, `apfs deleteContainer`…) bị chặn hẳn ở
 hook PreToolUse, kể cả khi viết khác (`sudo`, `sh -c`, đường dẫn đầy đủ, chữ hoa thường) hay khi người dùng vừa nhắn
 đồng ý (TM-148, TM-149); lệnh chỉ đọc ổ đĩa vẫn qua. Bước cài `deny` của install.py ghi luật `permissions.deny` tương
 ứng, có xem trước và hoàn tác (TM-150)."""
@@ -24,79 +24,53 @@ BLOCKED = [
     "diskutil ap deleteContainer disk3",
     "diskutil apfs deleteVolume disk3s1",
     "diskutil apfs eraseVolume disk3s1 -name X",
-    "newfs_apfs /dev/disk2s1",
-    "newfs_hfs -v X /dev/rdisk2s1",
-    "/sbin/newfs_msdos -F 32 /dev/disk2s1",
-    "newfs /dev/disk2s1",
-    "mkfs /dev/sdb1",
-    "mkfs.ext4 /dev/sdb1",
-    "mkfs.vfat -F 32 /dev/disk2s1",
-    "dd if=/dev/zero of=/dev/disk2 bs=1m",
-    "dd if=ubuntu.img of=/dev/rdisk4 bs=4m",
-    "dd bs=1m of=/dev/disk2s1 if=/dev/urandom",
-    'dd if=/dev/zero of="/dev/rdisk2"',
-    "dd if=/dev/zero of=/dev/../dev/disk2",
 ]
 
 EVASIONS = [
     "sudo diskutil eraseDisk APFS X disk2",
     "sudo -u root diskutil zeroDisk disk2",
     'sh -c "diskutil eraseDisk APFS X disk2"',
-    "bash -lc 'sudo dd if=/dev/zero of=/dev/rdisk2'",
     "/usr/sbin/diskutil eraseDisk APFS X disk2",
     "diskutil ERASEDISK APFS X disk2",
     "diskutil erasedisk APFS X disk2",
     "diskutil APFS DELETECONTAINER disk3",
     "DiskUtil SecureErase 0 disk2",
-    "/sbin/NEWFS_APFS /dev/disk2s1",
-    "MKFS.EXT4 /dev/sdb1",
-    "/bin/DD if=/dev/zero of=/dev/disk2",
     "env FOO=1 diskutil eraseVolume APFS X disk2s1",
-    "time dd if=/dev/zero of=/dev/disk2",
     "ls && diskutil eraseDisk APFS X disk2",
     "echo ok; eval 'diskutil zeroDisk disk2'",
-    "nohup newfs_apfs /dev/disk2s1 &",
     "/usr/bin/env diskutil eraseDisk APFS X disk2",
-    "sudo /usr/bin/env dd if=/dev/zero of=/dev/disk2",
     "echo disk2 | xargs diskutil eraseDisk APFS X",
     "xargs -n 1 -I {} diskutil zeroDisk {} < list.txt",
     "xargs -i diskutil zeroDisk {} < list.txt",
     "find /dev -name disk2 -exec diskutil zeroDisk {} \\;",
-    "find /dev -name 'disk2*' -execdir newfs_apfs {} +",
-    "cat /dev/zero > /dev/disk2",
-    "pv ubuntu.img >/dev/rdisk2",
-    "head -c 1000000 /dev/urandom 1>> /dev/disk2s1",
     # review opus·xhigh 19/11: shell sau lệnh bọc viết bằng đường dẫn, xargs, find; shlex lỗi; `//dev`; gdd
     '/usr/bin/sudo sh -c "diskutil eraseDisk APFS X disk2"',
     "/usr/bin/env bash -c 'diskutil zeroDisk disk2'",
     "xargs -I{} sh -c 'diskutil eraseDisk APFS X {}'",
-    "find /dev -name disk2 -exec sh -c 'newfs_apfs \"$1\"' _ {} \\;",
     "BASH -c 'diskutil zeroDisk disk2'",
-    "/bin/SH -c 'mkfs.ext4 /dev/sdb1'",
     "ksh -c 'diskutil zeroDisk disk2'",
     "su root -c 'diskutil zeroDisk disk2'",
     "env -S 'diskutil zeroDisk disk2'",
     "diskutil eraseDisk APFS $'X\\'Y' disk2",
-    "dd if=/dev/zero of=//dev/disk2",
-    "cat /dev/zero > //dev/rdisk2",
-    "gdd if=/dev/zero of=/dev/disk2",
     "caffeinate diskutil zeroDisk disk2",
     # review sonnet·xhigh 19/11: `#` giữa từ, biến trong of=, lệnh con, ống vào shell, `-c --`, `sudo -s`
     "ls # xem\ndiskutil eraseDisk APFS X disk2",
-    "echo a#b; sudo dd if=/dev/zero of=/dev/rdisk2",
-    "DISK=/dev/rdisk2; sudo dd if=ubuntu.img of=\"$DISK\" bs=4m",
-    "dd if=/dev/zero of=$(echo /dev/disk2)",
-    "cat img > \"$DEV\"  # DEV=/dev/disk2",
     'x="$(sudo diskutil eraseDisk APFS X disk2)"',
     "y=`diskutil zeroDisk disk2`",
     "echo 'diskutil eraseDisk APFS X disk2' | sh",
-    "printf 'mkfs.ext4 /dev/sdb1\\n' | sudo bash",
     "bash -c -- 'diskutil zeroDisk disk2'",
     "sudo -s 'diskutil zeroDisk disk2'",
     "bash -c \"bash -c \\\"bash -c 'diskutil zeroDisk disk2'\\\"\"",
 ]
 
 ALLOWED = [
+    # Bạn chốt 19/11/2026: chỉ chặn diskutil; dd, newfs, mkfs, ghi > vào /dev/disk* cần root (máy hỏi mật khẩu sudo)
+    # nên hook cho qua. Các ca dưới khóa quyết định đó, không phải nới assert.
+    "newfs_apfs /dev/disk2s1",
+    "mkfs.ext4 /dev/sdb1",
+    "dd if=/dev/zero of=/dev/disk2 bs=1m",
+    "cat /dev/zero > /dev/disk2",
+    "cat img > \"$DEV\"  # DEV=/dev/disk2",
     "diskutil list",
     "diskutil info disk2",
     "diskutil apfs list",
@@ -150,8 +124,8 @@ class DiskEraseGuard(GuardBase):
 
     def test_user_consent_does_not_unlock(self):
         for prompt, cmd in (("Đồng ý, xóa ổ disk2 đi: diskutil eraseDisk APFS X disk2", "diskutil eraseDisk APFS X disk2"),
-                            ("Chạy dd if=/dev/zero of=/dev/disk2 đi", "dd if=/dev/zero of=/dev/disk2"),
-                            ("mkfs.ext4 /dev/sdb1", "mkfs.ext4 /dev/sdb1")):
+                            ("Chạy diskutil zeroDisk disk2 đi", "diskutil zeroDisk disk2"),
+                            ("diskutil apfs deleteContainer disk3", "diskutil apfs deleteContainer disk3")):
             with self.subTest(cmd=cmd):
                 self.start(prompt, "consent")
                 self.assert_hard_denied(cmd, "consent")
@@ -173,7 +147,7 @@ class DiskEraseGuard(GuardBase):
     def test_docstring_lists_hard_block(self):
         text = (REPO / "plugin" / "hooks" / "pretool_guard.py").read_text(encoding="utf-8")
         doc = text.split('"""')[1]
-        for needle in ("`diskutil erase*`", "`newfs*`", "`mkfs*`", "`dd` có `of=/dev/disk*`", "chặn hẳn"):
+        for needle in ("`diskutil erase*`", "`apfs deleteContainer`", "chặn hẳn", "Chỉ `diskutil`"):
             self.assertIn(needle, doc)
 
 
@@ -211,8 +185,8 @@ class DenyInstallStep(TempDirTestCase):
     def test_preview_lists_rules_and_changes_nothing(self):
         out = self.run_install("--only", "deny")
         self.assertIn("XEM TRƯỚC", out)
-        for rule in ("Bash(diskutil erase*)", "Bash(newfs*)", "Bash(mkfs*)", "Bash(dd *of=/dev/disk*)",
-                     "Bash(dd *of=/dev/rdisk*)", "Bash(sudo diskutil erase*)"):
+        for rule in ("Bash(diskutil erase*)", "Bash(diskutil zeroDisk*)", "Bash(diskutil apfs deleteContainer*)",
+                     "Bash(sudo diskutil partitionDisk*)", "Bash(sudo diskutil erase*)"):
             self.assertIn(rule, out)
         self.assertEqual(json.loads(self.settings.read_text()), self.original)
 
@@ -222,7 +196,8 @@ class DenyInstallStep(TempDirTestCase):
         deny = data["permissions"]["deny"]
         self.assertEqual(deny[0], "Bash(rm -rf /)")
         self.assertIn("Bash(diskutil erase*)", deny)
-        self.assertIn("Bash(dd *of=/dev/rdisk*)", deny)
+        self.assertIn("Bash(sudo diskutil zeroDisk*)", deny)
+        self.assertFalse(any("dd " in r or "newfs" in r or "mkfs" in r for r in deny))
         self.assertEqual(len(deny), len(set(deny)))
         self.assertEqual(data["permissions"]["allow"], ["Bash(ls)"])
         self.assertEqual(data["model"], "sonnet")
@@ -237,11 +212,11 @@ class DenyInstallStep(TempDirTestCase):
             with self.subTest(value=value):
                 self.settings.write_text(json.dumps(value))
                 self.run_install("--apply", "--only", "deny")
-                self.assertIn("Bash(newfs*)", json.loads(self.settings.read_text())["permissions"]["deny"])
+                self.assertIn("Bash(diskutil zeroDisk*)", json.loads(self.settings.read_text())["permissions"]["deny"])
 
     def test_settings_without_permissions_gets_deny_list(self):
         self.settings.write_text(json.dumps({"model": "opus"}))
         self.run_install("--apply", "--only", "deny")
         data = json.loads(self.settings.read_text())
-        self.assertIn("Bash(mkfs*)", data["permissions"]["deny"])
+        self.assertIn("Bash(diskutil reformat*)", data["permissions"]["deny"])
         self.assertEqual(data["model"], "opus")

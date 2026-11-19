@@ -244,7 +244,7 @@
     "test:tests/test_disk_guard.py::DiskEraseGuard.test_each_disk_erase_command_is_hard_denied",
     "test:tests/test_disk_guard.py::DiskEraseGuard.test_user_consent_does_not_unlock"
    ],
-   "note": "Hook chặn lần đầu mọi dạng rm -r ngoài thư mục tạm; lệnh xóa ổ đĩa (diskutil erase*, newfs*, mkfs*, dd of=/dev/disk*) chặn hẳn, thêm luật permissions.deny qua bước deny của install.sh; xóa bằng lệnh khác (find -delete, unlink…) chưa có máy."
+   "note": "Hook chặn lần đầu mọi dạng rm -r ngoài thư mục tạm; lệnh xóa ổ đĩa (diskutil erase*, zeroDisk, partitionDisk, apfs deleteContainer…) chặn hẳn, thêm luật permissions.deny qua bước deny của install.sh; xóa bằng lệnh khác (find -delete, unlink…) chưa có máy."
   },
   {
    "id": "D1b",

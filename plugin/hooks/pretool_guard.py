@@ -22,11 +22,12 @@
   khi viết lại commit đã có trên remote: qua cùng cổng với tag (chặn lần đầu, người dùng nhắn lại thì cho qua), khóa
   theo gốc repo và đúng lệnh. Chữ "git push" trong thông điệp commit, heredoc, echo không phải lệnh nên không bị hỏi.
 - Lệnh xóa ổ đĩa (việc G, 19/11/2026): `diskutil erase*` (`eraseDisk`, `eraseVolume`), `secureErase`, `zeroDisk`,
-  `randomDisk`, `partitionDisk`, `reformat`, `apfs deleteContainer`/`deleteVolume`/`eraseVolume`, `newfs*`, `mkfs*`,
-  `dd` có `of=/dev/disk*` hay `/dev/rdisk*`: chặn hẳn, lời đồng ý trong chat không mở (TM-148, TM-149). Tên lệnh và verb
-  so không phân biệt hoa thường, sau khi bỏ `sudo`, mở `sh -c`, cả sau `/usr/bin/env`, `xargs`, `find -exec`; ghi
-  chuyển hướng `>` vào `/dev/disk*` cũng chặn. Chưa bắt: tên lệnh nằm trong biến hay lệnh con (`$d zeroDisk`). Lớp hai:
-  luật `permissions.deny` do bước `deny` của `tools/install.py` ghi.
+  `randomDisk`, `partitionDisk`, `reformat`, `apfs deleteContainer`/`deleteVolume`/`eraseVolume`: chặn hẳn, lời đồng ý
+  trong chat không mở (TM-148, TM-149). Tên lệnh và verb so không phân biệt hoa thường, sau khi bỏ `sudo`, mở `sh -c`,
+  cả sau `/usr/bin/env`, `xargs`, `find -exec`, lệnh con, ống vào shell. Chỉ `diskutil` (bạn chốt 19/11/2026): `dd`,
+  `newfs*`, `mkfs*`, ghi `>` vào `/dev/disk*` cần root, máy hỏi mật khẩu `sudo`, nên không chặn. Biết mà không sửa (hook
+  chỉ nhằm chặn nhầm tay): `xargs sudo diskutil …`, tên lệnh trong biến, `python -c`, `osascript`, lệnh trong file
+  script. Lớp hai: luật `permissions.deny` do bước `deny` của `tools/install.py` ghi.
 
 Lệnh không khớp mẫu nào thì thoát ngay, không in gì. Mọi lỗi đều bỏ qua: hook không bao giờ được làm kẹt phiên.
 """
@@ -93,7 +94,6 @@ MD_NAMES = {"claude.md", "claude.local.md", "agents.md", "gemini.md", "skill.md"
 DISKUTIL_WIPE = {"secureerase", "zerodisk", "randomdisk", "partitiondisk", "reformat"}
 DISKUTIL_APFS = {"apfs", "ap"}
 DISKUTIL_APFS_WIPE = {"deletecontainer", "deletevolume", "erasevolume"}
-DISK_DD = {"dd", "gdd"}
 XARGS_VALUE_FLAGS = {"-I", "-J", "-L", "-n", "-P", "-R", "-S", "-s", "-E", "-d", "-a", "--max-args", "--max-procs",
                      "--max-lines", "--max-chars", "--delimiter", "--arg-file", "--eof", "--process-slot-var"}
 DISK_SHELLS = SHELLS | {"ksh", "mksh", "csh", "tcsh", "fish"}
@@ -101,12 +101,7 @@ DISK_WRAPPERS = {"caffeinate", "arch"}  # chạy lệnh theo sau, cờ đứng t
 DISK_TEXT_RES = (
     re.compile(r"\bdiskutil\b[^\n;|&]*?\b(?:erase\w*|secureerase|zerodisk|randomdisk|partitiondisk|reformat|"
                r"deletecontainer|deletevolume)\b"),
-    re.compile(r"(?:^|[\s;&|(/'\"])(?:newfs\w*|mkfs[\w.]*)\s"),
-    re.compile(r"\bg?dd\b[^\n;|&]*\bof=/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)"),
-    re.compile(r">\s*/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)"),
 )
-DISK_DEVICE_TEXT_RE = re.compile(r"/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)")
-DISK_DEVICE_RE = re.compile(r"^/dev/(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)")
 MD_DIRS = {".claude", ".agent", ".agents", ".github", ".cursor", "skills", "agents", "commands", "memory", "plans",
            "references", "prompts"}
 
@@ -346,13 +341,7 @@ def mktemp_vars(command: str) -> frozenset:
 
 def disk_prog(word: str) -> bool:
     name = Path(word).name.casefold()
-    return name in DISK_DD or name == "diskutil" or name.startswith(("newfs", "mkfs"))
-
-
-def dev_path(path: str) -> str:
-    """Đường dẫn chuẩn để so với `/dev/disk*`: casefold, `normpath`, gộp các `/` ở đầu (`//dev/disk2`)."""
-    full = os.path.normpath(path.casefold())
-    return "/" + full.lstrip("/") if full.startswith("/") else full
+    return name == "diskutil"
 
 
 def disk_inner(argv: list) -> list:
@@ -406,8 +395,7 @@ def disk_inner(argv: list) -> list:
 
 def check_disk_command(command: str):
     """Chặn hẳn lệnh xóa ổ đĩa trong cả chuỗi lệnh (TM-148, review 19/11): tách bằng shlex cả khi giữ `#` giữa từ, mở
-    lệnh con `$(…)` và backtick, chữ đưa vào shell qua ống (`echo '…' | sh`), `of=`/`>` có biến khi chuỗi nhắc tới
-    thiết bị ổ đĩa; không tách được thì quét chữ gốc."""
+    lệnh con `$(…)` và backtick, chữ đưa vào shell qua ống (`echo '…' | sh`); không tách được thì quét chữ gốc."""
     parsed = simple_commands(command)
     if command.strip() and not parsed:
         name = disk_text_wipe(command)
@@ -424,20 +412,6 @@ def check_disk_command(command: str):
         found = check_disk_wipe(argv)
         if found:
             return found
-    # Đích là biến hay lệnh con (`of="$DISK"`, `> "$DEV"`): chặn khi thiết bị ổ đĩa nằm ngay trong đích hay trong một
-    # phép gán `TÊN=/dev/disk…` của chuỗi (ngoài nháy đơn, heredoc có nháy); `of="$HOME/x.img"` vẫn qua.
-    assigned = re.search(r"(?:^|[\s;&|(])(?!(?:if|of)=)[A-Za-z_]\w*=[\"']?/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)",
-                         live.casefold()) or any(DISK_DEVICE_TEXT_RE.search(x.casefold()) for x in inner)
-    for argv in parsed:
-        prog = Path(argv[0]).name.casefold()
-        for i, arg in enumerate(argv):
-            target = arg[3:] if prog in DISK_DD and arg.casefold().startswith("of=") else None
-            if target is None and re.match(r"^\d*>>?$", arg) and i + 1 < len(argv):
-                target = argv[i + 1]
-            elif target is None and re.match(r"^\d*>>?.", arg):
-                target = re.sub(r"^\d*>>?", "", arg)
-            if target and target[:1] in "$`" and (assigned or DISK_DEVICE_TEXT_RE.search(" ".join(argv[i:]).casefold())):
-                return disk_deny("dd of=/ghi > vào ổ đĩa qua biến")
     piped = any(a and Path(a[0]).name.casefold() in DISK_SHELLS and not any(SHELL_C_RE.match(x) for x in a[1:])
                 and not positional(a[1:], set()) for a in parsed)
     if piped:
@@ -457,23 +431,11 @@ def disk_text_wipe(command: str):
     return None
 
 
-def disk_redirect(argv: list):
-    """Chuyển hướng ghi thẳng vào thiết bị ổ đĩa (`cat x > /dev/disk2`, `>>/dev/rdisk2s1`)."""
-    for i, arg in enumerate(argv):
-        m = re.match(r"^\d*>>?(.*)$", arg)
-        if not m:
-            continue
-        target = m.group(1) or (argv[i + 1] if i + 1 < len(argv) else "")
-        if target and DISK_DEVICE_RE.match(dev_path(target)):
-            return f"> {target}"
-    return None
-
-
 def disk_wipe(argv: list):
-    """Tên ngắn của lệnh xóa ổ đĩa trong `argv` (`diskutil eraseDisk`, `newfs_apfs`, `dd of=/dev/disk2`, ghi `>`
-    vào `/dev/disk2`), kể cả qua lệnh bọc, `xargs`, `find -exec`; hay None."""
+    """Tên ngắn của lệnh xóa ổ đĩa trong `argv` (`diskutil eraseDisk`, `diskutil apfs deleteContainer`), kể cả qua
+    lệnh bọc, shell, `xargs`, `find -exec`; hay None."""
     for inner in disk_inner(argv):
-        found = disk_wipe_one(inner) or disk_redirect(inner)
+        found = disk_wipe_one(inner)
         if found:
             return found
     return None
@@ -482,8 +444,6 @@ def disk_wipe(argv: list):
 def disk_wipe_one(argv: list):
     prog = Path(argv[0]).name.casefold()
     args = [a.casefold() for a in argv[1:]]
-    if prog.startswith(("newfs", "mkfs")):
-        return Path(argv[0]).name
     if prog == "diskutil":
         verbs = [a for a in args if not a.startswith("-")]
         if verbs[:1] == ["quiet"]:
@@ -492,10 +452,6 @@ def disk_wipe_one(argv: list):
             return f"diskutil {verbs[0]}"
         if verbs[:1] and verbs[0] in DISKUTIL_APFS and verbs[1:2] and verbs[1] in DISKUTIL_APFS_WIPE:
             return f"diskutil {verbs[0]} {verbs[1]}"
-    if prog in DISK_DD:
-        for arg in args:
-            if arg.startswith("of=") and arg[3:] and DISK_DEVICE_RE.match(dev_path(arg[3:])):
-                return f"dd {arg}"
     return None
 
 
