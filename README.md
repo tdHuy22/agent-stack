@@ -330,6 +330,10 @@ python3 tools/maintain.py
 
 `maintain.py` (mỗi tháng) kiểm phiên bản Claude Code, đồ bên thứ ba có commit mới chưa (có thì phải kiểm duyệt lại), test, độ dài mô tả skill, mức dùng 7 ngày so với `BASELINE.md`. Chỉ đọc, trừ khi thêm `--clean-cache`.
 
+`tools/cleanup.py` liệt kê rác kèm dung lượng (worktree đã gộp và sạch trong `.claude/worktrees/`, `.tmp/`, `evals/results/` cũ, scratchpad cũ), không dùng model; chỉ xóa khi thêm `--apply`, và chỉ đúng các mục đã liệt kê.
+
+Bộ plugin theo project: `/stack-profile gon` (hay nút "gọn" trong pane Kế hoạch) tắt plugin ít dùng và cho skill ít dùng chỉ còn tên, qua `.claude/settings.local.json` của project; `/stack-profile du` trả lại như cũ. Danh sách ở `profiles.gon` của `.agent/stack.json` (script: `plugin/skills/project-setup/scripts/profile.py`). Có hiệu lực từ phiên mới.
+
 Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích tiếng Việt ngắn, tên biến và hàm tiếng Anh; file tạm trong `.tmp/`, trạng thái chạy trong `state/`. Tên skill kebab-case tối đa 64 ký tự, `description` tối đa 1.024 ký tự (giới hạn của chuẩn Agent Skills). Chi tiết trong `CLAUDE.md`.
 
 ## 10. Bảo mật và giới hạn

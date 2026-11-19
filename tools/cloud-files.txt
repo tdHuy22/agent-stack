@@ -83,6 +83,7 @@ plugin/skills/progress/SKILL.md
 plugin/skills/progress/scripts/collect.py
 plugin/skills/progress/scripts/plan_tree.py
 plugin/skills/project-setup/SKILL.md
+plugin/skills/project-setup/scripts/profile.py
 plugin/skills/project-setup/scripts/stack.py
 plugin/skills/reader-page/SKILL.md
 plugin/skills/reader-page/mau.html

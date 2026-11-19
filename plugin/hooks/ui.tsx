@@ -10,6 +10,8 @@ const PANE = 'plan'
 const COMMAND = 'tree'
 const RECEIPT_COMMAND = 'receipts'
 const RECEIPT_LINES = 15
+const PROFILE_COMMAND = 'stack-profile'
+const PROFILES = ['gon', 'du'] as const
 const CLOSED_KEY = 'planPaneClosed'
 // Mã lá hay mốc của plan_tree.py (T.2, 14, 25.1.2); chặn mọi thứ khác (TM-28, TM-30).
 const CODE = /^[A-Za-z0-9][A-Za-z0-9.]{0,15}$/
@@ -23,6 +25,8 @@ const MAX_LEAVES = '200'
 const EMPTY: PlanView = { tree: null, error: null, planPath: null, mtimeMs: 0 }
 
 const plan = atom({ plugin: 'agent-stack', key: 'plan' } as const, EMPTY)
+// Lời báo của lần đổi bộ gọn/đủ gần nhất (profile.py), hiện ở chân pane.
+const profileNote = atom({ plugin: 'agent-stack', key: 'profileNote' } as const, '')
 const paneShown = atom({ plugin: 'agent-stack', key: 'paneShown' } as const, false)
 const routerHint = atom({ plugin: 'agent-stack', key: 'routerHint' } as const, null as RouterHint | null)
 // Giá trị đưa vào ô nhập từ dải: tên model hay mức effort (TM-37).
@@ -52,6 +56,26 @@ let inflight: Promise<void> | null = null
 
 function script($: EngineInterface): string {
   return `${$.plugin.root}/skills/progress/scripts/plan_tree.py`
+}
+
+/** Chạy profile.py (việc G): `show` hay đổi bộ `gon`/`du` của project đang mở. Logic nằm ở script. */
+async function runProfile($: EngineInterface, action: 'show' | 'gon' | 'du'): Promise<string> {
+  try {
+    const cwd = await $.session.cwd()
+    const run = await $.process.run(
+      ['python3', `${$.plugin.root}/skills/project-setup/scripts/profile.py`, '--project', cwd, action],
+      { timeoutMs: TIMEOUT_MS },
+    )
+    const out = run.stdout.trim().split('\n').filter(Boolean).pop() ?? ''
+    return (run.exitCode === 0 ? out : firstLine(run.stderr) || `profile.py thoát mã ${run.exitCode}`).slice(0, 300)
+  } catch (err) {
+    return `Không chạy được profile.py: ${String(err).slice(0, 200)}`
+  }
+}
+
+async function switchProfile($: EngineInterface, action: 'gon' | 'du'): Promise<void> {
+  const note = await runProfile($, action)
+  await update($, profileNote, () => note)
 }
 
 function firstLine(text: string): string {
@@ -302,6 +326,10 @@ export const register: Register = on => {
       description: 'Xem biên nhận kiểm chứng của project (receipt.py show), không gọi model',
     })
     await $.command.register({
+      name: PROFILE_COMMAND,
+      description: 'Bộ plugin của project: /stack-profile gon (gọn, ít token nạp sẵn) hay du (đủ); không gọi model',
+    })
+    await $.command.register({
       name: COMMAND,
       description: 'Mở pane cây kế hoạch; /tree <mã> xem một việc (vd /tree T.2)',
     })
@@ -423,6 +451,15 @@ export const register: Register = on => {
     }
   }).catch(() => ({ text: 'Lệnh /receipts gặp lỗi; xem `claude --debug`.' }))
 
+  on('command.run', { command: PROFILE_COMMAND }, async ($, e) => {
+    const arg = e.args.trim()
+    if (arg === '') return { text: await runProfile($, 'show') }
+    const action = PROFILES.find(p => p === arg)
+    if (!action) return { text: 'Dùng: /stack-profile gon | du (không tham số: xem bộ đang dùng).' }
+    await switchProfile($, action)
+    return { text: await read($, profileNote) }
+  }).catch(() => ({ text: 'Lệnh /stack-profile gặp lỗi; xem `claude --debug`.' }))
+
   on('command.run', { command: COMMAND }, async ($, e) => {
     const codes = e.args.split(/[\s,]+/).filter(Boolean)
     if (codes.length === 1 && codes[0] === '?') {
@@ -469,6 +506,7 @@ export const register: Register = on => {
     if (!tree) return <Text dimColor>Project này chưa có file kế hoạch.</Text>
 
     const phases = tree.done_phases
+    const note = await read($, profileNote)
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
@@ -542,6 +580,20 @@ export const register: Register = on => {
         <Text dimColor wrap="wrap">
           Bấm mã một việc để điền mã đó vào ô nhập.
         </Text>
+        <Box flexDirection="row" gap={1} flexWrap="wrap">
+          <Text dimColor>Bộ plugin:</Text>
+          <Button key="profile-gon" plain onPress={() => switchProfile($, 'gon')}>
+            gọn
+          </Button>
+          <Button key="profile-du" plain onPress={() => switchProfile($, 'du')}>
+            đủ
+          </Button>
+        </Box>
+        {note !== '' && (
+          <Text dimColor wrap="wrap">
+            {note}
+          </Text>
+        )}
       </Box>
     )
   })

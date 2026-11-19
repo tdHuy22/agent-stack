@@ -49,6 +49,7 @@ export type RouterHint = {
 declare module 'claude-code' {
   interface PluginState {
     // paneShown: pane Kế hoạch đã được vẽ ít nhất một lần trong phiên (giữ tới hết phiên).
-    'agent-stack': { plan: PlanView; paneShown: boolean; routerHint: RouterHint | null }
+    // profileNote: lời báo của lần đổi bộ plugin gọn/đủ gần nhất (profile.py, việc G).
+    'agent-stack': { plan: PlanView; paneShown: boolean; routerHint: RouterHint | null; profileNote: string }
   }
 }

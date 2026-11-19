@@ -52,6 +52,12 @@ function fake(on: On, s: Setup) {
       const stdout = Array.from({ length: 20 }, (_, i) => `- kiểm ${i + 1}: ✓ đạt`).join('\n')
       return { value: { exitCode: 0, stdout: `Kiểm tra đã ghi:\n${stdout}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
+    if (e.argv[1]?.endsWith('profile.py')) {
+      s.runs.push([...e.argv])
+      const action = e.argv[e.argv.length - 1]
+      const stdout = action === 'show' ? 'Bộ đang dùng: đủ.\n' : `  + x\nĐã chuyển sang bộ ${action === 'gon' ? 'gọn' : 'đủ'}.\n`
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     if (e.argv[1]?.endsWith('ui_status.py')) {
       s.statusStdins?.push(e.init?.stdin ?? '')
       s.statusArgs?.push([...e.argv])
@@ -391,6 +397,33 @@ test('/receipts in biên nhận qua receipt.py show, cắt bớt khi dài', asyn
   expect(out.text).toContain('- kiểm 14: ✓ đạt')
   expect(out.text).not.toContain('- kiểm 15: ✓ đạt')
   expect(out.text).toContain('… còn 6 dòng')
+})
+
+test('/stack-profile xem và đổi bộ gọn/đủ qua profile.py, tham số lạ không chạy script', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  expect((await $.command.run({ command: 'stack-profile', args: '' })).text).toContain('Bộ đang dùng: đủ')
+  expect(s.runs[0]).toEqual(expect.arrayContaining(['--project', CWD, 'show']))
+  expect((await $.command.run({ command: 'stack-profile', args: 'gon' })).text).toBe('Đã chuyển sang bộ gọn.')
+  expect(s.runs[1]?.[s.runs[1].length - 1]).toBe('gon')
+  expect((await $.command.run({ command: 'stack-profile', args: 'du' })).text).toBe('Đã chuyển sang bộ đủ.')
+  const before = s.runs.length
+  expect((await $.command.run({ command: 'stack-profile', args: 'rm -rf /' })).text).toContain('Dùng: /stack-profile')
+  expect(s.runs.length).toBe(before)
+})
+
+test('pane có nút gọn/đủ; bấm nút chạy profile.py và hiện lời báo', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  await $.command.run({ command: 'tree', args: '' })
+  const ui = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'Pane', requestId: 'plan', props: paneProps() })
+  expect(await ui.find({ type: 'Button', key: 'profile-gon' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'profile-du' })).toBeDefined()
+  await ui.press({ key: 'profile-gon' })
+  expect(s.runs.some(r => r[1]?.endsWith('profile.py') && r[r.length - 1] === 'gon')).toBe(true)
+  await ui.unmount()
+  const again = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'Pane', requestId: 'plan', props: paneProps() })
+  expect(await again.find({ type: 'Text', text: /Đã chuyển sang bộ gọn/ })).toBeDefined()
 })
 
 test('hook Stop của agent-stack chặn lượt thì hiện toast tóm tắt, kết quả giữ nguyên', async ($, on) => {

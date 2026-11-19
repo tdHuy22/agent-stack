@@ -80,6 +80,10 @@ Ngoài `stack.json`:
 - Cùng luật, cùng cụm, cùng chiều lệch lặp từ 3 lần trở lên thì thành đề xuất. Đề xuất siết vẫn đưa người dùng duyệt như mục 3; đề xuất nới đi đường duyệt ở mục 4.
 - Lúc mở phiên, hook chỉ báo số đề xuất.
 
+## 6. Bộ plugin gọn/đủ
+
+`stack.json` có thể khai `profiles.gon` (`plugins_off`: id `tên@marketplace`; `skills_name_only`: tên skill). Người dùng đổi bằng `/stack-profile gon|du` hay `python3 scripts/profile.py --project . gon|du`; không có mục này thì dùng mặc định của script. Plugin agent-stack không bao giờ bị tắt.
+
 ## Không làm
 
 - Không ghi mục nào người dùng chưa duyệt.

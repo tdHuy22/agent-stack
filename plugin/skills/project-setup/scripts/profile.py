@@ -22,14 +22,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
 import agentstack as A  # noqa: E402
 
 PROTECTED_PLUGINS = {"agent-stack@agent-stack-local"}
+PROTECTED_MARKETPLACE = "agent-stack-local"
 PLUGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SKILL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})?$")
 MAX_NAMES = 100
@@ -64,6 +67,12 @@ def names(values, pattern) -> list:
     return out[:MAX_NAMES]
 
 
+def protected(plugin_id: str) -> bool:
+    """Plugin của marketplace agent-stack-local (chứa hook chặn) không bao giờ bị tắt; so không phân biệt hoa thường."""
+    folded = plugin_id.casefold()
+    return folded in PROTECTED_PLUGINS or folded.endswith("@" + PROTECTED_MARKETPLACE)
+
+
 def wanted(project: Path) -> dict:
     """Danh sách của bộ "gọn" cho project: từ stack.json nếu có, không thì mặc định."""
     data = A.read_json(project / ".agent" / "stack.json", {}) or {}
@@ -71,7 +80,7 @@ def wanted(project: Path) -> dict:
     gon = gon if isinstance(gon, dict) else {}
     plugins = names(gon["plugins_off"], PLUGIN_RE) if "plugins_off" in gon else list(DEFAULT_PLUGINS_OFF)
     skills = names(gon["skills_name_only"], SKILL_RE) if "skills_name_only" in gon else list(DEFAULT_SKILLS_NAME_ONLY)
-    return {"plugins_off": [p for p in plugins if p not in PROTECTED_PLUGINS], "skills_name_only": skills,
+    return {"plugins_off": [p for p in plugins if not protected(p)], "skills_name_only": skills,
             "source": ".agent/stack.json" if gon else "mặc định"}
 
 
@@ -156,10 +165,17 @@ def apply_du(data: dict, rec: dict) -> list:
 
 
 def write_settings(path: Path, data: dict) -> None:
+    """Ghi nguyên tử qua file tạm tên ngẫu nhiên tạo mới (O_EXCL): file tạm có sẵn trong repo, kể cả symlink, không
+    làm lệch chỗ ghi (TM-155)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".agent-stack.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".settings.local.", suffix=".agent-stack.tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def main(argv=None) -> int:
