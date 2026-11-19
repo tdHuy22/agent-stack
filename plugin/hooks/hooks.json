@@ -18,7 +18,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Monitor",
         "hooks": [
           {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pretool_guard.py"], "timeout": 5}
         ]

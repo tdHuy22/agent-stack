@@ -21,6 +21,12 @@
   (trừ -n, và -X chỉ xóa file git bỏ qua), `rm -r` với đích ngoài chỗ ghi tạm, `git commit --amend` và `git rebase`
   khi viết lại commit đã có trên remote: qua cùng cổng với tag (chặn lần đầu, người dùng nhắn lại thì cho qua), khóa
   theo gốc repo và đúng lệnh. Chữ "git push" trong thông điệp commit, heredoc, echo không phải lệnh nên không bị hỏi.
+- Lệnh xóa ổ đĩa (việc G, 19/11/2026): `diskutil erase*` (`eraseDisk`, `eraseVolume`), `secureErase`, `zeroDisk`,
+  `randomDisk`, `partitionDisk`, `reformat`, `apfs deleteContainer`/`deleteVolume`/`eraseVolume`, `newfs*`, `mkfs*`,
+  `dd` có `of=/dev/disk*` hay `/dev/rdisk*`: chặn hẳn, lời đồng ý trong chat không mở (TM-148, TM-149). Tên lệnh và verb
+  so không phân biệt hoa thường, sau khi bỏ `sudo`, mở `sh -c`, cả sau `/usr/bin/env`, `xargs`, `find -exec`; ghi
+  chuyển hướng `>` vào `/dev/disk*` cũng chặn. Chưa bắt: tên lệnh nằm trong biến hay lệnh con (`$d zeroDisk`). Lớp hai:
+  luật `permissions.deny` do bước `deny` của `tools/install.py` ghi.
 
 Lệnh không khớp mẫu nào thì thoát ngay, không in gì. Mọi lỗi đều bỏ qua: hook không bao giờ được làm kẹt phiên.
 """
@@ -83,6 +89,24 @@ SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rb",
 MD_NAMES = {"claude.md", "claude.local.md", "agents.md", "gemini.md", "skill.md", "readme.md", "changelog.md",
             "contributing.md", "security.md", "code_of_conduct.md", "license.md", "support.md", "nhat-ky.md",
             "threat-model.md", "memory.md", "pull_request_template.md"}
+# Lệnh xóa ổ đĩa: chặn hẳn (TM-148). Verb của diskutil so sau casefold.
+DISKUTIL_WIPE = {"secureerase", "zerodisk", "randomdisk", "partitiondisk", "reformat"}
+DISKUTIL_APFS = {"apfs", "ap"}
+DISKUTIL_APFS_WIPE = {"deletecontainer", "deletevolume", "erasevolume"}
+DISK_DD = {"dd", "gdd"}
+XARGS_VALUE_FLAGS = {"-I", "-J", "-L", "-n", "-P", "-R", "-S", "-s", "-E", "-d", "-a", "--max-args", "--max-procs",
+                     "--max-lines", "--max-chars", "--delimiter", "--arg-file", "--eof", "--process-slot-var"}
+DISK_SHELLS = SHELLS | {"ksh", "mksh", "csh", "tcsh", "fish"}
+DISK_WRAPPERS = {"caffeinate", "arch"}  # chạy lệnh theo sau, cờ đứng trước
+DISK_TEXT_RES = (
+    re.compile(r"\bdiskutil\b[^\n;|&]*?\b(?:erase\w*|secureerase|zerodisk|randomdisk|partitiondisk|reformat|"
+               r"deletecontainer|deletevolume)\b"),
+    re.compile(r"(?:^|[\s;&|(/'\"])(?:newfs\w*|mkfs[\w.]*)\s"),
+    re.compile(r"\bg?dd\b[^\n;|&]*\bof=/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)"),
+    re.compile(r">\s*/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)"),
+)
+DISK_DEVICE_TEXT_RE = re.compile(r"/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)")
+DISK_DEVICE_RE = re.compile(r"^/dev/(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)")
 MD_DIRS = {".claude", ".agent", ".agents", ".github", ".cursor", "skills", "agents", "commands", "memory", "plans",
            "references", "prompts"}
 
@@ -129,7 +153,7 @@ def approved_plugins(A) -> set:
     return out
 
 
-def simple_commands(command: str, depth: int = 0) -> list:
+def simple_commands(command: str, depth: int = 0, commenters: str = "#") -> list:
     """Tách chuỗi lệnh shell thành các lệnh đơn (danh sách argv): bỏ thân heredoc, tách ở ; && || | & ( ) và xuống
     dòng, nối dòng kết thúc bằng `\\`, bỏ gán biến và tiền tố như sudo, env; mở `bash -c "..."` (cả `-lc`, `-ec`) và
     `eval '...'` thêm một tầng. Chuỗi trích dẫn (thông điệp commit, echo) nằm trong argv của lệnh khác nên không bị hiểu
@@ -141,6 +165,7 @@ def simple_commands(command: str, depth: int = 0) -> list:
     lexer = shlex.shlex(text, posix=True, punctuation_chars=";&|()\n")
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
+    lexer.commenters = commenters
     try:
         tokens = list(lexer)
     except ValueError:
@@ -151,10 +176,12 @@ def simple_commands(command: str, depth: int = 0) -> list:
             current = strip_prefixes(current)
             if current:
                 flag = next((i for i, a in enumerate(current[1:], 1) if SHELL_C_RE.match(a)), None)
+                if flag is not None and flag + 1 < len(current) and current[flag + 1] == "--":
+                    flag += 1  # `bash -c -- '…'`: chuỗi lệnh đứng sau `--`
                 if Path(current[0]).name in SHELLS and flag is not None and depth < 2:
-                    out += simple_commands(current[flag + 1], depth + 1) if flag + 1 < len(current) else []
+                    out += simple_commands(current[flag + 1], depth + 1, commenters) if flag + 1 < len(current) else []
                 elif current[0] == "eval" and depth < 2:
-                    out += simple_commands(" ".join(current[1:]), depth + 1)
+                    out += simple_commands(" ".join(current[1:]), depth + 1, commenters)
                 else:
                     out.append(current)
             current = []
@@ -197,6 +224,9 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
     lệnh không đảo ngược), cổng đứng trước hỏi: lời nhắc không được che lệnh bị chặn đứng sau nó, vì qua cổng là cả
     chuỗi chạy."""
     results = []
+    wipe = check_disk_command(command)  # chặn hẳn, đứng trước mọi cổng khác
+    if wipe:
+        return wipe
     if LOCK_NAME in command:
         found = lock_named_by_interpreter(command, cwd)
         if found:
@@ -314,7 +344,166 @@ def mktemp_vars(command: str) -> frozenset:
     return frozenset(n for n in names if not reassigned(n))
 
 
+def disk_prog(word: str) -> bool:
+    name = Path(word).name.casefold()
+    return name in DISK_DD or name in ("diskutil",) or name.startswith(("newfs", "mkfs"))
+
+
+def dev_path(path: str) -> str:
+    """Đường dẫn chuẩn để so với `/dev/disk*`: casefold, `normpath`, gộp các `/` ở đầu (`//dev/disk2`)."""
+    full = os.path.normpath(path.casefold())
+    return "/" + full.lstrip("/") if full.startswith("/") else full
+
+
+def disk_inner(argv: list) -> list:
+    """Các argv mà `argv` chạy: chính nó, lệnh sau lệnh bọc viết bằng đường dẫn hay chữ hoa (`/usr/bin/env …`,
+    `/usr/bin/sudo …`, `caffeinate …`), chuỗi của `sh -c` (mọi shell, so không phân biệt hoa thường), `su -c`,
+    `env -S`, lệnh sau `xargs`, sau `find -exec`/`-execdir`/`-ok`."""
+    out, todo = [], [argv]
+    while todo:
+        cur = todo.pop()
+        if not cur or len(out) > 16:
+            continue
+        out.append(cur)
+        name = Path(cur[0]).name.casefold()
+        if any(c.isspace() for c in cur[0]):  # `sudo -s 'diskutil …'`: cả chuỗi là một lệnh shell
+            todo += simple_commands(" ".join(cur))
+        elif name in DISK_SHELLS or name == "su":
+            flag = next((i for i, a in enumerate(cur[1:], 1) if SHELL_C_RE.match(a)), None)
+            if flag is not None and flag + 1 < len(cur) and cur[flag + 1] == "--":
+                flag += 1  # `bash -c -- '…'`
+            if flag is not None and flag + 1 < len(cur):
+                todo += simple_commands(cur[flag + 1])
+        elif name == "env" and any(a in ("-S", "--split-string") or a.startswith("--split-string=") for a in cur):
+            for i, a in enumerate(cur):
+                if a in ("-S", "--split-string") and i + 1 < len(cur):
+                    todo += simple_commands(cur[i + 1])
+                elif a.startswith("--split-string="):
+                    todo += simple_commands(a.split("=", 1)[1])
+        elif name in DISK_WRAPPERS:
+            rest = cur[1:]
+            while rest and rest[0].startswith("-"):
+                rest = rest[2:] if rest[0] in ("-t", "-w") and name == "caffeinate" else rest[1:]
+            todo.append(rest)
+        elif name in PREFIXES | {"doas"} and cur[0] != name:
+            todo.append(strip_prefixes([name, *cur[1:]]))
+        elif name == "doas":
+            todo.append(strip_prefixes(["sudo", *cur[1:]]))
+        elif name == "xargs":
+            # Lệnh của xargs là từ đầu tiên không phải cờ hay giá trị của cờ (cờ của BSD và GNU gộp lại): xét mọi chỗ
+            # có tên lệnh xóa ổ mà mọi từ trước nó là cờ hay giá trị của cờ cần giá trị (`xargs grep mkfs` không tính).
+            for i in range(1, len(cur)):
+                prefix_ok = all(w.startswith("-") or cur[j - 1] in XARGS_VALUE_FLAGS for j, w in enumerate(cur[1:i], 1))
+                if prefix_ok and (disk_prog(cur[i]) or Path(cur[i]).name.casefold() in DISK_SHELLS):
+                    todo.append(cur[i:])
+        elif name == "find":
+            for i, arg in enumerate(cur):
+                if arg in ("-exec", "-execdir", "-ok", "-okdir"):
+                    end = next((j for j in range(i + 1, len(cur)) if cur[j] in (";", "+")), len(cur))
+                    todo.append(cur[i + 1:end])
+    return out
+
+
+def check_disk_command(command: str):
+    """Chặn hẳn lệnh xóa ổ đĩa trong cả chuỗi lệnh (TM-148, review 19/11): tách bằng shlex cả khi giữ `#` giữa từ, mở
+    lệnh con `$(…)` và backtick, chữ đưa vào shell qua ống (`echo '…' | sh`), `of=`/`>` có biến khi chuỗi nhắc tới
+    thiết bị ổ đĩa; không tách được thì quét chữ gốc."""
+    parsed = simple_commands(command)
+    if command.strip() and not parsed:
+        name = disk_text_wipe(command)
+        return disk_deny(name) if name else None
+    # Lệnh con chỉ chạy ngoài nháy đơn và ngoài thân heredoc có nháy (`<<'EOF'`): bỏ hai phần đó trước khi tìm.
+    live = HEREDOC_RE.sub(lambda m: " " + m.group(3) + "\n" if m.group(1) else m.group(0), command)
+    live = re.sub(r"'[^']*'", "''", live)
+    inner = [m.group(1) or m.group(2) for m in re.finditer(r"\$\(([^()]*)\)|`([^`]*)`", live)]
+    inner = [text for text in inner if text]
+    argvs = parsed + simple_commands(command, commenters="")
+    for text in inner:
+        argvs += simple_commands(text)
+    for argv in argvs:
+        found = check_disk_wipe(argv)
+        if found:
+            return found
+    folded = command.casefold()
+    if DISK_DEVICE_TEXT_RE.search(folded) and (re.search(r"\bg?dd\b[^\n;|&]*\bof=\S*[$`({]", folded)
+                                              or re.search(r">\s*[\"']?[$`]", folded)):
+        return disk_deny("dd of=/ghi > vào ổ đĩa qua biến")
+    piped = any(a and Path(a[0]).name.casefold() in DISK_SHELLS and not any(SHELL_C_RE.match(x) for x in a[1:])
+                and not positional(a[1:], set()) for a in parsed)
+    if piped:
+        name = disk_text_wipe(command)
+        if name:
+            return disk_deny(name)
+    return None
+
+
+def disk_text_wipe(command: str):
+    """Khi không tách được lệnh (shlex lỗi, như `$'X\\'Y'`): quét chữ gốc tìm mẫu xóa ổ đĩa."""
+    text = command.casefold()
+    for rx in DISK_TEXT_RES:
+        m = rx.search(text)
+        if m:
+            return m.group(0).strip()[:60]
+    return None
+
+
+def disk_redirect(argv: list):
+    """Chuyển hướng ghi thẳng vào thiết bị ổ đĩa (`cat x > /dev/disk2`, `>>/dev/rdisk2s1`)."""
+    for i, arg in enumerate(argv):
+        m = re.match(r"^\d*>>?(.*)$", arg)
+        if not m:
+            continue
+        target = m.group(1) or (argv[i + 1] if i + 1 < len(argv) else "")
+        if target and DISK_DEVICE_RE.match(dev_path(target)):
+            return f"> {target}"
+    return None
+
+
+def disk_wipe(argv: list):
+    """Tên ngắn của lệnh xóa ổ đĩa trong `argv` (`diskutil eraseDisk`, `newfs_apfs`, `dd of=/dev/disk2`, ghi `>`
+    vào `/dev/disk2`), kể cả qua lệnh bọc, `xargs`, `find -exec`; hay None."""
+    for inner in disk_inner(argv):
+        found = disk_wipe_one(inner) or disk_redirect(inner)
+        if found:
+            return found
+    return None
+
+
+def disk_wipe_one(argv: list):
+    prog = Path(argv[0]).name.casefold()
+    args = [a.casefold() for a in argv[1:]]
+    if prog.startswith(("newfs", "mkfs")):
+        return Path(argv[0]).name
+    if prog == "diskutil":
+        verbs = [a for a in args if not a.startswith("-")]
+        if verbs[:1] == ["quiet"]:
+            verbs = verbs[1:]
+        if verbs and (verbs[0].startswith("erase") or verbs[0] in DISKUTIL_WIPE):
+            return f"diskutil {verbs[0]}"
+        if verbs[:1] and verbs[0] in DISKUTIL_APFS and verbs[1:2] and verbs[1] in DISKUTIL_APFS_WIPE:
+            return f"diskutil {verbs[0]} {verbs[1]}"
+    if prog in DISK_DD:
+        for arg in args:
+            if arg.startswith("of=") and arg[3:] and DISK_DEVICE_RE.match(dev_path(arg[3:])):
+                return f"dd {arg}"
+    return None
+
+
+def check_disk_wipe(argv: list):
+    name = disk_wipe(argv)
+    return disk_deny(name) if name else None
+
+
+def disk_deny(name: str):
+    return "deny", (f"agent-stack: `{name}` là lệnh xóa ổ đĩa (dữ liệu mất hẳn), bị chặn hẳn: lời đồng ý trong chat "
+                    "không mở được. Đừng chạy, kể cả qua đường khác. Nếu người dùng thật sự cần, họ tự chạy trong "
+                    "terminal.")
+
+
 def check_argv(argv: list, cwd: str, temp_vars=frozenset(), session_id: str = ""):
+    wipe = check_disk_wipe(argv)
+    if wipe:
+        return wipe
     vet_hint = ("Chạy skill vet-skill cho nó trước; chỉ cài khi người dùng đã duyệt trong vetted.lock "
                 "(cài bằng ./install.sh của agent-stack). Nếu người dùng muốn tự cài thì họ chạy lệnh này trong terminal.")
     prog, args = Path(argv[0]).name, argv[1:]
@@ -1704,6 +1893,8 @@ def main():
     cwd = data.get("cwd") or ""
     if tool == "Bash":
         result = check_bash(str(tool_input.get("command") or ""), cwd, data.get("session_id") or "")
+    elif tool == "Monitor":  # Monitor chạy lệnh shell: chỉ xét lệnh xóa ổ đĩa (review 19/11)
+        result = check_disk_command(str(tool_input.get("command") or ""))
     elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
         result = check_write(tool_input, cwd, data.get("session_id") or "", tool)
     else:

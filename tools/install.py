@@ -13,6 +13,8 @@ Các bước (chạy theo thứ tự; --only để chọn một phần):
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
               terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
+  deny        thêm luật permissions.deny chặn lệnh xóa ổ đĩa (diskutil erase*, newfs*, mkfs*, dd of=/dev/disk*)
+              vào ~/.claude/settings.json, giữ luật cũ; lớp hai sau hook pretool_guard.py (việc G, TM-150)
   catalog     cài các mục đã duyệt trong vetted.lock (scope user); mục scope project chỉ in lệnh. MCP từ xa
               (kind mcp-remote): `claude mcp add -s user --transport http`, chỉ khi URL khớp bản đã duyệt và định
               nghĩa tool lấy lại ngay trước khi cài còn khớp hash đã duyệt
@@ -48,7 +50,12 @@ import time
 from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
-STEPS = ("rules", "plugin", "pi", "statusline", "autocontinue", "catalog", "tools")
+STEPS = ("rules", "plugin", "pi", "statusline", "autocontinue", "deny", "catalog", "tools")
+# Luật deny cho lệnh xóa ổ đĩa (bước deny). Hook pretool_guard.py bắt cả dạng viết khác; luật này là lớp hai.
+DISK_DENY_RULES = tuple(f"Bash({pre}{cmd})" for pre in ("", "sudo ") for cmd in (
+    "diskutil erase*", "diskutil secureErase*", "diskutil zeroDisk*", "diskutil randomDisk*", "diskutil partitionDisk*",
+    "diskutil reformat*", "diskutil apfs deleteContainer*", "diskutil apfs deleteVolume*", "diskutil apfs eraseVolume*",
+    "diskutil ap deleteContainer*", "diskutil ap deleteVolume*", "diskutil ap eraseVolume*", "newfs*", "mkfs*", "dd *of=/dev/disk*", "dd *of=/dev/rdisk*"))
 MARKETPLACE = "agent-stack-local"
 VENDOR_MARKETPLACE = "agent-stack-vendor-local"
 VENDOR_PLUGIN = "agent-stack-vendor"
@@ -570,6 +577,34 @@ class Installer:
             else:
                 self.say("  + autoContinueAtUsageLimit = true")
                 data["autoContinueAtUsageLimit"] = True
+        self.edit_settings(mutate)
+
+    def step_deny(self) -> None:
+        self.say("[deny] permissions.deny chặn lệnh xóa ổ đĩa")
+
+        def mutate(data):
+            if data.get("permissions") is None:
+                data.pop("permissions", None)
+            perms = data.get("permissions")
+            if perms is not None and not isinstance(perms, dict):
+                self.say("  ! permissions trong settings.json không phải object, giữ nguyên")
+                self.failures.append("settings.json: permissions không phải object")
+                return
+            perms = data.setdefault("permissions", {})
+            if perms.get("deny") is None:
+                perms.pop("deny", None)
+            deny = perms.get("deny")
+            if deny is not None and not isinstance(deny, list):
+                self.say("  ! permissions.deny không phải danh sách, giữ nguyên")
+                self.failures.append("settings.json: permissions.deny không phải danh sách")
+                return
+            deny = perms.setdefault("deny", [])
+            for rule in DISK_DENY_RULES:
+                if rule in deny:
+                    self.say(f"  = đã có {rule}")
+                else:
+                    self.say(f"  + {rule}")
+                    deny.append(rule)
         self.edit_settings(mutate)
 
     def approved(self) -> dict:
