@@ -10,7 +10,8 @@ Lệnh:
   receipt.py run [--project DIR] [--label TÊN] [--timeout GIÂY] [--narrow] -- <lệnh> [tham số...]
       Chạy lệnh (không qua shell), in output, ghi biên nhận. Mã thoát của receipt.py là mã thoát của lệnh.
       `--narrow` (tự bật khi lệnh gọi narrow.py): bộ test thu hẹp, biên nhận ghi `scope: narrow` và không thay biên
-      nhận cả bộ ở hook Stop, done-gate (TM-160).
+      nhận cả bộ ở hook Stop, done-gate (TM-160). Trừ đúng dạng `python3 narrow.py full [--jobs N] [--timeout GIÂY]`
+      ở chính project: chạy cả bộ song song và tự kiểm đủ số test, nên là biên nhận cả bộ.
   receipt.py show [--project DIR] [--json]
       In các lần kiểm tra đã ghi và cho biết từng kết quả còn khớp code hiện tại không.
   receipt.py forget [--project DIR] TÊN [TÊN...]
@@ -453,15 +454,65 @@ def run_place(root: Path, run_dir: Path) -> dict:
 NARROW_TOOL = "narrow.py"
 
 
-def is_narrow(cmd: list) -> bool:
-    """Lệnh chạy bộ test thu hẹp (narrow.py, kể cả qua trình chạy): biên nhận của nó không thay biên nhận cả bộ."""
-    return any(isinstance(a, str) and Path(a).name == NARROW_TOOL for a in cmd)
+PYTHON_RE = re.compile(r"python(?:3(?:\.\d+)?)?")
+FULL_OPTS = {"--jobs": re.compile(r"[1-9]\d{0,3}"), "--timeout": re.compile(r"\d{1,6}(?:\.\d+)?")}
+
+
+def is_full_suite(cmd: list, root: Path, run_dir: Path) -> bool:
+    """`narrow.py full` chạy CẢ BỘ song song và tự kiểm tổng số test bằng discover (mã khác 0 khi thiếu), nên biên nhận
+    của nó là của cả bộ (TM-160). Chỉ nhận đúng dạng `[python3] narrow.py full [--jobs N] [--timeout GIÂY] [--project
+    <chính project của biên nhận>]`, cờ dạng `--x V` hay `--x=V`, với narrow.py đúng là file nằm cạnh receipt.py này
+    (so đường dẫn đã resolve); mọi dạng khác (narrow.py khác, narrow.py xuất hiện hai lần, có trình
+    bọc hay cờ của python đứng trước, lệnh con khác như `run … full`, tham số lạ, project khác, gốc biên nhận không
+    phải gốc git) vẫn là bộ thu hẹp."""
+    if not all(isinstance(a, str) for a in cmd):
+        return False
+    hits = [i for i, a in enumerate(cmd) if Path(a).name == NARROW_TOOL]
+    if len(hits) != 1 or hits[0] > 1 or (hits[0] == 1 and not PYTHON_RE.fullmatch(Path(cmd[0]).name)):
+        return False
+    # đúng narrow.py nằm cạnh receipt.py này (file khác cùng tên có thể không kiểm số test)
+    tool = Path(cmd[hits[0]]).expanduser()
+    try:
+        if (tool if tool.is_absolute() else run_dir / tool).resolve() != (HERE.parent / NARROW_TOOL).resolve():
+            return False
+    except (OSError, RuntimeError):
+        return False
+    rest = cmd[hits[0] + 1:]
+    if rest[:1] != ["full"]:
+        return False
+    opts, project, i = rest[1:], None, 0
+    while i < len(opts):
+        key, eq, value = opts[i].partition("=")
+        if not eq:
+            if i + 1 >= len(opts):
+                return False
+            value = opts[i + 1]
+        i += 1 if eq else 2
+        if key == "--project" and value and not value.startswith("-"):
+            project = value
+        elif not (key in FULL_OPTS and FULL_OPTS[key].fullmatch(value)):
+            return False
+    # narrow.py chạy ở gốc git của project; gốc biên nhận là thư mục con có file kế hoạch (monorepo) thì bộ chạy
+    # khác bộ của biên nhận: chỉ nhận khi gốc biên nhận chính là gốc git.
+    where = run_dir / Path(project).expanduser() if project else run_dir
+    try:
+        return (root / ".git").exists() and where.resolve() == root.resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def is_narrow(cmd: list, root: Path | None = None, run_dir: Path | None = None) -> bool:
+    """Lệnh chạy bộ test thu hẹp (narrow.py, kể cả qua trình chạy): biên nhận của nó không thay biên nhận cả bộ. Trừ
+    `narrow.py full` đúng dạng, chạy ở chính project của biên nhận (is_full_suite)."""
+    if not any(isinstance(a, str) and Path(a).name == NARROW_TOOL for a in cmd):
+        return False
+    return root is None or not is_full_suite(cmd, root, run_dir or root)
 
 
 def cmd_run(root: Path, label: str, cmd: list, timeout: float, run_dir: Path | None = None,
             narrow: bool = False) -> int:
     run_dir = run_dir or root
-    narrow = narrow or is_narrow(cmd)
+    narrow = narrow or is_narrow(cmd, root, run_dir)
     before = A.tree_fingerprint(root)
     start = time.time()
     try:

@@ -24,17 +24,31 @@ Lệnh:
       đa 8); mặc định đối số `discover -s tests -t .`, hay chỉ tên module, test (không nhận cờ; khi đó "cả bộ" của vết
       chỉ là phần đó và biên nhận mang `scope: narrow`). Mã 0: ghi được vết và mọi test đạt; 1: ghi được vết nhưng
       có test trượt (in đủ tên); 2: không ghi được.
-  narrow.py run [--project DIR] [--base REF] [--head REF] [--plan] [--json] [--timeout GIÂY]
+  narrow.py run [--project DIR] [--base REF] [--head REF] [--plan] [--json] [--timeout GIÂY] [--jobs N]
       Diff: cây làm việc (cả file mới chưa track) so với REF (mặc định HEAD); `--head REF` thay cây làm việc bằng
       commit đó (để đo trên diff cũ: chạy test trên code hiện tại, không ghi biên nhận). In test được chọn và vì sao,
       rồi chạy qua `receipt.py run --narrow` (bộ thu hẹp) hay `receipt.py run` (rơi về cả bộ). `--plan`: chỉ in. Mã
-      thoát là mã của lệnh test; 2 khi tham số sai.
+      thoát là mã của lệnh test; 2 khi tham số sai. `--jobs N` (mặc định 1): N > 1 thì chia test đã chọn theo module
+      (mỗi module một mảnh, mảnh liên quan nhất chạy trước) và chạy N mảnh cùng lúc như `full`; rơi về cả bộ thì chạy
+      `full` (biên nhận cả bộ), trừ khi vết ghi trên một phần bộ test: khi đó chạy `exec --jobs` các tên trong vết, biên
+      nhận thu hẹp.
+  narrow.py full [--project DIR] [--jobs N] [--timeout GIÂY]
+      (việc F2a) Chạy CẢ BỘ `discover -s tests -t .` song song, không nhận tham số chọn bớt test: mỗi mảnh một tiến
+      trình `python3 -m unittest`, N tiến trình cùng lúc (mặc định số nhân hiệu năng: `sysctl -n
+      hw.perflevel0.physicalcpu` trên macOS, không có thì số lõi / 2). Mỗi module một mảnh; có vết thì mảnh lâu chạy
+      trước và module ước quá SPLIT_SECS giây được tách theo lớp test. Mảnh trượt chạy lại một mình một lần; đạt khi
+      chạy lại thì vẫn in đuôi lỗi lần đầu và nêu mảnh đó ở dòng tổng kết (mã 0). Cùng tập test với discover tuần tự
+      nhưng mỗi module một tiến trình: KHÔNG bắt lỗi rò trạng thái giữa các module (`os.environ`, `sys.modules`, cwd)
+      như chạy tuần tự (rủi ro đã chấp nhận, TM-160); trước khi cài toàn cục chạy lệnh tuần tự. Tổng các dòng `Ran N tests` phải bằng số test discover nạp được (đếm trong một tiến
+      trình nạp mà không chạy). Mã 0: đạt và đủ test; 1: còn mảnh trượt, lệch số test hay quá giờ (mặc định 1500
+      giây, dưới giới hạn 1800 của receipt.py để tự dừng các mảnh); 2: không nạp được bộ test.
+      Chạy qua `receipt.py run -- python3 narrow.py full` thì biên nhận là của cả bộ (không `scope: narrow`).
   narrow.py status [--project DIR]
       Vết ghi lúc nào, ở commit nào, bao nhiêu file đã đổi từ đó.
-  narrow.py exec [--project DIR] -- <tên test…>
+  narrow.py exec [--project DIR] [--jobs N] [--timeout GIÂY] -- <tên test…>
       (receipt.py chạy lệnh này) chạy các test; trượt thì chạy lại cả danh sách với test trượt thay bằng cả module
       của nó, mã thoát là của lần chạy lại: đạt thì test đó cần test khác chạy trước, được ghi vào vết để lần sau chạy
-      cả module.
+      cả module. `--jobs N` > 1: song song theo module như `run --jobs`.
 
 Rơi về chạy rộng hơn, in lý do: chưa có vết, vết bản khác, hỏng hay có tham số lạ, diff rỗng, vết cũ (quá DRIFT_LIMIT
 file code đổi từ lúc ghi), file mới không test nào chạm thư mục của nó, test trượt lúc ghi vết không rõ module, chọn từ
@@ -49,13 +63,16 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import difflib
 import functools
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -874,20 +891,28 @@ def unittest_args(data) -> list:
     return list(args) if args_ok(args) else list(DEFAULT_ARGS)
 
 
-def receipt_cmd(root: Path, plan: dict, data, timeout: float) -> list:
+def receipt_cmd(root: Path, plan: dict, data, timeout: float, jobs: int = 1) -> list:
     """Lệnh chạy qua receipt.py. Chế độ cả bộ theo vết ghi trên một phần bộ test (`record -- tests.x`) vẫn là bộ thu
-    hẹp: biên nhận mang `scope: narrow`, không thay biên nhận cả bộ (TM-159, TM-160)."""
+    hẹp: biên nhận mang `scope: narrow`, không thay biên nhận cả bộ (TM-159, TM-160). `jobs` > 1: chạy song song theo
+    mảnh (`exec --jobs`; cả bộ thật thì `full`, biên nhận cả bộ vì `full` tự kiểm đủ số test)."""
     receipt = HERE.parent / "receipt.py"
     base = [sys.executable, str(receipt), "run", "--project", str(root), "--timeout", str(int(timeout))]
+    narrow = ["--narrow", "--label", NARROW_LABEL]
+    # song song: dừng trước receipt (receipt giết narrow.py thì không ai dừng các mảnh), để tự dọn mảnh
+    par = ["--jobs", str(jobs), "--timeout", str(int(max(60, timeout - 30)))] if jobs > 1 else []
     if plan["mode"] == "full":
         args = unittest_args(data)
-        partial = ["--narrow", "--label", NARROW_LABEL] if args != DEFAULT_ARGS else []
+        if jobs > 1 and args == DEFAULT_ARGS:
+            return [*base, "--", sys.executable, str(HERE), "full", "--project", str(root), *par]
+        if jobs > 1:  # vết ghi trên một phần bộ test: args là tên module, test
+            return [*base, *narrow, "--", sys.executable, str(HERE), "exec", "--project", str(root), *par, "--", *args]
+        partial = narrow if args != DEFAULT_ARGS else []
         return [*base, *partial, "--", sys.executable, "-m", "unittest", *args]
-    return [*base, "--narrow", "--label", NARROW_LABEL, "--", sys.executable, str(HERE), "exec", "--project",
-            str(root), "--", *plan["names"]]
+    return [*base, *narrow, "--", sys.executable, str(HERE), "exec", "--project", str(root), *par, "--",
+            *plan["names"]]
 
 
-def cmd_run(root: Path, base, head, plan_only: bool, as_json: bool, timeout: float) -> int:
+def cmd_run(root: Path, base, head, plan_only: bool, as_json: bool, timeout: float, jobs: int = 1) -> int:
     plan = select(root, base, head)
     data = load_raw(root)
     if as_json:
@@ -901,24 +926,397 @@ def cmd_run(root: Path, base, head, plan_only: bool, as_json: bool, timeout: flo
             print(f"[narrow] đo: cả bộ, không chạy lại (ước {plan['estimate']} giây theo lúc ghi vết)")
             return 0
         argv = [sys.executable, "-m", "unittest", *plan["names"]]
+        if jobs > 1:
+            argv = [sys.executable, str(HERE), "exec", "--project", str(root), "--jobs", str(jobs), "--timeout",
+                    str(int(timeout)), "--", *plan["names"]]
         started = time.monotonic()
         code = subprocess.run(argv, cwd=str(root), stdin=subprocess.DEVNULL).returncode
         print(f"[narrow] đo: {plan['selected']}/{plan['total']} test, {time.monotonic() - started:.1f} giây, mã {code} "
               "(không ghi biên nhận)")
         return code
-    return subprocess.run(receipt_cmd(root, plan, data, timeout), cwd=str(root), stdin=subprocess.DEVNULL).returncode
+    return subprocess.run(receipt_cmd(root, plan, data, timeout, jobs), cwd=str(root),
+                          stdin=subprocess.DEVNULL).returncode
 
 
 FAIL_RE = re.compile(r"^(?:FAIL|ERROR): (\S+) \(([\w.]+)\)", re.M)
 
 
-def cmd_exec(root: Path, names: list) -> int:
+def module_groups(names: list, known: set) -> list:
+    """Chia tên test theo module (mỗi nhóm một mảnh), giữ thứ tự xuất hiện đầu tiên: test liên quan nhất vẫn chạy
+    trước ở mức mảnh. Module của tên: module dài nhất trong vết là tiền tố của nó; không có thì chính tên đó."""
+    groups: dict = {}
+    for n in names:
+        mod = max((m for m in known if n == m or n.startswith(m + ".")), key=len, default=n)
+        groups.setdefault(mod, []).append(n)
+    return [{"names": [mod] if mod in items else items, "module": mod} for mod, items in groups.items()]
+
+
+# ---------------------------------------------------------------- chạy song song (việc F2a)
+
+SPLIT_SECS = 45.0  # module ước lâu hơn mức này (theo vết) thì tách thành mảnh theo lớp test
+TAIL_CHARS = 300  # độ dài tối đa phần đuôi lỗi in cho mỗi mảnh trượt
+RAN_RE = re.compile(r"^Ran (\d+) tests? in \d+(?:\.\d+)?s$", re.M)
+
+
+def default_jobs() -> int:
+    """Số nhân hiệu năng (macOS: `sysctl -n hw.perflevel0.physicalcpu`), không có thì số lõi / 2; tối thiểu 1."""
+    n = 0
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(["sysctl", "-n", "hw.perflevel0.physicalcpu"], capture_output=True, text=True,
+                                 timeout=5, stdin=subprocess.DEVNULL)
+            n = int(out.stdout.strip()) if out.returncode == 0 else 0
+        except (OSError, subprocess.SubprocessError, ValueError):
+            n = 0
+    return max(1, n or (os.cpu_count() or 2) // 2)
+
+
+@contextlib.contextmanager
+def term_as_exit():
+    """SIGTERM thành SystemExit, để khối finally giết các mảnh và dọn thư mục tạm (mặc định SIGTERM dừng ngay)."""
+    def handler(signum, _frame):
+        raise SystemExit(128 + signum)
+    try:
+        old = signal.signal(signal.SIGTERM, handler)
+    except ValueError:  # không ở luồng chính
+        old = None
+    try:
+        yield
+    finally:
+        if old is not None:
+            signal.signal(signal.SIGTERM, old)
+
+
+def kill(proc) -> None:
+    try:
+        os.killpg(proc.pid, 9)
+    except OSError:
+        pass
+
+
+def launch(root: Path, names: list, work: Path, tag: str):
+    """Một mảnh: `python3 -m unittest <tên…>` trong tiến trình (và nhóm tiến trình) riêng. stdout, stderr vào hai file
+    riêng trong `work`: kết quả của unittest nằm ở stderr, test in gì ra stdout không lẫn vào. `names` rỗng thì từ chối
+    (unittest không tham số sẽ discover cả cây)."""
+    if not names:
+        raise ValueError("mảnh rỗng")
+    out = open(work / f"out-{tag}", "wb")  # noqa: SIM115 (đóng sau khi chờ)
+    err = open(work / f"err-{tag}", "wb")  # noqa: SIM115
+    try:
+        proc = subprocess.Popen([sys.executable, "-m", "unittest", *names], cwd=str(root), stdin=subprocess.DEVNULL,
+                                stdout=out, stderr=err, start_new_session=True)
+    except BaseException:
+        out.close()
+        err.close()
+        raise
+    return proc, (out, err)
+
+
+def close_all(logs) -> None:
+    for f in logs:
+        f.close()
+
+
+def collect(work: Path, tag: str, code) -> dict:
+    """Kết quả một mảnh: mã thoát (None: quá giờ), số test theo dòng `Ran N tests` cuối cùng của stderr, stderr."""
+    try:
+        err = (work / f"err-{tag}").read_bytes().decode("utf-8", "replace")
+    except OSError:
+        err = ""
+    ran = RAN_RE.findall(err)
+    return {"code": code, "ran": int(ran[-1]) if ran else None, "out": err}
+
+
+def run_one(root: Path, names: list, work: Path, tag: str, timeout: float) -> dict:
+    """Chạy một mảnh một mình và chờ xong; lỗi hay bị ngắt giữa chừng (SIGTERM, Ctrl-C) thì vẫn giết mảnh."""
+    proc, logs = launch(root, names, work, tag)
+    code = None
+    try:
+        code = proc.wait(timeout=max(1.0, timeout))
+    except subprocess.TimeoutExpired:
+        code = None
+    finally:
+        if proc.poll() is None:
+            kill(proc)
+            proc.wait()
+        close_all(logs)
+    return collect(work, tag, code)
+
+
+def run_parallel(root: Path, shards: list, jobs: int, deadline: float, work: Path) -> dict:
+    """Chạy các mảnh, tối đa `jobs` tiến trình cùng lúc, theo thứ tự danh sách. Xong thì chạy lại MỘT MÌNH, lần lượt,
+    mỗi mảnh trượt (loại nhiễu do song song: tải máy, test đo thời gian); kết quả lần chạy lại là kết quả của mảnh.
+    Lần trượt đầu không bị che: `first_tail` giữ đuôi lỗi của nó, `rerun_ok` đánh dấu mảnh trượt lần đầu mà đạt khi
+    chạy lại."""
+    queue = list(range(len(shards)))
+    running: dict = {}
+    results: list = [None] * len(shards)
+    timed_out = False
+    try:
+        while queue or running:
+            while queue and len(running) < jobs:
+                i = queue.pop(0)
+                running[i] = launch(root, shards[i]["names"], work, str(i))
+            for i, (proc, logs) in list(running.items()):
+                code = proc.poll()
+                if code is not None:
+                    close_all(logs)
+                    del running[i]
+                    results[i] = collect(work, str(i), code)
+            if time.monotonic() > deadline:
+                timed_out = True
+                break
+            if running:
+                time.sleep(0.05)
+    finally:
+        for i, (proc, logs) in running.items():
+            kill(proc)
+            proc.wait()
+            close_all(logs)
+            results[i] = collect(work, str(i), None)
+    for i, res in enumerate(results):
+        res = results[i] = res or {"code": None, "ran": None, "out": ""}
+        res.update(shard=shards[i], index=i)
+        if res["code"] == 0:
+            continue
+        res["first_tail"] = "quá giờ" if res["code"] is None else fail_tail(res["out"])
+        if timed_out:
+            continue
+        left = deadline - time.monotonic()
+        if left <= 1:
+            timed_out = True
+            continue
+        again = run_one(root, shards[i]["names"], work, f"{i}-alone", left)
+        res.update(again, rerun_ok=again["code"] == 0, retried=True)
+    return {"results": results, "timed_out": timed_out, "jobs": jobs}
+
+
+def shard_label(shard: dict) -> str:
+    return A.clip(" ".join(shard["names"]), 120)
+
+
+def fail_tail(out: str) -> str:
+    """Một dòng: test trượt (tối đa 3) và vài dòng cuối của lỗi cuối cùng, giới hạn TAIL_CHARS."""
+    ids = [w if w.endswith("." + n) else f"{w}.{n}" for n, w in FAIL_RE.findall(out)]
+    ids = list(dict.fromkeys(ids))
+    ends = list(RAN_RE.finditer(out))
+    body = out[:ends[-1].start()] if ends else out
+    lines = [ln.strip() for ln in body.splitlines() if ln.strip() and not set(ln.strip()) <= set("=-")]
+    head = ", ".join(ids[:3]) + (f" (+{len(ids) - 3})" if len(ids) > 3 else "")
+    text = (head + " | " if head else "") + " ⏎ ".join(lines[-3:])
+    return text if len(text) <= TAIL_CHARS else text[:TAIL_CHARS - 1] + "…"
+
+
+def report(rep: dict, total, started: float, what: str) -> int:
+    """In gọn: mỗi mảnh chỉ trượt khi song song một dòng, mỗi mảnh còn trượt một dòng kèm đuôi lỗi, rồi một dòng tổng
+    kết. `total`: số test discover nạp được (None: không kiểm số lượng). Mã 0 chỉ khi mọi mảnh đạt và đủ số test."""
+    results = rep["results"]
+    rerun = [res for res in results if res.get("rerun_ok") and res["code"] == 0]
+    for res in rerun:
+        print(f"[narrow] {shard_label(res['shard'])}: trượt lần đầu, đạt khi chạy lại một mình (có thể chập chờn hay do "
+              f"chạy song song); lần đầu: {res.get('first_tail', '')}")
+    bad = [res for res in results if res["code"] != 0]
+    for res in bad:
+        why = "quá giờ" if res["code"] is None else f"mã {res['code']}"
+        print(f"[narrow] ✗ {shard_label(res['shard'])} ({why}): {fail_tail(res['out'])}")
+    ran = sum(res["ran"] or 0 for res in results)
+    problems = []
+    if rep["timed_out"]:
+        problems.append("quá giờ, đã dừng")
+    if total is not None:
+        off = [res for res in results if res["shard"].get("expect") is not None and res["ran"] != res["shard"]["expect"]]
+        if ran != total or off:
+            problems.append(f"số test đã chạy ({ran}) khác số test discover nạp được ({total})"
+                            + (": " + "; ".join(f"{shard_label(r['shard'])} chạy {r['ran']}/{r['shard']['expect']}"
+                                                for r in off[:3]) if off else ""))
+    for p in problems:
+        print(f"[narrow] ✗ {p}")
+    ok = not bad and not problems
+    count = f"{ran}/{total}" if total is not None else str(ran)
+    # Dòng cuối là `summary` của biên nhận (receipt.py cắt 160 ký tự): mảnh phải chạy lại nêu ở đây, không chỉ "đạt".
+    note = (f" ({len(rerun)} mảnh trượt lần đầu, đạt khi chạy lại: "
+            + A.clip(", ".join(shard_label(r["shard"]) for r in rerun), 60) + ")") if rerun else ""
+    print(f"[narrow] {what}: {count} test, {len(results)} mảnh, {rep['jobs']} tiến trình, "
+          f"{time.monotonic() - started:.1f} giây: " + ("đạt" if ok else f"TRƯỢT ({len(bad)} mảnh trượt)") + note)
+    return 0 if ok else 1
+
+
+def cmd_inventory(root: str, out: str) -> int:
+    """(tiến trình riêng, `full` gọi) Nạp bộ test như `python -m unittest discover -s tests -t .` mà không chạy: ghi
+    tổng số test và số test theo module, theo lớp (để tách mảnh) vào `out`. Module của test là module mà loader đã nạp
+    nó (không phải nơi định nghĩa lớp). Lớp chỉ tách được khi module không có `load_tests` và lớp nằm đúng tên đó trong
+    module; module không nạp được (`_FailedTest`) là một mảnh riêng; test không gán được module thì `attributed` sai."""
+    os.chdir(root)
+    sys.path[0] = root  # như `python -m unittest`
+    for name in ("agentstack", "linetrace"):  # test tự nạp lib như khi chạy `python -m unittest`
+        sys.modules.pop(name, None)
+    found: list = []
+    original = unittest.TestLoader.loadTestsFromModule
+
+    def spy(self, module, *args, **kwargs):
+        suite = original(self, module, *args, **kwargs)
+        found.append((module, suite))
+        return suite
+    unittest.TestLoader.loadTestsFromModule = spy  # type: ignore[method-assign]
+    try:
+        unittest.TestProgram(module=None, argv=["python -m unittest", *DEFAULT_ARGS], testRunner=_Collect, exit=False)
+    finally:
+        unittest.TestLoader.loadTestsFromModule = original  # type: ignore[method-assign]
+    suite = _Collect.suite
+    total = suite.countTestCases() if suite is not None else 0
+    modules: dict = {}
+    covered: set = set()
+    for module, msuite in found:
+        name = module.__name__
+        entry = modules.setdefault(name, {"count": 0, "classes": {}, "split": not hasattr(module, "load_tests")})
+        for case in flatten(msuite):
+            covered.add(id(case))
+            cls = type(case)
+            entry["count"] += 1
+            entry["classes"][cls.__name__] = entry["classes"].get(cls.__name__, 0) + 1
+            if getattr(module, cls.__name__, None) is not cls:
+                entry["split"] = False
+    attributed = True
+    for case in flatten(suite) if suite is not None else []:
+        if id(case) in covered:
+            continue
+        name = getattr(case, "_testMethodName", "")
+        if type(case).__name__ == "_FailedTest" and NAME_RE.match(name):  # module không nạp được
+            entry = modules.setdefault(name, {"count": 0, "classes": {}, "split": False})
+            entry["count"] += 1
+        else:
+            attributed = False
+    rows = [[m, e["count"], e["classes"] if e["split"] else None] for m, e in modules.items() if e["count"]]
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump({"total": total, "attributed": attributed and sum(r[1] for r in rows) == total, "modules": rows}, f)
+    return 0
+
+
+def trace_secs(root: Path):
+    """(giây theo module, giây theo (module, lớp)) từ vết còn dùng được (chỉ để xếp, tách mảnh); không có vết thì rỗng.
+    Thời gian trong vết gồm phần chậm do ghi vết."""
+    data = load_raw(root)
+    by_module: dict = {}
+    by_class: dict = {}
+    if valid_map(data, root):
+        return by_module, by_class
+    for tid, sec in zip(data["tests"], data["secs"], strict=False):
+        parts = tid.rsplit(".", 2)
+        if len(parts) == 3:
+            by_module[parts[0]] = by_module.get(parts[0], 0.0) + float(sec)
+            by_class[(parts[0], parts[1])] = by_class.get((parts[0], parts[1]), 0.0) + float(sec)
+    return by_module, by_class
+
+
+def plan_shards(rows: list, by_module: dict, by_class: dict) -> list:
+    """Mảnh cho `full`: mỗi module một mảnh; module ước quá SPLIT_SECS (theo vết) mà tách được thì chia các lớp vào
+    ceil(giây / SPLIT_SECS) mảnh (lớp lâu xếp trước vào mảnh nhẹ nhất). Mảnh lâu chạy trước; không có vết thì xếp theo
+    số test."""
+    known = [s for m, s in by_module.items() if s > 0]
+    per_test = (sum(known) / max(1, sum(n for m, n, _ in rows if m in by_module))) if known else None
+    shards = []
+    for name, count, classes in rows:
+        est = by_module.get(name, per_test * count if per_test is not None else None)
+        if est is not None and est > SPLIT_SECS and classes and len(classes) > 1:
+            unit = est / max(1, count)
+            items = sorted(((by_class.get((name, c), unit * n), c, n) for c, n in classes.items()), reverse=True)
+            bins = [[0.0, [], 0] for _ in range(min(len(items), math.ceil(est / SPLIT_SECS)))]
+            for sec, cls, n in items:
+                low = min(bins, key=lambda b: (b[0], len(b[1])))  # hòa giây thì mảnh ít lớp hơn: không mảnh rỗng
+                low[0] += sec
+                low[1].append(f"{name}.{cls}")
+                low[2] += n
+            shards += [{"names": sorted(b[1]), "expect": b[2], "est": b[0], "module": name} for b in bins if b[1]]
+        else:
+            shards.append({"names": [name], "expect": count, "est": est if est is not None else float(count),
+                           "module": name})
+    shards.sort(key=lambda s: (-s["est"], s["names"]))
+    return shards
+
+
+def cmd_full(root: Path, jobs: int, timeout: float) -> int:
+    """Cả bộ `discover -s tests -t .` song song: mỗi mảnh một tiến trình `python3 -m unittest`, mảnh trượt chạy lại
+    một mình, và tổng số test đã chạy phải bằng số test discover nạp được. Mã 0: mọi mảnh đạt và đủ số test; 1: có
+    mảnh trượt hay lệch số test; 2: không nạp được bộ test."""
+    started = time.monotonic()
+    with term_as_exit():
+        return full_in(root, jobs, timeout, started)
+
+
+def full_in(root: Path, jobs: int, timeout: float, started: float) -> int:
+    work = Path(tempfile.mkdtemp(prefix="narrow-full-", dir=str(tmp_base())))
+    try:
+        inv_path = work / "inventory.json"
+        try:
+            got = subprocess.run([sys.executable, str(HERE), "_inventory", "--root", str(root), "--out", str(inv_path)],
+                                 cwd=str(root), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                 errors="replace", timeout=min(timeout, 600))
+            inv = json.loads(inv_path.read_text("utf-8")) if got.returncode == 0 else None
+        except (OSError, ValueError, subprocess.SubprocessError):
+            got, inv = None, None
+        if not isinstance(inv, dict) or not isinstance(inv.get("total"), int) or not all(
+                isinstance(r, list) and len(r) == 3 and isinstance(r[0], str) and NAME_RE.match(r[0])
+                and isinstance(r[1], int) and (r[2] is None or (isinstance(r[2], dict) and all(
+                    isinstance(c, str) and NAME_RE.match(c) for c in r[2]))) for r in inv.get("modules", [])):
+            tail = ((got.stdout + got.stderr) if got else "")[-TAIL_CHARS:].replace("\n", " ⏎ ")
+            print(f"[narrow] không nạp được bộ test để đếm: {tail}")
+            return 2
+        total = inv["total"]
+        if not total:
+            print("[narrow] discover không thấy test nào")
+            return 2
+        if inv["attributed"]:
+            shards = plan_shards(inv["modules"], *trace_secs(root))
+        else:  # không gán được test cho module: một mảnh chạy đúng lệnh discover (vẫn đủ, chỉ không song song)
+            print("[narrow] không chia được test theo module (load_tests của package?): chạy cả bộ một tiến trình")
+            shards = [{"names": list(DEFAULT_ARGS), "expect": total, "est": 0.0, "module": None}]
+        rep = run_parallel(root, shards, min(jobs, len(shards)), started + timeout, work)
+        return report(rep, total, started, "cả bộ song song")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def cmd_exec_parallel(root: Path, names: list, jobs: int, timeout: float) -> int:
+    """`exec --jobs N` (N > 1): mỗi module một mảnh, N tiến trình cùng lúc theo thứ tự đã chọn (test liên quan nhất
+    trước); mảnh trượt chạy lại một mình; vẫn trượt mà mảnh chỉ là một phần module thì chạy cả module một mình (test
+    cần test khác chạy trước): đạt thì tính là đạt và ghi vào vết như `exec` tuần tự."""
+    started = time.monotonic()
+    data = load_raw(root)
+    known = {m for m, _ in data["modules"]} if data and not valid_map(data, root) else set()
+    shards = module_groups(names, known)
+    work = Path(tempfile.mkdtemp(prefix="narrow-exec-", dir=str(tmp_base())))
+    alone_bad: set = set()
+    with term_as_exit(), contextlib.ExitStack() as stack:
+        stack.callback(shutil.rmtree, work, ignore_errors=True)
+        rep = run_parallel(root, shards, min(jobs, len(shards)), started + timeout, work)
+        for res in rep["results"]:
+            mod = res["shard"]["module"]
+            if res["code"] == 0 or rep["timed_out"] or res["shard"]["names"] == [mod] or mod not in known:
+                continue
+            again = run_one(root, [mod], work, f"{res['index']}-module", started + timeout - time.monotonic())
+            if again["code"] == 0:
+                failing = {w if w.endswith("." + n) else f"{w}.{n}" for n, w in FAIL_RE.findall(res["out"])}
+                alone_bad |= {t for t in failing if NAME_RE.match(t)}
+                print(f"[narrow] {shard_label(res['shard'])}: trượt khi chạy riêng, đạt khi chạy cả module {mod}")
+                res.update(again, rerun_ok=True)
+    if alone_bad and data and not valid_map(data, root):
+        data["alone_bad"] = sorted(set(data.get("alone_bad", [])) | alone_bad)
+        try:
+            A.write_json_atomic(state_file(root), data)
+        except OSError:
+            pass
+    return report(rep, None, started, "bộ thu hẹp song song")
+
+
+def cmd_exec(root: Path, names: list, jobs: int = 1, timeout: float = 1800) -> int:
     """Chạy bộ thu hẹp. Có test trượt mà module của nó chưa chạy trọn thì chạy lại TOÀN BỘ danh sách, với mỗi test trượt
     thay bằng cả module của nó (test cần test khác chạy trước), và lấy mã thoát của lần chạy lại: mọi lỗi khác của lần
     đầu (test khác, module không nạp được) vẫn có trong lần đó, không bị lần chạy lại che đi."""
     if not names or not all(NAME_RE.match(n) for n in names):
         print("[narrow] tên test không hợp lệ")
         return 2
+    if jobs > 1:
+        return cmd_exec_parallel(root, names, jobs, timeout)
     first = subprocess.run([sys.executable, "-m", "unittest", *names], cwd=str(root), stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, errors="replace")
     sys.stdout.write(first.stdout)
@@ -984,6 +1382,9 @@ def main(argv=None) -> int:
         head = argv[1:argv.index("--")] if "--" in argv else argv[1:]
         opts = dict(zip(head[0::2], head[1::2], strict=False))
         return cmd_shard(opts["--root"], opts["--out"], opts["--site"], opts["--targets"], rest)
+    if argv[:1] == ["_inventory"]:
+        opts = dict(zip(argv[1::2], argv[2::2], strict=False))
+        return cmd_inventory(opts["--root"], opts["--out"])
     ap = argparse.ArgumentParser(description="Chạy bộ test thu hẹp theo file đổi.", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True)
     rec = sub.add_parser("record", help="ghi vết cả bộ test", allow_abbrev=False)
@@ -998,10 +1399,18 @@ def main(argv=None) -> int:
     run.add_argument("--plan", action="store_true", help="chỉ in, không chạy")
     run.add_argument("--json", action="store_true", help="in kế hoạch dạng JSON, không chạy")
     run.add_argument("--timeout", type=float, default=1800)
+    run.add_argument("--jobs", type=int, default=1, help="> 1: chạy song song theo module (mảnh)")
+    full = sub.add_parser("full", help="chạy cả bộ song song, kiểm đủ số test", allow_abbrev=False)
+    full.add_argument("--project", default=".")
+    full.add_argument("--jobs", type=int, default=None, help="mặc định: số nhân hiệu năng")
+    # dưới mặc định 1800 của receipt.py run: receipt giết narrow.py khi quá giờ thì mảnh đang chạy không ai dừng
+    full.add_argument("--timeout", type=float, default=1500)
     st = sub.add_parser("status", help="vết ghi lúc nào, cũ chưa", allow_abbrev=False)
     st.add_argument("--project", default=".")
     ex = sub.add_parser("exec", help="(receipt.py gọi) chạy các test đã chọn", allow_abbrev=False)
     ex.add_argument("--project", default=".")
+    ex.add_argument("--jobs", type=int, default=1)
+    ex.add_argument("--timeout", type=float, default=1800)
     ex.add_argument("names", nargs=argparse.REMAINDER)
     args = ap.parse_args(argv)
     try:
@@ -1012,11 +1421,13 @@ def main(argv=None) -> int:
                 raise Bad("đối số sau `--` chỉ nhận đúng mặc định hay tên module, test (không nhận cờ như -k)")
             return cmd_record(root, rest or list(DEFAULT_ARGS), max(1, args.jobs), args.timeout)
         if args.cmd == "run":
-            return cmd_run(root, args.base, args.head, args.plan, args.json, args.timeout)
+            return cmd_run(root, args.base, args.head, args.plan, args.json, args.timeout, max(1, args.jobs))
+        if args.cmd == "full":
+            return cmd_full(root, max(1, args.jobs or default_jobs()), args.timeout)
         if args.cmd == "status":
             return cmd_status(root)
         names = args.names[1:] if args.names[:1] == ["--"] else args.names
-        return cmd_exec(root, names)
+        return cmd_exec(root, names, max(1, args.jobs), args.timeout)
     except Bad as exc:
         print(f"[narrow] {exc}")
         return 2

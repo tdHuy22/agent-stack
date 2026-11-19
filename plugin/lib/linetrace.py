@@ -296,6 +296,12 @@ if os.environ.get("@P@_TRACE") and os.environ.get("@P@_OUT"):
         except Exception:
             _touch = None
     def _dump():
+        # Lỗi ở đây in ra stderr của tiến trình con lúc thoát, làm hỏng test kiểm stderr rỗng: nuốt mọi lỗi.
+        try:
+            _dump_now()
+        except Exception:
+            pass
+    def _dump_now():
         sys.settrace(None)
         test = os.environ.get("@P@_TEST", "")
         if _touch is not None:
@@ -306,7 +312,9 @@ if os.environ.get("@P@_TRACE") and os.environ.get("@P@_OUT"):
         if _touch is not None:
             rec["touched"] = sorted(_touch.touched)
             rec["dirs"] = sorted(_touch.listed)
-            rec["spawns"] = sorted([p, w, list(a)] for s in _touch.spawns.values() for p, w, a in s)
+            # thư mục chạy `w` là None khi ngoài root: xếp theo JSON để không so None với chuỗi
+            rec["spawns"] = sorted(([p, w, list(a)] for s in _touch.spawns.values() for p, w, a in s),
+                                   key=json.dumps)
         path = os.path.join(os.environ["@P@_OUT"], f"{os.getpid()}-{id(_seen)}.json")
         try:
             with open(path, "w", encoding="utf-8") as f:

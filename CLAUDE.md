@@ -33,6 +33,7 @@ Repo này là nguồn sự thật cho bộ công cụ cá nhân dùng với Clau
 ## Mốc kiểm tra
 
 - `python3 -m unittest discover -s tests -t .` phải đạt (Python 3.11).
+  Chạy song song: `python3 plugin/skills/session-keeper/scripts/narrow.py full` (mặc định số nhân hiệu năng): cùng tập test, mỗi module một tiến trình; mảnh trượt được chạy lại một mình một lần, đạt thì vẫn tính đạt và tên mảnh nằm ở dòng cuối. Không bắt lỗi rò trạng thái giữa các module (`os.environ`, `sys.modules`, cwd), nên trước khi cài toàn cục (`install.sh --apply`) chạy lệnh tuần tự một lần. Tự kiểm đủ số test discover nạp được; chạy qua `receipt.py run` nằm cùng thư mục với `narrow.py` thì là biên nhận cả bộ.
 - `"$(python3 tools/claude_app.py)" plugin validate plugin` phải ra `Validation passed`.
 - `"$(python3 tools/claude_app.py)" plugin test plugin` phải đạt (test của mod; `tests/test_ui_mod.py` cũng gọi lệnh này).
 - File mới thì `git add` trước lần chạy bộ test cuối: vài test so với file git đang theo dõi (`tests/test_cloud_setup.py` so `tools/cloud-files.txt`), nên file chưa add không làm lộ chỗ lệch. Thêm file vào `plugin/`, `global/` thì tạo lại `tools/cloud-files.txt` theo dòng `# Tạo lại` của nó.
