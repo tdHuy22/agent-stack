@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 
 class ReadOnlyAgents(unittest.TestCase):
-    """Subagent chỉ đọc phải cấm tường minh công cụ ghi (độ phủ trước nằm trong test hợp đồng pi, gỡ 19/11/2026)."""
+    """Subagent chỉ đọc phải cấm tường minh công cụ ghi (độ phủ trước nằm trong tests/test_pi_contract.py, gỡ 19/11/2026)."""
     READ_ONLY = {"cold-reader": {"Bash"}, "explore-lite": set(), "researcher": set(), "reviewer": set(),
                  "test-runner": set()}
     WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
