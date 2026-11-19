@@ -117,6 +117,11 @@ ALLOWED = [
     # backtick markdown trong heredoc có nháy hay chuỗi nháy đơn: shell không chạy (lỗi gặp thật 19/11)
     "python3 - <<'EOF'\nprint('chặn `diskutil erase*`, `newfs*`')\nEOF",
     "echo 'x `diskutil zeroDisk disk2` y'",
+    # review lại 19/11: biến ở đích không có thiết bị ổ đĩa đi kèm
+    'dd if=/dev/rdisk2 of="$HOME/backup.img" bs=1m',
+    "dd if=/dev/disk2 of=${IMG}",
+    'diskutil info /dev/disk2 > "$OUT"',
+    "git commit -m 'chặn `dd of=/dev/disk*`, cho qua `dd if=/dev/disk2 of=img`'",
 ]
 
 

@@ -424,10 +424,20 @@ def check_disk_command(command: str):
         found = check_disk_wipe(argv)
         if found:
             return found
-    folded = command.casefold()
-    if DISK_DEVICE_TEXT_RE.search(folded) and (re.search(r"\bg?dd\b[^\n;|&]*\bof=\S*[$`({]", folded)
-                                              or re.search(r">\s*[\"']?[$`]", folded)):
-        return disk_deny("dd of=/ghi > vào ổ đĩa qua biến")
+    # Đích là biến hay lệnh con (`of="$DISK"`, `> "$DEV"`): chặn khi thiết bị ổ đĩa nằm ngay trong đích hay trong một
+    # phép gán `TÊN=/dev/disk…` của chuỗi (ngoài nháy đơn, heredoc có nháy); `of="$HOME/x.img"` vẫn qua.
+    assigned = re.search(r"(?:^|[\s;&|(])(?!(?:if|of)=)[A-Za-z_]\w*=[\"']?/+dev/+(?:r?disk\d|sd[a-z]|nvme\d|mmcblk\d)",
+                         live.casefold()) or any(DISK_DEVICE_TEXT_RE.search(x.casefold()) for x in inner)
+    for argv in parsed:
+        prog = Path(argv[0]).name.casefold()
+        for i, arg in enumerate(argv):
+            target = arg[3:] if prog in DISK_DD and arg.casefold().startswith("of=") else None
+            if target is None and re.match(r"^\d*>>?$", arg) and i + 1 < len(argv):
+                target = argv[i + 1]
+            elif target is None and re.match(r"^\d*>>?.", arg):
+                target = re.sub(r"^\d*>>?", "", arg)
+            if target and target[:1] in "$`" and (assigned or DISK_DEVICE_TEXT_RE.search(" ".join(argv[i:]).casefold())):
+                return disk_deny("dd of=/ghi > vào ổ đĩa qua biến")
     piped = any(a and Path(a[0]).name.casefold() in DISK_SHELLS and not any(SHELL_C_RE.match(x) for x in a[1:])
                 and not positional(a[1:], set()) for a in parsed)
     if piped:
