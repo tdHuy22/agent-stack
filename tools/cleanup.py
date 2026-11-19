@@ -96,7 +96,7 @@ def main_branch(root: Path) -> str | None:
     return None
 
 
-def worktree_items(root: Path):
+def worktree_items(root: Path, days: float, now: float):
     base = root / ".claude" / "worktrees"
     items, kept = [], []
     if not usable_base(base):
@@ -122,12 +122,16 @@ def worktree_items(root: Path):
         elif not head or git(root, "merge-base", "--is-ancestor", head, target) is None:
             why = f"chưa gộp vào {target}"
         else:
-            status = git(path, "status", "--porcelain")
+            status = git(path, "status", "--porcelain", "--ignored")
             if status is None:
                 why = "không đọc được git status"
+            elif any(line.startswith("!!") for line in status.stdout.splitlines()):
+                why = "có file git bỏ qua (như .env, .venv): xem tay"
             elif status.stdout.strip():
                 why = "còn thay đổi chưa commit"
-        size, _ = tree_stats(path)
+        size, newest = tree_stats(path)
+        if not why and (now - newest) / 86400 < days:
+            why = f"đổi trong {days:g} ngày qua (có thể còn phiên đang dùng)"
         entry = {"kind": "worktree", "path": str(path), "bytes": size, "branch": branch or head[:12]}
         if why:
             kept.append({**entry, "why": why})
@@ -178,7 +182,7 @@ def collect(args) -> dict:
     kinds = set(args.only.split(",")) if args.only else set(KINDS)
     items, kept = [], []
     if "worktree" in kinds:
-        found, held = worktree_items(root)
+        found, held = worktree_items(root, args.days, now)
         items += found
         kept += held
     if "tmp" in kinds:
