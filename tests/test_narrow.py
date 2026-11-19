@@ -59,7 +59,7 @@ class T(unittest.TestCase):
         self.assertEqual(out.stdout.strip(), "4")
 """
 # test_b chỉ đạt khi test_a chạy trước trong cùng tiến trình
-TEST_ORDER = """import unittest
+TEST_ORDER = """import subprocess, sys, unittest
 from pkg import calc
 
 STATE = []
@@ -72,7 +72,14 @@ class T(unittest.TestCase):
     def test_b(self):
         self.assertEqual(STATE, [10])
         self.assertEqual(calc.mul(1, 1), 1)
+        subprocess.run([sys.executable, "-c", "import pkg.side"], check=True)
 """
+# Module không chạm gì của pkg: giữ số test chọn dưới ngưỡng chạy cả bộ (70%)
+TEST_FILLER = """import unittest
+
+
+class T(unittest.TestCase):
+""" + "".join(f"    def test_f{i}(self):\n        pass\n\n" for i in range(6))
 TEST_TOOL = """import subprocess, unittest
 
 
@@ -95,9 +102,10 @@ class NarrowBase(TempDirTestCase):
         files = {"pkg/__init__.py": "", "pkg/calc.py": CALC, "pkg/data.json": '{"k": 1}\n',
                  "plugin/SKILL.md": "---\nname: x\n---\n", "plugin/hooks.json": '{"hooks": {}}\n',
                  "plugin/rulebook.json": "{}\n", "README.md": "đọc tôi\n", "tests/__init__.py": "",
-                 "tests/test_add.py": TEST_ADD, "tests/test_mul.py": TEST_MUL}
+                 "tests/test_add.py": TEST_ADD, "tests/test_mul.py": TEST_MUL, "tests/test_filler.py": TEST_FILLER}
         if order:
             files["tests/test_order.py"] = TEST_ORDER
+            files["pkg/side.py"] = "X = 1\n"
         if tool:
             files["tests/test_tool.py"] = TEST_TOOL
         files.update(extra or {})
@@ -139,38 +147,37 @@ class NarrowBase(TempDirTestCase):
         return files[0]
 
 
-class LineSelection(NarrowBase):
+class FileSelection(NarrowBase):
+    """Chọn theo file: đổi dòng nào cũng chọn mọi test của các module test đã nạp file."""
+
     def setUp(self):
         super().setUp()
         self.build()
         self.record()
 
-    def test_body_change_selects_only_tests_through_that_line(self):
+    def test_body_change_selects_every_module_that_loaded_the_file(self):
         self.put("pkg/calc.py", CALC.replace("return a + b", "return b + a"))
         plan = self.plan()
         self.assertEqual(plan["mode"], "narrow")
-        # test_add gọi trực tiếp, test_child gọi qua tiến trình python con
-        self.assertEqual(sorted(plan["names"]), ["tests.test_add", "tests.test_mul.T.test_child"])
-        self.assertEqual(plan["total"], 4)
+        self.assertEqual(sorted(plan["names"]), ["tests.test_add", "tests.test_mul"])
+        self.assertEqual(plan["total"], 10)
 
-    def test_comment_only_change_runs_nothing(self):
+    def test_comment_only_change_still_selects_by_file(self):
         self.put("pkg/calc.py", CALC.replace("# cộng", "# phép cộng"))
         plan = self.plan()
-        self.assertEqual(plan["mode"], "none")
-        self.assertEqual(plan["names"], [])
+        self.assertEqual(sorted(plan["names"]), ["tests.test_add", "tests.test_mul"])
 
     def test_module_level_change_takes_every_test_touching_the_file(self):
         self.put("pkg/calc.py", CALC.replace("LIMIT = 10", "LIMIT = 11"))
         plan = self.plan()
-        self.assertIn("dòng mức module", self.reasons(plan))
-        # mọi test của module test đã nạp calc.py (test_data cũng vậy: có thể chỉ đọc hằng của calc)
-        self.assertEqual(plan["mode"], "full")
+        self.assertIn("mọi test đã nạp", self.reasons(plan))
+        self.assertEqual(sorted(plan["names"]), ["tests.test_add", "tests.test_mul"])
 
     def test_run_writes_a_narrow_receipt(self):
         self.put("pkg/calc.py", CALC.replace("return a + b", "return b + a"))
         out = self.narrow("run")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
-        self.assertIn("chọn 2/4 test", out.stdout)
+        self.assertIn("chọn 4/10 test", out.stdout)
         shown = subprocess.run([sys.executable, str(RECEIPT), "show", "--json", "--project", str(self.proj)],
                                capture_output=True, text=True, env=dict(os.environ, **self.env))
         checks = json.loads(shown.stdout)
@@ -191,14 +198,15 @@ class NonPythonAndNewFiles(NarrowBase):
                 git(self.proj, "checkout", "-q", "--", ".")
                 self.put(rel, text)
                 plan = self.plan()
-                self.assertEqual(plan["names"], ["tests.test_mul.T.test_data"], self.reasons(plan))
-                self.assertIn("test đọc file này", self.reasons(plan))
+                # test_data đọc file trong tiến trình của tests.test_mul: cả module
+                self.assertEqual(plan["names"], ["tests.test_mul"], self.reasons(plan))
+                self.assertIn("mọi test đã nạp, chạy hay đọc", self.reasons(plan))
 
     def test_unread_file_runs_nothing_and_says_so(self):
         self.put("plugin/rulebook.json", '{"x": 1}\n')
         plan = self.plan()
         self.assertEqual(plan["mode"], "none")
-        self.assertIn("không test nào đọc file này", self.reasons(plan))
+        self.assertIn("không test nào nạp, chạy hay đọc file này", self.reasons(plan))
 
     def test_new_test_file_not_in_trace_runs_its_module(self):
         self.put("tests/test_new.py", "import unittest\n\n\nclass X(unittest.TestCase):\n"
@@ -238,7 +246,8 @@ class NonPythonAndNewFiles(NarrowBase):
         (self.proj / "tests" / "test_add.py").unlink()
         self.put("pkg/calc.py", CALC.replace("return a + b", "return b + a"))
         plan = self.plan()
-        self.assertEqual(plan["names"], ["tests.test_mul.T.test_child"], self.reasons(plan))
+        # xóa file trong tests/: mọi test đã liệt kê thư mục đó (bộ nạp module cũng liệt kê) — thà thừa
+        self.assertNotIn("tests.test_add", plan["names"], self.reasons(plan))
         out = self.narrow("run")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
 
@@ -246,7 +255,7 @@ class NonPythonAndNewFiles(NarrowBase):
         (self.proj / "pkg" / "data.json").unlink()
         plan = self.plan()
         self.assertIn("file bị xóa", self.reasons(plan))
-        self.assertIn("tests.test_mul.T.test_data", plan["names"])
+        self.assertIn("tests.test_mul", plan["names"])
 
 
 class StaleTrace(NarrowBase):
@@ -267,7 +276,7 @@ class StaleTrace(NarrowBase):
         self.commit("đổi sau khi ghi vết")
         self.put("pkg/calc.py", CALC.replace("total = 0", "total = 0  # đầu").replace("return a + b", "return b + a"))
         plan = self.plan()
-        self.assertIn("vết cũ cho file này", self.reasons(plan))
+        self.assertIn("file đã đổi sau khi ghi vết", self.reasons(plan))
         touching = [n for f, why, n in plan["items"] if f == "pkg/calc.py"]
         # mọi test chạm calc.py, không chỉ dòng đổi: cả test_data (module của nó đã nạp calc.py)
         self.assertEqual(touching, [4])
@@ -300,7 +309,7 @@ class OrderAndTools(NarrowBase):
     def test_test_failing_alone_reruns_module_and_is_remembered(self):
         self.build(order=True)
         self.record()
-        self.put("pkg/calc.py", CALC.replace("total += a", "total = total + a"))
+        self.put("pkg/side.py", "X = 2\n")  # chỉ tiến trình con của test_b nạp file này: chọn riêng test_b
         plan = self.plan()
         self.assertIn("tests.test_order.T.test_b", plan["names"])
         self.assertNotIn("tests.test_order.T.test_a", plan["names"])
@@ -317,7 +326,7 @@ class OrderAndTools(NarrowBase):
         self.put("pkg/calc.py", CALC.replace("return a + b", "return a - b"))
         out = self.narrow("run")
         self.assertNotEqual(out.returncode, 0)
-        self.assertIn("lỗi thật", out.stdout)
+        self.assertIn("FAIL: test_add", out.stdout + out.stderr)
 
     def test_external_tool_run_inside_repo_is_always_included(self):
         self.build(tool=True)
@@ -367,7 +376,8 @@ class Safety(NarrowBase):
         (self.proj / "pkg" / "calc.py").unlink()
         (self.proj / "pkg" / "calc.py").symlink_to(outside)
         plan = self.plan()
-        self.assertIn("không đọc được nội dung", self.reasons(plan))
+        self.assertIn("pkg/calc.py", self.reasons(plan))
+        self.assertIn("tests.test_add", plan["names"])
 
     def test_corrupt_or_foreign_trace_falls_back_to_full_suite(self):
         path = self.map_file()
@@ -476,14 +486,14 @@ print(five())
 
 
 class TraceDetails(NarrowBase):
-    def test_running_a_script_is_execution_not_a_data_read(self):
+    def test_script_run_by_a_child_selects_only_that_test(self):
         self.build()
         self.put("pkg/script.py", SCRIPT)
         self.put("tests/test_script.py", TEST_SCRIPT)
         self.commit("thêm script")
         self.record()
         data = json.loads(self.map_file().read_text())
-        self.assertNotIn("pkg/script.py", data["reads"])
+        self.assertIn("pkg/script.py", data["touched"])
         self.assertIn("pkg/script.py", data["lines"])
         self.assertEqual(data["opaque"], {})  # `git -C <thư mục tạm>` không đọc repo
         self.put("pkg/script.py", SCRIPT.replace("return 5", "return 2 + 3"))
@@ -599,10 +609,11 @@ class UntracedLines(NarrowBase):
         plan = self.plan()
         self.assertIn("test_scale_true", self.selected(plan), self.reasons(plan))
 
-    def test_traced_line_change_stays_line_level(self):
+    def test_traced_line_change_selects_the_whole_module(self):
         self.put("pkg/shape.py", SHAPE.replace("return y", "return y * 1"))
         plan = self.plan()
-        self.assertEqual(self.selected(plan), {"test_pick_true"}, self.reasons(plan))
+        self.assertIn("tests.test_shape", plan["names"], self.reasons(plan))
+        self.assertEqual(plan["names"][0], "tests.test_shape")  # test đi qua dòng đổi chạy trước
 
 
 # rules() chỉ đọc rules.json một lần mỗi tiến trình (lru_cache): test thứ hai dùng nội dung mà không mở file (lỗi 2).
@@ -644,19 +655,15 @@ class CachedReads(NarrowBase):
         plan = self.plan()
         self.assertIn("tests.test_rules", plan["names"], self.reasons(plan))
 
-    def test_old_trace_without_openers_falls_back_to_full_suite_for_data_files(self):
+    def test_older_trace_version_falls_back_to_full_suite(self):
         path = self.map_file()
         data = json.loads(path.read_text())
-        data["version"] = 1
-        data.pop("openers", None)
+        data["version"] = 2
         path.write_text(json.dumps(data))
         self.put("pkg/rules.json", '{"a": 1, "b": 3}\n')
         plan = self.plan()
         self.assertEqual(plan["mode"], "full", self.reasons(plan))
-        self.assertIn("vết bản cũ", self.reasons(plan))
-        self.put("pkg/rules.json", '{"a": 1, "b": 2}\n')
-        self.put("pkg/calc.py", CALC.replace("return a + b", "return b + a"))
-        self.assertEqual(self.plan()["mode"], "narrow")  # file Python vẫn chọn theo dòng với vết bản cũ
+        self.assertIn("phiên bản", self.reasons(plan))
 
 
 class ExecKeepsRealFailures(NarrowBase):
@@ -778,11 +785,10 @@ class ModuleLoads(NarrowBase):
         self.assertTrue({"tests.test_order", "tests.test_order.T.test_a"} & set(plan["names"]), self.reasons(plan))
         self.assertNotIn("tests.test_other", plan["names"])
 
-    def test_trace_without_load_lists_runs_full_suite_for_module_level_change(self):
+    def test_trace_without_touched_map_runs_full_suite(self):
         path = self.map_file()
         data = json.loads(path.read_text())
-        data.pop("loaded_by", None)
-        data["version"] = 1
+        data.pop("touched", None)
         path.write_text(json.dumps(data))
         self.put("pkg/calc.py", CALC.replace("LIMIT = 10", "LIMIT = 11"))
         plan = self.plan()
@@ -847,56 +853,190 @@ class FixturesAndSource(NarrowBase):
         self.assertIn("tests.test_source", plan["names"], self.reasons(plan))
 
 
-LIB_AGENTSTACK = """import json
+# ---- Vòng 3 (review 20/11): chọn theo file. Trạng thái trong bộ nhớ sống theo tiến trình, mỗi module test ghi vết
+# trong một tiến trình riêng: file đổi thì chọn mọi test của module đã nạp, chạy hay đọc nó.
+
+RX = """def _r(x):
+    return x * 2
 
 
-def read_json(path, default=None):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return default
+RULES = [_r(1), _r(2)]
 """
-CONF = """import sys
-from functools import lru_cache
-from pathlib import Path
-
-sys.path.insert(0, "plugin/lib")
-import agentstack  # noqa: E402
-
-
-@lru_cache(maxsize=1)
-def conf():
-    return agentstack.read_json(Path("pkg/conf.json"))
-"""
-TEST_CONF = """import unittest
-from pkg import conf
+TEST_RX = """import unittest
+from pkg import rx
 
 
 class T(unittest.TestCase):
-    def test_conf(self):
-        self.assertEqual(conf.conf()["x"], 1)
+    def test_rules(self):
+        self.assertEqual(rx.RULES, [2, 4])
+
+    def test_call(self):
+        self.assertEqual(rx._r(5), 10)
+"""
+MEMO = """from functools import lru_cache
+
+
+@lru_cache(maxsize=1)
+def table():
+    return {"a": 1 + 1}
+
+
+def get(k):
+    return table()[k]
+"""
+MEMO2 = """_CACHE = {}
+
+
+def val(k):
+    if k not in _CACHE:
+        _CACHE[k] = k * 10
+    return _CACHE[k]
+"""
+TEST_MEMO = """import unittest
+from pkg import memo, memo2
+
+
+class T(unittest.TestCase):
+    def test_a(self):
+        self.assertEqual(memo.get("a"), 2)
+        self.assertEqual(memo2.val(1), 10)
+
+    def test_b(self):
+        self.assertEqual(memo.get("a"), 2)
+        self.assertEqual(memo2.val(1), 10)
+"""
+CONF2 = """import json
+from pathlib import Path
+
+DATA = json.loads(Path("pkg/conf.json").read_text())
+
+
+def helper():
+    return 1
+"""
+TEST_CONF2 = """import unittest
+from pkg import conf2
+
+
+class T(unittest.TestCase):
+    def test_data(self):
+        self.assertEqual(conf2.DATA["x"], 1)
+"""
+TEST_CONF2_HELPER = """import unittest
+from pkg import conf2
+
+
+class T(unittest.TestCase):
+    def test_helper(self):
+        self.assertEqual(conf2.helper(), 1)
+"""
+TEST_SETMOD = """import unittest
+from pkg import calc
+
+VALUE = []
+
+
+def setUpModule():
+    VALUE.append(calc.mul(3, 3))
+
+
+class T(unittest.TestCase):
+    def test_v(self):
+        self.assertEqual(VALUE, [9])
 """
 
 
-class PassthroughReaders(NarrowBase):
-    """Mục D: file đọc qua hàm đọc chung của plugin/lib thì người đọc là khung gọi ngoài hàm đó."""
+class FileLevelSelection(NarrowBase):
+    def setUp(self):
+        super().setUp()
+        self.build(extra={"pkg/rx.py": RX, "tests/test_rx.py": TEST_RX, "pkg/memo.py": MEMO, "pkg/memo2.py": MEMO2,
+                          "tests/test_memo.py": TEST_MEMO, "pkg/conf2.py": CONF2, "pkg/conf.json": '{"x": 1}\n',
+                          "tests/test_conf2.py": TEST_CONF2, "tests/test_conf2_helper.py": TEST_CONF2_HELPER,
+                          "tests/test_setmod.py": TEST_SETMOD, "tests/test_other.py": TEST_OTHER})
+        self.record()
 
-    def test_opener_skips_generic_lib_reader(self):
-        self.build(extra={"plugin/lib/agentstack.py": LIB_AGENTSTACK, "pkg/conf.py": CONF,
-                          "pkg/conf.json": '{"x": 1}\n', "tests/test_conf.py": TEST_CONF})
+    def chosen(self, plan) -> set:
+        tests = json.loads(self.map_file().read_text())["tests"]
+        return {t for t in tests for n in plan["names"] if t == n or t.startswith(n + ".")}
+
+    def test_function_run_at_import_selects_tests_using_the_built_constant(self):
+        self.put("pkg/rx.py", RX.replace("return x * 2", "return x * 3"))
+        self.assertIn("tests.test_rx.T.test_rules", self.chosen(self.plan()))
+
+    def test_lru_cache_result_selects_every_test_of_the_module(self):
+        self.put("pkg/memo.py", MEMO.replace("1 + 1", "1 + 2"))
+        self.assertLessEqual({"tests.test_memo.T.test_a", "tests.test_memo.T.test_b"}, self.chosen(self.plan()))
+
+    def test_module_dict_memo_selects_every_test_of_the_module(self):
+        self.put("pkg/memo2.py", MEMO2.replace("k * 10", "k * 11"))
+        self.assertLessEqual({"tests.test_memo.T.test_a", "tests.test_memo.T.test_b"}, self.chosen(self.plan()))
+
+    def test_data_file_read_at_import_into_a_constant(self):
+        self.put("pkg/conf.json", '{"x": 2}\n')
+        plan = self.plan()
+        self.assertIn("tests.test_conf2.T.test_data", self.chosen(plan), self.reasons(plan))
+        self.assertNotIn("tests.test_other.T.test_x", self.chosen(plan))
+
+    def test_setupmodule_selects_the_module(self):
+        self.put("pkg/calc.py", CALC.replace("total += a", "total = total + a"))
+        self.assertIn("tests.test_setmod.T.test_v", self.chosen(self.plan()))
+
+    def test_tests_through_changed_lines_run_first(self):
+        self.put("pkg/calc.py", CALC.replace("total += a", "total = total + a"))
+        plan = self.plan()
+        self.assertEqual(plan["mode"], "narrow", self.reasons(plan))
+        first = plan["names"][0]
+        self.assertTrue(first.startswith(("tests.test_mul", "tests.test_setmod")), plan["names"])
+        self.assertNotIn("tests.test_other", plan["names"])
+
+
+TEST_BROKEN = """import unittest
+
+
+class T(unittest.TestCase):
+    def test_fails(self):
+        self.assertEqual(1, 2)
+"""
+TEST_WRITER = """import unittest
+from pathlib import Path
+
+
+class T(unittest.TestCase):
+    def test_writes(self):
+        Path("pkg/gen.txt").write_text("đổi trong lúc ghi vết\\n")
+"""
+
+
+class RecordDetails(NarrowBase):
+    def test_tests_failing_at_record_time_are_always_planned(self):
+        self.build(extra={"tests/test_broken.py": TEST_BROKEN, "tests/test_other.py": TEST_OTHER})
+        out = self.narrow("record", "--jobs", "2")
+        self.assertEqual(out.returncode, 1, out.stdout + out.stderr)
+        self.assertIn("tests.test_broken.T.test_fails", out.stdout)
+        self.put("plugin/rulebook.json", '{"x": 1}\n')
+        plan = self.plan()
+        self.assertTrue({"tests.test_broken", "tests.test_broken.T.test_fails"} & set(plan["names"]),
+                        self.reasons(plan))
+
+    def test_file_changed_while_recording_counts_as_drifted(self):
+        self.build(extra={"pkg/gen.txt": "gốc\n", "tests/test_writer.py": TEST_WRITER})
         self.record()
         data = json.loads(self.map_file().read_text())
-        self.assertEqual(data["openers"].get("pkg/conf.json"), ["pkg/conf.py"])
+        self.assertEqual(data["inventory"]["pkg/gen.txt"], "")
 
-    def test_generic_readers_keep_no_state(self):
-        # hàm đọc chung được bỏ qua chỉ khi không tự giữ nội dung (cache, biến toàn cục): nếu có thì phải gỡ khỏi danh sách
-        import ast
-        spec = importlib.util.spec_from_file_location("narrow_pass", NARROW)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertTrue(module.PASSTHROUGH)
-        for rel, name in module.PASSTHROUGH:
-            tree = ast.parse((PLUGIN.parent / rel).read_text(encoding="utf-8"))
-            func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
-            self.assertEqual(func.decorator_list, [], rel)
-            self.assertFalse([n for n in ast.walk(func) if isinstance(n, (ast.Global, ast.Nonlocal))], rel)
+    def test_full_mode_of_a_partial_trace_writes_a_narrow_receipt(self):
+        self.build()
+        out = self.narrow("record", "--jobs", "1", "--", "tests.test_add")
+        self.assertIn(out.returncode, (0, 1), out.stdout + out.stderr)
+        out = self.narrow("run")  # diff rỗng: chế độ cả bộ theo tham số của vết (chỉ tests.test_add)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        shown = subprocess.run([sys.executable, str(RECEIPT), "show", "--json", "--project", str(self.proj)],
+                               capture_output=True, text=True, env=dict(os.environ, **self.env))
+        checks = json.loads(shown.stdout)
+        self.assertEqual([rec.get("scope") for rec in checks.values()], ["narrow"], checks)
+
+    def test_names_and_refs_with_a_trailing_newline_are_refused(self):
+        self.build()
+        self.record()
+        self.assertEqual(self.narrow("exec", "--", "tests.test_add\n").returncode, 2)
+        self.assertEqual(self.narrow("run", "--plan", "--base", "HEAD\n").returncode, 2)

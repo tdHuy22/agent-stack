@@ -21,6 +21,7 @@ riêng, ra bảng dòng → test; mỗi bản chép có `mutmut_config.py` đặ
 (`-f`), và mutmut chạy với `--rerun-all` (sống với lệnh thu hẹp thì chạy lại cả lệnh), nên số bắt, số sống bằng cách cũ.
 Tắt (chạy cả lệnh cho mọi đột biến) khi `--no-select`, lệnh khác dạng, project có `mutmut_config.py`, hay ghi vết lỗi.
 Tiến trình canh `mutation_select.py reap` giết các nhóm tiến trình và xóa bản chép khi script bị giết, kể cả SIGKILL.
+Dòng `- thời gian:` (JSON `phases`) ghi giây của từng phần: ghi vết, dựng bản chép, chạy đột biến, đọc kết quả, chạy lại.
 
 Lệnh:
   mutation.py [--project DIR] [--base REF] [--cmd "<lệnh test>"] [--timeout GIÂY] [--mutmut PATH] [--link PATH...]
@@ -558,6 +559,7 @@ def run(args) -> dict:
     previous = signal.signal(signal.SIGTERM, on_term)
     started = time.monotonic()
     workers = []
+    phases = {}  # giây của từng phần (việc 1b, mục c): đo trước khi chọn chỗ tối ưu
     reaper = start_reaper(tmp)
     selection = "tắt: chưa tới bước ghi vết"
     try:
@@ -569,7 +571,11 @@ def run(args) -> dict:
                           "thể lệch" for rel in added if re.search(rb"\r(?!\n)", info["current"][rel][1])]
         code = sum(1 for rel, lines in added.items() for n in lines if is_code(texts[rel][n - 1]))
         deadline = started + args.timeout
+        mark = time.monotonic()
         selection, trace_map, python = trace_step(args, info, tmp, deadline)
+        if trace_map is not None or selection.startswith("tắt: bước ghi vết"):  # chỉ khi bước ghi vết đã chạy
+            phases["trace"] = time.monotonic() - mark
+        mark = time.monotonic()
         first = None
         for i, group in enumerate(split_lines(added, texts, jobs_for(args.jobs, code))):
             base = tmp / f"w{i}"
@@ -587,17 +593,21 @@ def run(args) -> dict:
                 str(info["mutmut"]), "run", "--paths-to-mutate", ",".join(targets), "--runner", info["runner"],
                 "--use-patch-file", str(patch), "--tests-dir", tests_dir(cwd, info["book"], prefix), *extra]})
         info["current"] = info["blobs"] = None  # nội dung cả repo không cần giữ trong lúc chờ mutmut
+        phases["copy"], mark = time.monotonic() - mark, time.monotonic()
         for w in workers:
             w["proc"] = start_group(w["cmd"], w["cwd"], w["log"])
         for w in workers:  # cùng một hạn chót: lần chạy sau không được thêm giờ
             w["code"], w["output"] = finish_group(w["proc"], deadline, w["log"])
             w["seconds"] = time.monotonic() - started
+        phases["mutants"], mark = time.monotonic() - mark, time.monotonic()
         for w in workers:
             restore_backups(w["cwd"], w["targets"])
             w["res"] = collect(info["mutmut"], w["cwd"])
+        phases["collect"], mark = time.monotonic() - mark, time.monotonic()
         for w in workers:  # trượt ở lần chạy test gốc khi máy bận (nhiều lần chạy song song): chạy lại một mình, một lần
             if baseline_failed(w) and time.monotonic() < deadline:
                 retry_alone(w, info["mutmut"], deadline, started)
+                phases["retry"] = time.monotonic() - mark
     finally:
         mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})  # SIGTERM lúc dọn: chờ dọn xong mới nhận
         try:
@@ -627,7 +637,7 @@ def run(args) -> dict:
             tested = max(0, part["total"] - part["untested"])
             estimate = max(estimate, math.ceil(part["untested"] * w["seconds"] / (tested + 1)))
     res.update(notes=info["notes"], files=info["py"], runner=info["runner"], jobs=len(workers), outside=outside,
-               selection=selection,
+               selection=selection, phases={k: round(v, 1) for k, v in phases.items()},
                unreached=line_ranges(unreached), unreached_known=all(w["res"]["known"] for w in workers),
                estimate_seconds=estimate, seconds=round(time.monotonic() - started, 1))
     output = "\n".join(w["output"] for w in workers)
@@ -703,6 +713,17 @@ def unreached_lines(res: dict) -> list:
     return [f"- chưa chạy tới: {spots}{more} ({res['untested']} đột biến); {hint}"]
 
 
+PHASE_LABELS = (("trace", "ghi vết (gồm chạy riêng từng test)"), ("copy", "dựng bản chép"),
+                ("mutants", "chạy đột biến"), ("collect", "đọc kết quả"), ("retry", "chạy lại một mình"))
+
+
+def phase_lines(res: dict) -> list:
+    """Thời gian từng phần (khóa `phases`), để biết nên tối ưu chỗ nào; không có thì không in."""
+    phases = res.get("phases") or {}
+    parts = [f"{label} {phases[key]:.0f} giây" for key, label in PHASE_LABELS if isinstance(phases.get(key), (int, float))]
+    return [f"- thời gian: {', '.join(parts)}"] if parts else []
+
+
 def summary(res: dict) -> list:
     lines = [f"- {n}" for n in res.get("notes") or []]
     survived = res.get("survived") or []
@@ -715,7 +736,8 @@ def summary(res: dict) -> list:
     selection = res.get("selection") or ""
     if selection.startswith("tắt: ") and selection != "tắt: --no-select":
         lines.append(f"- chọn test tắt: {selection[len('tắt: '):]} (mỗi đột biến chạy cả lệnh test)")
-    where = ", ".join(f"{s['file']}:{s['line']}" for s in survived[:MAX_LISTED])
+    lines += phase_lines(res)
+    where =", ".join(f"{s['file']}:{s['line']}" for s in survived[:MAX_LISTED])
     counts = (f"{res['total']} đột biến trên dòng đổi, {res['killed']} bị bắt, {len(survived)} sống"
               + (f", {res['timeout']} quá giờ" if res.get("timeout") else "")
               + (f", {res['untested']} chưa chạy tới" if res.get("untested") else "")

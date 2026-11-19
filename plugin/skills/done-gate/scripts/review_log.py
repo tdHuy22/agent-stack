@@ -4,12 +4,14 @@
   python3 review_log.py add --writer opus --level cao --reviewers fable:high,sonnet:high [--task "…"] \\
       [--found "fable:vua:sua:mô tả lỗi"] [--found "both:cao:sua:…"] [--found "sonnet:thap:bac-bo:…"]
   python3 review_log.py summary [--days N] [--json]
+  python3 review_log.py pending [--days N] [--all-projects]
 
 Mỗi lần review, một hay nhiều reviewer, kể cả không tìm được lỗi nào, là một dòng JSON trong state/review-log.jsonl.
 `--reviewers` là model, có thể kèm effort (opus:xhigh,sonnet:xhigh; dạng cũ opus,sonnet không effort vẫn nhận, nhưng
 đã kèm effort thì phải kèm cho mọi reviewer). `--found` có dạng ai:mức:kết-quả:mô tả, với ai là một model trong
 --reviewers hay both (cả hai cùng tìm), mức là cao, vua, thap, kết quả là sua (lỗi thật), bac-bo (dương tính giả,
-bác bỏ được) hay hoi (đưa người dùng quyết). Chỉ ghi máy này, không gửi đi đâu.
+bác bỏ được), hoi (đưa người dùng quyết) hay ghi (lỗi thật mức thấp, ghi lại để sửa sau, không sửa ngay; chỉ nhận mức
+thap). `pending` liệt kê các lỗi `ghi` của project đang đứng, mới nhất trước. Chỉ ghi máy này, không gửi đi đâu.
 Summary so reviewer khác nhau trên các lần review kép, và (khi có effort) tách theo model·effort và theo ô của bảng
 done-gate (mức, họ model người viết, reviewer) để đánh giá từng ô.
 """
@@ -28,7 +30,7 @@ WHO = {"opus": "opus", "sonnet": "sonnet", "fable": "fable", "haiku": "haiku", "
        "cả-hai": "both"}
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 SEVERITIES = ("cao", "vua", "thap")
-VERDICTS = ("sua", "bac-bo", "hoi")
+VERDICTS = ("sua", "bac-bo", "hoi", "ghi")
 MAX_TEXT = 300
 MAX_LINE_BYTES = 20_000
 
@@ -57,6 +59,8 @@ def parse_found(value: str) -> dict:
         raise ValueError(f"mức phải là {', '.join(SEVERITIES)}, nhận được {severity!r}")
     if verdict not in VERDICTS:
         raise ValueError(f"kết quả phải là {', '.join(VERDICTS)}, nhận được {verdict!r}")
+    if verdict == "ghi" and severity != "thap":
+        raise ValueError(f"kết quả ghi (để sửa sau) chỉ cho lỗi mức thap; lỗi mức {severity} thì sửa hay hoi")
     text = " ".join(parts[3].split())[:MAX_TEXT] if len(parts) > 3 else ""
     return {"by": WHO[who], "severity": severity, "verdict": verdict, "text": text}
 
@@ -248,6 +252,22 @@ def render(s: dict, days) -> str:
     return "\n".join(lines)
 
 
+def pending(records: list, project) -> list:
+    """Các dòng "<ngày> <việc>: <mô tả>" của lỗi `ghi` (mức thấp, để sửa sau), mới nhất trước; project None là mọi
+    project."""
+    out = []
+    for r in sorted(records, key=lambda r: r["ts"], reverse=True):
+        if project is not None and r.get("project") != project:
+            continue
+        for f in r.get("findings") or []:
+            if isinstance(f, dict) and f.get("verdict") == "ghi":
+                day = time.strftime("%d/%m/%Y", time.localtime(r["ts"]))
+                task = r.get("task") or "?"
+                out.append(f"- {day} {task}" + (f" [{r.get('project')}]" if project is None else "")
+                           + f": {f.get('text') or '(không mô tả)'}")
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Nhật ký review của done-gate: ghi lỗi nào do reviewer nào tìm, rồi tổng hợp.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -262,10 +282,19 @@ def main(argv=None) -> int:
     m = sub.add_parser("summary", help="tổng hợp: reviewer nào bắt lỗi nào")
     m.add_argument("--days", type=int, help="chỉ xét bấy nhiêu ngày gần nhất")
     m.add_argument("--json", action="store_true")
+    p = sub.add_parser("pending", help="lỗi mức thấp đã ghi để sửa sau (kết quả ghi)")
+    p.add_argument("--days", type=int, help="chỉ xét bấy nhiêu ngày gần nhất")
+    p.add_argument("--all-projects", action="store_true", help="mọi project, không chỉ project đang đứng")
+    p.add_argument("--cwd", help="thư mục project (mặc định thư mục hiện tại)")
     args = ap.parse_args(argv)
     if args.cmd == "add":
         return add(args)
     since = time.time() - args.days * 86400 if args.days else 0
+    if args.cmd == "pending":
+        project = None if args.all_projects else project_name(Path(args.cwd or "."))
+        rows = pending(read_records(log_path(), since), project)
+        print("\n".join(rows) if rows else "Không có lỗi mức thấp nào đang chờ sửa.")
+        return 0
     s = summarize(read_records(log_path(), since))
     print(json.dumps(s, ensure_ascii=False, indent=1) if args.json else render(s, args.days))
     return 0

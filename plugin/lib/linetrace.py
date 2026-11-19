@@ -1,24 +1,19 @@
 """Ghi vết test theo dòng, dùng chung cho `mutation_select.py` (done-gate) và `narrow.py` (session-keeper).
 
-Tracer: `sys.settrace` ghi (file đích, dòng) theo test đang chạy. Touches: audit hook (PEP 578) ghi file test mở, thư
-mục test liệt kê và tiến trình con không ghi vết được (công cụ ngoài như ruff, git chạy trong repo). site_source:
+Tracer: `sys.settrace` ghi (file đích, dòng) theo test đang chạy. Touches: audit hook (PEP 578) ghi file, thư mục
+tiến trình chạm tới và tiến trình con không ghi vết được (công cụ ngoài như ruff, git chạy trong repo). site_source:
 nội dung `sitecustomize.py` cho tiến trình Python con (đặt vào PYTHONPATH chỉ cho bước ghi vết), cùng cách ghi.
 Chỉ thư viện chuẩn; không import gì ngoài stdlib (luật lib chỉ import lib).
 """
 from __future__ import annotations
 
-import linecache
 import os
 import re
-import sys
 import unittest
 import unittest.suite
 import unittest.util
 
 PY_NAME_RE = re.compile(r"python(3(\.\d+)*)?$")
-# Khung gọi của bộ nạp module (cả zipimport dò file script chính): mở file .py để nạp, không phải đọc dữ liệu. linecache
-# (inspect.getsource, traceback, warnings) tính là đọc dữ liệu: test so mã nguồn phải được chọn khi file đổi.
-IMPORT_PREFIXES = ("<frozen importlib._bootstrap", "<frozen zipimport>")
 
 
 class Tracer:
@@ -70,28 +65,22 @@ PYC_RE = re.compile(r"^(?:(.*)/)?__pycache__/([^/.]+)\.[^/]*\.pyc$")
 
 
 class Touches:
-    """Audit hook: file (`open`), thư mục (`os.listdir`, `os.scandir`) trong `root` mà test đang chạy chạm tới, và tiến
-    trình con không ghi vết được (không phải python, python có `-I/-E/-S`, hay env thiếu biến ghi vết `trace_env` hoặc
-    thiếu thư mục `site` trong PYTHONPATH): (tên chương trình, thư mục chạy tương đối hay None khi ngoài root, các đối
-    số trỏ vào root). Mở file .py hay .pyc để nạp module tính riêng (`imports`; ngoài test thì vào `loaded`), không tính
-    là đọc dữ liệu. `openers`: file .py trong root gần nhất trên ngăn xếp lúc mở file dữ liệu ("" khi không có; bỏ qua
-    khi đó là chính hàm test đang chạy), ghi cả lúc không có test (nạp module, setUpClass): file đọc một lần rồi giữ
-    trong bộ nhớ (lru_cache, biến module, thuộc tính lớp) chỉ ghi được người đọc đầu tiên, nên chọn test theo file .py
-    đã đọc nó. Tiến trình con (sitecustomize) không ghi `openers`: nó chỉ sống trong một test. Lỗi trong hook bị nuốt: hook không bao giờ làm hỏng thao tác của test."""
+    """Audit hook ghi những gì tiến trình chạm tới trong `root`, LÚC NÀO CŨNG ghi (lúc nạp module, trong fixture, trong
+    test): `touched` gồm file mở (nạp module, đọc dữ liệu, đọc mã nguồn qua linecache; `.pyc` tính là file `.py` của
+    nó), `listed` gồm thư mục liệt kê (`os.listdir`, `os.scandir`). `spawns`: theo test đang chạy, tiến trình con không
+    ghi vết được (không phải python, python có `-I/-E/-S`, hay env thiếu biến ghi vết `trace_env` hoặc thiếu thư mục
+    `site` trong PYTHONPATH): (tên chương trình, thư mục chạy tương đối hay None khi ngoài root, các đối số trỏ vào
+    root). Lỗi trong hook bị nuốt: hook không bao giờ làm hỏng thao tác của test."""
 
-    def __init__(self, root: str, current, trace_env: str, site: str = "", passthrough=()):
+    def __init__(self, root: str, current, trace_env: str, site: str = ""):
         self.root = os.path.realpath(root)
         self.prefix = self.root + os.sep
         self.current = current  # hàm trả về id test đang chạy ("" khi không có)
         self.trace_env = trace_env
         self.site = site
-        self.reads: dict = {}  # rel -> set(test)
-        self.imports: dict = {}  # rel .py -> set(test)
-        self.loaded: set = set()  # rel .py nạp khi không có test nào chạy (lúc nạp module test)
-        self.dirs: dict = {}  # rel thư mục ("" là gốc) -> set(test)
+        self.touched: set = set()  # rel file
+        self.listed: set = set()  # rel thư mục ("" là gốc)
         self.spawns: dict = {}  # test -> set((tên, cwd rel hay None, tuple đối số rel))
-        self.openers: dict = {}  # rel file dữ liệu -> set(rel .py đã mở nó, "" khi không biết)
-        self.passthrough = set(passthrough)  # (rel .py, qualname) của hàm đọc file chung không giữ nội dung: bỏ qua
         self.cache: dict = {}
         self.busy = False
 
@@ -114,69 +103,24 @@ class Touches:
             return
         self.busy = True
         try:
-            test = self.current()
             if event == "open":
                 rel = self.rel(args[0])
-                if not rel:
-                    return
-                pyc = PYC_RE.match(rel)
-                if pyc or (rel.endswith(".py") and self.from_import()):
-                    src = ((pyc.group(1) + "/" if pyc.group(1) else "") + pyc.group(2) + ".py") if pyc else rel
-                    if test:
-                        self.imports.setdefault(src, set()).add(test)
-                    else:
-                        self.loaded.add(src)
-                else:
-                    who = self.opener(test)
-                    if who is not None:
-                        self.openers.setdefault(rel, set()).add(who)
-                    if test:
-                        self.reads.setdefault(rel, set()).add(test)
-            elif not test:
-                return
+                if rel:
+                    pyc = PYC_RE.match(rel)
+                    self.touched.add(((pyc.group(1) + "/" if pyc.group(1) else "") + pyc.group(2) + ".py")
+                                     if pyc else rel)
             elif event in ("os.listdir", "os.scandir"):
                 rel = self.rel(args[0] if args and args[0] is not None else ".")
                 if rel is not None:
-                    self.dirs.setdefault(rel, set()).add(test)
+                    self.listed.add(rel)
             else:
-                self.spawn(test, *args[:4])
+                test = self.current()
+                if test:
+                    self.spawn(test, *args[:4])
         except Exception:  # noqa: BLE001
             pass
         finally:
             self.busy = False
-
-    @staticmethod
-    def from_import() -> bool:
-        """Lần mở này do bộ nạp module hay trình thông dịch (mở file script chính, không có khung Python nào)."""
-        try:
-            frame = sys._getframe(2)
-        except ValueError:
-            return True
-        for _ in range(8):
-            if frame is None:
-                return False
-            name = frame.f_code.co_filename
-            if name.startswith(IMPORT_PREFIXES):
-                return True
-            frame = frame.f_back
-        return False
-
-    def opener(self, test):
-        """File .py trong root của khung gọi gần nhất (bỏ khung của hook), "" khi không có. None khi khung đó là chính
-        hàm test đang chạy: hàm test chạy một lần cho mỗi test nên không giữ nội dung cho test khác."""
-        try:
-            frame = sys._getframe(2)
-        except ValueError:
-            return ""
-        while frame is not None:
-            code = frame.f_code
-            rel = self.rel(code.co_filename)
-            qual = getattr(code, "co_qualname", code.co_name)
-            if rel and rel.endswith(".py") and (rel, qual) not in self.passthrough:
-                own = rel[:-3].replace("/", ".") + "." + qual
-                return None if test and test == own else rel
-            frame = frame.f_back
-        return ""
 
     def traced_env(self, env) -> bool:
         """Tiến trình con nhận env này có chạy sitecustomize ghi vết không."""
@@ -205,14 +149,13 @@ class Touches:
                 else:
                     i += 1
         where = self.rel(place)
-        inside =tuple(sorted({r for r in (self.rel(a) for a in argv[1:] if os.path.isabs(a)) if r is not None}))
+        inside = tuple(sorted({r for r in (self.rel(a) for a in argv[1:] if os.path.isabs(a)) if r is not None}))
         self.spawns.setdefault(test, set()).add((prog, where, inside))
 
 
 def own_codes() -> set:
     """Code object của audit hook: chạy giữa test nhưng không phải code của test, Tracer bỏ qua."""
-    return {f.__code__ for f in (Touches.hook, Touches.rel, Touches.spawn, Touches.from_import,
-                                  Touches.traced_env, Touches.opener, isolating)}
+    return {f.__code__ for f in (Touches.hook, Touches.rel, Touches.spawn, Touches.traced_env, isolating)}
 
 
 def make_result(tracer, test_env: str, timings: dict | None = None):
@@ -222,7 +165,6 @@ def make_result(tracer, test_env: str, timings: dict | None = None):
 
     class Result(unittest.TextTestResult):
         def startTest(self, test):
-            linecache.clearcache()  # mỗi test tự đọc lại mã nguồn qua linecache: lần đọc được ghi cho test đó
             tracer.test = test.id()
             tracer.order.setdefault(tracer.test, len(tracer.order))
             os.environ[test_env] = tracer.test
@@ -358,14 +300,12 @@ if os.environ.get("@P@_TRACE") and os.environ.get("@P@_OUT"):
         test = os.environ.get("@P@_TEST", "")
         if _touch is not None:
             _touch.busy = True
-        if not test or not (_seen or (_touch is not None and (_touch.reads or _touch.imports or _touch.dirs
-                                                                or _touch.spawns))):
+        if not test or not (_seen or (_touch is not None and (_touch.touched or _touch.listed or _touch.spawns))):
             return
         rec = {"test": test, "lines": {k: sorted(v) for k, v in _seen.items()}}
         if _touch is not None:
-            rec["reads"] = sorted(_touch.reads)
-            rec["imports"] = sorted(_touch.imports)
-            rec["dirs"] = sorted(_touch.dirs)
+            rec["touched"] = sorted(_touch.touched)
+            rec["dirs"] = sorted(_touch.listed)
             rec["spawns"] = sorted([p, w, list(a)] for s in _touch.spawns.values() for p, w, a in s)
         path = os.path.join(os.environ["@P@_OUT"], f"{os.getpid()}-{id(_seen)}.json")
         try:
