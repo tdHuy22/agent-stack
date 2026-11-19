@@ -9,8 +9,8 @@ Hook cũng lưu yêu cầu gần nhất của người dùng theo từng phiên 
 không được ghi đè yêu cầu thật và không được router gợi ý; khóa và token được che.
 
 Tin của người dùng (không tính lệnh và tin do hệ thống tạo) được ghi ngay vào lượt cuối ở trạng thái đang chạy
-(.agent/LAST-TURN.md), để Esc, crash hay lượt dài chưa xong vẫn để lại yêu cầu; lệnh không tương tác (`claude -p`,
-`pi -p`) thì không, để không ghi đè lượt của phiên tương tác. Phiên còn chạy agent-stack cũ hơn bản
+(.agent/LAST-TURN.md), để Esc, crash hay lượt dài chưa xong vẫn để lại yêu cầu; lệnh không tương tác (`claude -p`)
+thì không, để không ghi đè lượt của phiên tương tác. Phiên còn chạy agent-stack cũ hơn bản
 đã cài thì nhắc một lần.
 
 Mọi tin (kể cả tin do hệ thống tạo) mở một lượt mới: hook ghi lúc bắt đầu lượt, dấu §0 và HEAD lúc đó
@@ -115,12 +115,9 @@ def main():
     if sid and not A.once(f"prompt-{sid}-{digest}", 5):
         return  # hook bị đăng ký hai lần
     flags = {}
-    # Hạn mức (limits.json do statusline Claude Code ghi) và bản plugin đang chạy là của Claude Code; chạy từ pi qua
-    # cầu nối thì bỏ, kẻo model của pi bỏ việc chính đi cập nhật §0 vì hạn mức của công cụ khác.
-    claude_code = A.host() == "claude-code"
     try:
-        context, user = limit_notes(sid) if claude_code else ([], [])
-        stale_ctx, stale_user = stale_plugin_note(sid) if sid and claude_code else ("", "")
+        context, user = limit_notes(sid)
+        stale_ctx, stale_user = stale_plugin_note(sid) if sid else ("", "")
         if stale_ctx:
             context.append(stale_ctx)
             user.append(stale_user)
@@ -169,7 +166,7 @@ def main():
         except Exception as exc:  # noqa: BLE001 (lỗi phần phụ không được làm mất cảnh báo hạn mức hay router)
             A.log_event("hook-error", {"hook": "client-place", "error": repr(exc)[:300]})
         try:  # phiên dài: nhắc mở phiên mới (lỗi không được làm mất cảnh báo hạn mức hay router)
-            long_ctx, long_user = long_session_note(sid, data, prompt) if claude_code else ("", "")
+            long_ctx, long_user = long_session_note(sid, data, prompt)
             if long_ctx:
                 context.append(long_ctx)
                 user.append(long_user)

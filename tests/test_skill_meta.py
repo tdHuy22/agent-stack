@@ -81,3 +81,28 @@ class ReviewerAgent(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReadOnlyAgents(unittest.TestCase):
+    """Subagent chỉ đọc phải cấm tường minh công cụ ghi (độ phủ trước nằm trong test hợp đồng pi, gỡ 19/11/2026)."""
+    READ_ONLY = {"cold-reader": {"Bash"}, "explore-lite": set(), "researcher": set(), "reviewer": set(),
+                 "test-runner": set()}
+    WRITE_TOOLS = {"Write", "Edit", "NotebookEdit"}
+
+    def test_every_agent_has_name_and_description(self):
+        agents = sorted((PLUGIN / "agents").glob("*.md"))
+        self.assertTrue(agents)
+        for path in agents:
+            with self.subTest(agent=path.stem):
+                fm = frontmatter(path.read_text(encoding="utf-8"))
+                self.assertEqual(fm.get("name"), path.stem)
+                self.assertTrue(str(fm.get("description") or "").strip())
+
+    def test_read_only_agents_ban_write_tools(self):
+        for name, extra in self.READ_ONLY.items():
+            with self.subTest(agent=name):
+                fm = frontmatter((PLUGIN / "agents" / f"{name}.md").read_text(encoding="utf-8"))
+                banned = {t.strip() for t in str(fm.get("disallowedTools") or "").split(",") if t.strip()}
+                self.assertTrue(banned >= self.WRITE_TOOLS | extra, f"{name} phải cấm {sorted(self.WRITE_TOOLS | extra)}")
+                tools = {t.strip() for t in str(fm.get("tools") or "").split(",") if t.strip()}
+                self.assertFalse(tools & (self.WRITE_TOOLS | extra), f"{name} không được khai công cụ ghi")

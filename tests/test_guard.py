@@ -948,16 +948,6 @@ class StopRequiresEvidence(StopBase):
         self.chot()
         self.assertIsNone(self.stop("v7"))
 
-    def test_pi_has_no_subagent_hook_so_reviewer_is_not_required(self):
-        self.turn("v8")
-        self.risky()
-        self.chot()
-        time.sleep(1.1)
-        self.assertEqual(self.receipt("python3", "-c", "pass"), 0)
-        out = self.hook("stop.py", {"session_id": "v8", "cwd": str(self.project), "stop_hook_active": False,
-                                    "last_assistant_message": "Xong."}, AGENT_STACK_HOST="pi")
-        self.assertIsNone(out)
-
     def test_evidence_check_never_runs_commands_of_the_repo(self):
         self.turn("v9")
         self.risky()

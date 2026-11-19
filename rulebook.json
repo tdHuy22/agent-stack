@@ -935,17 +935,6 @@
    "note": "Test chạy validate và test của mod bằng engine của app; mod hỏng thì test trượt."
   },
   {
-   "id": "P11",
-   "file": "CLAUDE.md",
-   "anchor": "ghi vào hợp đồng `plugin/hosts/pi.json`",
-   "check": "may-chan",
-   "by": [
-    "test:tests/test_pi_contract.py::ContractTests.test_repo_plugin_matches_contract",
-    "test:tests/test_pi_contract.py::ContractTests.test_new_hook_event_needs_entry"
-   ],
-   "note": "Test trượt khi hook, subagent, skill mới hay đổi tên mà chưa có mục trong hợp đồng pi."
-  },
-  {
    "id": "P12",
    "file": "CLAUDE.md",
    "anchor": "bắt mọi lỗi, thoát mã 0",

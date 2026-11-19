@@ -1,10 +1,8 @@
 """GĐ3, TM-115: hook pretool_guard giữ giao thức archctl. Agent không ghi file luật trong `.arch/` (Write, Edit,
 MultiEdit, NotebookEdit, lệnh shell, trình thông dịch) và không chạy lệnh chỉ người được chạy (`accept`, `reject`,
 `baseline`, `serve`, `init --force`), kể cả qua đường dẫn tuyệt đối, env, sudo, `bash -c`, xargs, find -exec. Ghi đề
-xuất (`archctl propose`, `block`) và đọc luật vẫn qua. Ca của pi đi qua cùng hook với payload của cầu nối."""
-import json
-
-from tests._util import PLUGIN, git
+xuất (`archctl propose`, `block`) và đọc luật vẫn qua."""
+from tests._util import git
 from tests.test_guard import GuardBase
 
 PROTECTED = ("system.arch", "decisions.md", "baseline", ".archignore", ".verified")
@@ -95,17 +93,3 @@ class ArchProtocolGuard(GuardBase):
                     "echo accept"]:
             with self.subTest(cmd=cmd):
                 self.assertIsNone(self.bash(cmd), cmd)
-
-    def test_pi_payload_is_guarded_too(self):
-        """Cầu nối pi gửi PreToolUse với tool_input {file_path, content} cho write/edit, {command} cho bash
-        (tool_map trong pi.json)."""
-        tool_map = json.loads((PLUGIN / "hosts" / "pi.json").read_text())["hooks"]["PreToolUse"]["tool_map"]
-        for tool, ti in ((tool_map["write"], {"file_path": str(self.project / ".arch/system.arch"), "content": "y"}),
-                         (tool_map["edit"], {"file_path": ".arch/decisions.md", "content": None}),
-                         (tool_map["bash"], {"command": "archctl accept p-1 --reason ok"})):
-            with self.subTest(tool=tool):
-                out = self.hook("pretool_guard.py", {"session_id": "pi1", "cwd": str(self.project),
-                                                     "hook_event_name": "PreToolUse", "transcript_path": "",
-                                                     "interactive": False, "tool_name": tool, "tool_input": ti},
-                                AGENT_STACK_HOST="pi")
-                self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")

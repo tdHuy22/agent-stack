@@ -3,7 +3,7 @@
 hai lần. Mọi ca khác giữ nguyên hành vi cũ (gọi archctl, báo vi phạm).
 
 Dùng lại harness `ArchHookBase` của test_archgate (archctl giả ghi lời gọi vào `FAKE_ARCH_LOG`). Mỗi test tự đặt rõ
-`CLAUDE_PROJECT_DIR` và `AGENT_STACK_HOST`, không dựa vào môi trường ngoài. Ca bỏ: không có lời gọi archctl nào và
+`CLAUDE_PROJECT_DIR`, không dựa vào môi trường ngoài. Ca bỏ: không có lời gọi archctl nào và
 `additionalContext` rỗng. Ca báo: có dòng `✗ VI PHẠM` và đúng một lời gọi archctl đúng đối số.
 """
 import json
@@ -52,7 +52,6 @@ class ArchDedupeBase(ArchHookBase):
     def env_for(self, **extra):
         """Môi trường cho hook chạy dưới Claude Code với archctl giả (báo vi phạm) đứng đầu PATH."""
         extra.setdefault("CLAUDE_PROJECT_DIR", str(self.project))
-        extra.setdefault("AGENT_STACK_HOST", "claude-code")
         return self.fake_env(1, VIOLATION, **extra)
 
     # ---- chạy một công cụ ----
@@ -214,11 +213,6 @@ class HookCoversTool(ArchDedupeBase):
         (self.project / ".claude").mkdir()
         (self.project / ".claude" / "settings.json").symlink_to(real)
         self.expect_skipped(self.run_tool("Edit", self.env_for()))
-
-    def test_claude_code_host_default_name_is_the_same_as_missing_host(self):
-        # spec:post-edit-archctl-trung#S1
-        self.put(config())
-        self.expect_skipped(self.run_tool("Edit", self.env_for(AGENT_STACK_HOST="claude-code")))
 
 
 class HookDoesNotCoverOrDoesNotCount(ArchDedupeBase):
@@ -419,27 +413,13 @@ class SettingsAreUntrusted(ArchDedupeBase):
         self.expect_reported("Edit", self.run_tool("Edit", self.env_for()))
 
 
-class OtherHosts(ArchDedupeBase):
-    def test_pi_host_keeps_reporting_even_with_the_hook(self):
-        # spec:post-edit-archctl-trung#S5
-        self.put(config())
-        self.put(config(), "settings.local.json")
-        for tool in ALL_TOOLS:
-            with self.subTest(tool=tool):
-                self.expect_reported(tool, self.run_tool(tool, self.env_for(AGENT_STACK_HOST="pi")))
-
+class WithoutProjectDir(ArchDedupeBase):
     def test_no_claude_project_dir_keeps_reporting_even_with_the_hook(self):
         # spec:post-edit-archctl-trung#S5
         self.put(config())
         for tool in ALL_TOOLS:
             with self.subTest(tool=tool):
                 self.expect_reported(tool, self.run_tool(tool, self.env_for(CLAUDE_PROJECT_DIR="")))
-
-    def test_pi_without_project_dir_keeps_reporting(self):
-        # spec:post-edit-archctl-trung#S5
-        self.put(config())
-        env = self.env_for(AGENT_STACK_HOST="pi", CLAUDE_PROJECT_DIR="")
-        self.expect_reported("Edit", self.run_tool("Edit", env))
 
 
 class WhatTheProjectHookDoesNotCheck(ArchDedupeBase):
@@ -499,7 +479,7 @@ class MissingArchctl(ArchDedupeBase):
     def test_missing_archctl_is_mentioned_once_per_session_even_with_the_hook(self):
         # spec:post-edit-archctl-trung#S7
         self.put(config())
-        env = {"PATH": BASE_PATH, "CLAUDE_PROJECT_DIR": str(self.project), "AGENT_STACK_HOST": "claude-code"}
+        env = {"PATH": BASE_PATH, "CLAUDE_PROJECT_DIR": str(self.project)}
         self.assertIn("máy chưa có archctl", self.edit_view(sid="m1", **env))
         self.assertEqual(self.edit_view(sid="m1", **env), "", "cùng phiên: không nhắc lại")
         self.assertIn("máy chưa có archctl", self.edit_view(sid="m2", **env), "phiên khác thì nhắc lại")
@@ -507,7 +487,7 @@ class MissingArchctl(ArchDedupeBase):
     def test_missing_archctl_with_settings_local_hook_and_bash(self):
         # spec:post-edit-archctl-trung#S7
         self.put(config(), "settings.local.json")
-        env = {"PATH": BASE_PATH, "CLAUDE_PROJECT_DIR": str(self.project), "AGENT_STACK_HOST": "claude-code"}
+        env = {"PATH": BASE_PATH, "CLAUDE_PROJECT_DIR": str(self.project)}
         self.start("làm tiếp", "mb1")
         self.view.write_text(NEW_TEXT)
         first = self.post("Bash", {"command": "sed -i '' s/Y/X/ app/web/view.py"}, "mb1", **env)

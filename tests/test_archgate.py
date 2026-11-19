@@ -1,5 +1,5 @@
-"""GĐ3: archctl vào vòng lặp. Hook post_edit đưa dòng vi phạm `archctl check` về agent ngay lượt sửa file (Claude Code
-và payload của pi), session_start báo số đề xuất chờ duyệt, done-gate (`checks.py`) chạy `check --strict` và `verify`.
+"""GĐ3: archctl vào vòng lặp. Hook post_edit đưa dòng vi phạm `archctl check` về agent ngay lượt sửa file (Claude Code),
+session_start báo số đề xuất chờ duyệt, done-gate (`checks.py`) chạy `check --strict` và `verify`.
 Dùng archctl giả (ghi lại đối số, in đầu ra cho trước) để kiểm từng nhánh; archctl thật (khi máy có) cho ca đầu-cuối.
 
 Tái hiện gốc (14/11/2026): hook do `archctl init` sinh chạy `archctl check --changed`, in vi phạm ra stdout và thoát
@@ -169,21 +169,6 @@ class PostEditArch(ArchHookBase):
                          "cùng vi phạm, cùng lượt: không báo lặp")
         self.assertEqual(self.post("Bash", {"command": "ls app"}, "b1", **env), "")
         self.assertEqual(len(self.calls()), 2, "lệnh không ghi file thì không gọi archctl")
-
-    def test_pi_payload_gets_the_same_message_with_supported_keys_only(self):
-        """Cầu nối pi (coding-agents) nối additionalContext vào cuối kết quả edit; hook chỉ được in khóa có trong
-        `outputs_supported` của pi.json."""
-        contract = json.loads((PLUGIN / "hosts" / "pi.json").read_text())
-        view = self.project / "app" / "web" / "view.py"
-        view.write_text("from app.report.data import X\n")
-        raw = self.hook("post_edit.py", {"session_id": "pi1", "cwd": str(self.project), "hook_event_name": "PostToolUse",
-                                         "transcript_path": "", "interactive": False, "tool_name": "Edit",
-                                         "tool_input": {"file_path": str(view), "new_string": "from app"},
-                                         "tool_response": {}},
-                        AGENT_STACK_HOST="pi", **self.fake_env(1, VIOLATION))
-        self.assertIn("✗ VI PHẠM", raw["hookSpecificOutput"]["additionalContext"])
-        keys = {"hookSpecificOutput." + k for k in raw["hookSpecificOutput"]} | (set(raw) - {"hookSpecificOutput"})
-        self.assertLessEqual(keys - {"hookSpecificOutput.hookEventName"}, set(contract["outputs_supported"]))
 
     @unittest.skipUnless(shutil.which("archctl"), "máy chưa có archctl (cài: ./install.sh --only tools, mục cargo:archctl)")
     def test_real_archctl_end_to_end(self):

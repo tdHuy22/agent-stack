@@ -71,12 +71,11 @@ ARCH_BASELINE = {
 
 
 def arch_violations() -> set:
-    """(file, module) mà hook import ngoài stdlib, `plugin/lib`, `plugin/hosts`; hay lib import ngoài stdlib và lib.
+    """(file, module) mà hook import ngoài stdlib và `plugin/lib`; hay lib import ngoài stdlib và lib.
     Tên module so theo tên file (hook, lib nạp script qua `sys.path.insert` rồi `import <tên>`)."""
     lib = {p.stem for p in (PLUGIN / "lib").glob("*.py")}
-    hosts = {p.stem for p in (PLUGIN / "hosts").glob("*.py")}
     found = set()
-    for folder, allowed in (("hooks", lib | hosts), ("lib", lib)):
+    for folder, allowed in (("hooks", lib), ("lib", lib)):
         for path in sorted((PLUGIN / folder).glob("*.py")):
             for _, name in top_imports(ast.parse(path.read_text(encoding="utf-8"), str(path))):
                 if name not in sys.stdlib_module_names and name not in allowed:
@@ -88,7 +87,7 @@ class ArchitectureRules(unittest.TestCase):
     def test_hooks_import_only_lib_and_lib_only_itself(self):
         found = arch_violations()
         new = sorted(f"{f} import {m}" for f, m in found - ARCH_BASELINE)
-        self.assertEqual(new, [], "Hook chỉ gọi thư viện chung plugin/lib (và plugin/hosts), lib chỉ gọi lib: dời phần "
+        self.assertEqual(new, [], "Hook chỉ gọi thư viện chung plugin/lib, lib chỉ gọi lib: dời phần "
                                   "dùng chung vào plugin/lib thay vì import script của skill hay hook khác")
 
     def test_baseline_only_shrinks(self):

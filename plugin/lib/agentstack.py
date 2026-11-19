@@ -85,8 +85,8 @@ def read_hook_input() -> dict:
 
 def non_interactive(data: dict) -> bool:
     """Phiên không có người ngồi trước màn hình: `claude -p` (Claude Code đặt CLAUDE_CODE_ENTRYPOINT=sdk-cli; app
-    desktop là claude-desktop, terminal là cli) hay cầu nối báo `interactive: false` (pi `-p`, theo payload_common
-    chung trong plugin/hosts/pi.json). Không rõ thì coi là tương tác. SessionStart dựa vào nó để bỏ ghi chú lượt cuối;
+    desktop là claude-desktop, terminal là cli) hay payload báo `interactive: false` (test dùng để giả `-p`). Không rõ
+    thì coi là tương tác. SessionStart dựa vào nó để bỏ ghi chú lượt cuối;
     UserPromptSubmit, Stop, StopFailure để không ghi đè lượt cuối khi lượt không đổi file."""
     if data.get("interactive") is False:
         return True
@@ -178,12 +178,6 @@ def read_json(path: Path, default=None):
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return default
-
-
-def host() -> str:
-    """Công cụ đang chạy hook: "claude-code" (mặc định) hay tên cầu nối đặt qua AGENT_STACK_HOST (pi đặt "pi",
-    theo env trong plugin/hosts/pi.json)."""
-    return os.environ.get("AGENT_STACK_HOST", "claude-code")
 
 
 def write_json_atomic(path: Path, data) -> None:

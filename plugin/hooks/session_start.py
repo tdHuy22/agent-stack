@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hook SessionStart: nạp lại trạng thái project từ đĩa khi mở, resume, clear hoặc sau compact,
 kèm gợi ý skill hợp với project và cách làm việc tiếp theo trong §0 (router), và lượt cuối do hook Stop ghi ở
-.agent/LAST-TURN.md (trừ khi resume lại đúng phiên đã ghi lượt đó, hay phiên không tương tác như `claude -p`, `pi -p`).
+.agent/LAST-TURN.md (trừ khi resume lại đúng phiên đã ghi lượt đó, hay phiên không tương tác như `claude -p`).
 
 Thư mục không phải git repo và không có file kế hoạch (PLAN.md §0, .agent/HANDOFF.md...) thì hook im lặng.
 """
@@ -64,12 +64,11 @@ def main():
             route.prefetch(root, data)  # lớp model (GĐ5): chạy nền cho việc tiếp theo trong §0, không chờ
     except ImportError:
         pass
-    # Cảnh báo đặt trên đầu: pi lệch hợp đồng (mỗi lần mở phiên pi), plugin lệch bản đã kiểm duyệt (lúc khởi động)
-    notes = [pi_sync() if A.host() == "pi" else ("", ""), plugin_drift() if source == "startup" else ("", ""),
-             arch_pending(root)]
+    # Cảnh báo đặt trên đầu: plugin lệch bản đã kiểm duyệt (lúc khởi động)
+    notes = [plugin_drift() if source == "startup" else ("", ""), arch_pending(root)]
     drift_note = "\n".join(n for n, _ in notes if n)
     drift_user = " · ".join(u for _, u in notes if u)
-    # Lệnh không tương tác (`claude -p`, `pi -p`) là một câu hỏi độc lập: ghi chú lượt cuối làm model chép lại
+    # Lệnh không tương tác (`claude -p`) là một câu hỏi độc lập: ghi chú lượt cuối làm model chép lại
     # câu trả lời cũ (ca 04/11/2026: "Trả lời đúng một từ: ok" ra "Có"), nên bỏ; toàn văn vẫn ở LAST-TURN. Sau compact
     # thì giữ: lệnh đó đang chạy dở, ghi chú là yêu cầu của chính nó.
     skip = A.non_interactive(data) and source != "compact"
@@ -113,26 +112,6 @@ def arch_pending(root) -> tuple:
             "`archctl proposals` rồi tự chạy `archctl accept|reject <id> --reason ...`; agent không chạy hai lệnh này. "
             "Phần việc đang bế tắc vì đề xuất thì chờ, đừng lách luật.",
             f"⏸ {count} đề xuất kiến trúc chờ bạn duyệt · archctl proposals")
-
-
-def pi_sync():
-    """Chỉ trong pi (cầu nối đặt AGENT_STACK_HOST=pi): sinh lại subagent dạng pi vào state/pi/agents theo đúng
-    plugin/ đang chạy, và báo khi plugin lệch hợp đồng hosts/pi.json. Lệch thì giữ bộ subagent cũ, vì bản sinh từ
-    hợp đồng lệch có thể mở công cụ bị cấm. Trả về (context, dòng cho người dùng); rỗng nếu ổn. Lỗi khi kiểm hay sinh cũng được báo."""
-    try:
-        plugin = Path(__file__).resolve().parents[1]
-        sys.path.insert(0, str(plugin / "hosts"))
-        import pi_host  # noqa: E402
-        _, problems = pi_host.sync(plugin, A.state_dir() / "pi" / "agents")
-    except Exception as exc:  # việc phụ: lỗi ở đây không được làm mất phần còn lại của hook
-        problems = [f"lỗi khi kiểm hay sinh subagent cho pi: {type(exc).__name__}: {exc}"]
-    if not problems:
-        return "", ""
-    shown = "; ".join(problems[:3])
-    return (f"[agent-stack] pi: plugin lệch hợp đồng hosts/pi.json ({len(problems)} chỗ), phần lệch có thể không chạy "
-            f"trong pi: {A.clip(shown, 600)}. Báo cho người dùng; sửa trong agent-stack rồi chạy "
-            f"`python3 plugin/hosts/pi_host.py check`.",
-            f"⚠️ agent-stack lệch hợp đồng pi ({len(problems)} chỗ)")
 
 
 def plugin_drift():

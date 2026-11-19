@@ -9,7 +9,7 @@ bước nào lớp từ khóa không chắc thì hỏi lớp model một lần c
 dưới sàn của project hay bước bảo mật khai dưới gợi ý; không có gì thì im. Model của phiên có quyền cuối.
 
 Tách khỏi plan_exit.py (ghi tiêu chí xong vào §0) để lớp model chậm không làm mất phần ghi tiêu chí. Mọi lỗi thì im
-lặng, thoát 0. pi không có plan mode nên không chạy hook này.
+lặng, thoát 0.
 """
 import json
 import subprocess

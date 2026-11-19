@@ -43,7 +43,7 @@ BACK_NOTE = ("[agent-stack] Người dùng đã quay lại gõ trên Mac ({platf
 
 def in_desktop() -> bool:
     """Phiên của app Desktop. Phiên `rc`, CloudCLI và terminal không có hộp next-step nên Claude vốn viết bằng chữ."""
-    return A.host() == "claude-code" and os.environ.get("CLAUDE_CODE_ENTRYPOINT", "") == "claude-desktop"
+    return os.environ.get("CLAUDE_CODE_ENTRYPOINT", "") == "claude-desktop"
 
 
 def digest(text: str) -> str:

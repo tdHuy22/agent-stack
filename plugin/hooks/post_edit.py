@@ -179,9 +179,9 @@ def remember(turn: dict, sid: str, lines_by_root: list, fp) -> list:
 
 
 def settings_project():
-    """Thư mục mà app nạp `.claude/settings*.json` (`CLAUDE_PROJECT_DIR`), hay None khi không phải Claude Code: pi không
-    chạy hook trong file đó, nên không có hook archctl nào báo thay (TM-133)."""
-    return (os.environ.get("CLAUDE_PROJECT_DIR") or None) if A.host() == "claude-code" else None
+    """Thư mục mà app nạp `.claude/settings*.json` (`CLAUDE_PROJECT_DIR`), hay None khi biến không có: khi đó không có
+    hook archctl nào trong file đó báo thay (TM-133)."""
+    return os.environ.get("CLAUDE_PROJECT_DIR") or None
 
 
 def small_file(path: Path) -> bool:

@@ -807,12 +807,7 @@ def plan_mode_skipped(task: str, hit) -> bool:
 
 
 def plan_mode_hint(permission_mode=None) -> dict:
-    """Câu gợi ý plan mode cho dòng 🧭 (user) và bối cảnh (context). pi không có plan mode nên nhận câu khác."""
-    if A.host() == "pi":
-        return {"user": "kế hoạch phiên trước khi làm",
-                "context": ("Việc tiếp theo trong §0 là việc cỡ vừa trở lên: pi không có plan mode, nên bước đầu viết kế hoạch "
-                            "phiên theo khuôn của skill session-keeper (mục `ke-hoach`: việc, tiêu chí xong, các bước kèm model "
-                            "và effort, lệnh kiểm chứng, ngoài phạm vi, điểm dừng) và chờ bạn trả lời trước khi sửa file.")}
+    """Câu gợi ý plan mode cho dòng 🧭 (user) và bối cảnh (context)."""
     return {"user": PLAN_MODE_PHRASE,
             "context": (f"Việc tiếp theo trong §0 là việc cỡ vừa trở lên: gợi ý người dùng vào {PLAN_MODE_PHRASE} rồi lập kế "
                         "hoạch phiên theo khuôn của skill session-keeper (mục `ke-hoach`: việc, tiêu chí xong, các bước kèm "

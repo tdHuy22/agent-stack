@@ -114,12 +114,12 @@ Tất cả viết bằng Python thư viện chuẩn, bắt mọi lỗi, thoát m
 
 | Hook | Khi nào | Làm gì |
 |---|---|---|
-| `SessionStart` | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project, lượt cuối vào context (lệnh không tương tác `claude -p`, `pi -p` thì bỏ lượt cuối); in dòng 📍 🧭 🕘. Báo plugin lệch bản đã kiểm duyệt; kiểm nền MCP từ xa mỗi ngày một lần. |
-| `UserPromptSubmit` | Mỗi tin nhắn | Ghi lượt cuối ở trạng thái đang chạy (trừ `claude -p`, `pi -p`); gợi ý `[router]` có tính chi phí ghi lại cache khi đổi model; cảnh báo hạn mức 5 giờ (90%) và tuần (80%); nhắc khi phiên chạy plugin cũ hơn bản đã cài; lưu yêu cầu gần nhất (đã che khóa) cho subagent; ghi mốc bắt đầu lượt cho hook Stop; phiên Desktop thì đánh dấu lượt cần kiểm nơi người dùng gõ. |
+| `SessionStart` | Mở phiên, resume, `/clear`, sau compact | Nạp §0, hồ sơ project, lượt cuối vào context (lệnh không tương tác `claude -p` thì bỏ lượt cuối); in dòng 📍 🧭 🕘. Báo plugin lệch bản đã kiểm duyệt; kiểm nền MCP từ xa mỗi ngày một lần. |
+| `UserPromptSubmit` | Mỗi tin nhắn | Ghi lượt cuối ở trạng thái đang chạy (trừ `claude -p`); gợi ý `[router]` có tính chi phí ghi lại cache khi đổi model; cảnh báo hạn mức 5 giờ (90%) và tuần (80%); nhắc khi phiên chạy plugin cũ hơn bản đã cài; lưu yêu cầu gần nhất (đã che khóa) cho subagent; ghi mốc bắt đầu lượt cho hook Stop; phiên Desktop thì đánh dấu lượt cần kiểm nơi người dùng gõ. |
 | `PreToolUse` | Trước Bash, mỗi lần ghi, sửa file, và công cụ `mcp__ccd_turn__*` của app Desktop | Phiên Desktop: kiểm một lần mỗi lượt người dùng gõ trên Mac hay điện thoại (Remote Control, theo `clientPlatform` trong transcript), chỉ nhắc khi đổi máy: sang điện thoại thì nhắc viết câu hỏi bằng chữ vì hộp next-step không hiện ở đó, về Mac thì một câu ngắn; sau compact hay `/clear` báo lại. Chặn cài đồ chưa vet (mỗi lần); hỏi trước marketplace lạ và `git checkout` trên cây bẩn; khi router thấy lượt đụng ranh giới tin cậy mà chưa có threat model, chặn lần sửa mã nguồn đầu tiên để chạy `threat-model`; khi router thấy lượt làm tính năng, refactor, kiến trúc hay sửa lỗi mà §0 chưa có **Tiêu chí xong**, chặn lần sửa mã nguồn đầu tiên để ghi tiêu chí (hai nhắc gộp làm một); chặn lần tạo tag git hay `gh release create` đầu tiên cho tới khi người dùng trả lời đã audit cả repo chưa; cũng chặn lệnh không đảo ngược được (`git push`, `git reset --hard`, `git clean -f`, `rm -r` ngoài thư mục tạm thật, `commit --amend` hay `rebase` đụng commit đã đẩy) cho tới khi người dùng nhắn lại, trừ khi chính tin vừa gửi đã bảo đúng việc đó (như "Push"), mỗi lời đồng ý dùng một lần; tạo file `.md` mới không thuộc loại bắt buộc Markdown thì chặn một lần, nhắc viết HTML theo `reader-page`. |
 | `SubagentStart` | Mỗi subagent, skill `context: fork` | Đưa yêu cầu gần nhất và 1–2 việc đầu trong §0 cho subagent, vì chúng không thấy hội thoại. |
 | `PreCompact` | Trước compact | Nhắc nếu §0 đã lâu chưa cập nhật; không chặn compact. |
-| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC (`claude -p`, `pi -p` chỉ ghi khi lượt đổi file); nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `done-gate` thì chặn một lần; lượt đã chạy `done-gate` ở mức vừa trở lên mà thiếu bằng chứng (không có biên nhận đạt còn đúng cho code hiện tại, có lệnh kiểm tra trượt trên code hiện tại, hay chưa giao reviewer) thì chặn một lần, kể cả ở lần dừng thứ hai; nếu có sửa file mà §0 chưa cập nhật thì chặn một lần (lượt chỉ commit phần sửa ở lượt trước thì không); file mà phiên khác đang làm cùng project sửa (theo transcript của hai phiên) không tính cho lượt này; nhắc vẽ cây kế hoạch khi bạn hỏi tiến độ mà pane Kế hoạch không hiện (không tính "lưu tiến độ", không còn ở lượt đầu phiên hay sau mỗi việc xong). |
+| `Stop` | Cuối mỗi lượt | Ghi `.agent/LAST-TURN.md` (thư mục chung thì `state/last-turn/`), có chữ ký HMAC (`claude -p` chỉ ghi khi lượt đổi file); nếu lượt đổi code có rủi ro từ vừa trở lên mà chưa chạy `done-gate` thì chặn một lần; lượt đã chạy `done-gate` ở mức vừa trở lên mà thiếu bằng chứng (không có biên nhận đạt còn đúng cho code hiện tại, có lệnh kiểm tra trượt trên code hiện tại, hay chưa giao reviewer) thì chặn một lần, kể cả ở lần dừng thứ hai; nếu có sửa file mà §0 chưa cập nhật thì chặn một lần (lượt chỉ commit phần sửa ở lượt trước thì không); file mà phiên khác đang làm cùng project sửa (theo transcript của hai phiên) không tính cho lượt này; nhắc vẽ cây kế hoạch khi bạn hỏi tiến độ mà pane Kế hoạch không hiện (không tính "lưu tiến độ", không còn ở lượt đầu phiên hay sau mỗi việc xong). |
 | `StopFailure` | Lỗi API kết thúc lượt | Ghi lượt cuối ở trạng thái "dừng vì lỗi" (`claude -p` chỉ khi đổi file), kèm file đã đổi và phần trả lời dở. |
 | `SessionEnd` | Đóng phiên | Ghi `state/sessions.jsonl` để `progress` gợi ý `claude --resume`. |
 
@@ -178,7 +178,6 @@ Mọi thay đổi ngoài repo đều đi qua `install.sh`. Mặc định chỉ x
 |---|---|
 | `rules` | Symlink `~/.claude/CLAUDE.md` tới luật chung |
 | `plugin` | Marketplace local `agent-stack-local` và plugin `agent-stack` |
-| `pi` | Chỉ khi máy có pi: `~/.pi/agent/agent-stack/plugin` trỏ vào `plugin/`, `agents` trỏ vào `state/pi/agents` (xem 5.7) |
 | `statusline` | Khóa `statusLine` trong `~/.claude/settings.json` |
 | `autocontinue` | Khóa `autoContinueAtUsageLimit` |
 | `catalog` | Plugin chính thức và đồ bên thứ ba đã duyệt, chép đúng commit đã kiểm vào `vendor/` |
@@ -215,25 +214,6 @@ claude plugin list
 ```
 
 phải có `agent-stack@agent-stack-local` đang bật. Thư mục không phải git repo và không có file kế hoạch thì hook im lặng, đó là hành vi đúng.
-
-### 5.7 Dùng với pi
-
-pi (project `~/Documents/Claude/coding-agents`, trước là `pi-agent`) chạy đúng thư mục `plugin/` mà Claude Code chạy, nên hai bên luôn cùng một code. Phần nối nằm ở hai nơi:
-
-| Nơi | Giữ gì |
-|---|---|
-| agent-stack | `plugin/hosts/pi.json` (hợp đồng: hook nào ứng với sự kiện pi nào, trường vào ra, subagent và skill nào dùng hay bỏ kèm lý do), `plugin/hosts/pi_host.py` (kiểm hợp đồng, sinh subagent dạng pi), `tests/test_pi_contract.py`, bước `pi` của `install.sh` |
-| coding-agents | cầu nối `extensions/agent-stack-bridge.ts`, `config/APPEND_SYSTEM.md`, chặn lệnh, công cụ web, cấu hình model |
-
-`./install.sh --apply` (bước `pi`, chỉ khi có `~/.pi/agent`) tạo hai đường cố định cho pi: `~/.pi/agent/agent-stack/plugin` → `plugin/` và `~/.pi/agent/agent-stack/agents` → `state/pi/agents`. Mỗi lần mở phiên pi, hook SessionStart (cầu nối đặt `AGENT_STACK_HOST=pi`) sinh lại subagent dạng pi theo đúng `plugin/agents/`, và báo khi plugin lệch hợp đồng; lệch thì giữ bộ subagent cũ.
-
-Phần này có hiệu lực ở pi khi coding-agents dùng hai đường cố định trên (cầu nối gọi hook qua `~/.pi/agent/agent-stack/plugin/hooks`, extension subagent đọc `~/.pi/agent/agent-stack/agents`, `settings.json` lấy skill từ `~/.pi/agent/agent-stack/plugin/skills`); tới 02/11/2026 pi-agent vẫn gọi thẳng repo và chép subagent bằng `pi-agent/tools/port_agents.py` của nó, nên đó là việc còn lại ở pi-agent.
-
-Thêm, đổi tên hay bỏ một hook, subagent hay skill thì ghi vào `plugin/hosts/pi.json` (dùng, hay bỏ kèm lý do); quên thì `tests/test_pi_contract.py` trượt. Kiểm riêng:
-
-```bash
-python3 plugin/hosts/pi_host.py check
-```
 
 ## 6. Một ngày làm việc
 

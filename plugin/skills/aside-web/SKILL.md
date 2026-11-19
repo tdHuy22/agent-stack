@@ -7,7 +7,7 @@ argument-hint: "<việc cần làm trên web>"
 
 # Dùng trình duyệt Aside
 
-Script: `${CLAUDE_SKILL_DIR}/scripts/aside_web.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ ở pi), dùng `~/Documents/Claude/agent-stack/plugin/skills/aside-web/scripts/aside_web.py`. Gọi `python3 <script> <lệnh>`.
+Script: `${CLAUDE_SKILL_DIR}/scripts/aside_web.py`. Nếu biến này không được thay bằng đường dẫn thật, dùng `~/Documents/Claude/agent-stack/plugin/skills/aside-web/scripts/aside_web.py`. Gọi `python3 <script> <lệnh>`.
 
 Aside là trình duyệt của người dùng, có sẵn phiên đăng nhập, lịch sử, bộ nhớ về họ, và một agent riêng. Mọi đường dưới đây chạy trên tài khoản thật của người dùng.
 

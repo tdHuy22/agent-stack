@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests._util import REPO, TempDirTestCase, copy_plugin, git
+from tests._util import REPO, TempDirTestCase, git
 
 
 def vetted(cache) -> str:
@@ -164,54 +164,20 @@ class InstallTests(TempDirTestCase):
         self.assertEqual(json.loads(settings.read_text()), {"model": "sonnet", "skipWorkflowUsageWarning": True})
         self.assertIn("plugin uninstall agent-stack@agent-stack-local --scope user", self.calls_made())
 
-    def with_pi(self):
-        """Máy có pi, và agent-stack giả có plugin/ đủ để kiểm hợp đồng pi (bản chép tối thiểu của plugin thật)."""
-        (self.home / ".pi" / "agent").mkdir(parents=True, exist_ok=True)
-        shutil.rmtree(self.stack / "plugin")
-        return copy_plugin(self.stack / "plugin")
-
-    def test_pi_links_the_same_plugin_folder_as_claude_code(self):
-        plugin = self.with_pi()
-        out = self.run_install("--apply", "--only", "pi")
-        self.assertIn("[pi]", out)
-        base = self.home / ".pi" / "agent" / "agent-stack"
-        agents = self.stack / "state" / "pi" / "agents"
-        self.assertEqual(os.readlink(base / "plugin"), str(plugin))
-        self.assertEqual(os.readlink(base / "agents"), str(agents))
-        self.assertTrue((base / "plugin" / "hosts" / "pi.json").is_file())
-        self.assertIn("tools: read, grep, find, ls, bash", (base / "agents" / "reviewer.md").read_text())
-        self.assertIn("= đã có", self.run_install("--apply", "--only", "pi"))
-        self.run_install("--rollback", "--apply", expect=None)
-        self.assertFalse(base.exists())  # thư mục do lần cài tạo cũng được dọn
-
-    def test_pi_is_skipped_when_contract_drifts(self):
-        plugin = self.with_pi()
-        (plugin / "agents" / "planner.md").write_text("---\nname: planner\ndescription: Lập kế hoạch.\n---\n")
-        out = self.run_install("--apply", "--only", "pi", expect=2)
-        self.assertIn("subagent planner chưa có mục", out)
-        self.assertFalse((self.home / ".pi" / "agent" / "agent-stack").exists())
-        self.assertFalse((self.stack / "state" / "pi").exists())
-
-    def test_pi_error_is_a_failure_and_install_log_is_kept(self):
-        self.with_pi()
-        (self.stack / "state" / "pi").mkdir(parents=True)
-        (self.stack / "state" / "pi" / "agents").write_text("không phải thư mục")
-        out = self.run_install("--apply", "--only", "rules,pi", expect=1)
-        self.assertIn("- lỗi: pi:", out)
+    def test_step_error_is_a_failure_and_install_log_is_kept(self):
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps({"permissions": {"deny": "không phải danh sách"}}))
+        out = self.run_install("--apply", "--only", "rules,deny", expect=1)
+        self.assertIn("- lỗi: settings.json: permissions.deny", out)
         self.assertTrue(list((self.stack / "state" / "install-logs").glob("*.json")))  # bước rules vẫn gỡ được
 
-    def test_pi_does_not_replace_foreign_folder(self):
-        self.with_pi()
-        foreign = self.home / ".pi" / "agent" / "agent-stack" / "plugin"
+    def test_link_does_not_replace_foreign_folder(self):
+        foreign = self.home / ".claude" / "CLAUDE.md"
         foreign.mkdir(parents=True)
-        out = self.run_install("--apply", "--only", "pi", expect=2)
+        out = self.run_install("--apply", "--only", "rules", expect=2)
         self.assertIn("không phải của agent-stack", out)
         self.assertTrue(foreign.is_dir() and not foreign.is_symlink())
-
-    def test_pi_step_is_silent_without_pi(self):
-        out = self.run_install("--only", "pi")
-        self.assertIn("máy chưa có pi", out)
-        self.assertFalse((self.home / ".pi").exists())
 
     def test_existing_user_file_is_kept_unless_replace(self):
         claude_md = self.home / ".claude" / "CLAUDE.md"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hook Stop: sau mỗi lượt, ghi lượt cuối (yêu cầu, câu trả lời cuối đã che khóa, việc tiếp theo, file đổi) vào
 .agent/LAST-TURN.md của thư mục làm việc, kể cả thư mục không phải project (thư mục chung thì vào state/last-turn/),
-để phiên mới làm tiếp được; lệnh không tương tác (`claude -p`, `pi -p`) chỉ ghi khi lượt đổi file. Ghi trước các bước chậm. Chặn một lần để Claude làm nốt trước khi xong:
+để phiên mới làm tiếp được; lệnh không tương tác (`claude -p`) chỉ ghi khi lượt đổi file. Ghi trước các bước chậm. Chặn một lần để Claude làm nốt trước khi xong:
 - lượt đổi code có mức rủi ro từ vừa trở lên (risk.py của done-gate) mà chưa chạy done-gate: chạy done-gate (nó lo
   luôn threat model khi đụng ranh giới tin cậy, review theo mức rủi ro và §0);
 - lượt đã chạy done-gate ở mức vừa trở lên mà thiếu bằng chứng: không có biên nhận đạt nào còn đúng cho code hiện
@@ -207,9 +207,9 @@ def evidence_gaps(root: Path, turn: dict, sid: str):
     if not any(rec.get("ok") and receipt_current(rec, turn["ts"]) for rec in checks.values()):
         gaps.append(("chưa có biên nhận đạt", "không có biên nhận đạt nào còn đúng cho code hiện tại: chạy mốc kiểm "
                      "tra của project qua `receipt.py run -- <lệnh>`"))
-    # pi không có SubagentStart nên không có dấu reviewer để kiểm (plugin/hosts/pi.json). Payload SubagentStart không
-    # có model, nên chỉ kiểm có ít nhất một lần giao reviewer, không kiểm đúng model hay đủ hai reviewer (done-gate bước 5).
-    if A.host() != "pi" and not A.subagent_started_since(sid, "reviewer", turn["ts"]):
+    # Payload SubagentStart không có model, nên chỉ kiểm có ít nhất một lần giao reviewer, không kiểm đúng model hay
+    # đủ hai reviewer (done-gate bước 5).
+    if not A.subagent_started_since(sid, "reviewer", turn["ts"]):
         gaps.append(("chưa review", "chưa giao `agent-stack:reviewer` (bước 5 của done-gate, bắt buộc từ mức vừa)"))
     return (level, gaps) if gaps else None
 
@@ -297,7 +297,7 @@ def main():
     git = A.git_summary(root)
     dirty = len(git.get("dirty") or []) if git.get("is_repo") else None
 
-    # Lệnh không tương tác (`claude -p`, `pi -p`) chỉ ghi lượt cuối khi đổi file: lượt hỏi đáp như mốc kiểm tra
+    # Lệnh không tương tác (`claude -p`) chỉ ghi lượt cuối khi đổi file: lượt hỏi đáp như mốc kiểm tra
     # "Trả lời đúng một từ: ok" không được ghi đè lượt làm việc thật của phiên tương tác trong thư mục.
     quiet = A.non_interactive(data) and not changed
 

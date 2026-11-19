@@ -7,7 +7,7 @@ argument-hint: "<việc cần chạy, hoặc thư mục job>"
 
 # Chạy job GPU trên Kaggle
 
-Script: `${CLAUDE_SKILL_DIR}/scripts/kaggle_job.py`. Nếu biến này không được thay bằng đường dẫn thật (ví dụ ở pi), dùng `~/Documents/Claude/agent-stack/plugin/skills/kaggle-gpu/scripts/kaggle_job.py`. Gọi `python3 <script> <lệnh>`, đứng ở thư mục gốc project (output và nhật ký nằm trong `runs/kaggle/` của project).
+Script: `${CLAUDE_SKILL_DIR}/scripts/kaggle_job.py`. Nếu biến này không được thay bằng đường dẫn thật, dùng `~/Documents/Claude/agent-stack/plugin/skills/kaggle-gpu/scripts/kaggle_job.py`. Gọi `python3 <script> <lệnh>`, đứng ở thư mục gốc project (output và nhật ký nằm trong `runs/kaggle/` của project).
 
 Kaggle chạy job theo lô: gửi code lên, Kaggle chạy trên máy của họ, xong thì tải file job ghi ra về. Không có phiên tương tác, không truyền tham số dòng lệnh được.
 

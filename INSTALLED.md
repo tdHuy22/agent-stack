@@ -587,6 +587,8 @@
 | 2 | symlink | ~/.pi/agent/agent-stack/plugin | → `~/Documents/Claude/agent-stack/plugin` | `rm ~/.pi/agent/agent-stack/plugin` |
 | 3 | symlink | ~/.pi/agent/agent-stack/agents | → `~/Documents/Claude/agent-stack/state/pi/agents` | `rm ~/.pi/agent/agent-stack/agents` |
 
+*Ghi chú 19/11/2026 (ghi tay, lần `--apply` sau sẽ dựng lại file và mất dòng này): ba mục trên không còn, vì `~/.pi` đã bị gỡ khỏi máy 19/11/2026; bước `pi` đã bỏ khỏi `tools/install.py`.*
+
 ## Lần cài 15:38 06/11/2026
 
 - Nhật ký máy đọc: `state/install-logs/20261106-153819.json`

@@ -56,6 +56,54 @@
    "reason": "việc D: dòng ➡️ rút gọn, bạn đồng ý 19/11",
    "sha256": "0f7c383efa3140a466be6e9012ae1a8449aa5e628b54d8c5a0b38e69d56d9f68",
    "ts": "2026-11-19T10:56:30+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_arch_guard.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "3fd237f1210861a76e44c824c1149616bc12f26ffa6f406b8ee246d1fe579435",
+   "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_archgate.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "2119745bab1164551727fbb0af22ee41b775a3792007ae51409e1e16e028cee2",
+   "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_archgate_dedupe.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "078971d6a8ebcb7530b6e15b165e3a2eec99625fc1060b5e55a5095a240f00ea",
+   "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_install.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "1cb4ca77557184b3f71f64f9f0bfe80cba7eb9d78b22976d9e335e14b9eaf806",
+   "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_plan_exit.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "a26da4dd4e39576e47569d48a0f0fc42af0a6640df1045e8df366ac50fa47f8c",
+   "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_route.py",
+   "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
+   "sha256": "8c9eb86546f79e2e41f1975ad7692d5435e4508b1525bb51430df0ee4d90a0b2",
+   "ts": "2026-11-19T23:06:32+07:00"
   }
  ],
  "files": {
@@ -413,9 +461,8 @@
     "e935088a94cf",
     "858ba513f592",
     "aab946150f38",
-    "0ee1b17379bf",
-    "f2f4a1237dbd",
-    "3ba5c3823ed9",
+    "41ed45a6c5e2",
+    "10a1e35678b4",
     "5afa042eee68",
     "522533ff37f5",
     "2e023caff24e",
@@ -495,36 +542,15 @@
     "5315a6a10ead",
     "b5526a31327b",
     "591b1fd027c7",
-    "b356b02f9059",
-    "484f87cbbbeb",
-    "7af45af72000",
-    "91432556ad74",
-    "19b44887c3fa",
-    "fbc557be33e5",
-    "fa909a4c9e69",
-    "ae4dbca6d515",
-    "d2c34ad586a5",
-    "5ac242b13636",
-    "447e8d7d57f9",
-    "c780b2b9a910",
-    "830f6951a942",
-    "056ed9b9deb5"
+    "b356b02f9059"
    ],
    "py": {
     "items": [
      [
       "import",
       "",
-      "df2035d05770743b",
-      "json",
-      "",
-      ""
-     ],
-     [
-      "import",
-      "",
-      "8e1a097ff0898f8c",
-      "PLUGIN,git",
+      "f25d4dd916d0a242",
+      "git",
       "",
       ""
      ],
@@ -615,20 +641,12 @@
       "",
       "06289be8632c902d",
       "8e037e3d62d10fa0"
-     ],
-     [
-      "def",
-      "ArchProtocolGuard.test_pi_payload_is_guarded_too",
-      "16aa905b6222e26c",
-      "",
-      "237feee036b3486c",
-      "a76b75b4232293c4,dbf1c1f7ef589a63,00325413f9fc0b0b"
      ]
     ],
     "v": "3.11"
    },
-   "sha256": "3fd237f1210861a76e44c824c1149616bc12f26ffa6f406b8ee246d1fe579435",
-   "ts": "2026-11-14T15:47:26+07:00"
+   "sha256": "1047b7fb8e7396338feb51374351ab2502eb742f084c1719dd32e28b8501e74f",
+   "ts": "2026-11-19T23:30:42+07:00"
   },
   "tests/test_archgate.py": {
    "base": "ca9f447150405c341e39961a5aeaab93cce6d7c0",
@@ -642,8 +660,8 @@
    "label": "lock: python3 -m unittest tests.test_archgate_review tests.test_archgate",
    "level": "cao",
    "lines": [
-    "8c6ac0907855",
-    "26213f9b45ab",
+    "006bd57a1627",
+    "c57d8b6587ba",
     "0c0e0def3f97",
     "9d34380dbb24",
     "0103cf9fb7c3",
@@ -792,20 +810,6 @@
     "fcb8cad63280",
     "f4e44df3a8b2",
     "9d9d8e90faf4",
-    "2c248ee29d8e",
-    "14e207c4d66d",
-    "7a1d2bb52d32",
-    "55cd5738fe75",
-    "98aff48038c2",
-    "a241ef91c94b",
-    "c73d713223a7",
-    "08846ee29e72",
-    "fdbafb8bf6fc",
-    "9056b79666f7",
-    "e9ffd675bc6a",
-    "041631f9b1d9",
-    "f21176ccd299",
-    "f935831301ee",
     "ee8e595a62c4",
     "f0f0622cf85d",
     "49b270759f57",
@@ -1166,14 +1170,6 @@
      ],
      [
       "def",
-      "PostEditArch.test_pi_payload_gets_the_same_message_with_supported_keys_only",
-      "32079867735ecfb9",
-      "",
-      "de0632caacfef258",
-      "634c6c8d010de821,25670c6977e9d06d,b8e487ee71a0cc45,aed568b43f838dd4,d41390f4e7232d32,e5b6eb4d86f81042a,bda5893d5dbbd02d,2d181080f0a1eb52a"
-     ],
-     [
-      "def",
       "PostEditArch.test_real_archctl_end_to_end",
       "505c3134ae95fe8c",
       "",
@@ -1295,8 +1291,8 @@
     ],
     "v": "3.11"
    },
-   "sha256": "2119745bab1164551727fbb0af22ee41b775a3792007ae51409e1e16e028cee2",
-   "ts": "2026-11-14T15:47:59+07:00"
+   "sha256": "fe5dd0c7025e60fbf8ac98432927db88795848b88b98b1be25f16c9c60a85e49",
+   "ts": "2026-11-19T23:31:06+07:00"
   },
   "tests/test_archgate_dedupe.py": {
    "base": "53532e5a89a8cddadaf23f820359f48e05fa7c64",
@@ -1306,14 +1302,14 @@
     "unittest",
     "tests.test_archgate_dedupe"
    ],
-   "label": "relock: archgate dedupe",
+   "label": "lock: python3 -m unittest tests.test_archgate_dedupe",
    "level": "cao",
    "lines": [
     "fcf80386d2e4",
     "cda935d67549",
     "8fd74f6a5e83",
     "d8952bca9de0",
-    "63d1cec196d6",
+    "65332ece1079",
     "0476210f9afb",
     "409020dbb919",
     "f2f4a1237dbd",
@@ -1353,7 +1349,6 @@
     "ba8c0baf100a",
     "703cae5a99ea",
     "9b936644a5b8",
-    "03a13ab959bb",
     "59b91483030e",
     "9a7781fd9049",
     "753ea03dd3dc",
@@ -1497,10 +1492,6 @@
     "13660b778fe4",
     "1a034b12ca1c",
     "90ae976b7e3e",
-    "1f6df2a0e761",
-    "162d779c52bc",
-    "0d604bcb798d",
-    "981cf6d6bf36",
     "00c4f3cdc948",
     "f64aca3d4d83",
     "5213849701e5",
@@ -1677,25 +1668,13 @@
     "471fb903b42c",
     "3e4b79fde995",
     "97e0d8bdab0e",
-    "8a1a5cbb29bb",
-    "5c611a272286",
-    "3ef7b11ea0bd",
-    "0d604bcb798d",
-    "3eeb5d389bec",
-    "52633bab70cc",
-    "d2c34ad586a5",
-    "9883d7400032",
+    "20b694ac7d9b",
     "5c2d834a3819",
     "3ef7b11ea0bd",
     "0d604bcb798d",
     "52633bab70cc",
     "d2c34ad586a5",
     "d6b25f9a611e",
-    "e8763e2b2ab8",
-    "3ef7b11ea0bd",
-    "0d604bcb798d",
-    "3c380c83d263",
-    "7bde126a5587",
     "2e18cd0ab7fe",
     "307858ec79db",
     "64f9ac674504",
@@ -1747,14 +1726,14 @@
     "c0af64dc2917",
     "ea33e3be728e",
     "0d604bcb798d",
-    "0cc5761b04f1",
+    "37a3f534ce21",
     "e65ea0d36f51",
     "5a1e36f88ba8",
     "9c08a9bf0117",
     "8ab640122ca1",
     "ea33e3be728e",
     "3eeb5d389bec",
-    "0cc5761b04f1",
+    "37a3f534ce21",
     "df4716f554b5",
     "b9ab3201009b",
     "3f22d28a103f",
@@ -2160,10 +2139,10 @@
      [
       "def",
       "ArchDedupeBase.env_for",
-      "e300720903d13015",
+      "3dc9369ef5f2add1",
       "",
       "964fd3807234e70e",
-      "748042107e0b9855,826d6ff6404732ab,c4575ba3c3e0be5d,a322377cda12ddc6"
+      "748042107e0b9855,826d6ff6404732ab,a322377cda12ddc6"
      ],
      [
       "def",
@@ -2308,14 +2287,6 @@
       "",
       "80e5e75c63d50175",
       "1418684eec68b2a9,7642e9f532e8c166,c2f983eca90ad8b9,465ef072a71ed4aa,8a6ee4a370d75ce8,9b2843c3a106323ca"
-     ],
-     [
-      "def",
-      "HookCoversTool.test_claude_code_host_default_name_is_the_same_as_missing_host",
-      "1829f7e279c526c1",
-      "",
-      "72ff5356c93381f7",
-      "4c285b202527fbd7,da6a531ea6edc432a"
      ],
      [
       "class",
@@ -2495,35 +2466,19 @@
      ],
      [
       "class",
-      "OtherHosts",
-      "c1992e865a0ddf50",
-      "OtherHosts",
+      "WithoutProjectDir",
+      "4b6ddc7db1b204d7",
+      "WithoutProjectDir",
       "",
       ""
      ],
      [
       "def",
-      "OtherHosts.test_pi_host_keeps_reporting_even_with_the_hook",
-      "23b8d63ce8741641",
-      "",
-      "f40de821cff7dd3f",
-      "4c285b202527fbd7,330b2dbbc7f18a75,366a972ac37d09d3"
-     ],
-     [
-      "def",
-      "OtherHosts.test_no_claude_project_dir_keeps_reporting_even_with_the_hook",
+      "WithoutProjectDir.test_no_claude_project_dir_keeps_reporting_even_with_the_hook",
       "a5d01d1b9e1cef3c",
       "",
       "29c99bc0ac0d63f9",
       "4c285b202527fbd7,291c6ea362e6d66b"
-     ],
-     [
-      "def",
-      "OtherHosts.test_pi_without_project_dir_keeps_reporting",
-      "ad546bcddfc6b18e",
-      "",
-      "c07b053f77840016",
-      "4c285b202527fbd7,83256f2cc16e64ff,facbeff74fbd5e62a"
      ],
      [
       "class",
@@ -2584,18 +2539,18 @@
      [
       "def",
       "MissingArchctl.test_missing_archctl_is_mentioned_once_per_session_even_with_the_hook",
-      "819b380e57c2838f",
+      "79a7cd680c757099",
       "",
       "8153bdfc8d7a4eb7",
-      "4c285b202527fbd7,e443347f1be2bf73,2db4dc38e6b88434a,d584111fdce6f6cda,ca3589e6f79cf180a"
+      "4c285b202527fbd7,cb3d336452c4dcef,2db4dc38e6b88434a,d584111fdce6f6cda,ca3589e6f79cf180a"
      ],
      [
       "def",
       "MissingArchctl.test_missing_archctl_with_settings_local_hook_and_bash",
-      "6d302962c972cb96",
+      "94788a7fbd3c99ed",
       "",
       "decc119f7ae927b7",
-      "330b2dbbc7f18a75,e443347f1be2bf73,87f1a6fc58f95cd8,f797e838b6e46771,b6a5e1f22f8c0a3e,6634650031320eb8a,1cf065727c668e9da"
+      "330b2dbbc7f18a75,cb3d336452c4dcef,87f1a6fc58f95cd8,f797e838b6e46771,b6a5e1f22f8c0a3e,6634650031320eb8a,1cf065727c668e9da"
      ],
      [
       "class",
@@ -2848,14 +2803,8 @@
     ],
     "v": "3.11"
    },
-   "red": {
-    "base": "53532e5a89a8cddadaf23f820359f48e05fa7c64",
-    "kind": "assert",
-    "line": "AssertionError: Lists differ: ['check --root /Users/macos/Documents/Clau[117 chars].py'] != []",
-    "ts": "2026-11-16T15:49:18+07:00"
-   },
-   "sha256": "078971d6a8ebcb7530b6e15b165e3a2eec99625fc1060b5e55a5095a240f00ea",
-   "ts": "2026-11-17T16:40:45+07:00"
+   "sha256": "e7af810b2581704e6e556a0c114f961438b2747b6ff2ca6392be63bb8da78210",
+   "ts": "2026-11-19T23:33:20+07:00"
   },
   "tests/test_archgate_review.py": {
    "base": "ca9f447150405c341e39961a5aeaab93cce6d7c0",
@@ -6622,7 +6571,7 @@
     "61c01096aa26",
     "83d8e9e427df",
     "9b5c42011415",
-    "5d4cc235bc01",
+    "2a99baf9eaf9",
     "7212de628211",
     "1c327caad16c",
     "26b6192936f7",
@@ -6765,49 +6714,19 @@
     "1b5901abb0f3",
     "fda11b21c2cb",
     "209dd16e93ee",
-    "148d793d1d76",
-    "4597e130bcf3",
-    "96125e19fe7b",
-    "94ded6498764",
-    "3df8d4266ce3",
-    "038238b6e7ec",
-    "49a6c3ec0af8",
-    "503b07821d8f",
-    "6d6dd74cd38c",
-    "e98801ae5d90",
-    "caac4ad4cf8e",
-    "dbb19559a289",
-    "2b44b36158ef",
-    "e5d7be8cb5cd",
-    "435ceed75233",
-    "ef175c87e4c8",
-    "f5f83e85adab",
-    "862991b28720",
-    "57aa23cdef98",
-    "49a6c3ec0af8",
-    "7c1015ab554d",
-    "146d547910f7",
-    "230b34f60929",
-    "5537a04679e6",
-    "d495eb419f7b",
-    "1868b5472861",
-    "59947a7b2f7f",
-    "93678d8d13a8",
-    "0ad2b0b0745b",
-    "5437ae806a87",
-    "eb7ccf4aed1a",
+    "9079797e775b",
+    "bce52e0a0702",
+    "8a19c54a5b4e",
+    "88c88f133d4a",
+    "58481453b577",
+    "f63c3c597be7",
     "50401730ae81",
-    "2be8c92a7a8f",
-    "59947a7b2f7f",
-    "349c53c4495f",
+    "305a22ed5bb1",
+    "d48bfdbb5354",
     "74f9259b6992",
-    "146d547910f7",
+    "a21d0cc184ba",
     "4998cd7f7f9a",
     "499254fae0c3",
-    "4d2b08fa93cd",
-    "9db24876fbc9",
-    "22c01f124dce",
-    "7f46309e2652",
     "1a72a5e5ae65",
     "a301c7e5685c",
     "284e37f89ac3",
@@ -7444,8 +7363,8 @@
      [
       "import",
       "",
-      "6edc596a9f4b0a1e",
-      "REPO,TempDirTestCase,copy_plugin,git",
+      "9d9a1c69bb5d8bc2",
+      "REPO,TempDirTestCase,git",
       "",
       ""
      ],
@@ -7547,51 +7466,19 @@
      ],
      [
       "def",
-      "InstallTests.with_pi",
-      "c0f36298212e9e59",
+      "InstallTests.test_step_error_is_a_failure_and_install_log_is_kept",
+      "3e41b89c090425f5",
       "",
-      "4949af93a6b08c49",
-      "280122160ed65160,4f5ff5fdd74e348d,3203281c9a3fcf1a,f1f307b4578fb9df"
+      "1b8524cccad4ec36",
+      "c86e726269c083fd,aa7e8b20495d439e,f653a63d8249dcb1,6db304a36978ac93,c7fcd6b2b3f58445a,679808f524a8536ba"
      ],
      [
       "def",
-      "InstallTests.test_pi_links_the_same_plugin_folder_as_claude_code",
-      "c91c8b94389e4275",
+      "InstallTests.test_link_does_not_replace_foreign_folder",
+      "24f33bbf2dff2118",
       "",
-      "62f7a66072247722",
-      "83aa34843cbbe8b1,bbbee2cd9c76d8e5,10a8c5f86d1fb469a,f75aabf4c38c479d,541d10e7f7051697,38a6fb62915c09e7a,74f327de568b3a80a,5bdc5f7ed8e86fcba,24dd2f6fc6c5d361a,7f0f678d2682e275a,3345d9eb6a1ed098,f0d2db12af0de33ca"
-     ],
-     [
-      "def",
-      "InstallTests.test_pi_is_skipped_when_contract_drifts",
-      "c9025bff8d7c9d4f",
-      "",
-      "d8510d324eb4369f",
-      "83aa34843cbbe8b1,b54e088663f6101e,b5064a241b61a969,4e77a9c8efa69178a,78d2664b56f8e4e4a,9fcfa28ec9a4df0fa"
-     ],
-     [
-      "def",
-      "InstallTests.test_pi_error_is_a_failure_and_install_log_is_kept",
-      "452b37d305b14835",
-      "",
-      "6e0a345f6cc2086b",
-      "b7a85669beea2664,5a2db5720e01c539,71cb125a6f0a8d51,c5f302a26818a7ea,9ccadcb63731ae5ca,679808f524a8536ba"
-     ],
-     [
-      "def",
-      "InstallTests.test_pi_does_not_replace_foreign_folder",
-      "6f5b1f430c549f49",
-      "",
-      "53c1dcf5cbbe1abb",
-      "b7a85669beea2664,e8805c8e2afac105,7e691bb7cc8a285c,b5064a241b61a969,5a2f1426a6f51ac7a,76dcf734f987da8ea"
-     ],
-     [
-      "def",
-      "InstallTests.test_pi_step_is_silent_without_pi",
-      "7f5fbc3904f288a9",
-      "",
-      "2afd831c9b54fcc7",
-      "d62e320a4d1197d1,f060edf600d94863a,1c52743126560f2ba"
+      "32075cad3eeab123",
+      "d22bb225ba0da39c,7e691bb7cc8a285c,faae63ce7c641141,5a2f1426a6f51ac7a,76dcf734f987da8ea"
      ],
      [
       "def",
@@ -7884,8 +7771,8 @@
     ],
     "v": "3.11"
    },
-   "sha256": "1cb4ca77557184b3f71f64f9f0bfe80cba7eb9d78b22976d9e335e14b9eaf806",
-   "ts": "2026-11-14T15:48:01+07:00"
+   "sha256": "bcbfbbab5b93ae85bfc28edb211b5b08868ff025352c88a4ee7ff2f72ccd4211",
+   "ts": "2026-11-19T23:31:09+07:00"
   },
   "tests/test_install_cargo_upgrade.py": {
    "base": "ac54a447b59a07dfb3ac2687b99e35091be30962",
@@ -13376,8 +13263,6 @@
     "60edeae6b2e6",
     "d64b16dc357a",
     "9218f9fb5fb6",
-    "2541d0c7416b",
-    "be52bde5abd1",
     "567c319f93c5",
     "c81ac373b359",
     "567be08bef07",
@@ -13701,10 +13586,10 @@
      [
       "def",
       "PlanExitHook.test_hook_is_registered_for_exitplanmode_with_short_timeout",
-      "621bf42e11575239",
+      "910108b81e6df7d2",
       "",
       "bfb4f8788c66aa3f",
-      "2497968235e12dbb,4c6a15888288b4d7,99f94bc475fb2790a,98666c05b755fabfa,8959e3d89e9244b1,99f957436d7ff1b5a"
+      "2497968235e12dbb,4c6a15888288b4d7,99f94bc475fb2790a,98666c05b755fabfa"
      ],
      [
       "def",
@@ -13789,8 +13674,8 @@
     ],
     "v": "3.11"
    },
-   "sha256": "a26da4dd4e39576e47569d48a0f0fc42af0a6640df1045e8df366ac50fa47f8c",
-   "ts": "2026-11-14T12:01:18+07:00"
+   "sha256": "40004c25ce076c8ed102187fe3aa8b7652acd76406d492aea927fb29e3c07723",
+   "ts": "2026-11-19T23:31:21+07:00"
   },
   "tests/test_project_setup.py": {
    "base": "ce0d6d2970b7ea2836b12faf080ee007a63c2f7f",
@@ -14823,7 +14708,7 @@
     "unittest",
     "tests.test_route"
    ],
-   "label": "khóa lại sau việc D",
+   "label": "lock: python3 -m unittest tests.test_route",
    "level": "cao",
    "lines": [
     "f2f4a1237dbd",
@@ -15379,14 +15264,6 @@
     "3c21579ed2ad",
     "b185c08e8d1c",
     "3c3812674a8a",
-    "9ae89e5c6a47",
-    "b98ff9854a3e",
-    "e83480110bd8",
-    "f56ff6774f36",
-    "b185c08e8d1c",
-    "5adb375e8216",
-    "8c4328edf4e5",
-    "92b3b61f5c84",
     "28230ca9c4b4",
     "dec7978fbb3f",
     "fa1e531db5a6",
@@ -16155,14 +16032,6 @@
      ],
      [
       "def",
-      "PlanModeHint.test_pi_has_no_plan_mode_so_gets_the_plain_plan_step",
-      "c111b9f3b4bf7cce",
-      "",
-      "6dc2274fa73cc3de",
-      "7d34090811984214,cf182acb19ffa5fa,ce715f717912b886a,8c2eee5b8a88bf15a,9668a2ff88d0decda,522572e700741452a"
-     ],
-     [
-      "def",
       "PlanModeHint.test_context_does_not_make_plan_mode_a_fixed_default_or_opusplan",
       "ba92a41bae44d92e",
       "",
@@ -16220,8 +16089,8 @@
     ],
     "v": "3.11"
    },
-   "sha256": "8c9eb86546f79e2e41f1975ad7692d5435e4508b1525bb51430df0ee4d90a0b2",
-   "ts": "2026-11-19T10:56:56+07:00"
+   "sha256": "ce2d56accdf479785f652a6f6f175fce1857f3c16a4762e12d7f17b8628dbede",
+   "ts": "2026-11-19T23:30:24+07:00"
   },
   "tests/test_route_gd5.py": {
    "base": "39d2446c49610b427bd8d50a4ac836ffe6c4e6ef",

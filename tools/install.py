@@ -7,9 +7,6 @@ sao lưu cấu hình trước, và ghi nhật ký vào state/install-logs/ để
 Các bước (chạy theo thứ tự; --only để chọn một phần):
   rules       ~/.claude/CLAUDE.md -> global/CLAUDE.global.md
   plugin      marketplace cục bộ agent-stack-local + plugin agent-stack (scope user)
-  pi          chỉ khi máy có pi (~/.pi/agent), sau khi kiểm hợp đồng plugin/hosts/pi.json:
-              ~/.pi/agent/agent-stack/plugin -> plugin/ (cùng thư mục Claude Code chạy) và
-              ~/.pi/agent/agent-stack/agents -> state/pi/agents (subagent dạng pi, hook SessionStart sinh lại trong pi)
   statusline  statusLine trong ~/.claude/settings.json (chỉ khi chưa có)
   autocontinue  autoContinueAtUsageLimit = true trong ~/.claude/settings.json (chỉ khi chưa đặt): phiên trong
               terminal tự chờ rồi làm tiếp khi chạm giới hạn 5 giờ
@@ -50,7 +47,7 @@ import time
 from pathlib import Path
 
 HOME_STACK = Path(os.environ.get("AGENT_STACK_HOME") or Path(__file__).resolve().parents[1]).resolve()
-STEPS = ("rules", "plugin", "pi", "statusline", "autocontinue", "deny", "catalog", "tools")
+STEPS = ("rules", "plugin", "statusline", "autocontinue", "deny", "catalog", "tools")
 # Luật deny cho lệnh xóa ổ đĩa của diskutil (bước deny; dd, newfs, mkfs cần root nên không chặn, bạn chốt 19/11).
 # Hook pretool_guard.py bắt cả dạng viết khác; luật này là lớp hai.
 DISK_DENY_RULES = tuple(f"Bash({pre}{cmd})" for pre in ("", "sudo ") for cmd in (
@@ -516,43 +513,6 @@ class Installer:
         # đã cài từ trước thì install không chép lại: cập nhật để bản chép khớp với code trong repo
         self.run([self.claude_bin, "plugin", "update", f"agent-stack@{MARKETPLACE}", "--scope", "user"],
                  ok_if="latest")
-
-    def step_pi(self) -> None:
-        """pi dùng đúng thư mục plugin/ mà Claude Code nạp tại chỗ (marketplace nguồn thư mục), qua đường cố định
-        ~/.pi/agent/agent-stack/plugin; subagent dạng pi nằm ở state/pi/agents (hook SessionStart sinh lại mỗi lần
-        mở phiên pi). Hợp đồng plugin/hosts/pi.json lệch thì không đổi gì cho pi."""
-        self.say("[pi] agent-stack cho pi, cùng thư mục plugin/ với Claude Code")
-        pi_dir = Path(os.environ.get("PI_CODING_AGENT_DIR") or self.home / ".pi" / "agent")
-        if not pi_dir.is_dir():
-            self.say(f"  = máy chưa có pi ({short(str(pi_dir))}), không làm gì")
-            return
-        plugin = HOME_STACK / "plugin"
-        try:
-            self.pi_links(pi_dir, plugin)
-        except Exception as exc:  # lỗi ở bước này không được làm mất nhật ký gỡ của các bước đã chạy
-            self.say(f"  lỗi: {exc}")
-            self.failures.append(f"pi: {exc}")
-
-    def pi_links(self, pi_dir: Path, plugin: Path) -> None:
-        sys.path.insert(0, str(plugin / "hosts"))  # nạp khi máy có pi: lỗi ở đây không làm hỏng các bước khác
-        import pi_host
-        agents = HOME_STACK / "state" / "pi" / "agents"
-        if self.apply:
-            names, problems = pi_host.sync(plugin, agents)
-        else:
-            names, problems = [], pi_host.check(plugin)
-        if problems:
-            for line in problems[:5]:
-                self.say(f"  ! lệch hợp đồng: {line}")
-            self.say("  ! bỏ qua: plugin/ lệch hợp đồng pi; sửa rồi chạy python3 plugin/hosts/pi_host.py check")
-            self.skipped.append(f"pi: plugin lệch hợp đồng ({problems[0]})")
-            return
-        if self.apply:
-            self.say(f"  · subagent cho pi trong {short(str(agents))}: {', '.join(names)}")
-        else:
-            self.say(f"  · sẽ sinh subagent cho pi vào {short(str(agents))}")
-        self.link(plugin, pi_dir / "agent-stack" / "plugin")
-        self.link(agents, pi_dir / "agent-stack" / "agents")
 
     def step_statusline(self) -> None:
         self.say("[statusline] model · effort · ctx · 5h · 7d")

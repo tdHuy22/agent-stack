@@ -638,15 +638,6 @@ class PlanModeHint(ProjectFixtures):
         self.assertNotIn("Shift+Tab", hint["user"])
         self.assertNotIn("Shift+Tab", hint["context"])
 
-    def test_pi_has_no_plan_mode_so_gets_the_plain_plan_step(self):
-        from unittest import mock
-        with mock.patch.dict(os.environ, {"AGENT_STACK_HOST": "pi"}):
-            hint = self.hint(self.SCEE)
-        self.assertNotIn("Shift+Tab", hint["user"])
-        self.assertNotIn("/plan", hint["context"])
-        self.assertIn("kế hoạch phiên", hint["context"])
-        self.assertIn("chờ bạn", hint["context"])
-
     def test_context_does_not_make_plan_mode_a_fixed_default_or_opusplan(self):
         ctx = self.hint(self.SCEE)["context"]
         self.assertNotIn("opusplan", ctx)

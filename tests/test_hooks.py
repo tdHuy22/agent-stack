@@ -165,15 +165,6 @@ class HookTests(TempDirTestCase):
         higher = self.run_hook("prompt_submit.py", {"session_id": "p", "prompt": "câu thứ ba"})
         self.assertIn("96%", higher["systemMessage"])
 
-    def test_prompt_submit_skips_limits_when_host_is_pi(self):
-        # Hạn mức là của Claude Code; cầu nối pi đặt AGENT_STACK_HOST=pi nên không được nhắc
-        self.write_limits(99)
-        out = self.run_hook("prompt_submit.py", {"session_id": "pi1", "prompt": "đọc notes.txt"},
-                            env_extra={"AGENT_STACK_HOST": "pi"})
-        self.assertNotIn("Hạn mức", json.dumps(out or {}, ensure_ascii=False))
-        out = self.run_hook("prompt_submit.py", {"session_id": "cc1", "prompt": "đọc notes.txt"})
-        self.assertIn("Hạn mức tuần đã dùng 99%", out["systemMessage"])
-
     def test_prompt_submit_ignores_stale_limits(self):
         self.write_limits(99, age=3600)
         out = self.run_hook("prompt_submit.py", {"session_id": "q", "prompt": "x"})
@@ -304,8 +295,7 @@ class HookTests(TempDirTestCase):
     def test_client_place_silent_outside_desktop(self):
         t = self.write_transcript()
         envs = [{"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}, {"CLAUDE_CODE_ENTRYPOINT": "claudecodeui"},  # rc, CloudCLI
-                {"CLAUDE_CODE_ENTRYPOINT": "cli"}, {},  # terminal, không đặt
-                {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "AGENT_STACK_HOST": "pi"}]  # cầu nối pi
+                {"CLAUDE_CODE_ENTRYPOINT": "cli"}, {}]  # terminal, không đặt
         for i, env in enumerate(envs):
             with self.subTest(env=env):
                 self.assertEqual(self.cp_turn(t, f"từ iPhone {i}", "ios", f"s{i}", env=env), "")
@@ -408,12 +398,6 @@ class HookTests(TempDirTestCase):
                 self.assertNotIn("📏", out.get("systemMessage", ""))
         # các tin trên không được "ăn" lần nhắc: tin thật đầu tiên vẫn nhận lời nhắc
         self.assertIn("📏", self.long_note("ls3", 250000, "sửa lỗi ở bước tiếp theo")["systemMessage"])
-
-    def test_prompt_submit_long_session_note_skips_other_hosts(self):
-        payload = {"session_id": "ls4", "prompt": "sửa lỗi ở bước tiếp theo",
-                   "transcript_path": self.long_transcript("ls4", 250000)}
-        out = self.run_hook("prompt_submit.py", payload, env_extra={"AGENT_STACK_HOST": "pi"})
-        self.assertNotIn("📏", (out or {}).get("systemMessage", ""))
 
     # ---------------------------------------------------------------- Stop ghi lượt cuối, nhờ cập nhật §0
 
@@ -948,7 +932,7 @@ class HookTests(TempDirTestCase):
         self.assertIn("Lượt cuối", other["hookSpecificOutput"]["additionalContext"])
 
     def test_session_start_skips_the_last_turn_when_nobody_is_watching(self):
-        # Ca 04/11/2026: lượt trước trả "Có", rồi `pi -p "Trả lời đúng một từ: ok"` chép lại "Có" từ ghi chú.
+        # Ca 04/11/2026: lượt trước trả "Có", rồi một lệnh `-p "Trả lời đúng một từ: ok"` chép lại "Có" từ ghi chú.
         self.with_plan()
         self.submit("old", "trả lời đúng một từ: có hay không")
         self.stop("old", "Có")
@@ -956,7 +940,7 @@ class HookTests(TempDirTestCase):
         for py in PYTHONS:
             for label, payload, env in (
                     ("claude -p", start, {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}),
-                    ("pi -p", dict(start, interactive=False), {"AGENT_STACK_HOST": "pi"})):
+                    ("payload interactive false", dict(start, interactive=False), {})):
                 with self.subTest(py=py, mode=label):
                     payload = dict(payload, session_id=f"{py}-{label}")  # cùng phiên trong 15 giây thì hook bỏ qua
                     out = self.run_hook("session_start.py", payload, python=py, env_extra=env)
@@ -969,7 +953,7 @@ class HookTests(TempDirTestCase):
             for label, payload, env in (
                     ("terminal", start, {"CLAUDE_CODE_ENTRYPOINT": "cli"}),
                     ("app", start, {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop"}),
-                    ("pi có giao diện", dict(start, interactive=True), {"AGENT_STACK_HOST": "pi"}),
+                    ("payload interactive true", dict(start, interactive=True), {}),
                     ("không rõ", start, {})):
                 with self.subTest(py=py, mode=label):
                     payload = dict(payload, session_id=f"{py}-{label}")  # cùng phiên trong 15 giây thì hook bỏ qua
@@ -977,7 +961,7 @@ class HookTests(TempDirTestCase):
                     self.assertIn("Câu trả lời cuối (rút gọn): Có", out["hookSpecificOutput"]["additionalContext"])
 
     def test_print_mode_turns_keep_the_interactive_last_turn_unless_they_change_files(self):
-        # Mốc kiểm tra `pi -p "Trả lời đúng một từ: ok"` từng ghi đè lượt làm việc thật của phiên tương tác.
+        # Mốc kiểm tra `-p "Trả lời đúng một từ: ok"` từng ghi đè lượt làm việc thật của phiên tương tác.
         git(self.project, "init", "-q")
         self.submit("work", "sửa parser cho đúng định dạng ngày")
         def note():  # thư mục tạm của hệ điều hành là thư mục chung: hook ghi vào state/last-turn/
@@ -990,7 +974,7 @@ class HookTests(TempDirTestCase):
         before = note()
         self.assertIn("sửa parser", before)
         modes = (("claude -p", {}, {"CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}),
-                 ("pi -p", {"interactive": False}, {"AGENT_STACK_HOST": "pi"}))
+                 ("payload -p", {"interactive": False}, {}))
         for label, extra, env in modes:
             with self.subTest(mode=label):
                 sid = "p-" + label.split()[0]
@@ -1010,9 +994,9 @@ class HookTests(TempDirTestCase):
         after = note()
         self.assertIn("thêm hàm format_date", after)
         self.assertIn("dates.py", after)
-        # pi -p có đổi file cũng được ghi.
-        base = {"session_id": "p-pi-edit", "cwd": str(self.project), "interactive": False}
-        env = {"AGENT_STACK_HOST": "pi"}
+        # Payload báo `interactive: false` có đổi file cũng được ghi.
+        base = {"session_id": "p-payload-edit", "cwd": str(self.project), "interactive": False}
+        env = {}
         self.run_hook("prompt_submit.py", dict(base, prompt="thêm hàm parse_time"), env_extra=env)
         self.touch("times.py")
         self.run_hook("stop.py", dict(base, last_assistant_message="Đã thêm parse_time."), env_extra=env)

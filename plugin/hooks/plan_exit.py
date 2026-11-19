@@ -8,7 +8,7 @@ Kiểm bằng luật tĩnh (khuôn `ke-hoach` của skill session-keeper): có m
 Ghi vào file của người dùng nên theo threat model TM-107 đến TM-110: chỉ chép mục tiêu chí (tối đa 4 mục, mỗi mục tối
 đa 240 ký tự, một dòng); chỉ ghi file kế hoạch trong gốc project, bỏ qua symlink; ghi nguyên tử; đọc tối đa 20 000 ký
 tự; mọi lỗi thì im lặng, thoát 0. Log sự kiện chỉ ghi tên khóa của payload, không ghi nội dung kế hoạch.
-Chấm model cho từng bước là việc của GĐ5, không làm ở đây. pi không có plan mode nên không chạy hook này.
+Chấm model cho từng bước là việc của GĐ5, không làm ở đây.
 """
 import os
 import re

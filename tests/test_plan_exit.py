@@ -182,8 +182,6 @@ class PlanExitHook(TempDirTestCase):
         entry = next(h for h in hooks if h["matcher"] == "ExitPlanMode")
         self.assertTrue(entry["hooks"][0]["args"][0].endswith("hooks/plan_exit.py"))
         self.assertLessEqual(entry["hooks"][0]["timeout"], 3)
-        pi = json.loads((PLUGIN / "hosts" / "pi.json").read_text(encoding="utf-8"))
-        self.assertIn("ExitPlanMode", pi["hooks"]["PostToolUse"]["no_pi_tool"])
 
     # ---- sửa theo review opus·high (14/11/2026)
 
