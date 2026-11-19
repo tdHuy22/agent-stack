@@ -106,7 +106,8 @@ def busy_children(data: dict) -> list:
 
 
 def children_note(pairs) -> str:
-    return ("🌳 Không nhắc vẽ cây: phiên con đang làm việc của cây ("
+    # Ghi chú liệt kê mọi phiên liên kết (cả phiên cha, phiên anh em), không chỉ phiên con (review 19/11/2026).
+    return ("🌳 Không nhắc vẽ cây: có phiên liên kết đang làm ("
             + ", ".join(f"{name} ({state})" for name, state in pairs)
             + "); bấm lá lúc này dễ thành hai phiên cùng sửa một file.")
 
