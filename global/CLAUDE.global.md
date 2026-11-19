@@ -10,7 +10,7 @@ Model trong bảng là model hợp với việc, không phải lệnh đổi nga
 
 ## Trang HTML và Artifact
 
-- Trang cho người đọc: nội dung theo `reader-page`, trình bày theo `artifact-design`. Kế hoạch có từ hai phương án đáng so sánh hay ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng Artifact riêng tư và đọc bình luận bằng `ArtifactComments` rồi mới làm.
+- Trang cho người đọc: nội dung theo `reader-page`, trình bày theo `artifact-design`. Kế hoạch có từ hai phương án đáng so sánh hay ba quyết định cần chốt: tóm tắt trong chat, hỏi một dòng "Muốn xem trang không?", chỉ làm trang khi người dùng đồng ý.
 
 ## Subagent
 

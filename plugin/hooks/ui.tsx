@@ -38,7 +38,7 @@ const UI_SECTION = {
     'hội thoại hiện cây kế hoạch và tự cập nhật khi file đổi; người dùng bấm mã một việc để điền mã vào ô nhập, gõ ' +
     '/tree để mở lại pane hay /tree <mã> để xem một việc. Khi luật chung bảo hiện cây kế hoạch, đừng chạy ' +
     'plan_tree.py --widget hay vẽ widget cây: thay vào đó viết một dòng nhắc xem pane Kế hoạch (hoặc gõ /tree). ' +
-    'Dòng ➡️ vẫn ghi đủ như luật chung.',
+    'Dòng ➡️ vẫn theo luật chung.',
   scope: 'session',
 } as const
 

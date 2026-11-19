@@ -70,7 +70,7 @@ Khi việc dài, tách bạch, cần model khác model của phiên chính:
 
 ## Bảng mặc định cho dòng ➡️
 
-Dùng khi không có gợi ý `[agent-stack]` hay `[router]` (luật chung, mục dòng ➡️). Model: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.2), `claude-haiku-5-5` (Haiku 5.5); effort `low` tới `max`. Trong bảng, – là `không`, * là chỉ khi đã cài:
+Dùng khi không có gợi ý `[agent-stack]` hay `[router]` (luật chung, mục dòng ➡️). Model: `sonnet` (Sonnet 5.5), `opus` (Opus 5.5), `fable` (Fable 5.2), `claude-haiku-5-5` (Haiku 5.5); effort `low` tới `max`. Trong bảng, – là `không`, * là chỉ khi đã cài. Dòng ➡️ chỉ ghi `· Model · Effort` khi khác cái đang chạy (khuyên đổi), `· Subagent`, `· Skill` khi ô không phải –; không có việc tiếp theo thì không in dòng:
 
 | Việc | Model·Effort | Subagent | Skill |
 |---|---|---|---|

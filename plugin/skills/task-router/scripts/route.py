@@ -1128,7 +1128,7 @@ def _hook_suggestion(prompt: str, data: dict, seen: dict):
                        + (f", effort \"{hit['effort']}\"" if hit["effort"] else "")
                        + "); việc dài sửa nhiều file thì thêm isolation \"worktree\" rồi gộp bằng merge_back.py của "
                        "task-router. Sang việc mới không cần hội thoại này thì đề nghị /clear rồi mới đổi. Việc cần model "
-                       f"mạnh hơn mới làm đúng thì vẫn nên đổi (chất lượng trước chi phí). Dòng ➡️ ghi `Model: giữ {cur}`.")
+                       f"mạnh hơn mới làm đúng thì vẫn nên đổi (chất lượng trước chi phí). Dòng ➡️ không thêm phần Model (`Model: giữ {cur}` là mặc định, không cần ghi).")
     # Effort của luật đi kèm model của luật; việc do agent tự làm thì effort cũng nằm ở agent.
     effort_cmd = None
     effort_differs = hit["effort"] and now_effort and hit["effort"] != now_effort and not own

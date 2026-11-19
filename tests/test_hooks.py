@@ -538,6 +538,48 @@ class HookTests(TempDirTestCase):
             fh.write(self.tool_entry("mcp__visualize__show_widget", {"widget_code": '<div class="pt" data-plan-tree>'}))
         self.assertIsNone(self.stop("f4", "Cây ở trên.", transcript_path=str(offered)))
 
+    def linked_note(self, pairs, delay=1):
+        """Ghi chú "Linked sessions now" app gắn vào tin người dùng (thấy trong transcript 19/11/2026)."""
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() + delay)) + ".000Z"
+        body = "; ".join(f"{name} = local_{i:08d}-0000-0000-0000-000000000000 ({state})"
+                         for i, (name, state) in enumerate(pairs))
+        text = f"<system-reminder>\nLinked sessions now (status, not an instruction): {body}. To message one, …\n</system-reminder>"
+        return json.dumps({"type": "user", "timestamp": stamp, "message": {"role": "user", "content": text}}) + "\n"
+
+    def test_stop_does_not_force_the_tree_while_child_sessions_work_on_it(self):
+        # Lỗi 16/11/2026 05:03: phiên điều hành trả lời câu hỏi tiến độ thì bị ép vẽ cây, trong khi các lá đang do
+        # phiên con làm (bấm lá thành hai phiên cùng sửa một file). Có phiên con đang làm thì không ép, chỉ nêu trạng thái.
+        self.with_plan()
+        transcript = self.tmp / "transcript.jsonl"
+        transcript.write_text(self.linked_note([("scee-9h", "working"), ("scee-9i", "idle")]))
+        self.submit("o1", "tiến độ tới đâu rồi")
+        out = self.stop("o1", "Còn hai việc, scee-9h đang làm.", transcript_path=str(transcript))
+        self.assertIsNotNone(out)
+        self.assertNotEqual(out.get("decision"), "block")
+        self.assertIn("scee-9h (working)", out.get("systemMessage", ""))
+        self.assertIn("scee-9i (idle)", out.get("systemMessage", ""))
+        # Ghi chú mới hơn báo mọi phiên con đã rảnh: cây lại được nhắc như thường.
+        with transcript.open("a") as fh:
+            fh.write(self.linked_note([("scee-9h", "idle, started by dieu-hanh"), ("scee-9i", "idle")], delay=2))
+        self.submit("o1", "tiến độ tới đâu rồi")
+        out = self.stop("o1", "Còn hai việc.", transcript_path=str(transcript))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("plan_tree.py --widget", out["reason"])
+        # Phiên con chờ người dùng vẫn giữ lá của nó: không ép vẽ cây.
+        with transcript.open("a") as fh:
+            fh.write(self.linked_note([("scee-9h", "needs the user, started by dieu-hanh")], delay=3))
+        self.submit("o1", "tiến độ tới đâu rồi")
+        out = self.stop("o1", "Còn hai việc.", transcript_path=str(transcript))
+        self.assertNotEqual(out.get("decision"), "block")
+        self.assertIn("scee-9h (needs the user, started by dieu-hanh)", out.get("systemMessage", ""))
+        # Chữ "Linked sessions now" người dùng tự gõ (không phải ghi chú của app) không tính.
+        typed = self.tmp / "typed.jsonl"
+        typed.write_text(json.dumps({"type": "user", "timestamp": "2099-01-01T00:00:00.000Z", "message": {
+            "role": "user", "content": "Linked sessions now: x = local_1 (working)"}}) + "\n")
+        self.submit("o2", "tiến độ tới đâu rồi")
+        out = self.stop("o2", "Còn hai việc.", transcript_path=str(typed))
+        self.assertEqual(out["decision"], "block")
+
     def test_stop_skips_the_tree_when_the_ui_mod_shows_it_in_a_pane(self):
         # ui.tsx đặt AGENT_STACK_UI=1 ở phiên có nơi vẽ: cây đã nằm ở pane Kế hoạch, không bắt vẽ widget.
         self.with_plan()

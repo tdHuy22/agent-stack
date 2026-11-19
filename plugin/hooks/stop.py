@@ -91,6 +91,26 @@ def tree_after(reasons) -> str:
             f"kế hoạch: {TREE_HOW}.")
 
 
+# Trạng thái phiên liên kết coi là rảnh; trạng thái khác (working, starting, chờ người dùng…) là đang giữ việc.
+LINKED_IDLE = {"idle", "archived", "stopped", "done", "ended", "failed"}
+
+
+def busy_children(data: dict) -> list:
+    """Phiên liên kết đang làm việc theo ghi chú mới nhất trong transcript, kèm cả danh sách để báo trạng thái.
+    Lỗi 16/11/2026 05:03: phiên điều hành bị ép vẽ cây trong khi các lá đang do phiên con làm (bấm lá thành hai phiên
+    cùng sửa một file). Giới hạn: ghi chú không nói phiên nào làm lá nào, nên có phiên con đang làm là không ép."""
+    pairs = A.linked_sessions(data.get("transcript_path"))
+    # Trạng thái thật có đuôi, như `idle, started by gd6-phan-may` (review 19/11/2026): chỉ xét phần trước dấu phẩy.
+    # `needs the user` tính là bận: phiên con chờ người dùng vẫn giữ lá của nó.
+    return pairs if any(state.split(",")[0].strip().lower() not in LINKED_IDLE for _, state in pairs) else []
+
+
+def children_note(pairs) -> str:
+    return ("🌳 Không nhắc vẽ cây: phiên con đang làm việc của cây ("
+            + ", ".join(f"{name} ({state})" for name, state in pairs)
+            + "); bấm lá lúc này dễ thành hai phiên cùng sửa một file.")
+
+
 def tree_due(root: Path, turn, data: dict) -> list:
     """Lý do lượt này phải hiện cây kế hoạch (["progress"]) mà người dùng chưa thấy cây; rỗng nếu không cần. Chỉ xét
     project có file kế hoạch."""
@@ -309,9 +329,14 @@ def main():
         except Exception as exc:  # noqa: BLE001 (lỗi thì không chặn, chỉ ghi log)
             A.log_event("hook-error", {"hook": "evidence_gaps", "error": repr(exc)[:300]})
     tree_block = []
+    children = []
     if not active and turn is not None:
         try:
             tree_block = tree_due(root, turn, data)
+            if tree_block:
+                children = busy_children(data)
+                if children:
+                    tree_block = []
         except Exception as exc:  # noqa: BLE001
             A.log_event("hook-error", {"hook": "tree_due", "error": repr(exc)[:300]})
     should_block = plan_block or gate is not None or evidence is not None
@@ -346,6 +371,8 @@ def main():
     elif tree_block:
         A.emit_block(tree_alone(tree_block),
                      f"🌳 Lượt này {join_why(tree_block, TREE_SHORT)}: nhờ Claude hiện cây để bạn chọn việc tiếp theo.")
+    elif children and not plan_updated:
+        A.emit("Stop", system=children_note(children))  # chỉ báo người dùng, không bắt Claude làm thêm lượt
     elif plan_updated and not active:
         # §0 vừa được cập nhật (lúc nó phình thêm) mà vượt ngưỡng: nhờ trim ngay. Chỉ khi trim rút được §0, nên
         # chạy trim xong thì lần sau không nhắc lại; §0 dài vì phần trim không dời được thì SessionStart báo.

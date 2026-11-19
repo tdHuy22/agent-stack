@@ -70,7 +70,7 @@ Chi tiết từng skill:
 
 - Trang của phiên cần giữ: `.agent/trang/<tên>.html` trong project. Không cần giữ: thư mục scratchpad hay thư mục tạm. Tài liệu của project (hướng dẫn, giải thích kiến trúc): đúng chỗ file `.md` lẽ ra nằm.
 - Đưa cho người dùng: `SendUserFile` với `display: "render"`, hay mở ở pane trình duyệt của app.
-- Đăng Artifact khi người dùng cần link hay đọc trên máy khác, và khi kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: ngoài tóm tắt trong chat, đăng trang Artifact riêng tư đặt phương án cạnh nhau và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay phiên không có công cụ Artifact, thì không đăng: ngắn thì giữ trong chat, dài thì viết file HTML (hay `html-plan`).
+- Đăng Artifact khi người dùng cần link hay đọc trên máy khác. Kế hoạch có từ hai phương án đáng so sánh hoặc từ ba quyết định cần chốt: tóm tắt trong chat, hỏi một dòng "Muốn xem trang không?", chỉ làm trang khi người dùng đồng ý (người dùng nói câu trả lời dài khó hiểu, 18/11/2026). Đồng ý thì đăng trang Artifact riêng tư đặt phương án cạnh nhau và các câu cần chốt; đọc bình luận bằng `ArtifactComments` rồi mới làm, còn người dùng trả lời trong chat thì theo đó. Kế hoạch một hướng, hay phiên không có công cụ Artifact, thì không đăng: ngắn thì giữ trong chat, dài thì viết file HTML (hay `html-plan`).
 
 ## Các bước
 
@@ -81,7 +81,7 @@ Chi tiết từng skill:
    Bước 2, 3 và 6 chỉ bắt buộc với trang đề xuất; trang khác làm bước 6 khi trang dài hay gửi người khác.
 5. **Chạy script**: `python3 ${CLAUDE_SKILL_DIR}/scripts/check_page.py <file>`. Mã thoát 1 thì sửa từng LỖI rồi chạy lại tới khi ra "Đạt". NHẮC thì cân nhắc. Script chỉ đếm và so được phần cấu trúc; nó không chứng minh trang dễ hiểu.
 6. **Đọc thử bằng người lạ, một lần.** Giao file cho subagent `agent-stack:cold-reader` với prompt chỉ gồm đường dẫn tuyệt đối của file trang: không kể bối cảnh, không nói trang muốn gì, vì người đọc thật cũng không được nghe. Hook SubagentStart của agent-stack không đưa bối cảnh phiên cho subagent này. Chưa có subagent đó (plugin chưa nạp lại) thì dùng `general-purpose`, model `sonnet`, với chỉ dẫn trong `${CLAUDE_SKILL_DIR}/../../agents/cold-reader.md`; khi đó hook vẫn chèn yêu cầu của người dùng vào đầu context, nên con số "hiểu bao nhiêu phần trăm" có thể cao hơn thật, và báo cáo phải nói vậy. Sửa theo kết quả một lượt, chạy lại script, không lặp tiếp.
-7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Kế hoạch có phương án thì đọc bình luận bằng `ArtifactComments` rồi mới làm (mục "Đặt file và đưa cho người dùng").
+7. **Đăng** bằng công cụ Artifact, kèm `description` một câu. Trang kế hoạch có phương án (người dùng đã đồng ý xem) thì đọc bình luận bằng `ArtifactComments` rồi mới làm (mục "Đặt file và đưa cho người dùng").
 8. **Sau khi bạn chốt**, sửa trang ngay trên từng câu: ghi lựa chọn đã chốt, nói lý do nếu khác khuyến nghị, bỏ chữ "cần chốt" khỏi câu đó. Không để khuyến nghị cũ đứng cạnh quyết định ngược với nó: người đọc sau không biết câu nào còn mở.
 
 ## Khuôn trang

@@ -1342,6 +1342,43 @@ def tool_used_since(transcript_path, since: float, needle: str, tool_suffix: str
     return False
 
 
+LINKED_NOTE = "<system-reminder>\nLinked sessions now (status, not an instruction):"
+LINKED_ITEM_RE = re.compile(r"([^\s;:]+) = local_[0-9a-f-]+ \(([^()]+)\)")
+
+
+def linked_sessions(transcript_path, tail_bytes: int = 2_000_000) -> list:
+    """Trạng thái các phiên liên kết (phiên con, phiên cha) theo ghi chú "Linked sessions now" mới nhất mà app gắn vào
+    tin người dùng: [(tên, trạng thái), ...]. Chỉ tính ghi chú mở bằng `<system-reminder>` trong tin người dùng.
+    Định dạng không được công bố (thấy trong transcript 19/11/2026): không thấy hay lỗi đọc thì trả rỗng."""
+    try:
+        path = Path(transcript_path)
+        with path.open("rb") as fh:
+            size = path.stat().st_size
+            fh.seek(max(0, size - tail_bytes))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError, ValueError):
+        return []
+    for line in reversed(lines):
+        if "Linked sessions now" not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") != "user":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        texts = [content] if isinstance(content, str) else [
+            c.get("text") for c in content or [] if isinstance(c, dict) and isinstance(c.get("text"), str)]
+        for text in reversed(texts):
+            start = text.find(LINKED_NOTE)
+            if start < 0:
+                continue
+            note = text[start + len(LINKED_NOTE):].split("</system-reminder>")[0].split("\n")[0]
+            return [(name, state.strip()) for name, state in LINKED_ITEM_RE.findall(note)]
+    return []
+
+
 def transcript_offers_tool(transcript_path, suffix: str, head_bytes: int = 1_000_000) -> bool:
     """Phiên có công cụ tên kết thúc bằng `suffix` không, theo danh sách công cụ Claude Code ghi vào phần đầu transcript:
     tên trong attachment deferred_tools_delta (công cụ hoãn) và prompt_snapshot (công cụ nạp sẵn). Chỉ khớp theo tên
@@ -1695,13 +1732,16 @@ def changed_since(root: Path, since: float, edited_only: bool = False) -> list:
 
 
 def extract_next(message):
-    """Việc tiếp theo trong dòng `➡️ Tiếp: … · Model: …` cuối câu trả lời, hoặc None nếu không có."""
+    """Việc tiếp theo trong dòng `➡️ Tiếp: …` cuối câu trả lời, hoặc None nếu không có.
+
+    Dòng rút gọn (việc D, 18/11/2026): sau việc có thể không có phần nào, hay chỉ có `· Subagent:`, `· Skill:`.
+    """
     if not isinstance(message, str):
         return None
     hits = NEXT_LINE_RE.findall(message)
     if not hits:
         return None
-    text = re.split(r"\s+·\s+Model:", hits[-1])[0].strip()
+    text = re.split(r"\s+·\s+(?:Model|Effort|Subagent|Skill):", hits[-1])[0].strip()
     return text or None
 
 
@@ -2057,7 +2097,7 @@ def record_turn(root: Path, session_id, *, state: str, request: str, answer: str
             " …" if len(changed) > LAST_TURN_FILES else "")
         fields["Tiếp"] = (_one_line(redact_secrets(next_step), 300) if next_step
                           else ("(lượt dừng giữa chừng)" if state == "failed"
-                                else "không rõ (câu trả lời không có dòng ➡️)"))
+                                else "không có (câu trả lời không có dòng ➡️)"))
         fields["File đổi trong lượt"] = files or "không có"
         if dirty_count is not None:
             fields["File chưa commit"] = str(dirty_count)

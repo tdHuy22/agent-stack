@@ -48,6 +48,14 @@
    "reason": "mở khóa tests/test_cwd_glob_guard.py (bạn nhắn 18/11): cd/popd/pushd thất bại đứng nguyên thì chặn, không chỉ hỏi",
    "sha256": "d05593430a65863bc2211d0a0d7ccc35f3ed5514ad7594a5075829739bd2bc04",
    "ts": "2026-11-18T18:00:21+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_route.py",
+   "reason": "việc D: dòng ➡️ rút gọn, bạn đồng ý 19/11",
+   "sha256": "0f7c383efa3140a466be6e9012ae1a8449aa5e628b54d8c5a0b38e69d56d9f68",
+   "ts": "2026-11-19T10:56:30+07:00"
   }
  ],
  "files": {
@@ -14808,15 +14816,14 @@
    "ts": "2026-11-17T20:26:50+07:00"
   },
   "tests/test_route.py": {
-   "base": "ca9f447150405c341e39961a5aeaab93cce6d7c0",
+   "base": "61489c9230c2894602f7925f60b531f44d8277e8",
    "cmd": [
     "python3",
     "-m",
     "unittest",
-    "tests.test_route",
-    "tests.test_plan_exit"
+    "tests.test_route"
    ],
-   "label": "lock: python3 -m unittest tests.test_route tests.test_plan_exit",
+   "label": "khóa lại sau việc D",
    "level": "cao",
    "lines": [
     "f2f4a1237dbd",
@@ -15272,9 +15279,10 @@
     "4137abb80bd0",
     "a4c7e3c836a0",
     "d00726297184",
+    "ebfaeff97a1c",
     "e395dde4dc7e",
-    "81bf28d75909",
-    "a88fcc5251e5",
+    "a575c2e2fdcc",
+    "53bc7077c65e",
     "6243d24bba0c",
     "3da101ffa618",
     "16e655b84a81",
@@ -15972,10 +15980,10 @@
      [
       "def",
       "ProjectAware.test_footer_rule_is_every_message_and_includes_skill",
-      "eddf50167be02015",
+      "7e017cd20f60f612",
       "",
       "492a0aa40b6f03f8",
-      "ae25600d29d21e46,a8cff8cc8d616c14a,4db115f78c60bfa3a,f701f9442321f0e7,98e3177322ac641da,ac4ebb8a4761d30a,0978a5bd02502bf1a,6e21e63ce9e4b96ea"
+      "ae25600d29d21e46,94379c4fdf06e7afa,cf608a555e06fb92a,f701f9442321f0e7,98e3177322ac641da,ac4ebb8a4761d30a,0978a5bd02502bf1a,6e21e63ce9e4b96ea"
      ],
      [
       "class",
@@ -16212,8 +16220,8 @@
     ],
     "v": "3.11"
    },
-   "sha256": "0f7c383efa3140a466be6e9012ae1a8449aa5e628b54d8c5a0b38e69d56d9f68",
-   "ts": "2026-11-14T12:01:18+07:00"
+   "sha256": "8c9eb86546f79e2e41f1975ad7692d5435e4508b1525bb51430df0ee4d90a0b2",
+   "ts": "2026-11-19T10:56:56+07:00"
   },
   "tests/test_route_gd5.py": {
    "base": "39d2446c49610b427bd8d50a4ac836ffe6c4e6ef",

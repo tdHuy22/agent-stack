@@ -434,10 +434,14 @@ class IrreversibleGuard(RemoteGuardBase):
         self.assertEqual(kinds, [("1", "Không đảo ngược được"), ("2", "Ra khỏi máy"),
                                  ("3", "Đụng ranh giới tin cậy theo cách người dùng chưa yêu cầu"),
                                  ("4", "Đổi phạm vi hay ý định"), ("5", "Tốn tiền")])
-        named = re.search(r"nhận ra một phần loại 1 và 2 \((.*?)\) và chặn lần đầu", section).group(1)
+        # Việc D (19/11/2026): danh sách lệnh dời từ luật chung sang docstring của hook, luật chỉ còn dòng trỏ.
+        self.assertIn("chặn lần đầu một phần loại 1 và 2 (danh sách: `pretool_guard.py`)", section)
+        doc = (PLUGIN / "hooks" / "pretool_guard.py").read_text(encoding="utf-8")
+        named = re.search(r"- Lệnh không đảo ngược được \(cải tiến 6\): (.*?) khi viết lại commit", doc, re.S).group(1)
+        named = re.sub(r"\([^)]*\)", "", named)  # bỏ phần ngoại lệ trong ngoặc, như (trừ -n, …)
         samples = {"git push": "git push origin main", "git reset --hard": "git reset --hard",
                    "git clean -f": "git clean -fd", "rm -r": "rm -r src",
-                   "amend": "git commit --amend --no-edit", "rebase": "git rebase --root"}
+                   "git commit --amend": "git commit --amend --no-edit", "git rebase": "git rebase --root"}
         self.assertEqual(set(re.findall(r"`([^`]+)`", named)), set(samples), "luật kê lệnh mà test chưa có mẫu")
         for i, cmd in enumerate(samples.values()):
             with self.subTest(cmd=cmd):

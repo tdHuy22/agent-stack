@@ -27,6 +27,22 @@
    "note": "chưa có máy kiểm ngoài test chống mất chữ (test_global_rules giữ dòng import ở đầu file, không tính là kiểm)."
   },
   {
+   "id": "TB1",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm bằng chứng của từng nhận định; người dùng đọc và hỏi lại."
+  },
+  {
+   "id": "TB2",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "chưa có máy kiểm độ ngắn và lời thường của câu trả lời."
+  },
+  {
    "id": "T1",
    "check": "may-bao",
    "by": [
@@ -480,6 +496,14 @@
    "note": "Hook Stop chỉ đọc dòng ➡️ để ghi LAST-TURN, không nhắc hay chặn khi thiếu; chưa có máy kiểm."
   },
   {
+   "id": "F1b",
+   "check": "nguoi-duyet",
+   "by": [
+    "file:global/SHARED.global.md"
+   ],
+   "note": "Hook Stop chỉ đọc dòng ➡️ để ghi LAST-TURN (vắng dòng thì ghi \"không có\"); chưa có máy kiểm việc không in khi không có việc."
+  },
+  {
    "id": "F2",
    "check": "nguoi-duyet",
    "by": [
@@ -662,7 +686,8 @@
    "id": "S7a",
    "check": "nguoi-duyet",
    "by": [
-    "file:global/SHARED.global.md"
+    "file:global/SHARED.global.md",
+    "skill:plugin/skills/done-gate/SKILL.md"
    ],
    "note": "chưa có máy kiểm việc chọn skill Semgrep."
   },
@@ -670,7 +695,8 @@
    "id": "S7b",
    "check": "nguoi-duyet",
    "by": [
-    "file:global/SHARED.global.md"
+    "file:global/SHARED.global.md",
+    "skill:plugin/skills/done-gate/SKILL.md"
    ],
    "note": "chưa có máy kiểm nơi ghi kết quả Semgrep."
   },
@@ -678,7 +704,8 @@
    "id": "S7c",
    "check": "nguoi-duyet",
    "by": [
-    "file:global/SHARED.global.md"
+    "file:global/SHARED.global.md",
+    "skill:plugin/skills/done-gate/SKILL.md"
    ],
    "note": "chưa có máy kiểm việc tránh static-analysis:codeql."
   },

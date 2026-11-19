@@ -575,6 +575,14 @@ class LastTurn(TempDirTestCase):
         self.assertIsNone(A.extract_next("Câu trả lời không có dòng tiếp theo."))
         self.assertIsNone(A.extract_next(None))
 
+    def test_next_step_reads_the_short_arrow_line(self):
+        # Việc D (18/11/2026): dòng ➡️ rút gọn, phần Model·Effort chỉ có khi khuyên đổi.
+        self.assertEqual(A.extract_next("Xong.\n➡️ Tiếp: chạy done-gate"), "chạy done-gate")
+        self.assertEqual(A.extract_next("➡️ Tiếp: review diff · Subagent: agent-stack:reviewer (sonnet·high)"), "review diff")
+        self.assertEqual(A.extract_next("➡️ Tiếp: sửa văn · Skill: writing-voice"), "sửa văn")
+        self.assertEqual(A.extract_next("➡️ Tiếp: việc dài · Effort: high"), "việc dài")
+        self.assertEqual(A.extract_next("➡️ Tiếp: đổi tên · Model hóa dữ liệu"), "đổi tên · Model hóa dữ liệu")
+
     def test_write_then_read_round_trip_redacts_and_clips(self):
         answer = "Đầu. " + "chữ " * 600 + " token ghp_" + "a" * 36
         A.write_last_turn(self.root, "sess-1", "yêu cầu có sk-ant-abcdef1234567890", answer, "bước kế",
