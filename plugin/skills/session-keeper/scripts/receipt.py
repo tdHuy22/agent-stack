@@ -7,8 +7,10 @@ việc (file đang theo dõi và file mới), nên commit mà không đổi nộ
 phần code (bỏ tài liệu theo done-gate), nên cập nhật §0, README sau bước kiểm cũng không làm cũ biên nhận.
 
 Lệnh:
-  receipt.py run [--project DIR] [--label TÊN] [--timeout GIÂY] -- <lệnh> [tham số...]
+  receipt.py run [--project DIR] [--label TÊN] [--timeout GIÂY] [--narrow] -- <lệnh> [tham số...]
       Chạy lệnh (không qua shell), in output, ghi biên nhận. Mã thoát của receipt.py là mã thoát của lệnh.
+      `--narrow` (tự bật khi lệnh gọi narrow.py): bộ test thu hẹp, biên nhận ghi `scope: narrow` và không thay biên
+      nhận cả bộ ở hook Stop, done-gate (TM-160).
   receipt.py show [--project DIR] [--json]
       In các lần kiểm tra đã ghi và cho biết từng kết quả còn khớp code hiện tại không.
   receipt.py forget [--project DIR] TÊN [TÊN...]
@@ -448,8 +450,18 @@ def run_place(root: Path, run_dir: Path) -> dict:
     return {} if run_dir == root else {"cwd": run_dir.relative_to(root).as_posix()}
 
 
-def cmd_run(root: Path, label: str, cmd: list, timeout: float, run_dir: Path | None = None) -> int:
+NARROW_TOOL = "narrow.py"
+
+
+def is_narrow(cmd: list) -> bool:
+    """Lệnh chạy bộ test thu hẹp (narrow.py, kể cả qua trình chạy): biên nhận của nó không thay biên nhận cả bộ."""
+    return any(isinstance(a, str) and Path(a).name == NARROW_TOOL for a in cmd)
+
+
+def cmd_run(root: Path, label: str, cmd: list, timeout: float, run_dir: Path | None = None,
+            narrow: bool = False) -> int:
     run_dir = run_dir or root
+    narrow = narrow or is_narrow(cmd)
     before = A.tree_fingerprint(root)
     start = time.time()
     try:
@@ -463,13 +475,17 @@ def cmd_run(root: Path, label: str, cmd: list, timeout: float, run_dir: Path | N
         code, output = 127, f"[receipt] không chạy được lệnh: {exc}"
     seconds = time.time() - start
     after, code_fp = fingerprints(root)
-    rec = record(root, label, cmd, code, output, seconds, before, after, code_fp, run_place(root, run_dir))
+    extra = run_place(root, run_dir)
+    if narrow:
+        extra["scope"] = "narrow"
+    rec = record(root, label, cmd, code, output, seconds, before, after, code_fp, extra)
     sys.stdout.write(output if output.endswith("\n") or not output else output + "\n")
     mark = "✓ đạt" if rec["ok"] else f"✗ trượt (mã {code})"
     note = " · lệnh đã làm thay đổi file trong project" if rec["changed_tree"] else ""
     where = "" if rec["fingerprint"] else " · không phải git repo nên không theo dõi được code có đổi sau đó không"
     saved = "đã ghi biên nhận" if rec["saved"] else f"KHÔNG ghi được biên nhận ({rec['save_error']})"
-    print(f"[receipt] {mark} · {label} · {rec['seconds']} giây · {saved}{note}{where}")
+    scope = " · bộ thu hẹp (không thay biên nhận cả bộ)" if narrow else ""
+    print(f"[receipt] {mark} · {label}{scope} · {rec['seconds']} giây · {saved}{note}{where}")
     return code
 
 
@@ -622,7 +638,8 @@ def describe(label: str, rec: dict) -> str:
     fresh = freshness(rec)
     summary = f" · {rec['summary']}" if rec.get("summary") else ""
     place = f" · chạy trong {rec['cwd']}" if isinstance(rec.get("cwd"), str) else ""
-    return f"- {label}: {mark}, {ago(rec.get('ts'))}, {fresh}{place}{summary}"
+    scope = " · bộ thu hẹp, không thay cả bộ" if rec.get("scope") == "narrow" else ""
+    return f"- {label}: {mark}, {ago(rec.get('ts'))}, {fresh}{place}{scope}{summary}"
 
 
 def cmd_show(root: Path, as_json: bool) -> int:
@@ -670,6 +687,8 @@ def main(argv=None) -> int:
     run.add_argument("--label", help="tên lần kiểm tra (mặc định: chính câu lệnh)")
     run.add_argument("--timeout", type=float, default=1800)
     run.add_argument("--cwd", help=CWD_HELP)
+    run.add_argument("--narrow", action="store_true",
+                     help="bộ test thu hẹp (narrow.py): biên nhận không thay biên nhận cả bộ")
     run.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh> [tham số...]")
     show = sub.add_parser("show", help="xem các biên nhận đã ghi", allow_abbrev=False)
     show.add_argument("--project", default=".")
@@ -740,7 +759,8 @@ def main(argv=None) -> int:
         if args.spec or args.allow:
             ap.error("--spec và --allow chỉ dùng với --red")
         return cmd_lock(root, label, command, args.base, args.tests, args.link, args.timeout, args.level, run_dir)
-    return cmd_run(root, args.label or A.clip(" ".join(command), 80), command, args.timeout, run_dir)
+    return cmd_run(root, args.label or A.clip(" ".join(command), 80), command, args.timeout, run_dir,
+                   getattr(args, "narrow", False))
 
 
 if __name__ == "__main__":

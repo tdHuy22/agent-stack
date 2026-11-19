@@ -204,9 +204,14 @@ def evidence_gaps(root: Path, turn: dict, sid: str):
     if failing:
         gaps.append(("test trượt", "lệnh kiểm tra trượt trên code hiện tại: "
                      + ", ".join(f"`{label}` (mã {checks[label].get('exit')})" for label in failing[:3])))
-    if not any(rec.get("ok") and receipt_current(rec, turn["ts"]) for rec in checks.values()):
-        gaps.append(("chưa có biên nhận đạt", "không có biên nhận đạt nào còn đúng cho code hiện tại: chạy mốc kiểm "
-                     "tra của project qua `receipt.py run -- <lệnh>`"))
+    # Biên nhận của bộ test thu hẹp (`scope: narrow`, narrow.py) không thay mốc kiểm tra cả bộ (TM-160).
+    if not any(rec.get("ok") and rec.get("scope") != "narrow" and receipt_current(rec, turn["ts"])
+               for rec in checks.values()):
+        narrow_only = any(rec.get("ok") and rec.get("scope") == "narrow" and receipt_current(rec, turn["ts"])
+                          for rec in checks.values())
+        gaps.append(("chưa có biên nhận đạt", "không có biên nhận đạt nào còn đúng cho code hiện tại"
+                     + (" (chỉ có biên nhận bộ test thu hẹp, không thay cả bộ)" if narrow_only else "")
+                     + ": chạy mốc kiểm tra của project qua `receipt.py run -- <lệnh>`"))
     # Payload SubagentStart không có model, nên chỉ kiểm có ít nhất một lần giao reviewer, không kiểm đúng model hay
     # đủ hai reviewer (done-gate bước 5).
     if not A.subagent_started_since(sid, "reviewer", turn["ts"]):

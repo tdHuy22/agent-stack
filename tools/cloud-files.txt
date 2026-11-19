@@ -61,6 +61,7 @@ plugin/hooks/ui_status.py
 plugin/lib/agentstack.py
 plugin/lib/archgate.py
 plugin/lib/client_place.py
+plugin/lib/linetrace.py
 plugin/lib/routemodel.py
 plugin/lib/specbook.py
 plugin/lib/stackcfg.py
@@ -92,6 +93,7 @@ plugin/skills/reuse-best/SKILL.md
 plugin/skills/reuse-best/scripts/scout.py
 plugin/skills/session-keeper/SKILL.md
 plugin/skills/session-keeper/scripts/fails_before.py
+plugin/skills/session-keeper/scripts/narrow.py
 plugin/skills/session-keeper/scripts/receipt.py
 plugin/skills/session-keeper/scripts/spec.py
 plugin/skills/session-keeper/scripts/state.py

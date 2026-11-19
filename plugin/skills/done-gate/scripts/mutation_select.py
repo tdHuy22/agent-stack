@@ -32,104 +32,20 @@ TEST_ENV = "AGENT_STACK_MUT_TEST"
 PGIDS = "pgids"
 ALONE_TIMEOUT = 300
 
+# Bộ ghi vết dùng chung với narrow.py (plugin/lib/linetrace.py). Nạp rồi gỡ khỏi sys.path, sys.modules: test trong
+# bản chép tự nạp bản linetrace của chính nó (có thể là file đang đột biến).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))), "lib"))
+import linetrace as LT  # noqa: E402
+
+del sys.path[0]
+sys.modules.pop("linetrace", None)
+
 # sitecustomize cho tiến trình Python con của bước ghi vết: chỉ bật khi đủ biến môi trường, ghi khi thoát.
-SITE = r'''
-import os, sys
-if os.environ.get("AGENT_STACK_MUT_TRACE") and os.environ.get("AGENT_STACK_MUT_OUT"):
-    import atexit, json, threading
-    _t = json.loads(os.environ.get("AGENT_STACK_MUT_TARGETS") or "{}")  # realpath tuyệt đối -> đường dẫn trong bản chép
-    _seen, _known = {}, {}
-    def _local(frame, event, arg):
-        if event == "line":
-            _seen.setdefault(_known[frame.f_code.co_filename], set()).add(frame.f_lineno)
-        return _local
-    def _glob(frame, event, arg):
-        name = frame.f_code.co_filename
-        if name not in _known:
-            _known[name] = _t.get(os.path.realpath(name))
-        if _known[name] is None:
-            return None
-        _seen.setdefault(_known[name], set()).add(frame.f_lineno)
-        return _local
-    def _dump():
-        sys.settrace(None)
-        test = os.environ.get("AGENT_STACK_MUT_TEST", "")
-        if not (_seen and test):
-            return
-        path = os.path.join(os.environ["AGENT_STACK_MUT_OUT"], f"{os.getpid()}-{id(_seen)}.json")
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump({"test": test, "lines": {k: sorted(v) for k, v in _seen.items()}}, f)
-        except OSError:
-            pass
-    atexit.register(_dump)
-    threading.settrace(_glob)
-    sys.settrace(_glob)
-'''
-
-
-class Tracer:
-    """Ghi (file đích, dòng) theo test đang chạy. `targets`: realpath → đường dẫn tương đối trong bản chép."""
-
-    def __init__(self, targets: dict):
-        self.targets = targets
-        self.known: dict = {}
-        self.test = ""
-        self.order: dict = {}  # test -> thứ tự chạy
-        self.lines: dict = {}  # file -> dòng -> set(test)
-
-    def target(self, name):
-        if name not in self.known:
-            self.known[name] = self.targets.get(os.path.realpath(name))
-        return self.known[name]
-
-    def add(self, rel, line):
-        if self.test:
-            self.lines.setdefault(rel, {}).setdefault(line, set()).add(self.test)
-
-    def local(self, frame, event, arg):
-        if event == "line":
-            self.add(self.known[frame.f_code.co_filename], frame.f_lineno)
-        return self.local
-
-    def glob(self, frame, event, arg):
-        rel = self.target(frame.f_code.co_filename)
-        if rel is None:
-            return None
-        self.add(rel, frame.f_lineno)
-        return self.local
-
-
-def make_result(tracer: Tracer):
-    class Result(unittest.TextTestResult):
-        def startTest(self, test):
-            tracer.test = test.id()
-            tracer.order.setdefault(tracer.test, len(tracer.order))
-            os.environ[TEST_ENV] = tracer.test
-            super().startTest(test)
-
-        def stopTest(self, test):
-            super().stopTest(test)
-            tracer.test = ""
-            os.environ.pop(TEST_ENV, None)
-    return Result
-
-
-def loadable(name: str) -> bool:
-    """`python -m unittest <name>` nạp đúng một test có id này (test sinh động, `load_tests` lạ thì không)."""
-    try:
-        suite = unittest.defaultTestLoader.loadTestsFromName(name)
-    except Exception:  # noqa: BLE001
-        return False
-    found = []
-    stack = [suite]
-    while stack:
-        item = stack.pop()
-        if isinstance(item, unittest.TestSuite):
-            stack.extend(item)
-        else:
-            found.append(item.id())
-    return found == [name]
+SITE = LT.site_source("AGENT_STACK_MUT")
+Tracer = LT.Tracer
+make_result = LT.make_result
+loadable = LT.loadable
 
 
 def alone_fails(names: list, env: dict) -> set:
@@ -162,7 +78,7 @@ def cmd_trace(out: str, targets: list, site: str, argv: list) -> int:
     sys.path.insert(0, os.getcwd())
     tracer = Tracer({os.path.realpath(t): t for t in targets})
     with open(os.devnull, "w", encoding="utf-8") as sink:
-        runner = unittest.TextTestRunner(stream=sink, resultclass=make_result(tracer),  # type: ignore[arg-type]
+        runner = unittest.TextTestRunner(stream=sink, resultclass=make_result(tracer, TEST_ENV),  # type: ignore[arg-type]
                                          verbosity=0)
         threading.settrace(tracer.glob)
         sys.settrace(tracer.glob)
