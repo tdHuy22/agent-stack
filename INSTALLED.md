@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 17:01 15/11/2026 từ commit `ac54a44` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 20:50 19/11/2026 từ commit `c3bea77` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -656,6 +656,17 @@
 | # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
 |---:|---|---|---|---|
 | 1 | nâng công cụ | ~/.cargo/bin/archctl | archctl a82879b60c1e → 7f06586a2c54 | chép lại bản cũ từ `~/Documents/Claude/agent-stack/backups/install-20261115-170028/cargo-bin__archctl` |
+
+## Lần cài 20:50 19/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261119-205005.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261119-205005`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: rules, plugin, pi, statusline, autocontinue, catalog, tools
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
 
 ## Gỡ toàn bộ
 
