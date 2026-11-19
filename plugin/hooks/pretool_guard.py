@@ -346,7 +346,7 @@ def mktemp_vars(command: str) -> frozenset:
 
 def disk_prog(word: str) -> bool:
     name = Path(word).name.casefold()
-    return name in DISK_DD or name in ("diskutil",) or name.startswith(("newfs", "mkfs"))
+    return name in DISK_DD or name == "diskutil" or name.startswith(("newfs", "mkfs"))
 
 
 def dev_path(path: str) -> str:

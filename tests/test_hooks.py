@@ -1461,7 +1461,9 @@ class HooksConfig(unittest.TestCase):
         for kept in ("SessionStart", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd"):
             self.assertIn(kept, hooks)  # các hook cũ giữ nguyên
         guard, client = hooks["PreToolUse"]
-        self.assertEqual(set(guard["matcher"].split("|")), {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"})
+        # Monitor (việc G, 19/11/2026): hook chỉ xét lệnh xóa ổ đĩa cho công cụ này.
+        self.assertEqual(set(guard["matcher"].split("|")),
+                         {"Bash", "Write", "Edit", "MultiEdit", "NotebookEdit", "Monitor"})
         # nơi người dùng gõ: chỉ công cụ của app Desktop, để phiên khác không tốn thêm một lần chạy Python mỗi công cụ
         self.assertEqual(client, {"matcher": "mcp__ccd_turn__.*", "hooks": [
             {"type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/pretool_client.py"],
