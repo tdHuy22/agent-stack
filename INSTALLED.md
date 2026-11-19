@@ -1,6 +1,6 @@
 # Đã cài gì
 
-*Cập nhật 22:46 19/11/2026 từ commit `d79af7a` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
+*Cập nhật 00:04 20/11/2026 từ commit `e646e4e` của agent-stack. File này do `tools/install.py` tạo; đừng sửa tay. Mỗi lần cài là một mục bên dưới, cũ nhất trước.*
 
 ## Lần cài 15:19 02/10/2026
 
@@ -587,8 +587,6 @@
 | 2 | symlink | ~/.pi/agent/agent-stack/plugin | → `~/Documents/Claude/agent-stack/plugin` | `rm ~/.pi/agent/agent-stack/plugin` |
 | 3 | symlink | ~/.pi/agent/agent-stack/agents | → `~/Documents/Claude/agent-stack/state/pi/agents` | `rm ~/.pi/agent/agent-stack/agents` |
 
-*Ghi chú 19/11/2026 (ghi tay, lần `--apply` sau sẽ dựng lại file và mất dòng này): ba mục trên không còn, vì `~/.pi` đã bị gỡ khỏi máy 19/11/2026; bước `pi` đã bỏ khỏi `tools/install.py`.*
-
 ## Lần cài 15:38 06/11/2026
 
 - Nhật ký máy đọc: `state/install-logs/20261106-153819.json`
@@ -686,6 +684,17 @@
 - Nhật ký máy đọc: `state/install-logs/20261119-224620.json`
 - Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261119-224620`, gồm bản chụp `pristine/` của cấu hình trước khi cài
 - Bước đã chạy: rules, plugin, pi, statusline, autocontinue, deny, catalog, tools
+- Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
+
+| # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
+|---:|---|---|---|---|
+| 1 | lệnh claude | `claude plugin update agent-stack@agent-stack-local --scope user` |  | — |
+
+## Lần cài 00:04 20/11/2026
+
+- Nhật ký máy đọc: `state/install-logs/20261120-000417.json`
+- Sao lưu: `~/Documents/Claude/agent-stack/backups/install-20261120-000417`, gồm bản chụp `pristine/` của cấu hình trước khi cài
+- Bước đã chạy: rules, plugin, statusline, autocontinue, deny, catalog, tools
 - Kết quả: 1 thay đổi, 0 mục bị bỏ qua, 0 lỗi
 
 | # | Loại | Ở đâu | Chi tiết | Gỡ riêng mục này |
