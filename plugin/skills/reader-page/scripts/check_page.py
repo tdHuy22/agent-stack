@@ -2,6 +2,8 @@
 """Kiểm tĩnh một trang HTML cho người đọc (file trong project hay trang Artifact), theo khuôn của skill reader-page.
 
   python3 check_page.py <trang.html>
+  python3 check_page.py --khuon <trang.html>   # chèn meta viewport, font, CSS chuẩn (khuon.css) rồi kiểm
+
 
 Trang báo cáo (data-loai="bao-cao") chỉ cần tóm tắt và nguồn; trang công cụ (data-loai="cong-cu") cần tóm tắt
 và nút xuất data-xuat. Trang đề xuất và trang giải thích kiểm đủ như dưới.
@@ -47,6 +49,15 @@ TEXT_TAGS = {"p", "li", "dd", "dt", "td", "th", "h1", "h2", "h3", "h4", "b", "st
 PLACEHOLDER_RE = re.compile(r"(?:[^…:]{0,40}:\s*)?…[\s…,.:;]*")
 TEMPLATE_TEXTS = ("Tên trang", "Câu hỏi của trang, viết bằng lời thường", "Tên project · ngày",
                   "Một câu lời thường: phương án này làm gì.", "A[…] --> B[…]")
+
+# Phần đầu trang mà --khuon chèn: trang tự viết chỉ cần <title> và <main>, khỏi chép lại CSS mỗi lần.
+CSS_FILE = Path(__file__).resolve().parent.parent / "khuon.css"
+VIEWPORT_RE = re.compile(r"<meta\b[^>]*\bname\s*=\s*[\"']?viewport[\"'\s>/]", re.I)
+FIT_RE = re.compile(r"<meta\b[^>]*\bname\s*=\s*[\"']?claude:viewport-fit-sides", re.I)
+STYLE_MARK_RE = re.compile(r"<style\b[^>]*\bdata-khuon\b", re.I)
+FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700'
+         '&family=JetBrains+Mono:wght@400;600&display=swap">\n')
 
 # Mã nội bộ có số (HC5, D22, GĐ24, TM-28): luôn phải định nghĩa, không miễn được.
 CODE_RE = re.compile(r"(?<![\w-])[A-ZĐ]{1,5}-?\d+(?:\.\d+)*[a-z]?(?![\w-])")
@@ -390,19 +401,60 @@ def check(html: str) -> Report:
         if len(q.plain()) < MIN_QUESTION_CHARS:
             r.error("câu chốt", f"Câu chốt {i} quá ngắn: hỏi bằng lời thường, kèm lựa chọn và khuyến nghị.")
 
+    if not VIEWPORT_RE.search(_mask(html)):
+        r.note("điện thoại", 'Thiếu <meta name="viewport">: trang mở thẳng trên điện thoại sẽ bị thu nhỏ. '
+                             "Chạy lại với --khuon.")
+
     r.stats = {"ví dụ": len(examples), "phương án": len(seen), "câu chốt": len(questions),
                "thuật ngữ đã định nghĩa": len(p.definitions)}
     return r
 
 
+def _mask(html: str) -> str:
+    """Thay comment và thân <svg> bằng khoảng trắng cùng độ dài, để tìm chỗ chèn không rơi vào đó."""
+    blank = lambda m: " " * len(m.group())  # noqa: E731
+    html = re.sub(r"<!--.*?(?:-->|$)", blank, html, flags=re.S)
+    return re.sub(r"<svg\b.*?(?:</svg\s*>|$)", blank, html, flags=re.S | re.I)
+
+
+def apply_template(html: str, css: str) -> str:
+    """Chèn meta viewport, font và CSS chuẩn của khuôn sau <title>; phần đã có thì bỏ qua (chạy lại không đổi).
+
+    CSS chèn đứng trước mọi <style> của trang, nên <style> riêng (màu, chữ theo artifact-design) vẫn đè được.
+    Trang đã mang CSS của khuôn cũ (biến --f-body) thì không chèn thêm CSS."""
+    seen = _mask(html)
+    head = ""
+    if not VIEWPORT_RE.search(seen):
+        head += '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    if not FIT_RE.search(seen):
+        head += '<meta name="claude:viewport-fit-sides" content="cover">\n'
+    if not STYLE_MARK_RE.search(seen) and "--f-body:" not in seen:
+        head += FONTS + "<style data-khuon>\n" + css.strip() + "\n</style>\n"
+    if not head:
+        return html
+    for rx in (r"</title\s*>\s*", r"<head\b[^>]*>\s*", r"<html\b[^>]*>\s*", r"<!doctype[^>]*>\s*"):
+        m = re.search(rx, seen, re.I)
+        if m:
+            return html[:m.end()] + head + html[m.end():]
+    return head + html
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Kiểm trang Artifact theo khuôn reader-page trước khi đăng.")
     ap.add_argument("file", help="file HTML sắp đăng")
+    ap.add_argument("--khuon", action="store_true",
+                    help="chèn meta viewport, font và CSS chuẩn của khuôn vào file (nếu chưa có) rồi kiểm")
     args = ap.parse_args(argv)
     try:
         html = Path(args.file).read_text(encoding="utf-8")
+        if args.khuon:
+            styled = apply_template(html, CSS_FILE.read_text(encoding="utf-8"))
+            if styled != html:
+                Path(args.file).write_text(styled, encoding="utf-8")
+                html = styled
+                print("Đã chèn phần đầu chuẩn của khuôn (meta viewport, font, CSS).")
     except (OSError, UnicodeDecodeError) as exc:
-        print(f"Không đọc được {args.file}: {exc}")
+        print(f"Không đọc được hay ghi được {args.file}: {exc}")
         return 2
     r = check(html)
     for title, items in (("LỖI", r.errors), ("NHẮC", r.notes)):

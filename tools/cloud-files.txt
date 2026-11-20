@@ -86,8 +86,10 @@ plugin/skills/project-setup/SKILL.md
 plugin/skills/project-setup/scripts/profile.py
 plugin/skills/project-setup/scripts/stack.py
 plugin/skills/reader-page/SKILL.md
+plugin/skills/reader-page/khuon.css
 plugin/skills/reader-page/mau.html
 plugin/skills/reader-page/scripts/check_page.py
+plugin/skills/reader-page/tham-khao.md
 plugin/skills/recursive-session/SKILL.md
 plugin/skills/reuse-best/SKILL.md
 plugin/skills/reuse-best/scripts/scout.py

@@ -1,0 +1,69 @@
+/* CSS chuẩn của khuôn reader-page; check_page.py --khuon chèn vào trang. Đổi màu, chữ theo artifact-design bằng <style> riêng đặt sau. */
+/* Bố cục: một cột đọc khoảng 70 ký tự; bảng và sơ đồ được rộng hơn, cuộn ngang trong khung riêng */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --fg: #1f2421; --muted: #5c665f; --line: #d8ddd6;
+  --accent: #2f6a52; --accent-soft: #e1eee7;
+  --ok: #2f6a52; --ok-soft: #e1eee7; --warn: #8a5a12; --warn-soft: #f8edd8; --bad: #a3402c; --bad-soft: #f7e3dd;
+  --code-bg: #eceee9;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151916; --panel: #1d221f; --fg: #e3e8e4; --muted: #9aa69e; --line: #313a34;
+  --accent: #79c2a2; --accent-soft: #203a2f;
+  --ok: #79c2a2; --ok-soft: #203a2f; --warn: #e0b260; --warn-soft: #3a2f1a; --bad: #e58b75; --bad-soft: #402520;
+  --code-bg: #111512; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px }
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 40px }
+section, header, footer { display: grid; gap: 14px; min-width: 0 }
+h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance }
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700 }
+h2 { font-size: 1.3rem; font-weight: 600 }
+h3 { font-size: 1.05rem; font-weight: 600 }
+p, li, dd { max-width: 70ch }
+p, ul, ol, dl { margin: 0 }
+ul, ol { padding-left: 1.3em; display: grid; gap: 6px }
+.eyebrow { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+code, pre, kbd { font-family: var(--f-mono); font-size: .88em }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; margin: 0 }
+pre code { background: none; padding: 0 }
+dfn { font-style: normal; font-weight: 600 }
+.summary { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px }
+.ladder { counter-reset: none; gap: 10px }
+.ladder b { color: var(--accent) }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px }
+.glossary dt { font-weight: 600; font-family: var(--f-mono); font-size: .92em }
+.glossary dd { margin: 0 }
+@media (max-width: 520px) { .glossary { grid-template-columns: 1fr } .glossary dd { margin-bottom: 8px } }
+.examples, .options { display: grid; gap: 14px }
+@media (min-width: 820px) { .options { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) } }
+.example, .option, .question { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.option.rec { border: 2px solid var(--accent) }
+.facts { display: grid; gap: 4px }
+.facts dt { font-size: .8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+.facts dd { margin: 0 0 6px }
+.chip { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle }
+.violation { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 8px 10px; font-weight: 500 }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; font-variant-numeric: tabular-nums }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+thead th { font-size: .8rem; color: var(--muted); letter-spacing: .03em }
+.src { display: block; font-family: var(--f-mono); font-size: .78rem; color: var(--muted); font-weight: 400 }
+td[data-ket-qua="dat"] { background: var(--ok-soft) }
+td[data-ket-qua="vi-pham"] { background: var(--bad-soft); color: var(--bad) }
+td[data-ket-qua="can-duyet"] { background: var(--warn-soft); color: var(--warn) }
+td[data-ket-qua="khong-lien-quan"] { color: var(--muted) }
+.note { font-size: .9rem; color: var(--muted) }
+a { color: var(--accent) }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }

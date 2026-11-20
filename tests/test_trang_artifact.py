@@ -333,6 +333,47 @@ class Cli(TempDirTestCase):
         self.assertIn("LỖI", out.stdout)
         self.assertEqual(self.run_cli(str(self.tmp / "khong-co.html")).returncode, 2)
 
+    def test_khuon_adds_head_once_and_keeps_own_style_last(self):
+        # Trang tự viết chỉ có <title> và <main>: --khuon chèn viewport, font, CSS chuẩn sau <title>, chạy lại không đổi.
+        f = self.write("t.html", page().replace("</title>", "</title>\n<style>body{color:red}</style>", 1))
+        out = self.run_cli("--khuon", str(f))
+        self.assertEqual(out.returncode, 0, out.stdout)
+        html = f.read_text(encoding="utf-8")
+        self.assertEqual(html.count('name="viewport"'), 1)
+        self.assertEqual(html.count("<style data-khuon>"), 1)
+        self.assertIn("--accent", html)
+        self.assertLess(html.index("</title>"), html.index("<style data-khuon>"))
+        self.assertLess(html.index("<style data-khuon>"), html.index("body{color:red}"), "style riêng phải đè CSS chuẩn")
+        self.assertNotIn("Thiếu <meta", out.stdout)
+        self.run_cli("--khuon", str(f))
+        self.assertEqual(f.read_text(encoding="utf-8"), html)
+
+    def test_khuon_skips_comments_svg_and_old_template_css(self):
+        css = "X{}"
+        out = check_page.apply_template("<!-- cũ </title> --><title>T</title><main></main>", css)
+        self.assertLess(out.index("-->"), out.index('name="viewport"'), "không chèn vào giữa comment")
+        out = check_page.apply_template("<svg><title>icon</title></svg><main></main>", css)
+        self.assertLess(out.index('name="viewport"'), out.index("<svg>"), "không chèn vào trong <svg>")
+        out = check_page.apply_template("<!-- <style data-khuon> --><title>T</title>", css)
+        self.assertIn("<style data-khuon>\nX{}", out, "dấu trong comment không tính là đã chèn")
+        out = check_page.apply_template("<title>T</title><style>:root{--f-body: a}</style>", css)
+        self.assertNotIn("data-khuon", out, "trang đã có CSS khuôn cũ thì không chèn thêm CSS")
+        self.assertIn('name="viewport"', out)
+        out = check_page.apply_template("<!doctype html><html><head><meta charset=utf-8></head><main></main>", css)
+        self.assertTrue(out.startswith('<!doctype html><html><head><meta name="viewport"'))
+        for html in ("<!-- </title> --><title>T</title>", "<svg><title>i</title></svg>", "<html><head></head>"):
+            once = check_page.apply_template(html, css)
+            self.assertEqual(check_page.apply_template(once, css), once)
+
+    def test_missing_viewport_is_a_note(self):
+        r = check_page.check(page())
+        self.assertEqual(r.errors, [])
+        self.assertTrue(any("viewport" in n for n in r.notes))
+        self.assertFalse(any("viewport" in n for n in check_page.check(
+            '<meta name="viewport" content="width=device-width">' + page()).notes))
+        self.assertFalse(any("viewport" in n for n in check_page.check(
+            (SKILL / "mau.html").read_text(encoding="utf-8")).notes))
+
 
 if __name__ == "__main__":
     unittest.main()
