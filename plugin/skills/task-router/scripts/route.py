@@ -826,6 +826,25 @@ def model_effort(hit: dict) -> str:
     return f"{name} · {hit['effort']}" if hit.get("effort") else name
 
 
+def answer_line(hit) -> str:
+    """Dòng trả lời của skill task-router, đúng định dạng mục "Kết quả trả về" của SKILL.md; không luật nào khớp thì
+    trỏ về bảng mặc định (để model chọn theo bảng thay vì đoán)."""
+    if not hit:
+        return "Không khớp luật nào: chọn theo \"Bảng mặc định cho dòng ➡️\" trong SKILL.md."
+    rule = next((r for r in rules()["rules"] if r["id"] == hit.get("rule")), {})
+    why = " ".join((rule.get("desc") or hit.get("rule") or "").split(":")[0].split()[:15])  # mệnh đề đầu, không cụt
+    line = (f"➡️ Model: {model_name(hit.get('model'))} · Effort: {hit.get('effort') or 'giữ nguyên'} · "
+            f"Subagent: {hit.get('agent') or 'không'} · Skill: {', '.join(hit.get('skills') or []) or 'không'} · "
+            f"Lý do: {why}")
+    if hit.get("fallback"):
+        line += f"\nTest trượt thì lên {hit['fallback']}."
+    if hit.get("note"):
+        line += f"\nGhi chú: {hit['note']}"
+    for miss in hit.get("missing") or []:  # skill chưa bật đã được thay bằng skill dự phòng (localize)
+        line += f"\nChưa bật {miss.get('skill')}: {miss.get('install') or ''}".rstrip(": ")
+    return line
+
+
 def describe(hit: dict) -> str:
     bits = []
     if hit.get("model"):
@@ -1241,6 +1260,7 @@ def main(argv=None) -> int:
     ap.add_argument("--plan-steps", action="store_true",
                     help="đọc kế hoạch phiên từ stdin, in JSON {context} chấm từng bước (hook plan_steps.py gọi)")
     ap.add_argument("--cwd", help="thư mục làm việc của phiên (với --plan-steps)")
+    ap.add_argument("--line", action="store_true", help="in dòng ➡️ trả lời thay cho JSON (skill task-router dùng)")
     args = ap.parse_args(argv)
     if args.plan_steps:
         start = time.time()
@@ -1264,7 +1284,8 @@ def main(argv=None) -> int:
     # Lệnh xem thử: đọc stack.json nhưng không ghi bản chụp đã duyệt.
     stack = stack_lib().effective(root, protected_phrases(), write=False) if root else None
     hit = suggest_for(text, A.project_profile(root) if root else None, stack)
-    print(json.dumps(localize(hit, root) if hit else hit, ensure_ascii=False, indent=2))
+    hit = localize(hit, root) if hit else hit
+    print(answer_line(hit) if args.line else json.dumps(hit, ensure_ascii=False, indent=2))
     return 0
 
 

@@ -3,20 +3,21 @@ name: task-router
 description: Gợi ý nên dùng model nào (sonnet, opus, haiku, fable), effort nào (low đến max), subagent nào và skill nào cho một việc, để giữ chất lượng mà không tốn thừa hạn mức. Dùng khi người dùng hỏi việc này nên dùng model gì, effort bao nhiêu, có nên giao cho subagent không, hoặc muốn tiết kiệm token mà không giảm chất lượng.
 when_to_use: chọn model, chọn effort, nên dùng opus hay sonnet, giao subagent, tiết kiệm token, tiết kiệm hạn mức, routing
 argument-hint: "<mô tả việc>"
-model: sonnet
-effort: low
-context: fork
 ---
 
 # Chọn model, effort, subagent và skill cho một việc
 
-Việc cần gợi ý: `$ARGUMENTS`
+Việc cần gợi ý: `$ARGUMENTS` (trống thì là việc người dùng vừa nêu).
 
-## Bước 1: gợi ý theo luật (0 token)
+## Bước 1: chạy router, giữ nguyên dòng nó in
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/route.py" "<mô tả việc>"
+python3 "${CLAUDE_SKILL_DIR}/scripts/route.py" --line <<'VIEC'
+<mô tả việc>
+VIEC
 ```
+
+`<mô tả việc>` (qua stdin để shell không chạy backtick hay `$` trong chữ) là nguyên văn việc sẽ làm, bỏ câu hỏi chọn model và lời dặn cách trả lời ("trả lời ngắn" làm khớp nhầm luật viết tin nhắn). Script in sẵn dòng trả lời theo luật: giữ nguyên Model, Effort, Subagent, Skill của dòng đó. Chỉ khi script báo không khớp luật nào mới chọn theo bảng mặc định ở dưới.
 
 Nếu biến `${CLAUDE_SKILL_DIR}` không được thay bằng đường dẫn thật (ví dụ khi đọc thẳng file này ngoài plugin), dùng `~/Documents/Claude/agent-stack/plugin/skills/task-router/scripts/route.py`.
 
@@ -39,9 +40,9 @@ Cấu hình ở mục `model_layer` của `rules.json`. Số đo ngày 15/11/202
 - Tin nhắn và việc tiếp theo trong §0 không dùng lớp model. Lý do: độ trễ vượt 3 giây, và ở §0 model làm gợi ý tệ đi.
 - Tắt cho một phiên: `AGENT_STACK_ROUTER_MODEL=off`.
 
-## Bước 2: điều chỉnh theo các nguyên tắc sau
+## Bước 2: nguyên tắc đằng sau luật
 
-Luật từ khóa chỉ là điểm xuất phát. Sau đó cân nhắc thêm:
+Dùng để giải thích, chọn khi router không khớp, hay khi người dùng hỏi thêm điều kiện (ví dụ cấu hình rẻ hơn); không dùng để đổi dòng router đã in:
 
 1. **Giữ chất lượng là bắt buộc, rẻ hơn chỉ là điểm cộng.** Chỉ khuyên dùng model rẻ hơn hoặc effort thấp hơn khi việc có bước kiểm tra tự động (test, linter, schema), hoặc khi kết quả sẽ được một model mạnh hơn xem lại.
 2. **Hạ effort trước, hạ model sau.** Model mạnh ở effort thấp thường giữ chất lượng tốt hơn model yếu ở effort cao.
@@ -87,7 +88,7 @@ Việc khác (Aside, bài báo, audit, Fable, cài skill) và căn cứ: `~/Docu
 
 ## Kết quả trả về
 
-Một dòng, đúng định dạng:
+Dòng router in ra (không khớp luật thì tự viết theo bảng), đúng định dạng:
 
 `➡️ Model: <...> · Effort: <...> · Subagent: <tên|không> · Skill: <tên|không> · Lý do: <tối đa 15 từ>`
 
