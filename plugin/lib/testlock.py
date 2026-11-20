@@ -209,6 +209,9 @@ def parse(text) -> dict:
         red = clean_red(entry.get("red"))
         if red:
             clean["red"] = red
+        relock = entry.get("relock")  # khóa lại sau khi mở khóa có lời duyệt (`receipt.py lock --relock`, TM-174)
+        if isinstance(relock, dict) and all(isinstance(relock.get(k), str) for k in ("reason", "unlocked_at")):
+            clean["relock"] = {"reason": relock["reason"][:500], "unlocked_at": relock["unlocked_at"][:40]}
         py = entry.get("py")
         if (isinstance(py, dict) and isinstance(py.get("v"), str) and isinstance(py.get("items"), list)
                 and all(_strs(x, 6) for x in py["items"])):
@@ -322,8 +325,24 @@ def status(top, rel: str, entry: dict) -> str:
         return "changed"
 
 
+_CASE_CACHE: dict = {}
+
+
+def case_insensitive(top) -> bool:
+    """Hệ file chứa repo `top` không phân biệt hoa thường (APFS, HFS+ mặc định): `TESTS/x.py` là `tests/x.py` (TM-173).
+    Kiểm bằng `.GIT` so với `.git`, nhớ theo repo."""
+    key = str(top)
+    if key not in _CASE_CACHE:
+        try:
+            _CASE_CACHE[key] = os.path.samefile(Path(top) / ".git", Path(top) / ".GIT")
+        except OSError:
+            _CASE_CACHE[key] = False
+    return _CASE_CACHE[key]
+
+
 def lookup(full):
-    """(gốc repo, đường dẫn tương đối, mục khóa) khi `full` là file đã khóa; không thì None."""
+    """(gốc repo, đường dẫn tương đối, mục khóa) khi `full` là file đã khóa; không thì None. Trên hệ file không phân
+    biệt hoa thường, `TESTS/test_x.py` trả đúng mục `tests/test_x.py`."""
     try:
         full = Path(full)
         top = find_top(full.parent if not full.is_dir() else full)
@@ -333,6 +352,8 @@ def lookup(full):
     except (OSError, ValueError, RuntimeError):
         return None
     book = load(top)
+    if rel not in book["files"] and case_insensitive(top):
+        rel = next((k for k in book["files"] if k.casefold() == rel.casefold()), rel)
     entry = book["files"].get(rel)
     if entry is None and book.get("broken"):
         entry = {"level": "cao", "broken": True}  # sổ hỏng: không biết file nào khóa, coi file test nào cũng khóa
@@ -346,6 +367,9 @@ def is_lock_file(full) -> bool:
     try:
         full = Path(full).resolve()
         top = find_top(full.parent)
-        return top is not None and full == (top / LOCK_REL).resolve()
+        if top is None:
+            return False
+        lock = (top / LOCK_REL).resolve()
+        return full == lock or (case_insensitive(top) and str(full).casefold() == str(lock).casefold())
     except (OSError, RuntimeError):
         return False

@@ -1,0 +1,9 @@
+# Vá lỗ có từ trước của chốt chặn test khóa (phần 2) · mức cao · threat model TM-172, TM-173
+# "Bị chặn" là pretool_guard trả deny hay ask cho lệnh Bash, với project có `tests/test_b.py` khóa mức cao (như fixture của tests/test_testlock_guard.py).
+S1: Khi `cd` nằm trong subshell `( … )`, trong một vế của ống `|`, hay trong `bash -c '…'`/`sh -c '…'`, rồi lệnh sau ghi hay xóa `tests/test_b.py` theo đường dẫn tính từ thư mục gốc (ví dụ `(cd tools && true) && rm tests/test_b.py`), thì lệnh bị chặn; `(cd tools && make)` một mình vẫn qua.
+S2: Khi lệnh chạy qua `env -C <thư mục>` (hay `env --chdir=<thư mục>`) và đích tương đối trỏ tới test khóa (ví dụ `env -C tests rm test_b.py`), thì lệnh bị chặn; `env -C tools make` vẫn qua.
+S3: Khi đích ghi hay xóa viết hoa khác tên test khóa (`rm TESTS/test_b.py`, `rm tests/TEST_B.py`) trên hệ file không phân biệt hoa thường, thì lệnh bị chặn.
+S4: Khi lệnh có ngoặc nhọn nhiều tầng hay nhiều mảnh (bung ra hơn vài nghìn mẫu) ở đích `cd`, `rm`, thì hook trả lời trong dưới 2 giây và không cho qua im lặng nếu bản bung có thể trúng test khóa.
+S5: Khi `receipt.py run --project` hay `--cwd` có biến (`$PWD/tests`, `"$HOME/…"`) và lệnh bên trong ghi hay xóa một đích tương đối có thể là test khóa, thì lệnh bị chặn hay hỏi, không qua im lặng.
+S6: Khi lệnh gán `HOME=` hay `CDPATH=` (hay `export` chúng) rồi dùng `~`, `cd` không có `/` để tới thư mục chứa test khóa và ghi hay xóa test đó, thì lệnh bị chặn hay hỏi.
+S7: Khi tin người dùng vừa gửi là "mở khóa tests/test_b.py" và lệnh là `receipt.py unlock --reason '…' tests/test_b.py 2>&1` (hay `2>/dev/null`, `> log.txt`), thì lệnh qua như lệnh không có chuyển hướng; tin mở khóa file khác thì vẫn bị chặn.

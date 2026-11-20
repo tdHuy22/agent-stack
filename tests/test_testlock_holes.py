@@ -1,0 +1,352 @@
+"""Vá lỗ có từ trước của chốt chặn test khóa, phần 2 (spec khoa-test-lo-cu, TM-172, TM-173): `cd` trong subshell hay
+ống, `env -C`, tên viết hoa khác trên hệ file không phân biệt hoa thường, ngoặc nhọn bung quá nhiều, `--project`/`--cwd`
+có biến, gán `HOME=`/`CDPATH=`, và `receipt.py unlock` có chuyển hướng. Mọi lệnh chỉ là chuỗi gửi cho hook, không chạy
+thật. Viết trước bản sửa."""
+import json
+import os
+import subprocess
+import time
+
+from tests._util import git
+from tests.test_guard import HOOKS, GuardBase
+from tests.test_ratchet import write_lock
+
+A_TEST = "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_a(self):\n        self.assertEqual(1, 1)\n"
+B_TEST = A_TEST.replace("test_a", "test_b")
+R = "python3 plugin/skills/session-keeper/scripts/receipt.py"
+BLOCKED = ("deny", "ask")
+
+
+class HoleBase(GuardBase):
+    def setUp(self):
+        super().setUp()
+        tests = self.project / "tests"
+        tests.mkdir()
+        (tests / "test_a.py").write_text(A_TEST)
+        (tests / "test_b.py").write_text(B_TEST)
+        (self.project / "tools").mkdir()
+        write_lock(self.project, "vua", "tests/test_a.py")
+        write_lock(self.project, "cao", "tests/test_b.py")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "lock")
+
+    def bash_in(self, command, sid="h1", cwd=None, **env):
+        """Như self.bash nhưng chọn thư mục làm việc của hook (trường cwd của payload) và đo giờ chạy."""
+        payload = {"session_id": sid, "cwd": str(cwd or self.project), "tool_name": "Bash",
+                   "tool_input": {"command": command}, "hook_event_name": "PreToolUse"}
+        t0 = time.monotonic()
+        try:
+            out = subprocess.run(["python3", str(HOOKS / "pretool_guard.py")], input=json.dumps(payload),
+                                 capture_output=True, text=True, env=self.env(**env), timeout=10)
+        except subprocess.TimeoutExpired:
+            self.fail(f"hook chạy quá 10 giây (timeout thật là 5): {command[:80]!r}")
+        self.wall = time.monotonic() - t0
+        self.assertEqual((out.returncode, out.stderr), (0, ""))
+        if not out.stdout.strip():
+            return None
+        res = json.loads(out.stdout)["hookSpecificOutput"]
+        return res["permissionDecision"], res["permissionDecisionReason"]
+
+    def assertBlocked(self, cmd, allowed=BLOCKED, cwd=None, sid="h1"):
+        out = self.bash_in(cmd, sid, cwd)
+        self.assertIn(out and out[0], allowed, f"{cmd!r} -> {out}")
+        return out
+
+    def assertPasses(self, cmd, cwd=None, sid="h1"):
+        self.assertIsNone(self.bash_in(cmd, sid, cwd), cmd)
+
+
+class SubshellCd(HoleBase):
+    # spec:khoa-test-lo-cu#S1
+    def test_cd_inside_subshell_does_not_move_later_commands(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["(cd tools && true) && rm tests/test_b.py", "(cd tools); rm tests/test_b.py",
+                    "(cd tools && true) && echo pass > tests/test_b.py",
+                    "(cd tools && true) && sed -i '' s/1/2/ tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1
+    def test_cd_in_one_side_of_a_pipe_does_not_move_later_commands(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["cd tools | cat && rm tests/test_b.py", "cd tools | cat; rm tests/test_b.py",
+                    "echo x | cd tools; rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1
+    def test_cd_inside_shell_dash_c_does_not_move_later_commands(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["bash -c 'cd tools && true' && rm tests/test_b.py", "sh -c 'cd tools'; rm tests/test_b.py",
+                    "sh -c \"cd tools && true\" && rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1
+    def test_plain_cd_still_moves_and_harmless_subshell_passes(self):
+        self.start("làm tiếp", "h1")
+        self.assertPasses("(cd tools && make)")
+        self.assertPasses("bash -c 'cd tools && make'")
+        self.assertPasses("cd tools | cat")
+        self.assertBlocked("cd tests && rm test_b.py", ("deny",))  # cd thường vẫn đổi thư mục: không chặn nhầm kiểu mới
+        self.assertPasses("cd tools && rm helper.py")
+
+
+class EnvChdir(HoleBase):
+    # spec:khoa-test-lo-cu#S2
+    def test_env_dash_C_moves_the_target_into_locked_tests(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["env -C tests rm test_b.py", "env --chdir=tests rm test_b.py", "env -C tests sed -i '' s/1/2/ test_b.py",
+                    "env -C tests rm -f test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S2
+    def test_env_dash_C_other_dir_still_passes(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["env -C tools make", "env --chdir=tools make", "env -C tools rm helper.py", "env FOO=1 make"]:
+            with self.subTest(cmd=cmd):
+                self.assertPasses(cmd)
+
+    # spec:khoa-test-lo-cu#S2
+    def test_env_dash_C_then_cd_still_resolves_relative_to_new_dir(self):
+        self.start("làm tiếp", "h1")
+        self.assertBlocked("cd tools && env -C ../tests rm test_b.py", ("deny",))
+
+
+class CaseInsensitive(HoleBase):
+    def setUp(self):
+        super().setUp()
+        # Chỉ có nghĩa trên hệ file không phân biệt hoa thường (APFS mặc định); không thì bỏ qua.
+        if not (self.project / "TESTS" / "test_b.py").exists():
+            self.skipTest("hệ file phân biệt hoa thường: S3 không áp dụng")
+
+    # spec:khoa-test-lo-cu#S3
+    def test_different_case_directory_or_file_name_is_blocked(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["rm TESTS/test_b.py", "rm tests/TEST_B.py", "rm Tests/Test_B.py",
+                    "echo pass > TESTS/test_b.py", "sed -i '' s/1/2/ tests/TEST_B.py", "mv TESTS/test_b.py /tmp/x.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S3
+    def test_different_case_via_cd_is_blocked_and_reads_pass(self):
+        self.start("làm tiếp", "h1")
+        self.assertBlocked("cd TESTS && rm test_b.py", ("deny",))
+        self.assertBlocked("cd tests && rm TEST_B.py", ("deny",))
+        for cmd in ["cat TESTS/test_b.py", "grep -n assert tests/TEST_B.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertPasses(cmd)
+
+
+class BraceExplosion(HoleBase):
+    # `{,}` nhân số mẫu mà không đổi tên: `tests/{test_b.py,zz}` + n lần `{,}` bung ra 2^(n+1) mẫu, trong đó 2^n mẫu
+    # là đúng `tests/test_b.py`. Trên code cũ hook vẫn chặn đúng nhưng chậm theo cấp số nhân (dbl16 ~7 giây,
+    # lồng nhiều tầng quá 60 giây), mà app bỏ hook sau 5 giây rồi cho lệnh chạy.
+    def timed(self, cmd, cwd=None):
+        out = self.bash_in(cmd, "h1", cwd)
+        self.assertLess(self.wall, 2.0, f"hook phải trả lời dưới 2 giây (timeout 5), mất {self.wall:.2f}s: {cmd[:70]}")
+        return out
+
+    # spec:khoa-test-lo-cu#S4
+    def test_many_pieces_in_rm_target_answer_fast_and_block(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["rm tests/{test_b.py,zz}" + "{,}" * 16,  # 131072 mẫu
+                    "rm {tests,a,b,c,d,e,f,g}/{test_b.py,a,b,c,d,e,f,g}" + "{,}" * 11]:  # 131072 mẫu, nhiều mảnh
+            with self.subTest(cmd=cmd[:60]):
+                out = self.timed(cmd)
+                self.assertIn(out and out[0], BLOCKED, f"{out}")
+
+    # spec:khoa-test-lo-cu#S4
+    def test_nested_brace_levels_answer_fast_and_block(self):
+        self.start("làm tiếp", "h1")
+        level = "{{{,},{,}},{{,},{,}}}"  # 8 mẫu mỗi tầng
+        for cmd in [f"rm tests/{level * 3}{{test_b.py,zz}}", f"rm tests/{level * 2}{{test_b.py,zz}}{{,}}{{,}}{{,}}{{,}}"]:
+            with self.subTest(cmd=cmd[:60]):
+                out = self.timed(cmd)
+                self.assertIn(out and out[0], BLOCKED, f"{out}")
+
+    # spec:khoa-test-lo-cu#S4
+    def test_piece_beyond_the_fiftieth_alternative_is_not_dropped(self):
+        self.start("làm tiếp", "h1")
+        cmd = "rm tests/{" + ",".join(str(i) for i in range(60)) + ",test_b.py}"
+        out = self.timed(cmd)
+        self.assertIn(out and out[0], BLOCKED, f"{out}")
+
+    # spec:khoa-test-lo-cu#S4
+    def test_huge_brace_in_cd_target_answers_fast_and_does_not_pass(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["cd {tests,zz}" + "{,}" * 16 + " && rm test_b.py",
+                    "cd {tests,zz}" + "{{,},{,}}" * 8 + " && rm test_b.py"]:
+            with self.subTest(cmd=cmd[:60]):
+                out = self.timed(cmd)
+                self.assertIn(out and out[0], BLOCKED, f"{out}")
+
+    # spec:khoa-test-lo-cu#S4
+    def test_huge_brace_unrelated_to_locked_tests_still_answers_fast(self):
+        self.start("làm tiếp", "h1")
+        out = self.timed("rm app/{x,y}" + "{,}" * 16)
+        self.assertIn(out and out[0], (None, "ask", "deny"))  # qua hay hỏi đều được: điều bắt buộc là nhanh
+
+
+class ReceiptVariableDir(HoleBase):
+    # spec:khoa-test-lo-cu#S5
+    def test_project_or_cwd_with_variable_and_relative_locked_target(self):
+        self.start("làm tiếp", "h1")
+        for cmd in [f"{R} run --project $PWD/tests -- sed -i '' s/1/2/ test_b.py",
+                    f"{R} run --cwd \"$HOME/x\" -- rm test_b.py", f"{R} run --cwd \"$HOME/x\" -- rm tests/test_b.py",
+                    f"{R} run --project \"$HOME/x\" -- rm test_b.py", f"{R} run --cwd=$PWD/tests -- rm test_b.py",
+                    f"{R} run --project=$PWD/tests -- echo pass > test_b.py",
+                    f"{R} run --project ${{PROJ}}/tests -- rm -f test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S5
+    def test_unrelated_inner_command_with_variable_dir_is_not_blocked_for_nothing(self):
+        self.start("làm tiếp", "h1")
+        for cmd in [f"{R} run --project $PWD/tools -- python3 -m unittest", f"{R} run --cwd \"$HOME/x\" -- make"]:
+            with self.subTest(cmd=cmd):
+                self.assertPasses(cmd)
+
+
+class HomeAndCdpath(HoleBase):
+    # spec:khoa-test-lo-cu#S6
+    def test_assigned_home_then_tilde_target(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["HOME=$PWD && rm ~/tests/test_b.py", "export HOME=$PWD; rm ~/tests/test_b.py",
+                    "HOME=$PWD; echo pass > ~/tests/test_b.py", "export HOME=.; sed -i '' s/1/2/ ~/tests/test_b.py",
+                    "HOME=\"$PWD\" && rm -f ~/tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S6
+    def test_assigned_cdpath_then_cd_without_slash(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["CDPATH=$PWD && cd tests && rm test_b.py", "export CDPATH=$PWD; cd tests && rm test_b.py",
+                    "CDPATH=$PWD; cd tests; echo pass > test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, cwd=self.project / "tools")
+
+    # spec:khoa-test-lo-cu#S6
+    def test_cdpath_dot_from_project_root(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["CDPATH=. cd tests; rm test_b.py", "CDPATH=. && cd tests && rm test_b.py",
+                    "export CDPATH=.; cd tests && sed -i '' s/1/2/ test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S6
+    def test_plain_cd_and_unrelated_assignments_still_work(self):
+        self.start("làm tiếp", "h1")
+        self.assertPasses("FOO=1 && cd tools && make")
+        self.assertPasses("export CDPATH=$PWD; cd tools && make", cwd=self.project / "tools")
+        self.assertPasses("HOME=$PWD && ls ~/tools")
+
+
+class UnlockRedirects(HoleBase):
+    UNLOCK = f"{R} unlock --reason 'bạn duyệt' tests/test_b.py"
+
+    # spec:khoa-test-lo-cu#S7
+    def test_unlock_with_redirect_passes_after_user_names_the_file(self):
+        for i, redirect in enumerate(["2>&1", "2>/dev/null", "> log.txt", ">> log.txt 2>&1", "&> log.txt"]):
+            sid = f"u{i}"
+            self.start("mở khóa tests/test_b.py", sid)
+            with self.subTest(redirect=redirect):
+                self.assertIsNone(self.bash_in(f"{self.UNLOCK} {redirect}", sid), redirect)
+
+    # spec:khoa-test-lo-cu#S7
+    def test_unlock_with_redirect_records_the_consent_receipt_once(self):
+        self.start("mở khóa tests/test_b.py", "r1")
+        self.assertIsNone(self.bash_in(f"{self.UNLOCK} 2>&1", "r1"))
+        receipts = json.loads((self.state / "unlock-consents.json").read_text())
+        self.assertEqual([r["path"] for r in receipts], ["tests/test_b.py"])
+        out = self.bash_in(f"{self.UNLOCK} 2>/dev/null", "r1")
+        self.assertEqual(out and out[0], "deny", "một tin chỉ mở một lần, chuyển hướng không đổi điều đó")
+
+    # spec:khoa-test-lo-cu#S7
+    def test_unlock_with_redirect_for_another_file_is_still_blocked(self):
+        for i, redirect in enumerate(["2>&1", "2>/dev/null", "> log.txt"]):
+            sid = f"o{i}"
+            self.start("mở khóa tests/test_a.py", sid)
+            with self.subTest(redirect=redirect):
+                out = self.bash_in(f"{self.UNLOCK} {redirect}", sid)
+                self.assertEqual(out and out[0], "deny", redirect)
+
+    # spec:khoa-test-lo-cu#S7
+    def test_unlock_with_redirect_without_user_consent_is_blocked(self):
+        self.start("làm tiếp đi", "n1")
+        for redirect in ["2>&1", "2>/dev/null", "> log.txt"]:
+            with self.subTest(redirect=redirect):
+                out = self.bash_in(f"{self.UNLOCK} {redirect}", "n1")
+                self.assertEqual(out and out[0], "deny", redirect)
+
+
+class CdpathFromEnvironment(HoleBase):
+    # spec:khoa-test-lo-cu#S6 (thêm lúc chốt việc: CDPATH đặt sẵn trong môi trường, không gán trong lệnh)
+    def test_cdpath_already_in_environment_counts_too(self):
+        self.start("làm tiếp", "h1")
+        out = self.bash_in("cd tests && rm test_b.py", "h1", self.project / "tools",
+                           CDPATH=os.fspath(self.project))
+        self.assertIn(out and out[0], BLOCKED, f"{out}")
+        self.assertIsNone(self.bash_in("cd tests && make", "h1", self.project / "tools",
+                                       CDPATH=os.fspath(self.project)))
+
+
+class ReviewFixesHoles(HoleBase):
+    # Thêm lúc chốt việc, theo review opus·xhigh và sonnet·xhigh ngày 20/11/2026.
+    # spec:khoa-test-lo-cu#S1 (`&` chạy nền: `cd` ở vế trước chạy trong tiến trình con)
+    def test_cd_before_background_ampersand_does_not_move_later_commands(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["cd tools & rm tests/test_b.py", "cd tools && true & rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1 (`cd` tới thư mục không có thì thất bại, lệnh sau chạy ở thư mục cũ)
+    def test_cd_to_missing_dir_keeps_the_old_dir(self):
+        self.start("làm tiếp", "h1")
+        self.assertBlocked("cd nope; rm tests/test_b.py", ("deny",))
+        self.assertPasses("cd tools; rm helper.py")
+
+    # spec:khoa-test-lo-cu#S2 (cờ gộp của env: `-iC dir`, `-iu X`)
+    def test_env_combined_flags(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["env -iC tests rm test_b.py", "env -vC tests rm test_b.py", "env -iu X rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S4 (dải `{a..c}` được shell bung: có thể trúng test khóa)
+    def test_brace_range_is_not_ignored(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["rm tests/test_{a..c}.py", "echo x > tests/test_{a..c}.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S6 (`HOME=` rồi `cd ~`, `cd ~/tests`, `pushd ~`)
+    def test_assigned_home_then_cd_tilde(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["HOME=$PWD; cd ~; rm tests/test_b.py", "export HOME=$PWD && cd ~ && rm tests/test_b.py",
+                    "HOME=$PWD; cd ~/tests; rm test_b.py", "HOME=$PWD; pushd ~; rm tests/test_b.py",
+                    "HOME=$PWD; cd; rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, cwd=self.project / "tools")
+
+
+class ReviewRound2Holes(HoleBase):
+    # Thêm lúc chốt việc, theo review lại opus·xhigh ngày 21/11/2026.
+    # spec:khoa-test-lo-cu#S1 (chuyển hướng có `&` không phải `&` chạy nền: `cd` vẫn đổi thư mục)
+    def test_redirect_with_ampersand_is_not_a_background_job(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["cd tests &>/dev/null; rm test_b.py", "cd tests >& /dev/null; rm test_b.py",
+                    "cd tests <&0; rm test_b.py", "cd tests 2<&-; rm test_b.py",
+                    "cd tests &>>log.txt && rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S6 (gán HOME, CDPATH theo cách khác `NAME=`)
+    def test_other_ways_of_setting_home_or_cdpath(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["HOME+=/x; cd ~; rm tests/test_b.py", "read -r HOME <<< \"$PWD\"; cd ~; rm tests/test_b.py",
+                    "for HOME in \"$PWD\"; do rm ~/tests/test_b.py; done",
+                    "read -r CDPATH <<< ..; cd tests; rm test_b.py", "CDPATH+=..; cd tests; rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, cwd=self.project / "tools")
