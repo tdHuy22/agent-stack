@@ -31,8 +31,9 @@ LINE_RE = re.compile(r"^S(\d{1,4}):\s*(\S.*)$")
 TEXT_RE = re.compile(r"^(khi|nếu|trong khi)\s.*?\sthì\s+\S", re.I)
 TEST_PATH_RE = re.compile(r"(^|/)(tests?|spec|__tests__)/|(^|/)(test_[^/]*|[^/]*_test\.\w+|[^/]*\.(test|spec)\.\w+)$")
 CODE_RE = re.compile(r"^[0-9a-f]{8,64}$")
-# Tin đầu của phiên do phiên khác mở (brief do agent viết) và khối hệ thống chèn vào không phải lời người dùng (TM-128).
-SPAWN_RE = re.compile(r"\(from the session that started this one\)", re.I)  # "Background (…)" và "Task (…)"
+# Tin đầu của phiên do phiên khác mở (brief do agent viết) và khối hệ thống chèn vào không phải lời người dùng (TM-128):
+# A.is_spawn_brief. Lớp chắc chắn: bản duyệt ghi lúc có transcript mang `verify` (phiên, transcript, dấu chữ tin) và
+# chỉ được tính khi bản ghi transcript của tin có nguồn `human`; hook Stop chốt hay xóa (TM-170).
 # Tin nhắc số dòng spec (S3) là góp ý hay điều kiện: không phải lời duyệt cả file.
 LINE_ID_RE = re.compile(r"(?<![\w-])s\d{1,4}(?![\w-])")
 MENTION_RE = re.compile(r"duyet\s+spec\s+[0-9a-f]{8,64}")
@@ -144,17 +145,70 @@ def book_path() -> Path:
     return A.state_dir() / APPROVALS
 
 
-def load_approvals() -> list:
+def _rows() -> list:
+    """Mọi bản ghi đúng dạng trong sổ, kể cả bản chờ xác minh (để ghi lại sổ không làm mất chúng)."""
     data = A.read_json(book_path(), [])
     return [r for r in data if isinstance(r, dict) and r.get("source") in SOURCES
             and isinstance(r.get("lines"), list)] if isinstance(data, list) else []
 
 
+def _verify_fields(v) -> bool:
+    return isinstance(v, dict) and all(isinstance(v.get(k), str) and v.get(k) for k in ("session", "transcript", "digest"))
+
+
+def load_approvals() -> list:
+    """Bản duyệt được tính: bản không mang `verify`, và bản mang `verify` mà transcript cho thấy tin do người dùng gõ.
+    `verify` sai dạng thì không tính (đóng chứ không mở)."""
+    rows, out, settled = _rows(), [], False
+    for i, r in enumerate(rows):
+        if "verify" in r:
+            v = r["verify"]
+            if not (_verify_fields(v) and A.prompt_from_human(v["transcript"], v["digest"], v.get("size"))):
+                continue
+            r = rows[i] = {k: x for k, x in r.items() if k != "verify"}
+            settled = True
+        out.append(r)
+    if settled:  # chỉ ghi kết luận của phép kiểm vừa đạt: transcript bị dọn sau này không làm mất bản duyệt thật
+        try:
+            A.write_json_atomic(book_path(), rows)
+        except OSError:
+            pass
+    return out
+
+
 def add_record(rec: dict) -> None:
-    rows = (load_approvals() + [rec])[-MAX_RECORDS:]
+    rows = (_rows() + [rec])[-MAX_RECORDS:]
     path = book_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     A.write_json_atomic(path, rows)
+
+
+def settle_session(session_id, transcript) -> int:
+    """Hook Stop: chốt bản duyệt chờ xác minh của phiên `session_id`. Bản ghi tin (từ mốc `size`) có nguồn `human` thì
+    bỏ `verify` (vẫn tính khi transcript bị dọn sau này); thấy bản ghi khớp mà nguồn khác thì xóa khỏi sổ; chưa thấy
+    hay không đọc được thì giữ nguyên (chưa tính). `verify` sai dạng thì xóa. Trả số bản ghi đã đổi. Chỉ hook gọi."""
+    import client_place
+    if not isinstance(session_id, str) or not session_id:
+        return 0
+    rows, kept, changed = _rows(), [], 0
+    for r in rows:
+        v = r.get("verify")
+        if isinstance(v, dict) and v.get("session") == session_id:
+            if not _verify_fields(v):
+                changed += 1
+                continue
+            origin = client_place.prompt_origin(v["transcript"], v["digest"], v.get("size")) \
+                if v["transcript"] == transcript else None
+            if origin == "human":
+                r = {k: x for k, x in r.items() if k != "verify"}
+                changed += 1
+            elif origin is not None:
+                changed += 1
+                continue  # tin của lượt không do người dùng gõ (brief phiên con, tin app tạo): bỏ bản duyệt
+        kept.append(r)
+    if changed:
+        A.write_json_atomic(book_path(), kept)
+    return changed
 
 
 def approved(top) -> dict:
@@ -173,10 +227,13 @@ def approved(top) -> dict:
     return out
 
 
-def _record(top, source: str, path, sha, pairs) -> dict:
-    return {"top": str(Path(top).resolve()), "path": path, "sha256": sha,
-            "lines": [line_hash(sid, text) for sid, text in pairs], "source": source,
-            "ts": datetime.now().astimezone().isoformat(timespec="seconds")}
+def _record(top, source: str, path, sha, pairs, verify=None) -> dict:
+    rec = {"top": str(Path(top).resolve()), "path": path, "sha256": sha,
+           "lines": [line_hash(sid, text) for sid, text in pairs], "source": source,
+           "ts": datetime.now().astimezone().isoformat(timespec="seconds")}
+    if verify is not None:
+        rec["verify"] = verify
+    return rec
 
 
 def codes_in(text: str) -> list:
@@ -213,7 +270,7 @@ def mentions_approval(text: str) -> bool:
     return bool(MENTION_RE.search(A.fold(unicodedata.normalize("NFC", text or ""))))
 
 
-def approve_code(top, code: str):
+def approve_code(top, code: str, verify=None):
     """Ghi bản duyệt file spec có sha256 bắt đầu bằng `code` (8–64 ký tự hex); không khớp hay khớp nhiều file thì
     None (TM-131)."""
     if not CODE_RE.match(code or ""):
@@ -231,7 +288,8 @@ def approve_code(top, code: str):
         return None
     path, data, sha = hits[0]
     pairs = [(x["id"], x["text"]) for x in parse(data.decode("utf-8", "replace"))["lines"]]
-    rec = _record(top, "duyet-spec", path.relative_to(Path(top)).as_posix(), sha, pairs)
+    rec = _record(top, "duyet-spec", path.relative_to(Path(top)).as_posix(), sha, pairs,
+                  verify=verify if _verify_fields(verify) else None)
     add_record(rec)
     rec["texts"] = pairs  # chỉ để hook hiện cho người dùng, không ghi vào sổ
     return rec
@@ -313,12 +371,12 @@ def approval_hint(specs: list) -> str:
 def approval_text(prompt) -> str:
     """Phần chữ được đọc lời duyệt spec: rỗng khi tin là brief của phiên do phiên khác mở; bỏ khối hệ thống chèn vào,
     thẻ <ide_*>, phần dán, khối code, dòng trích (TM-128)."""
-    if not isinstance(prompt, str) or SPAWN_RE.search(prompt):
+    if not isinstance(prompt, str) or A.is_spawn_brief(prompt):
         return ""
     return A.own_words(REMINDER_RE.sub(" ", A.routable_text(prompt)))
 
 
-def approve_from_prompt(own_words: str, cwd) -> list:
+def approve_from_prompt(own_words: str, cwd, verify=None) -> list:
     """[(mã, bản ghi hay None)] cho mỗi mã duyệt trong lời người dùng (đã lọc bằng approval_text); rỗng khi tin không
     có lời duyệt spec."""
     if "spec" not in (own_words or "").lower():
@@ -327,7 +385,7 @@ def approve_from_prompt(own_words: str, cwd) -> list:
     top = git_top(cwd) if codes and cwd else None
     if top is None:
         return [(c, None) for c in codes]
-    return [(c, approve_code(top, c)) for c in codes]
+    return [(c, approve_code(top, c, verify)) for c in codes]
 
 
 def plan_lines(body) -> list:

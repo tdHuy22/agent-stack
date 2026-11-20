@@ -785,7 +785,8 @@ AUTOMATED_MARKERS = ("<task-notification>", "[SYSTEM NOTIFICATION", "NOT USER IN
 AUTOMATED_PREFIXES = ("<agent-message", "<cross-session-message", "<side-sessions-event", "<ci-monitor-event",
                       "[Cross-session idle notice]")  # app báo phiên đã hẹn báo đang rảnh (thấy ngày 14/11/2026)
 # Phần app có thể đặt trước các thẻ trên: khối <system-reminder> và dòng "Another Claude session sent a message:".
-# Tin mở đầu của phiên do phiên khác tạo cũng có khối nhắc đứng trước, nhưng sau đó là việc được giao: vẫn là yêu cầu.
+# Tin mở đầu của phiên do phiên khác tạo cũng có khối nhắc đứng trước, nhưng sau đó là việc được giao: vẫn là yêu cầu
+# (router, tiêu chí), nhưng không phải lời người dùng nên không mở cổng nào (SPAWN_RE, TM-170).
 AUTOMATED_LEAD_RE = re.compile(
     r"\A(?:\s*<system-reminder>.*?</system-reminder>)*\s*(?:Another Claude session sent a message:\s*)?", re.S)
 # Khóa và token có dấu hiệu nhận biết. (?<![A-Za-z0-9]) để không bắt giữa một từ khác (như "task-" hay "risk-").
@@ -814,6 +815,44 @@ SECRET_PATTERNS = (
     r"(?![A-Za-z0-9])\s*[=:]\s*\S{6,}",
 )
 LONG_RUN_RE = re.compile(r"[A-Za-z0-9+/_-]{32,}={0,2}")
+
+
+# Đầu brief của phiên do phiên khác tạo ("Background (…)", "Task (…)"): app tự thêm, phiên cha không bỏ được. Lớp
+# chặn đầu, khi bản ghi transcript của tin chưa có (hook UserPromptSubmit chạy trước khi app ghi tin); lớp chắc chắn
+# là nguồn tin trong transcript (prompt_from_human).
+SPAWN_RE = re.compile(r"\(from the session that started this one\)", re.I)
+
+
+def is_spawn_brief(prompt) -> bool:
+    """True khi tin là brief của phiên do phiên khác tạo: việc được giao, không phải lời người dùng gõ."""
+    return isinstance(prompt, str) and bool(SPAWN_RE.search(prompt))
+
+
+def prompt_digest(prompt) -> str:
+    """Dấu chữ của chính người dùng trong tin (own_words), để tìm lại bản ghi của tin trong transcript."""
+    return hashlib.sha256(own_words(prompt).strip().encode("utf-8", "replace")).hexdigest()[:32]
+
+
+def prompt_from_human(transcript, digest, start=None) -> bool:
+    """True khi bản ghi cuối cùng trong transcript (từ mốc `start`: cỡ transcript lúc gửi tin) có dấu chữ `digest` được
+    app ghi nguồn `human` (người dùng gõ, trên Mac, điện thoại hay tin xếp hàng). Không đọc được, chưa thấy, nguồn
+    khác: False (đóng chứ không mở)."""
+    try:
+        import client_place
+        return client_place.prompt_origin(transcript, digest, start) == "human"
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def transcript_size(transcript):
+    """Cỡ transcript (byte) lúc hook UserPromptSubmit chạy: bản ghi của tin vừa gửi nằm quanh hay sau vị trí này. 0 khi
+    file chưa có (phiên mới), None khi không đọc được."""
+    try:
+        return os.path.getsize(transcript)
+    except FileNotFoundError:
+        return 0
+    except (OSError, TypeError, ValueError):
+        return None
 
 
 def is_command_prompt(prompt) -> bool:
@@ -971,18 +1010,22 @@ USER_MSG_DIR = "user-msg"
 AUDIT_NUDGE_DAYS = 7
 
 
-def mark_user_message(session_id, prompt) -> None:
-    """Ghi lúc người dùng nhắn, gồm cả lệnh slash, `!`, `#`; bỏ tin rỗng và tin do hệ thống hay agent khác tạo. Không
-    bao giờ văng lỗi."""
+def mark_user_message(session_id, prompt, transcript=None) -> None:
+    """Ghi lúc người dùng nhắn, gồm cả lệnh slash, `!`, `#`; bỏ tin rỗng, tin do hệ thống hay agent khác tạo, brief
+    của phiên con. Có `transcript` thì ghi kèm để `release_gate` kiểm tin đó do người dùng gõ (TM-171). Không bao giờ
+    văng lỗi."""
     try:
         key = _session_key(session_id)
-        if key is None or not isinstance(prompt, str) or not prompt.strip() or is_automated_prompt(prompt):
+        if (key is None or not isinstance(prompt, str) or not prompt.strip() or is_automated_prompt(prompt)
+                or is_spawn_brief(prompt)):
             return
         directory = state_dir() / USER_MSG_DIR
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         old = read_json(directory / f"{key}.json", {}) or {}
         prev = old.get("ts") if isinstance(old, dict) else None
         record = {"ts": time.time()}
+        if isinstance(transcript, str) and transcript:
+            record.update(transcript=transcript, digest=prompt_digest(prompt), size=transcript_size(transcript))
         if isinstance(prev, (int, float)) and not isinstance(prev, bool):
             record["prev"] = prev  # tin trước đó: khóa dùng một lần chỉ qua khi lần chặn nằm sau tin này
         write_json_atomic(directory / f"{key}.json", record)
@@ -998,6 +1041,7 @@ def mark_user_message(session_id, prompt) -> None:
 # form", "đẩy nhanh tiến độ" đều không tính (rơi về hỏi như cũ). Xem KE-HOACH 6.30.
 CONSENT_TEXT_MAX = 2000
 CONSENT_TURN_SECONDS = 120  # lượt hiện tại phải mở ngay sau tin này (tin do hệ thống tạo mở lượt mà không ghi tin)
+REMINDER_BLOCK_RE = re.compile(r"<system-reminder\b[^>]*>.*?(?:</system-reminder>|\Z)", re.S | re.I)
 _NOT_OWN_WORDS = (re.compile(r"<pasted_content\b[^>]*>.*?(?:</pasted_content>|\Z)", re.S | re.I),
                   re.compile(r"```.*?(?:```|\Z)", re.S), re.compile(r"(?m)^[ \t]*>.*$"))
 CONSENT_VERBS = {  # việc → các cách gọi tên (một token, chữ thường)
@@ -1030,10 +1074,13 @@ _CONSENT_STRIP = "\"'`“”‘’()[]{}<>*_:"
 
 
 def own_words(prompt) -> str:
-    """Chữ của chính người dùng trong tin: bỏ phần dán (<pasted_content>), khối code và dòng trích (>), chuẩn NFC; giữ
+    """Chữ của chính người dùng trong tin: bỏ khối <system-reminder> app chèn (có thể trích báo cáo của phiên con, tức
+    chữ do agent viết, TM-170), thẻ <ide_*>, phần dán (<pasted_content>), khối code và dòng trích (>), chuẩn NFC; giữ
     CONSENT_TEXT_MAX ký tự cuối (lời bảo làm hay nằm cuối tin)."""
     import unicodedata
     text = prompt if isinstance(prompt, str) else ""
+    text = REMINDER_BLOCK_RE.sub(" ", text)
+    text = IDE_LONE_TAG_RE.sub(" ", IDE_TAG_RE.sub(" ", text))
     for pattern in _NOT_OWN_WORDS:
         text = pattern.sub(" ", text)
     return unicodedata.normalize("NFC", text)[-CONSENT_TEXT_MAX:]
@@ -1199,6 +1246,8 @@ def turn_consent(session_id, use_key: str, verb: str, targets=(), use: bool = Fa
         used = turn.get("consent_used") if isinstance(turn.get("consent_used"), list) else []
         if use_key in used or not text_consents(turn["consent_text"], verb, targets):
             return False
+        if not _turn_from_human(session_id, turn):
+            return False  # tin của lượt không do người dùng gõ (brief phiên con, tin app tạo) hay chưa thấy (TM-170)
         if use:
             save_turn(session_id, dict(turn, consent_used=used + [use_key]))
             if gate_key:
@@ -1206,6 +1255,25 @@ def turn_consent(session_id, use_key: str, verb: str, targets=(), use: bool = Fa
         return True
     except Exception:  # noqa: BLE001
         return False
+
+
+def _turn_from_human(session_id, turn: dict) -> bool:
+    """Tin mở lượt do người dùng gõ. Payload có `transcript_path` (app luôn gửi) thì đòi bản ghi transcript của tin có
+    nguồn `human`; kết quả `human` được nhớ trong lượt. Payload không có transcript (test cũ, client lạ) thì giữ hành
+    vi cũ: brief phiên con đã bị loại lúc lưu lời đồng ý (SPAWN_RE)."""
+    if "consent_digest" not in turn:
+        return True
+    if turn.get("consent_origin") == "human":
+        return True
+    if not prompt_from_human(turn.get("transcript"), turn.get("consent_digest"), turn.get("consent_size")):
+        return False
+    try:
+        now = load_turn(session_id)
+        if now and now.get("consent_digest") == turn["consent_digest"] and now.get("ts") == turn.get("ts"):
+            save_turn(session_id, dict(now, consent_origin="human"))  # lượt mới mở giữa chừng thì không gắn nhầm
+    except Exception:  # noqa: BLE001 (không nhớ được thì lần sau đọc lại transcript)
+        pass
+    return True
 
 
 def _drop_nudges(session_id, keys) -> None:
@@ -1232,6 +1300,8 @@ def release_gate(session_id, keys: list, once=()):
         msg = msg if isinstance(msg, dict) else {}
         spoke, prev = (v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
                        for v in (msg.get("ts"), msg.get("prev")))
+        if "digest" in msg and not prompt_from_human(msg.get("transcript"), msg.get("digest"), msg.get("size")):
+            spoke = None  # tin gần nhất không do người dùng gõ (tin app tạo không có thẻ tự động, TM-171)
         directory = state_dir() / AUDIT_NUDGE_DIR
         path = directory / f"{key}.json"
         nudges = read_json(path, {})

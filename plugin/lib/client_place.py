@@ -90,6 +90,86 @@ def message_text(message) -> str:
     return content if isinstance(content, str) else ""
 
 
+def _prompt_record(rec):
+    """(chữ, nguồn) khi bản ghi transcript là một tin mở lượt: dòng `type: user` có `turnOrigin` hay `origin` (bỏ kết
+    quả công cụ, khối meta, tóm tắt compact), hay tin xếp hàng (`attachment.type: queued_command`). Nguồn là
+    `turnOrigin`, không có thì `origin.kind`; app đặt các trường này (đo trên bản ghi thật 20/11/2026, Claude Code
+    2.1.326: tin gõ trên Mac và điện thoại `human`, brief phiên con `host_synthetic`, tin phiên khác `peer`, tin xếp
+    hàng `origin.kind: human`). Agent có Bash vẫn nối được dòng giả vào transcript, như sửa được `state/`: rủi ro còn
+    lại cùng loại TM-104, ghi ở TM-170. None khi không phải tin."""
+    if not isinstance(rec, dict):
+        return None
+    if rec.get("type") == "attachment":
+        att = rec.get("attachment")
+        if isinstance(att, dict) and att.get("type") == "queued_command":
+            origin = att.get("origin")
+            kind = origin.get("kind") if isinstance(origin, dict) else None
+            prompt = att.get("prompt")
+            text = prompt if isinstance(prompt, str) else message_text({"content": prompt})
+            return text, kind if isinstance(kind, str) else ""
+        return None
+    if rec.get("type") != "user" or rec.get("isMeta") or rec.get("isCompactSummary") or rec.get("isSidechain"):
+        return None
+    message = rec.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+        return None
+    origin = rec.get("origin")
+    kind = rec.get("turnOrigin") if "turnOrigin" in rec else (origin.get("kind") if isinstance(origin, dict) else None)
+    if "turnOrigin" not in rec and "origin" not in rec:
+        return None  # ghi chú ngắt lượt, kết quả lệnh slash: không phải tin mở lượt
+    return message_text(message), kind if isinstance(kind, str) else ""
+
+
+# Bản ghi của tin thường được app ghi sau khi hook UserPromptSubmit chạy (232/244 lần đo bằng `client-platform`), nên
+# xác minh đọc từ cỡ transcript lúc đó; lùi thêm một đoạn cho trường hợp bản ghi đã nằm sẵn (tin xếp hàng).
+ORIGIN_SLACK_BYTES = 64 * 1024
+ORIGIN_FORWARD_BYTES = 64 * 1024 * 1024  # đọc xuôi tối đa chừng này sau mốc (lượt có output công cụ rất lớn)
+
+
+def _origin_lines(path: Path, start):
+    """Các dòng transcript để tìm bản ghi tin: đọc xuôi từ `start` (lùi ORIGIN_SLACK_BYTES) khi biết mốc, không thì
+    TRANSCRIPT_SCAN_BYTES cuối (đọc ngược rồi đảo lại)."""
+    if isinstance(start, int) and not isinstance(start, bool) and start >= 0:
+        with path.open("rb") as fh:
+            fh.seek(max(0, start - ORIGIN_SLACK_BYTES))
+            if start > ORIGIN_SLACK_BYTES:
+                fh.readline()  # bỏ dòng có thể bị cắt giữa chừng
+            read = 0
+            for raw in fh:
+                read += len(raw)
+                if read > ORIGIN_FORWARD_BYTES:
+                    break
+                yield raw
+        return
+    yield from reversed([raw for _offset, raw in reverse_lines(path, TRANSCRIPT_SCAN_BYTES)])
+
+
+def prompt_origin(transcript, digest_value: str, start=None):
+    """Nguồn (`human`, `host_synthetic`, `peer`…; "" khi bản ghi không ghi nguồn) của bản ghi tin CUỐI CÙNG có dấu chữ
+    `digest_value` (agentstack.prompt_digest), tìm từ mốc `start` (cỡ transcript lúc hook UserPromptSubmit chạy). Lấy
+    bản cuối để tin người dùng cũ cùng chữ không cho mượn lời đồng ý; tin khác chen vào sau (thông báo nền, tin xếp
+    hàng) không làm lệch. None khi không đọc được hay chưa thấy: người gọi coi như không phải người dùng gõ."""
+    import agentstack as A
+    if not isinstance(transcript, str) or not transcript or not isinstance(digest_value, str) or not digest_value:
+        return None
+    found_kind = None
+    try:
+        for raw in _origin_lines(Path(transcript), start):
+            if b'"user"' not in raw and b'queued_command' not in raw:
+                continue
+            try:
+                rec = json.loads(raw.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            found = _prompt_record(rec)
+            if found is not None and A.prompt_digest(found[0]) == digest_value:
+                found_kind = found[1]
+    except (OSError, TypeError, ValueError):
+        return None
+    return found_kind
+
+
 def last_client_platform(transcript):
     """(clientPlatform của tin người dùng cuối trong transcript, dấu chữ của tin đó, vị trí byte của bản ghi).
 

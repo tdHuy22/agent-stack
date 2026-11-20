@@ -143,7 +143,11 @@ def main():
                     and not A.non_interactive(data)):
                 import specbook
                 said = specbook.approval_text(prompt)
-                results = specbook.approve_from_prompt(said, data.get("cwd"))
+                tp = data.get("transcript_path")
+                # có transcript: bản duyệt chờ xác minh nguồn tin; script không tính tới khi xác minh, hook Stop chốt
+                verify = ({"session": sid, "transcript": tp, "digest": A.prompt_digest(prompt),
+                           "size": A.transcript_size(tp)} if isinstance(tp, str) and tp else None)
+                results = specbook.approve_from_prompt(said, data.get("cwd"), verify=verify)
                 if not results and specbook.mentions_approval(prompt):
                     context.append("[agent-stack] Tin có cụm \"duyệt spec <mã>\" nhưng hook chưa ghi bản duyệt: câu là "
                                    "câu hỏi, có phủ định hay loại trừ (trừ, nhưng … Sn), nằm trong phần dán, khối code, "
@@ -215,15 +219,19 @@ def main():
         A.emit("UserPromptSubmit", "\n".join(context), " ".join(user))
     finally:
         remember_request(sid, data.get("cwd"), prompt)  # ghi sau khi xử lý như cũ, kể cả khi bước trên lỗi
-        A.mark_user_message(sid, prompt)  # cổng nhắc audit trước phát hành; tự bắt lỗi
+        A.mark_user_message(sid, prompt, data.get("transcript_path"))  # cổng nhắc audit, lệnh không đảo ngược
         if sid and data.get("cwd"):
             # transcript: hook Stop của phiên khác cùng project đọc để biết file nào do phiên này sửa.
             transcript = data.get("transcript_path")
             extra = dict(flags or {}, **({"transcript": transcript} if isinstance(transcript, str) else {}))
             if (prompt.strip() and not A.is_automated_prompt(prompt) and not A.is_command_prompt(prompt)
-                    and not A.non_interactive(data)):  # `-p`: prompt có thể chứa chữ không tin cậy (issue, PR)
+                    and not A.non_interactive(data)  # `-p`: prompt có thể chứa chữ không tin cậy (issue, PR)
+                    and not A.is_spawn_brief(prompt)):  # brief phiên con là việc được giao, không phải lời đồng ý
                 # đồng ý trước cho lệnh không đảo ngược (pretool_guard): chỉ tin thật của người dùng, đã che khóa
                 extra.update(consent_text=A.redact_secrets(A.own_words(prompt)), consent_ts=time.time())
+                if isinstance(transcript, str) and transcript:
+                    # pretool_guard chỉ nhận khi bản ghi transcript của tin có nguồn `human` (TM-170)
+                    extra.update(consent_digest=A.prompt_digest(prompt), consent_size=A.transcript_size(transcript))
             A.start_turn(sid, data.get("cwd"), extra)  # tự bắt lỗi, không bao giờ văng
         if not A.non_interactive(data):  # `-p` không ghi đè lượt cuối của phiên tương tác (hook Stop ghi nếu đổi file)
             A.mark_turn_running(sid, data.get("cwd"), prompt)  # sau cùng vì chậm nhất (vài lệnh git); tự bắt lỗi

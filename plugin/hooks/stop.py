@@ -267,6 +267,11 @@ def plan_state(digest_now, plan_updated, should_block, gate, changed) -> str:
 def main():
     data = A.read_hook_input()
     sid = data.get("session_id", "")
+    try:  # bản duyệt spec chờ xác minh của phiên: chốt khi tin do người dùng gõ, xóa khi không (TM-170)
+        import specbook
+        specbook.settle_session(sid, data.get("transcript_path"))
+    except Exception as exc:  # noqa: BLE001
+        A.log_event("hook-error", {"hook": "spec-settle", "error": repr(exc)[:300]})
     if not sid or not data.get("cwd"):
         return  # đầu vào thiếu hay hỏng: không đoán thư mục, vì hook sẽ ghi file vào đó
     active = bool(data.get("stop_hook_active"))
