@@ -122,7 +122,7 @@ def section1_phases(text: str) -> list:
 def failing_checks(root: Path) -> list:
     out = []
     for label, rec in (A.receipt_status(root) or {}).items():
-        if rec.get("ok"):
+        if rec.get("ok") or rec.get("scope") == "remote":  # chạy trên máy xa: chỉ để tham khảo (F2b, TM-164)
             continue
         when = ("code đã đổi sau lần trượt; nếu lệnh đã bỏ hay lần đó chạy sai thư mục thì xoá biên nhận bằng `receipt.py forget <tên>`" if rec.get("current") is False
                 else "code chưa đổi từ lần trượt")

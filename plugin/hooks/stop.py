@@ -199,6 +199,9 @@ def evidence_gaps(root: Path, turn: dict, sid: str):
         return None
     checks = A.receipt_status(root)
     gaps = []
+    # Biên nhận chạy trên máy xa (`scope: remote`, F2b, TM-164) chỉ để tham khảo: máy khác hệ điều hành, không tính đạt
+    # hay trượt ở đây.
+    checks = {label: rec for label, rec in checks.items() if rec.get("scope") != "remote"}
     failing = [label for label, rec in checks.items()
                if not rec.get("ok") and (receipt_epoch(rec) or 0) >= turn["ts"] and receipt_current(rec, turn["ts"])]
     if failing:

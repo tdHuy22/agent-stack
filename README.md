@@ -235,6 +235,8 @@ Phần lớn chỉ cần nói tự nhiên; skill tự kích hoạt.
    python3 plugin/skills/session-keeper/scripts/receipt.py run -- python3 -m unittest discover -s tests -t .
    ```
 
+   Chạy trên máy xa qua SSH (máy phải có trong `state/remote-hosts.json`, ngoài git): thêm `--host <tên>` sau `run`. Biên nhận đó ghi `scope: remote` và không thay biên nhận trên máy này.
+
 6. **Trước khi báo xong.** Hook Stop buộc chạy `done-gate` khi lượt đổi code có rủi ro từ vừa trở lên, rồi đòi bằng chứng: biên nhận đạt còn đúng cho code hiện tại và một lần giao reviewer.
 7. **Gần hết hạn mức.** Hook nhắc; nói "lưu tiến độ" để `session-keeper` cập nhật §0. Phiên sau tự đọc lại.
 8. **Bàn giao.** Nói "bàn giao" để `session-keeper` viết `.agent/HANDOFF.md`; phiên mới trong project tự nạp file này.

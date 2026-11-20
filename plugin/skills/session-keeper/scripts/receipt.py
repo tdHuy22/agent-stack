@@ -12,6 +12,11 @@ Lệnh:
       `--narrow` (tự bật khi lệnh gọi narrow.py): bộ test thu hẹp, biên nhận ghi `scope: narrow` và không thay biên
       nhận cả bộ ở hook Stop, done-gate (TM-160). Trừ đúng dạng `python3 narrow.py full [--jobs N] [--timeout GIÂY]`
       ở chính project: chạy cả bộ song song và tự kiểm đủ số test, nên là biên nhận cả bộ.
+  receipt.py run --host TÊN [--label TÊN] [--timeout GIÂY] [--cwd DIR] -- <lệnh> [tham số...]
+      Chạy trên máy xa qua SSH (remote.py, F2b): đúng HEAD cộng thay đổi chưa commit của file git đang theo dõi, tên
+      máy chỉ lấy từ `state/remote-hosts.json`. Biên nhận ghi `scope: remote`, `host`, nhãn mặc định `@TÊN: <lệnh>`;
+      không thay biên nhận trên máy này (hook Stop không tính, kể cả `narrow.py full`). Mã 2: từ chối trước khi gọi
+      ssh (không ghi biên nhận); 255: lỗi ssh, mạng hay output không có dòng kết thúc; 124: quá giờ.
   receipt.py show [--project DIR] [--json]
       In các lần kiểm tra đã ghi và cho biết từng kết quả còn khớp code hiện tại không.
   receipt.py forget [--project DIR] TÊN [TÊN...]
@@ -509,6 +514,32 @@ def is_narrow(cmd: list, root: Path | None = None, run_dir: Path | None = None) 
     return root is None or not is_full_suite(cmd, root, run_dir or root)
 
 
+def cmd_run_remote(root: Path, label: str, cmd: list, timeout: float, run_dir: Path, host: str) -> int:
+    """Chạy trên máy xa (TM-161–165). Biên nhận `scope: remote`, dấu vân tay là của code đã gửi (lấy trước khi đóng
+    gói), nên sửa file sau đó làm biên nhận cũ; lỗi vận chuyển, quá giờ ghi biên nhận trượt."""
+    import remote as RM
+    try:
+        res = RM.run_remote(root, run_dir, cmd, host, timeout)
+    except RM.Refused as exc:
+        print(f"[receipt] không chạy trên máy {host}: {exc}")
+        return 2
+    output = res.output
+    if res.error:
+        output += ("" if not output or output.endswith("\n") else "\n") + f"[receipt] máy {host}: {res.error}\n"
+    extra = {**run_place(root, run_dir), "scope": "remote", "host": host, "remote_commit": res.ship, "head": res.head}
+    if res.error:
+        extra["remote_error"] = A.clip(res.error, 500)
+    rec = record(root, label, cmd, res.code, output, res.seconds, res.fingerprint, res.fingerprint,
+                 res.code_fingerprint, extra)
+    sys.stdout.write(output if output.endswith("\n") or not output else output + "\n")
+    mark = "✓ đạt" if rec["ok"] else f"✗ trượt (mã {res.code})"
+    saved = "đã ghi biên nhận" if rec["saved"] else f"KHÔNG ghi được biên nhận ({rec['save_error']})"
+    ship = (res.ship or "?")[:12]
+    print(f"[receipt] {mark} · {label} · máy {host}, bản chép {ship} (không thay biên nhận trên máy này) · "
+          f"{rec['seconds']} giây · {saved}")
+    return res.code
+
+
 def cmd_run(root: Path, label: str, cmd: list, timeout: float, run_dir: Path | None = None,
             narrow: bool = False) -> int:
     run_dir = run_dir or root
@@ -690,6 +721,8 @@ def describe(label: str, rec: dict) -> str:
     summary = f" · {rec['summary']}" if rec.get("summary") else ""
     place = f" · chạy trong {rec['cwd']}" if isinstance(rec.get("cwd"), str) else ""
     scope = " · bộ thu hẹp, không thay cả bộ" if rec.get("scope") == "narrow" else ""
+    if rec.get("scope") == "remote":
+        scope = f" · chạy trên máy {rec.get('host')}, không thay biên nhận trên máy này"
     return f"- {label}: {mark}, {ago(rec.get('ts'))}, {fresh}{place}{scope}{summary}"
 
 
@@ -738,6 +771,7 @@ def main(argv=None) -> int:
     run.add_argument("--label", help="tên lần kiểm tra (mặc định: chính câu lệnh)")
     run.add_argument("--timeout", type=float, default=1800)
     run.add_argument("--cwd", help=CWD_HELP)
+    run.add_argument("--host", help="chạy trên máy xa có trong state/remote-hosts.json (biên nhận scope: remote)")
     run.add_argument("--narrow", action="store_true",
                      help="bộ test thu hẹp (narrow.py): biên nhận không thay biên nhận cả bộ")
     run.add_argument("command", nargs=argparse.REMAINDER, help="-- <lệnh> [tham số...]")
@@ -810,6 +844,9 @@ def main(argv=None) -> int:
         if args.spec or args.allow:
             ap.error("--spec và --allow chỉ dùng với --red")
         return cmd_lock(root, label, command, args.base, args.tests, args.link, args.timeout, args.level, run_dir)
+    if args.host is not None:
+        label = args.label or A.clip(f"@{args.host}: " + " ".join(command), 80)
+        return cmd_run_remote(root, label, command, args.timeout, run_dir, args.host)
     return cmd_run(root, args.label or A.clip(" ".join(command), 80), command, args.timeout, run_dir,
                    getattr(args, "narrow", False))
 

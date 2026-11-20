@@ -931,7 +931,7 @@ SPEC_BOOK_REASON = ("agent-stack: `state/spec-approvals.json` là sổ duyệt s
 RUNNER_RE = re.compile(r"^(python[\d.]*|uv|uvx|env|pipx|pyenv|poetry|pdm|hatch|rye)$")
 # Cờ của receipt.py nhận giá trị: lệnh bên trong là phần còn lại sau chúng (argparse REMAINDER, có hay không `--`).
 RECEIPT_VALUE_FLAGS = {"--project", "--label", "--timeout", "--base", "--link", "--tests", "--level", "--reason",
-                       "--spec", "--allow", "--cwd"}
+                       "--spec", "--allow", "--cwd", "--host"}
 RECEIPT_MULTI_FLAGS = {"--tests", "--spec", "--allow"}  # nargs="+" của receipt.py: nuốt tới cờ kế tiếp
 # Tên sổ duyệt sau khi shell bỏ dấu nháy, gạch chéo (`spec-approval"s".json` thành `spec-approvals.json`), hay còn glob.
 SPEC_BOOK_TOKEN_RE = re.compile(r"spec-appr[^/\s]{0,8}\.json|spec-appr[^/\s]*[*?\[]", re.I)

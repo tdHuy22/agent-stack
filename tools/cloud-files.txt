@@ -96,6 +96,7 @@ plugin/skills/session-keeper/SKILL.md
 plugin/skills/session-keeper/scripts/fails_before.py
 plugin/skills/session-keeper/scripts/narrow.py
 plugin/skills/session-keeper/scripts/receipt.py
+plugin/skills/session-keeper/scripts/remote.py
 plugin/skills/session-keeper/scripts/spec.py
 plugin/skills/session-keeper/scripts/state.py
 plugin/skills/session-keeper/scripts/watch_change.py

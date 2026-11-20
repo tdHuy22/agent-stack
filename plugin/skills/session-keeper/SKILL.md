@@ -15,6 +15,8 @@ Script hỗ trợ: `python3 "${CLAUDE_SKILL_DIR}/scripts/state.py" <lệnh> --pr
 
 Bộ test thu hẹp: đang làm thì chạy `python3 "${CLAUDE_SKILL_DIR}/scripts/narrow.py" run` (cùng thư mục với `receipt.py`) thay cả bộ (chỉ test chạm file vừa đổi; `narrow.py status` báo vết cũ hay chưa có thì `narrow.py record` trước). Gọi trực tiếp, không bọc trong `sh -c` hay `make`. Biên nhận thu hẹp (`scope: narrow`) không thay biên nhận cả bộ: cả bộ chạy đúng một lần trước commit qua `receipt.py run`, mutation một lần lúc cuối (done-gate). Mốc là `python3 -m unittest discover -s tests -t .` thì trước commit chạy được `receipt.py run -- python3 <narrow.py> full`: cùng tập test, mỗi module một tiến trình, mảnh trượt chạy lại một lần; không bắt lỗi rò trạng thái giữa module.
 
+Máy xa (TUF): `receipt.py run --host <tên> -- <lệnh>` chạy lệnh qua SSH trên máy có trong `state/remote-hosts.json` của agent-stack (ngoài git; tên máy không bao giờ lấy từ file trong repo), trên đúng HEAD cộng thay đổi chưa commit của file đang theo dõi; file chưa track (không bị ignore) thì từ chối. Dùng để chạy test dài hay song song nhiều hơn máy này mà không chiếm máy. Biên nhận `scope: remote` chỉ để tham khảo: không thay biên nhận trên máy này (hook Stop không tính, kể cả `narrow.py full`), vì máy xa khác hệ điều hành (TUF trượt sẵn 8 test do khác Linux/macOS). Mã 2: từ chối trước khi gọi SSH; 255: lỗi SSH, mạng; 124: quá giờ.
+
 Chế độ lấy theo `$ARGUMENTS`. Nếu không có, suy ra từ lời người dùng.
 
 ## `luu`: lưu tiến độ (mặc định)

@@ -29,6 +29,12 @@ Lệnh:
       Lệnh test: `--cmd`, không thì `cmd` trong sổ khóa của các file test đã khóa có trong diff. mutmut: `--mutmut`,
       biến AGENT_STACK_MUTMUT, rồi `<agent-stack>/.venv-mutmut/bin/mutmut`. Số lần chạy song song: `--jobs N` (tối đa
       bằng số dòng code thêm), không thì min(4, số lõi/2, số dòng code thêm/10), ít nhất 1. `--timeout` là hạn chung.
+  mutation.py --host TÊN [--project DIR] [--base REF] [--cmd "<lệnh test>"] [--timeout GIÂY] [--jobs N] [--no-select]
+              [--json]
+      Chạy trên máy xa qua SSH (F2b, TM-161–165; chỉ cho chính repo agent-stack): gửi HEAD cộng thay đổi chưa commit
+      bằng `session-keeper/scripts/remote.py`, REF đổi thành mã băm ở máy này, mutmut ở
+      `~/.cache/agent-stack-remote/venv-mutmut/` của máy xa; in kết quả như chạy tại chỗ, thêm dòng `- máy chạy: …`.
+      Không nhận `--link`, `--mutmut`. Lỗi gì cũng ra `Mutation: chưa chạy: …`.
   mutation.py setup
       Tạo `.venv-mutmut/` của agent-stack từ `tools/mutmut-requirements.txt` (mã băm) và
       `tools/mutmut-build-constraints.txt`; mã thoát khác 0 khi cài hỏng.
@@ -59,6 +65,7 @@ try:  # bản cài hỏng cũng phải thoát 0 với dòng trạng thái (S9)
     import agentstack as A
     import fails_before as FB
     import mutation_select as MS
+    import remote as R
     import risk
     import testlock as TL
 except Exception as exc:  # noqa: BLE001
@@ -751,6 +758,134 @@ def summary(res: dict) -> list:
     return lines
 
 
+REMOTE_MUTMUT = ".cache/agent-stack-remote/venv-mutmut/bin/mutmut"  # tính từ HOME của máy xa
+REMOTE_SCRIPT = "plugin/skills/done-gate/scripts/mutation.py"
+REMOTE_GRACE = 60  # giây (tối đa 1/10 hạn) dành cho mutation.py trên máy xa in kết quả trước hạn chung `--timeout`
+COUNT_KEYS = ("total", "killed", "timeout", "untested", "jobs")
+RUN_STATUSES = ("ran", "partial", "skipped")
+
+
+def is_count(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+
+def remote_result(data) -> dict:
+    """Kết quả JSON từ máy xa, chỉ giữ khóa đã biết với đúng kiểu (TM-165): sai kiểu thì Skip, không bao giờ in số đếm
+    từ dữ liệu không đọc được."""
+    if not isinstance(data, dict) or data.get("status") not in RUN_STATUSES:
+        raise Skip("kết quả từ máy xa không đọc được (thiếu `status` hợp lệ)")
+    res = {"status": data["status"]}
+    for key in COUNT_KEYS:
+        if key in data:
+            if not is_count(data[key]):
+                raise Skip(f"kết quả từ máy xa sai kiểu ở `{key}`")
+            res[key] = data[key]
+    for key in ("seconds", "estimate_seconds"):
+        if key in data:
+            if not is_number(data[key]):
+                raise Skip(f"kết quả từ máy xa sai kiểu ở `{key}`")
+            res[key] = data[key]
+    for key in ("reason", "selection"):
+        if key in data:
+            if not isinstance(data[key], str):
+                raise Skip(f"kết quả từ máy xa sai kiểu ở `{key}`")
+            res[key] = data[key]
+    for key in ("unreached_known", "timed_out"):
+        if key in data:
+            if not isinstance(data[key], bool):
+                raise Skip(f"kết quả từ máy xa sai kiểu ở `{key}`")
+            res[key] = data[key]
+    shapes = {"survived": {"file": str, "line": int, "diff": str}, "outside": {"file": str, "line": int},
+              "unreached": {"file": str, "start": int, "end": int}}
+    for key, shape in shapes.items():
+        items = data.get(key, [])
+        if not (isinstance(items, list) and all(isinstance(x, dict) and all(
+                isinstance(x.get(k), kind) and not isinstance(x.get(k), bool) for k, kind in shape.items())
+                for x in items)):
+            raise Skip(f"kết quả từ máy xa sai kiểu ở `{key}`")
+        if key == "outside" and not all(isinstance(x.get("status", ""), str) for x in items):
+            raise Skip("kết quả từ máy xa sai kiểu ở `outside`")
+        res[key] = [{k: x[k] for k in (*shape, "status") if k in x} for x in items]
+    notes = data.get("notes", [])
+    if not (isinstance(notes, list) and all(isinstance(n, str) for n in notes)):
+        raise Skip("kết quả từ máy xa sai kiểu ở `notes`")
+    res["notes"] = notes
+    phases = data.get("phases", {})
+    if not (isinstance(phases, dict) and all(isinstance(k, str) and is_number(v) for k, v in phases.items())):
+        raise Skip("kết quả từ máy xa sai kiểu ở `phases`")
+    res["phases"] = phases
+    if res["status"] != "ran" and "reason" not in res:
+        raise Skip("kết quả từ máy xa thiếu lý do")
+    if res["status"] in ("ran", "partial"):
+        if "total" not in res or "killed" not in res or "survived" not in data:
+            raise Skip("kết quả từ máy xa thiếu số đếm `total`, `killed` hay danh sách `survived`")
+        parts = res["killed"] + len(res["survived"]) + res.get("timeout", 0) + res.get("untested", 0)
+        if parts > res["total"]:
+            raise Skip("kết quả từ máy xa không khớp: số bắt, sống, quá giờ, chưa chạy cộng lại lớn hơn tổng")
+    return res
+
+
+def run_on_host(args) -> dict:
+    """Mutation trên máy xa (S9, S10 của spec f2b-chay-xa). Mọi lỗi thành Skip."""
+    if args.link or args.mutmut:
+        raise Skip("--link, --mutmut không dùng được với --host (máy xa không có thư mục của máy này; mutmut của máy "
+                   f"xa ở ~/{REMOTE_MUTMUT})")
+    root = Path(args.project).expanduser()
+    if not root.is_dir():
+        raise Skip(f"không thấy thư mục project {root}")
+    root = root.resolve()
+    top_out = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if top_out.returncode != 0 or not top_out.stdout.strip():
+        raise Skip("không phải git repo (cần git để biết dòng nào vừa đổi)")
+    top = Path(top_out.stdout.strip()).resolve()
+    home = A.home_dir()
+    if home is None or Path(home).expanduser().resolve() != top:
+        raise Skip("--host chỉ chạy cho chính repo agent-stack (máy xa cần mutation.py trong bản chép); project khác "
+                   "thì chạy tại chỗ")
+    try:
+        sha = FB.git(top, "rev-parse", "--verify", "-q", args.base + "^{commit}").decode().strip()
+    except FB.Problem as exc:
+        raise Skip(str(exc)) from None
+    ancestor = subprocess.run(["git", "-C", str(top), "merge-base", "--is-ancestor", sha, "HEAD"], capture_output=True)
+    if ancestor.returncode != 0:
+        raise Skip(f"--base {args.base} không phải tổ tiên của HEAD: máy xa chỉ có lịch sử tới HEAD")
+    sub = root.relative_to(top).as_posix()
+    # `--timeout` là hạn chung như khi chạy tại chỗ: mutation.py trên máy xa dừng sớm hơn một chút để kịp in kết quả.
+    inner = args.timeout - min(REMOTE_GRACE, args.timeout / 10)
+    cmd = ["python3", REMOTE_SCRIPT, "--project", sub, "--base", sha, "--timeout", f"{inner:g}", "--json"]
+    if args.cmd:
+        cmd += ["--cmd", args.cmd]
+    if args.jobs is not None:
+        cmd += ["--jobs", str(args.jobs)]
+    if args.no_select:
+        cmd.append("--no-select")
+    try:
+        res = R.run_remote(top, top, cmd, args.host, args.timeout,
+                           home_env={"AGENT_STACK_MUTMUT": REMOTE_MUTMUT})
+    except R.Refused as exc:
+        raise Skip(f"máy {args.host}: {exc}") from None
+    if res.error or res.code != 0:
+        why = res.error or f"mutation.py thoát mã {res.code}: " + (res.output or "").strip()[-300:]
+        raise Skip(f"máy {args.host}: " + " ⏎ ".join(x.strip() for x in why.splitlines() if x.strip()))
+    try:
+        data = json.loads(res.output)
+    except ValueError:
+        tail = " ⏎ ".join(x.strip() for x in (res.output or "").strip()[-200:].splitlines() if x.strip())
+        raise Skip(f"máy {args.host} trả kết quả không phải JSON: {tail}") from None
+    out = remote_result(data)
+    if out["status"] == "skipped":
+        out["reason"] = f"máy {args.host}: {out['reason']}"
+    where = f"máy chạy: {args.host}, bản chép {(res.ship or '?')[:12]} (HEAD {(res.head or '?')[:12]}"
+    where += " + thay đổi chưa commit)" if res.ship != res.head else ")"
+    out["notes"] = [where, *out["notes"]]
+    out["host"] = args.host
+    return out
+
+
 def cmd_setup() -> int:
     """Cài mutmut 2.5.1 vào `.venv-mutmut/` của agent-stack, đúng bộ gói đã vet (mã băm), không cài toàn cục."""
     home = stack_root()
@@ -792,13 +927,14 @@ def main(argv=None) -> int:
         ap.add_argument("--link", action="append", metavar="PATH", help="nối thư mục bị git bỏ qua, như .venv")
         ap.add_argument("--jobs", type=int, help="số lần chạy mutmut song song (mặc định: tự chọn theo cỡ diff)")
         ap.add_argument("--no-select", action="store_true", help="không chọn test theo dòng: mỗi đột biến chạy cả lệnh")
+        ap.add_argument("--host", help="chạy trên máy xa có trong state/remote-hosts.json (chỉ repo agent-stack)")
         ap.add_argument("--json", action="store_true")
         args = ap.parse_args(argv)
         if args.jobs is not None and args.jobs < 1:
             raise Skip(f"tham số sai (--jobs phải là số nguyên dương, nhận {args.jobs})")
         if IMPORT_ERROR is not None:
             raise Skip(f"không nạp được thư viện của agent-stack ({IMPORT_ERROR!r})"[:300])
-        res = run(args)
+        res = run_on_host(args) if args.host is not None else run(args)
     except Skip as exc:
         res: dict = {"status": "skipped", "reason": str(exc)}
     except Exception as exc:  # noqa: BLE001 (chỉ để báo: lỗi nào cũng không được làm trượt done-gate)

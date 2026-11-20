@@ -104,9 +104,51 @@
    "reason": "mở khóa 6 test (bạn nhắn 19/11/2026): gỡ hỗ trợ pi, bỏ ca chỉ kiểm pi",
    "sha256": "8c9eb86546f79e2e41f1975ad7692d5435e4508b1525bb51430df0ee4d90a0b2",
    "ts": "2026-11-19T23:06:32+07:00"
+  },
+  {
+   "action": "unlock",
+   "level": "cao",
+   "path": "tests/test_remote.py",
+   "reason": "mở khóa tests/test_remote.py",
+   "sha256": "ee9093942b326c7da35e35863a273f8d46c9644290a3963c309d8777aaa7026c",
+   "ts": "2026-11-20T08:26:36+07:00"
   }
  ],
  "files": {
+  ".agent/spec/f2b-chay-xa.txt": {
+   "base": "86ce33ace768acac9866c79000c81eba7f979a06",
+   "cmd": [
+    "python3",
+    "-m",
+    "unittest",
+    "tests.test_remote"
+   ],
+   "label": "lock: python3 -m unittest tests.test_remote",
+   "level": "cao",
+   "lines": [
+    "32026f32fd49",
+    "847298abc3d1",
+    "81a9a55ca334",
+    "be0ab7854866",
+    "677b0bd49522",
+    "f1429f751174",
+    "843214cf29be",
+    "565fdbf4cc68",
+    "205a65f51707",
+    "16ab8323d0aa",
+    "1748896ab258",
+    "4283f853d8d1",
+    "7feec44f1362"
+   ],
+   "red": {
+    "base": "86ce33ace768acac9866c79000c81eba7f979a06",
+    "kind": "thieu",
+    "line": "import remote # chưa có module thì mọi test trượt ở đây (ImportError)",
+    "ts": "2026-11-20T07:46:46+07:00"
+   },
+   "sha256": "3d2f607f827ec8795f8e0768279e2d34553c2f447f41eedcbe6fc33f0f1919bf",
+   "ts": "2026-11-20T07:46:46+07:00"
+  },
   ".agent/spec/gd6-qs-cong-cu.txt": {
    "base": "dbae333379fef029731b1629be3850dda9a03df4",
    "cmd": [
