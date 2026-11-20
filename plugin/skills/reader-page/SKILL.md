@@ -48,7 +48,7 @@ Mọi loại đều bị soát thuật ngữ và chữ mẫu. Báo cáo vẫn n�
 
 ## Dùng skill có sẵn của Anthropic khi hợp việc
 
-Đã qua `vet-skill`; chỉ dùng khi đã cài (`claude plugin list`). Nội dung vẫn theo các mục "Cách viết" của skill này.
+Đã qua `vet-skill`; chỉ dùng khi đã cài (`claude plugin list`). Bốn plugin này thuộc bộ `giao-dien`, không nạp sẵn: chưa bật thì `python3 ~/Documents/Claude/agent-stack/plugin/skills/project-setup/scripts/profile.py on giao-dien --project .` (lệnh in đường dẫn SKILL.md để đọc thẳng ngay; plugin nạp đủ sau `/reload-plugins`). Nội dung vẫn theo các mục "Cách viết" của skill này.
 
 | Việc | Dùng |
 |---|---|

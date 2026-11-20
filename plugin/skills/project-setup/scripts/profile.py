@@ -1,94 +1,49 @@
 #!/usr/bin/env python3
-"""Công tắc bộ plugin theo project (việc G mục 1, 19/11/2026): "gọn" ↔ "đủ", mỗi chiều một lệnh.
+"""Bật, tắt các bộ skill và plugin (việc H5 mục 1, 20/11/2026; thay công tắc "gọn"/"đủ" của việc G).
 
-"gọn" ghi vào `<project>/.claude/settings.local.json` (phạm vi local của Claude Code, đè cài đặt user và project):
-  - `enabledPlugins[<id>] = false` cho plugin ít dùng: plugin không nạp skill, subagent, hook của nó;
-  - `skillOverrides[<tên>] = "name-only"` cho skill ít dùng: skill chỉ còn tên trong danh sách nạp sẵn, bỏ mô tả, vẫn
-    gọi được bằng tên.
-"đủ" trả đúng giá trị cũ của các khóa "gọn" đã đổi (khóa người dùng tự đổi sau đó thì giữ). Giá trị cũ nằm ở
-`state/profiles/` của agent-stack, ngoài repo. Có hiệu lực từ phiên mới (Claude Code đọc cài đặt lúc mở phiên).
+Danh sách bộ cố định ở `plugin/lib/bundles.py`: bộ lõi luôn bật; bộ khác bật khi việc cần. Lệnh ghi `enabledPlugins`
+vào `<project>/.claude/settings.local.json` (mặc định, đè cấu hình user và project) hay, với `--user`, vào
+`$CLAUDE_CONFIG_DIR/settings.json` (mặc định `~/.claude/settings.json`). Skill agent-stack ngoài lõi không cần ghi gì:
+chúng không nạp sẵn (`disable-model-invocation: true`), Claude đọc thẳng `SKILL.md` theo đường dẫn lệnh này in ra và
+theo dòng của hook SessionStart khi bộ đang bật. Plugin có hiệu lực ở phiên mới hay sau khi người dùng gõ
+/reload-plugins.
 
-Danh sách lấy từ `profiles.gon.plugins_off` và `profiles.gon.skills_name_only` của `.agent/stack.json`; không có thì
-dùng mặc định dưới. stack.json nằm trong repo nên không tin được (TM-154): plugin agent-stack (chứa hook chặn) không
-bao giờ bị tắt, skill chỉ được đặt "name-only", tên sai dạng bị bỏ. Không bỏ skill nào vĩnh viễn: việc H mới quyết.
+Chỉ đặt `true` cho plugin đã cài (`installed_plugins.json`): Claude Code tự tải plugin chưa cài khi cấu hình bật nó,
+tức bản chưa qua vet-skill (TM-167). Plugin của bộ lõi không bao giờ bị đặt `false` (TM-166).
 
 Lệnh:
-  profile.py --project <thư mục> show [--json]   # bộ đang dùng
-  profile.py --project <thư mục> gon [--dry-run]
-  profile.py --project <thư mục> du [--dry-run]
+  profile.py [--project DIR | --user] show [--json]
+  profile.py [--project DIR | --user] on BỘ [BỘ...] [--dry-run]
+  profile.py [--project DIR | --user] off BỘ [BỘ...] [--dry-run]
+  profile.py [--project DIR | --user] loi [--dry-run]     # chỉ bộ lõi (bí danh: gon)
+  profile.py [--project DIR | --user] du [--dry-run]      # trả mọi khóa đã đổi về như trước lần đổi đầu tiên
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
+import copy
 import json
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
 import agentstack as A  # noqa: E402
+import bundles as B  # noqa: E402
 
-PROTECTED_PLUGINS = {"agent-stack@agent-stack-local"}
-PROTECTED_MARKETPLACE = "agent-stack-local"
-PLUGIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-SKILL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(?::[A-Za-z0-9][A-Za-z0-9._-]{0,63})?$")
-MAX_NAMES = 100
-# Mặc định của "gọn": plugin và skill ít dùng khi code (bạn đổi trong stack.json; việc H quyết bỏ hẳn hay không).
-DEFAULT_PLUGINS_OFF = (
-    "playground@claude-plugins-official",
-    "project-artifact@claude-plugins-official",
-    "html-plan@agent-stack-vendor-local",
-    "claude-security@claude-plugins-official",
-)
-DEFAULT_SKILLS_NAME_ONLY = (
-    "agent-stack:aside-web", "agent-stack:kaggle-gpu", "agent-stack:writing-voice",
-    "agent-stack-vendor:kaggle-cli", "agent-stack-vendor:frontend-design",
-    "anthropic-skills:docx", "anthropic-skills:pptx", "anthropic-skills:xlsx", "anthropic-skills:pdf",
-    "anthropic-skills:google-workspace", "anthropic-skills:docs", "anthropic-skills:paper-anatomy",
-    "anthropic-skills:deep-research", "anthropic-skills:import-memory", "anthropic-skills:setup-claude",
-    "anthropic-skills:morning", "anthropic-skills:computer-use", "anthropic-skills:chrome-browser",
-    "cowork-plugin-management:create-cowork-plugin", "cowork-plugin-management:cowork-plugin-customizer",
-)
-LABEL = {"gon": "gọn", "du": "đủ"}
+TABLE = "enabledPlugins"
+RESTORE = "restore"  # bước "trả khóa về giá trị trước lần đổi đầu tiên" của `off`
 
 
 class ProfileError(Exception):
     pass
 
 
-def names(values, pattern) -> list:
-    out = []
-    for value in values if isinstance(values, list) else []:
-        if isinstance(value, str) and pattern.match(value) and value not in out:
-            out.append(value)
-    return out[:MAX_NAMES]
-
-
-def protected(plugin_id: str) -> bool:
-    """Plugin của marketplace agent-stack-local (chứa hook chặn) không bao giờ bị tắt; so không phân biệt hoa thường."""
-    folded = plugin_id.casefold()
-    return folded in PROTECTED_PLUGINS or folded.endswith("@" + PROTECTED_MARKETPLACE)
-
-
-def wanted(project: Path) -> dict:
-    """Danh sách của bộ "gọn" cho project: từ stack.json nếu có, không thì mặc định."""
-    data = A.read_json(project / ".agent" / "stack.json", {}) or {}
-    gon = ((data.get("profiles") or {}) if isinstance(data, dict) else {}).get("gon")
-    gon = gon if isinstance(gon, dict) else {}
-    plugins = names(gon["plugins_off"], PLUGIN_RE) if "plugins_off" in gon else list(DEFAULT_PLUGINS_OFF)
-    skills = names(gon["skills_name_only"], SKILL_RE) if "skills_name_only" in gon else list(DEFAULT_SKILLS_NAME_ONLY)
-    return {"plugins_off": [p for p in plugins if not protected(p)], "skills_name_only": skills,
-            "source": ".agent/stack.json" if gon else "mặc định"}
-
-
-def settings_path(project: Path) -> Path:
-    folder = project / ".claude"
-    path = folder / "settings.local.json"
-    if folder.is_symlink() or path.is_symlink():
-        raise ProfileError(f"{path} hay thư mục .claude là symlink: không ghi (TM-155)")
+def check_path(path: Path) -> Path:
+    """Từ chối file settings hay thư mục chứa nó là symlink (TM-155, TM-168)."""
+    if path.parent.is_symlink() or path.is_symlink():
+        raise ProfileError(f"{path} hay thư mục chứa nó là symlink: không ghi")
     return path
 
 
@@ -104,135 +59,251 @@ def load_settings(path: Path) -> dict:
     return data
 
 
-def record_path(project: Path) -> Path:
-    digest = hashlib.sha256(str(project.resolve()).encode()).hexdigest()[:16]
-    return A.state_dir() / "profiles" / f"{digest}.json"
-
-
-def save_record(project: Path, rec: dict) -> None:
-    path = record_path(project)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    A.write_json_atomic(path, rec)
-
-
-def load_record(project: Path) -> dict:
-    rec = A.read_json(record_path(project), {}) or {}
-    return rec if isinstance(rec, dict) and isinstance(rec.get("changes"), list) else {"changes": []}
-
-
-def plan_gon(data: dict, want: dict) -> list:
-    """Các khóa cần đặt: (bảng, khóa, giá trị mới)."""
-    targets = [("enabledPlugins", p, False) for p in want["plugins_off"]]
-    targets += [("skillOverrides", s, "name-only") for s in want["skills_name_only"]]
-    return [(t, k, v) for t, k, v in targets if (data.get(t) or {}).get(k) != v]
-
-
-def apply_gon(data: dict, steps: list, rec: dict) -> dict:
-    known = {(c["table"], c["key"]) for c in rec["changes"]}
-    for table, key, value in steps:
-        current = data.get(table)
-        created = not isinstance(current, dict)
-        if not isinstance(current, dict):
-            current = data[table] = {}
-        if (table, key) not in known:
-            rec["changes"].append({"table": table, "key": key, "had": key in current, "old": current.get(key),
-                                   "set": value, "table_created": created})
-        else:
-            for change in rec["changes"]:
-                if (change["table"], change["key"]) == (table, key):
-                    change["set"] = value
-        current[key] = value
-    rec["profile"] = "gon"
-    return rec
-
-
-def apply_du(data: dict, rec: dict) -> list:
-    """Trả các khóa về giá trị cũ; trả về danh sách khóa đã trả."""
-    done = []
-    for change in rec["changes"]:
-        table = data.get(change["table"])
-        if not isinstance(table, dict) or table.get(change["key"]) != change["set"]:
-            continue  # người dùng đã tự đổi sau "gọn": giữ
-        if change["had"]:
-            table[change["key"]] = change["old"]
-        else:
-            table.pop(change["key"], None)
-        done.append(f"{change['table']}.{change['key']}")
-    for change in rec["changes"]:
-        if change.get("table_created") and data.get(change["table"]) == {}:
-            data.pop(change["table"])
-    return done
-
-
 def write_settings(path: Path, data: dict) -> None:
-    """Ghi nguyên tử qua file tạm tên ngẫu nhiên tạo mới (O_EXCL): file tạm có sẵn trong repo, kể cả symlink, không
-    làm lệch chỗ ghi (TM-155)."""
+    """Ghi nguyên tử qua file tạm tên ngẫu nhiên tạo mới (O_EXCL): file tạm có sẵn, kể cả symlink, không làm lệch chỗ
+    ghi (TM-155)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".settings.local.", suffix=".agent-stack.tmp")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".agent-stack.tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        if path.exists():  # giữ quyền của file cũ (mkstemp tạo 0600)
+            os.chmod(tmp, path.stat().st_mode & 0o777)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
 
 
+def load_record(path: Path) -> dict:
+    rec = A.read_json(B.record_path(path), {}) or {}
+    if not isinstance(rec, dict) or not isinstance(rec.get("changes"), list):
+        rec = {"changes": []}
+    # Chỉ nhận khóa plugin ngoài lõi có trong danh sách cố định, giá trị bool hay None: bản ghi bị sửa không làm `du`
+    # tắt được plugin lõi (TM-166).
+    allowed = {p for n in B.non_core() for p in B.BUNDLES[n]["plugins"]} - B.core_plugins()
+    rec["changes"] = [c for c in rec["changes"] if isinstance(c, dict) and c.get("key") in allowed
+                      and c.get("old") in (True, False, None) and c.get("set") in (True, False)]
+    rec["on"] = B.recorded_on(path)
+    rec["off"] = B.recorded(path, "off")
+    return rec
+
+
+def save_record(path: Path, rec: dict, scope: str) -> None:
+    target = B.record_path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    A.write_json_atomic(target, dict(rec, settings=str(path), scope=scope))
+
+
+def plan(action: str, names: list, rec: dict, project=None) -> tuple:
+    """(bộ đang bật sau lệnh, bộ tắt rõ sau lệnh, [(id plugin, giá trị mới)], [id chưa cài]). Bộ tắt rõ ở local che
+    bộ bật ở scope user (bundles.active)."""
+    on, off = list(rec["on"]), list(rec["off"])
+    core = B.core_plugins()
+    installed = B.installed_plugins()
+    steps, missing = [], []
+    if action == "loi":
+        on, off = [], B.non_core()
+        for name in B.non_core():
+            steps += [(p, False) for p in B.BUNDLES[name]["plugins"] if p not in core]
+    elif action == "on":
+        on = [n for n in B.non_core() if n in set(on) | set(names)]
+        off = [n for n in off if n not in names]
+        for name in names:
+            for p in B.BUNDLES[name]["plugins"]:
+                if p in core:
+                    continue
+                if p in installed:
+                    steps.append((p, True))
+                elif p not in missing:
+                    missing.append(p)
+    elif action == "off":
+        on = [n for n in on if n not in names]
+        off = [n for n in B.non_core() if n in set(off) | set(names)]
+        here = {p for n in on for p in B.BUNDLES[n]["plugins"]} | core
+        # Plugin dùng chung với bộ chỉ bật ở scope khác: không tắt, nhưng bỏ giá trị scope này đã ghim (trả về như cũ)
+        # để scope kia quyết (review 20/11).
+        other = {p for n in set(B.active(project)) - set(names) - set(on) for p in B.BUNDLES[n]["plugins"]}
+        for name in names:
+            for p in B.BUNDLES[name]["plugins"]:
+                if p in here:
+                    continue
+                steps.append((p, RESTORE if p in other else False))
+    return on, off, list(dict(steps).items()), missing
+
+
+def apply(data: dict, steps: list, rec: dict, restored=None) -> list:
+    """Đặt các khóa, ghi giá trị cũ vào bản ghi; trả các bước thật sự đổi."""
+    table = data.get(TABLE)
+    created = not isinstance(table, dict)
+    if created:
+        table = {}
+    known = {c["key"]: c for c in rec["changes"]}
+    done = []
+    for plugin, value in steps:
+        if value == RESTORE:
+            change = known.pop(plugin, None)
+            if change is None or table.get(plugin) != change.get("set"):
+                continue  # scope này chưa ghim, hay người dùng đã tự đổi: giữ
+            rec["changes"].remove(change)
+            if restored is not None:
+                restored.append(change)
+            if change.get("had"):
+                table[plugin] = change.get("old")
+            else:
+                table.pop(plugin, None)
+            done.append((plugin, change.get("old")))
+            continue
+        if table.get(plugin) is value:
+            continue
+        if plugin not in known:
+            change = {"key": plugin, "had": plugin in table, "old": table.get(plugin), "set": value,
+                      "table_created": created}
+            rec["changes"].append(change)
+            known[plugin] = change
+        else:
+            known[plugin]["set"] = value
+        table[plugin] = value
+        done.append((plugin, value))
+    if done:
+        data[TABLE] = table
+    return done
+
+
+def restore(data: dict, rec: dict) -> list:
+    """Trả các khóa về giá trị cũ, giữ khóa người dùng tự đổi sau đó."""
+    table = data.get(TABLE)
+    done = []
+    for change in rec["changes"]:
+        if not isinstance(table, dict) or table.get(change["key"]) != change.get("set"):
+            continue
+        if change.get("had"):
+            table[change["key"]] = change.get("old")
+        else:
+            table.pop(change["key"], None)
+        done.append(change["key"])
+    if isinstance(table, dict) and not table and any(c.get("table_created") for c in rec["changes"]):
+        data.pop(TABLE)
+    return done
+
+
+def show(path: Path, scope: str, rec: dict, as_json: bool, project=None) -> None:
+    info = {"scope": scope, "settings": str(path), "on": rec["on"], "active": B.active(project),
+            "bundles": [{"name": n, "label": b["label"], "plugins": list(b["plugins"]), "skills": list(b["skills"])}
+                        for n, b in B.BUNDLES.items()]}
+    if as_json:
+        print(json.dumps(info, ensure_ascii=False))
+        return
+    print(f"Bộ đang bật ({scope}, {path}): lõi" + "".join(f", {n}" for n in rec["on"]) + "."
+          + ("" if project is None else " Gộp cả scope user: lõi" + "".join(f", {n}" for n in info["active"]) + "."))
+    for item in info["bundles"]:
+        parts = ["plugin " + ", ".join(p.split("@")[0] for p in item["plugins"])] if item["plugins"] else []
+        parts += ["skill " + ", ".join(item["skills"])] if item["skills"] else []
+        print(f"  {item['name']:9} {item['label']} ({'; '.join(parts)})")
+    print("Đổi: /stack-profile on|off <bộ>, loi (chỉ lõi), du (về như cũ); hay profile.py cùng tham số.")
+
+
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Công tắc bộ plugin gọn/đủ theo project")
-    ap.add_argument("--project", default=".")
-    ap.add_argument("action", choices=("show", "gon", "du"))
+    ap = argparse.ArgumentParser(description="Bật, tắt các bộ skill và plugin của agent-stack")
+    where = ap.add_mutually_exclusive_group()
+    where.add_argument("--project", default=".")
+    where.add_argument("--user", action="store_true", help="ghi cấu hình user ($CLAUDE_CONFIG_DIR/settings.json)")
+    ap.add_argument("action", choices=("show", "on", "off", "loi", "gon", "du"))
+    ap.add_argument("names", nargs="*")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    project = Path(args.project).expanduser().resolve()
-    rec = load_record(project)
-    current = rec.get("profile") if rec["changes"] else "du"
-    if args.action == "show":
-        want = wanted(project)
-        info = {"profile": current or "du", "plugins_off": want["plugins_off"],
-                "skills_name_only": want["skills_name_only"], "source": want["source"]}
-        if args.json:
-            print(json.dumps(info, ensure_ascii=False))
-        else:
-            print(f"Bộ đang dùng: {LABEL.get(info['profile'], info['profile'])}. Bộ gọn ({info['source']}): tắt "
-                  f"{len(info['plugins_off'])} plugin, {len(info['skills_name_only'])} skill chỉ còn tên. "
-                  "Đổi: /stack-profile gon|du (có hiệu lực từ phiên mới).")
-        return 0
+    action = "loi" if args.action == "gon" else args.action
+    valid = B.non_core()
+    if action in ("on", "off"):
+        bad = [n for n in args.names if n not in valid]
+        if not args.names or bad:
+            print(f"profile: bộ không hợp lệ: {', '.join(bad) or '(trống)'}. Bộ bật/tắt được: {', '.join(valid)} "
+                  f"(bộ {B.CORE} luôn bật).", file=sys.stderr)
+            return 2
+    elif args.names:
+        print(f"profile: lệnh {args.action} không nhận tên bộ", file=sys.stderr)
+        return 2
+    scope = "user" if args.user else "local"
+    # Cùng thư mục với hook (bundles.settings_root): gốc git, ngoài git thì chính thư mục đó.
+    project = None if args.user else B.settings_root(args.project)
+    path = B.user_settings() if args.user else B.local_settings(project)
     try:
-        path = settings_path(project)
+        check_path(path)
+        rec = load_record(path)
+        if action == "show":
+            show(path, scope, rec, args.json, project)
+            return 0
         data = load_settings(path)
     except ProfileError as exc:
         print(f"profile: {exc}", file=sys.stderr)
         return 1
-    if args.action == "gon":
-        want = wanted(project)
-        steps = plan_gon(data, want)
-        for table, key, value in steps:
-            print(f"  + {table}.{key} = {json.dumps(value)}")
+    if action == "du":
+        preview = copy.deepcopy(data)
+        done = restore(preview, rec)
+        for key in done:
+            print(f"  - {TABLE}.{key}")
         if args.dry_run:
-            print(f"Xem trước bộ gọn: {len(steps)} khóa sẽ đổi trong {path}")
+            print(f"Xem trước: {len(done)} khóa sẽ trả lại trong {path}")
             return 0
-        rec = apply_gon(data, steps, rec)
-        rec["project"] = str(project)
-        write_settings(path, data)
-        save_record(project, rec)
-        print(f"Đã chuyển sang bộ gọn: {len(steps)} khóa đổi trong {path}. Mở phiên mới để có hiệu lực; "
-              "trả lại: /stack-profile du")
+        try:
+            if done:
+                write_settings(path, preview)
+            save_record(path, {"changes": [], "on": [], "off": []}, scope)
+        except OSError as exc:
+            print(f"profile: không ghi được: {exc}", file=sys.stderr)
+            return 1
+        print(f"Đã về như cũ: trả {len(done)} khóa trong {path}. Plugin có hiệu lực ở phiên mới hay sau /reload-plugins.")
         return 0
-    if not rec["changes"]:
-        print("Project đang ở bộ đủ, không có gì để trả.")
-        return 0
-    preview = json.loads(json.dumps(data))
-    done = apply_du(preview, rec)
-    for key in done:
-        print(f"  - {key}")
+    on, off, steps, missing = plan(action, args.names, rec, project)
+    if action == "on":
+        # Bộ chỉ có plugin mà không plugin nào cài: không ghi bộ là đang bật (hook sẽ thôi gợi ý mà plugin không nạp).
+        empty = [n for n in args.names if not B.BUNDLES[n]["skills"]
+                 and not any(p in B.installed_plugins() for p in B.BUNDLES[n]["plugins"])]
+        if empty:
+            print(f"profile: bộ {', '.join(empty)} chưa có plugin nào được cài (cài qua install.sh): không bật",
+                  file=sys.stderr)
+            return 1
+    preview = copy.deepcopy(data)
+    trial = copy.deepcopy(rec)
+    restored = []
+    done = apply(preview, steps, trial, restored)
+    for plugin, value in done:
+        print(f"  {'+' if value else '-'} {TABLE}.{plugin} = {json.dumps(value)}")
+    # Khóa vừa trả về "không có" làm bảng rỗng mà bảng do lần đổi đầu tiên tạo ra: bỏ bảng như `du`.
+    if preview.get(TABLE) == {} and (TABLE not in data or any(c.get("table_created") for c in restored)):
+        preview.pop(TABLE)
+    for plugin in missing:
+        print(f"  · {plugin} chưa cài: không bật (cài qua install.sh, mục đã duyệt trong catalog)")
+    if action == "on":
+        for name in args.names:
+            for skill in B.BUNDLES[name]["skills"]:
+                print(f"  đọc thẳng skill {skill}: {B.skill_md(skill)}")
+            for plugin in B.BUNDLES[name]["plugins"]:
+                for skill_file in B.plugin_skill_files(plugin):
+                    print(f"  đọc thẳng (trước khi plugin nạp): {skill_file}")
     if args.dry_run:
-        print(f"Xem trước bộ đủ: {len(done)} khóa sẽ trả lại trong {path}")
+        print(f"Xem trước: {len(done)} khóa sẽ đổi trong {path}")
         return 0
-    write_settings(path, preview)
-    save_record(project, {"changes": [], "profile": "du", "project": str(project)})
-    print(f"Đã chuyển về bộ đủ: trả {len(done)} khóa trong {path}. Mở phiên mới để có hiệu lực.")
+    trial["on"], trial["off"] = on, off
+    try:
+        # Bản ghi trước, còn giữ cả mục sắp trả (RESTORE): settings ghi lỗi thì `du` thấy khóa chưa đổi và bỏ qua, mục
+        # trả chưa mất giá trị cũ. Settings ghi xong mới lưu bản ghi cuối.
+        save_record(path, dict(trial, changes=trial["changes"] + restored), scope)
+        if done:
+            write_settings(path, preview)
+        if restored:
+            save_record(path, trial, scope)
+    except OSError as exc:
+        print(f"profile: không ghi được: {exc}", file=sys.stderr)
+        return 1
+    label = {"loi": "Chỉ còn bộ lõi", "on": "Đã bật bộ " + ", ".join(args.names),
+             "off": "Đã tắt bộ " + ", ".join(args.names)}[action]
+    label += f" ({len(missing)} plugin chưa cài, không bật)" if missing else ""
+    print(f"{label} ({scope}): {len(done)} khóa đổi trong {path}. Bộ đang bật"
+          + ("" if args.user else " (gộp user và local)") + ": lõi"
+          + "".join(f", {n}" for n in (on if args.user else B.active(project))) + ". Plugin có hiệu lực ở phiên mới hay sau /reload-plugins; về như cũ: "
+          "profile.py du.")
     return 0
 
 

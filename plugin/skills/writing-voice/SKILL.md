@@ -3,6 +3,7 @@ name: writing-voice
 description: Chỉnh văn bản tiếng Việt hoặc tiếng Anh cho tự nhiên, rõ ràng và đúng giọng của chính người dùng. Bỏ các dấu hiệu văn AI như mở bài sáo, cấu trúc "không chỉ... mà còn", thổi phồng, kết bài nhắc lại, nhịp câu đều đều, nhưng giữ nguyên ý và không bịa thêm sự kiện. Dùng khi người dùng nhờ viết lại, sửa văn, làm mượt đoạn văn, bài luận, blog, email, cover letter, hoặc nói "viết cho tự nhiên", "đúng giọng mình", "đọc như AI viết".
 when_to_use: viết lại, sửa văn, bài luận, essay, blog, email, cover letter, giọng văn, cho tự nhiên, đọc như AI, bớt sến
 argument-hint: "[tao-style-card | <đường dẫn hoặc đoạn văn>]"
+disable-model-invocation: true
 ---
 
 # Chỉnh văn theo giọng của người viết

@@ -11,7 +11,9 @@ const COMMAND = 'tree'
 const RECEIPT_COMMAND = 'receipts'
 const RECEIPT_LINES = 15
 const PROFILE_COMMAND = 'stack-profile'
-const PROFILES = ['gon', 'du'] as const
+const PROFILES = ['gon', 'loi', 'du'] as const
+// Tên bộ cho /stack-profile on|off (danh sách thật nằm ở plugin/lib/bundles.py; script từ chối tên lạ, mã 2).
+const BUNDLE_NAME = /^[a-z][a-z-]{0,29}$/
 const CLOSED_KEY = 'planPaneClosed'
 // Mã lá hay mốc của plan_tree.py (T.2, 14, 25.1.2); chặn mọi thứ khác (TM-28, TM-30).
 const CODE = /^[A-Za-z0-9][A-Za-z0-9.]{0,15}$/
@@ -58,24 +60,27 @@ function script($: EngineInterface): string {
   return `${$.plugin.root}/skills/progress/scripts/plan_tree.py`
 }
 
-/** Chạy profile.py (việc G): `show` hay đổi bộ `gon`/`du` của project đang mở. Logic nằm ở script. */
-async function runProfile($: EngineInterface, action: 'show' | 'gon' | 'du'): Promise<string> {
+/** Chạy profile.py (việc G, H5): `show`, `on|off <bộ>`, `loi`/`gon`, `du` cho project đang mở. Logic nằm ở script. */
+async function runProfile($: EngineInterface, action: string, names: string[] = []): Promise<string> {
   try {
     const cwd = await $.session.cwd()
     const run = await $.process.run(
-      ['python3', `${$.plugin.root}/skills/project-setup/scripts/profile.py`, '--project', cwd, action],
+      ['python3', `${$.plugin.root}/skills/project-setup/scripts/profile.py`, '--project', cwd, action, ...names],
       { timeoutMs: TIMEOUT_MS },
     )
-    const out = run.stdout.trim().split('\n').filter(Boolean).pop() ?? ''
-    return (run.exitCode === 0 ? out : firstLine(run.stderr) || `profile.py thoát mã ${run.exitCode}`).slice(0, 300)
+    // Đủ các dòng (danh sách bộ, plugin chưa cài, đường dẫn SKILL.md), không chỉ dòng cuối; pane chỉ lấy dòng cuối.
+    const out = run.stdout.trim().split('\n').filter(Boolean).slice(-16).join('\n')
+    return (run.exitCode === 0 ? out : firstLine(run.stderr) || `profile.py thoát mã ${run.exitCode}`).slice(-2000)
   } catch (err) {
     return `Không chạy được profile.py: ${String(err).slice(0, 200)}`
   }
 }
 
-async function switchProfile($: EngineInterface, action: 'gon' | 'du'): Promise<void> {
-  const note = await runProfile($, action)
-  await update($, profileNote, () => note)
+async function switchProfile($: EngineInterface, action: string, names: string[] = []): Promise<string> {
+  const text = await runProfile($, action, names)
+  const note = text.split('\n').pop() ?? ''
+  await update($, profileNote, () => note.slice(0, 300))
+  return text
 }
 
 function firstLine(text: string): string {
@@ -327,7 +332,7 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: PROFILE_COMMAND,
-      description: 'Bộ plugin của project: /stack-profile gon (gọn, ít token nạp sẵn) hay du (đủ); không gọi model',
+      description: 'Bộ skill, plugin của project: /stack-profile on|off <bộ>, loi (chỉ lõi), du (về như cũ); không gọi model',
     })
     await $.command.register({
       name: COMMAND,
@@ -454,8 +459,14 @@ export const register: Register = on => {
   on('command.run', { command: PROFILE_COMMAND }, async ($, e) => {
     const arg = e.args.trim()
     if (arg === '') return { text: await runProfile($, 'show') }
-    const action = PROFILES.find(p => p === arg)
-    if (!action) return { text: 'Dùng: /stack-profile gon | du (không tham số: xem bộ đang dùng).' }
+    const [verb = '', ...names] = arg.split(/\s+/)
+    const usage = { text: 'Dùng: /stack-profile on|off <bộ>… | loi | du (không tham số: xem các bộ).' }
+    if (verb === 'on' || verb === 'off') {
+      if (names.length === 0 || names.length > 7 || !names.every(n => BUNDLE_NAME.test(n))) return usage
+      return { text: await switchProfile($, verb, names) }
+    }
+    const action = names.length === 0 ? PROFILES.find(p => p === verb) : undefined
+    if (!action) return usage
     await switchProfile($, action)
     return { text: await read($, profileNote) }
   }).catch(() => ({ text: 'Lệnh /stack-profile gặp lỗi; xem `claude --debug`.' }))

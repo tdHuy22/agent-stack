@@ -642,16 +642,44 @@ def install_hint(plugin: str, item: dict) -> str:
     return f"claude plugin {verb} {plugin} --scope {'local' if verb == 'enable' else 'project'}"
 
 
+def bundle_missing(skill: str, plugin: str, root):
+    """Mục "missing" cho skill của plugin thuộc một bộ ngoài lõi (plugin/lib/bundles.py, H5): lệnh bật bộ thay cho
+    lệnh cài; None nếu plugin thuộc lõi hay không thuộc bộ nào."""
+    import bundles  # noqa: E402 (cùng thư mục lib với agentstack)
+    names = bundles.bundles_of_plugin(plugin)
+    if not names:
+        return None
+    return {"skill": skill, "bundle": names[0],
+            "install": bundles.profile_cmd(Path(root) if root else None, "on", names[0])}
+
+
+def hidden_skill_notes(skills) -> list:
+    """Skill agent-stack ngoài lõi không nạp sẵn (`disable-model-invocation`, H5): công cụ Skill không gọi được, nên
+    nêu đường dẫn SKILL.md để đọc thẳng."""
+    import bundles  # noqa: E402 (cùng thư mục lib với agentstack)
+    notes = []
+    for name in skills:
+        bundle = bundles.bundle_of_skill(name)
+        if bundle and bundle != bundles.CORE:
+            notes.append(f"{name} không nạp sẵn (bộ {bundle}): đọc thẳng `{bundles.skill_md(name)}` rồi làm theo")
+    return notes
+
+
 def localize(hit: dict, root) -> dict:
     """Bỏ khỏi gợi ý các skill của plugin chưa bật cho project (hay cho người dùng, khi không có project), thay bằng
     skill dự phòng (mục skill_fallbacks của rules.json), và ghi lệnh cài vào hit["missing"]. Sửa tại chỗ và trả lại hit."""
+    import bundles  # noqa: E402 (cùng thư mục lib với agentstack)
+    # Claude Code đọc settings.local.json ở cả cwd lẫn gốc git (đo 20/11): bật ở một trong hai là bật. profile.py ghi
+    # ở gốc git (bundles.settings_root), file kế hoạch có thể nằm ở thư mục con.
+    roots = list(dict.fromkeys((bundles.settings_root(root), Path(root)) if root else (None,)))
+    root = roots[0]
     keep, missing = [], []
     for name in hit.get("skills") or []:
         plugin, item = skill_plugin(name)
-        if plugin is None or plugin_enabled(Path(root) if root else None, plugin):
+        if plugin is None or enabled_in(roots, plugin):
             keep.append(name)
             continue
-        missing.append({"skill": name, "install": install_hint(plugin, item)})
+        missing.append(bundle_missing(name, plugin, root) or {"skill": name, "install": install_hint(plugin, item)})
         keep += (rules().get("skill_fallbacks") or {}).get(name, [])
     hit["skills"] = list(dict.fromkeys(keep))
     hit["missing"] = missing
@@ -693,6 +721,24 @@ def plugin_enabled(root: Path, plugin: str) -> bool:
         paths += [root / ".claude" / "settings.json", root / ".claude" / "settings.local.json"]
     for path in paths:
         value = ((A.read_json(path, {}) or {}).get("enabledPlugins") or {}).get(plugin)
+        if isinstance(value, bool):
+            state = value
+    return state
+
+
+def enabled_in(roots: list, plugin: str) -> bool:
+    """Như plugin_enabled nhưng xét nhiều gốc theo thứ tự đè: user, rồi từng gốc (gốc git trước, cwd sau), mỗi gốc
+    project rồi local; giá trị bool ghi rõ sau cùng thắng (review fable·high 20/11: `false` ở gốc git phải đè `true`
+    của user dù cwd là thư mục con)."""
+    state = False
+    paths = [claude_config_dir() / "settings.json"]
+    for root in roots:
+        if root:
+            paths += [Path(root) / ".claude" / "settings.json", Path(root) / ".claude" / "settings.local.json"]
+    for path in paths:
+        data = A.read_json(path, {})
+        table = data.get("enabledPlugins") if isinstance(data, dict) else None
+        value = table.get(plugin) if isinstance(table, dict) else None
         if isinstance(value, bool):
             state = value
     return state
@@ -1138,9 +1184,13 @@ def _hook_suggestion(prompt: str, data: dict, seen: dict):
         parts_user.append("skill " + ", ".join(hit["skills"]))
         parts_ctx.append("dùng skill " + ", ".join(hit["skills"]))
         parts_ctx += [n for n in ((rules().get("skill_notes") or {}).get(x) for x in hit["skills"]) if n]
+        parts_ctx += hidden_skill_notes(hit["skills"])
     if hit.get("missing"):
         parts_ctx.append("chưa bật cho project này: " + "; ".join(f"{m['skill']} (`{m['install']}`)" for m in hit["missing"])
-                         + "; chỉ đề xuất cài với người dùng, đừng tự cài")
+                         + ("; lệnh profile.py on <bộ> chỉ bật plugin đã cài (cấu hình local), tự chạy được khi việc "
+                            "cần, plugin nạp đủ sau khi người dùng gõ /reload-plugins"
+                            if all(m.get("bundle") for m in hit["missing"]) else
+                            "; chỉ đề xuất cài với người dùng, đừng tự cài"))
     if hit.get("note"):
         parts_ctx.append(hit["note"])
     if not parts_user:

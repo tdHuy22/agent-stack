@@ -3,6 +3,7 @@ name: kaggle-gpu
 description: Chạy job train, fine-tune, distill hay inference trên GPU miễn phí của Kaggle (T4 ×2, khoảng 30 giờ mỗi tuần) từ máy, không mở trình duyệt. Script kiểm CLI, đăng nhập và quota; kiểm thư mục job (private, slug khớp title, không có khóa trong code); push và chạy; chờ xong; tải output vào thư mục mới; ghi nhật ký lần chạy; gửi dữ liệu thành dataset private sau khi quét khóa. Dùng khi người dùng muốn chạy code trên GPU Kaggle, train hay fine-tune model nhỏ khi máy không có GPU đủ mạnh, đẩy notebook hay script lên Kaggle, xem job Kaggle chạy xong chưa, tải kết quả hay checkpoint về, hoặc đưa dữ liệu lên Kaggle cho job dùng. Tra lệnh Kaggle CLI khác (competition, model, benchmark) thì dùng skill chính thức kaggle-cli.
 when_to_use: kaggle, gpu kaggle, gpu miễn phí, free gpu, chạy trên kaggle, kaggle kernels push, notebook kaggle, train trên kaggle, fine-tune trên kaggle, T4, quota gpu, tải output kaggle, dataset kaggle, profile kaggle, nhiều người dùng chung, đăng nhập kaggle, chạy từng cell kaggle, kaggle jupyter server
 argument-hint: "<việc cần chạy, hoặc thư mục job>"
+disable-model-invocation: true
 ---
 
 # Chạy job GPU trên Kaggle

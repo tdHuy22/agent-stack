@@ -60,6 +60,7 @@ plugin/hooks/ui.tsx
 plugin/hooks/ui_status.py
 plugin/lib/agentstack.py
 plugin/lib/archgate.py
+plugin/lib/bundles.py
 plugin/lib/client_place.py
 plugin/lib/linetrace.py
 plugin/lib/routemodel.py

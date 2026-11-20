@@ -614,7 +614,9 @@ def gate_user(gated: list, session_id: str):
     if audits:
         action = ", ".join(dict.fromkeys(r[1] for r in audits))
         parts.append(f"sắp {action}, tức là sắp phát hành. Bước 3 của quy trình bảo mật là audit cả repo trước phát "
-                     "hành: quét Semgrep (`/static-analysis:semgrep`), rồi `/claude-security` tìm phần Semgrep bỏ sót.")
+                     "hành: quét Semgrep (`/static-analysis:semgrep`), rồi `/claude-security` tìm phần Semgrep bỏ sót "
+                     "(hai plugin thuộc bộ `bao-mat`; chưa bật thì `profile.py on bao-mat` rồi người dùng gõ "
+                     "/reload-plugins).")
         questions.append("hỏi họ đã audit commit sắp phát hành chưa")
     if confirms:
         parts.append("lệnh không đảo ngược được: " + "; ".join(dict.fromkeys(r[1] for r in confirms)) + ".")

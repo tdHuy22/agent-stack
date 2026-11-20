@@ -2,6 +2,7 @@
 name: project-setup
 description: Đánh giá một project rồi đề xuất cấu hình riêng cho agent-stack trong `.agent/stack.json`, file do hook đọc, model không đọc. File gồm từ khóa riêng kèm mức nghĩ, từ khóa router cần bỏ qua, thư mục lõi tính rủi ro cao, mức sàn theo vùng và theo cỡ project, công cụ kiểm có sẵn, mức quy trình. Mỗi mục kèm bằng chứng; người dùng duyệt từng mục rồi mới ghi. Chạy trong phiên của chính project cần cấu hình, đọc cả project một lần (Explore đọc rộng). Dùng khi bắt đầu dùng agent-stack ở một project, khi router gợi ý sai mức ở project đó, khi lúc mở phiên báo hồ sơ project đã đổi hay có đề xuất từ nhật ký router, hoặc khi người dùng nói cấu hình project, stack.json, project-setup. Không dùng để sửa luật chung của agent-stack.
 when_to_use: cấu hình project, cấu hình riêng cho project, stack.json, project-setup, router gợi ý sai ở project này, mức sàn, từ khóa riêng, hồ sơ project đổi, đề xuất cho stack.json
+disable-model-invocation: true
 ---
 
 # Cấu hình riêng của project (`.agent/stack.json`)
@@ -80,9 +81,9 @@ Ngoài `stack.json`:
 - Cùng luật, cùng cụm, cùng chiều lệch lặp từ 3 lần trở lên thì thành đề xuất. Đề xuất siết vẫn đưa người dùng duyệt như mục 3; đề xuất nới đi đường duyệt ở mục 4.
 - Lúc mở phiên, hook chỉ báo số đề xuất.
 
-## 6. Bộ plugin gọn/đủ
+## 6. Bộ skill và plugin
 
-`stack.json` có thể khai `profiles.gon` (`plugins_off`: id `tên@marketplace`; `skills_name_only`: tên skill). Người dùng đổi bằng `/stack-profile gon|du` hay `python3 scripts/profile.py --project . gon|du`; không có mục này thì dùng mặc định của script. Plugin agent-stack không bao giờ bị tắt.
+Danh sách bộ cố định ở `plugin/lib/bundles.py` (không khai trong `stack.json`): `loi` luôn bật; `bao-mat`, `giao-dien`, `ml`, `viet`, `cau-hinh` bật khi việc cần. Đổi bằng `/stack-profile on|off <bộ>`, `loi`, `du`, hay `python3 scripts/profile.py on <bộ> --project .` (thêm `--user` cho mọi project). Hướng dẫn đủ: README, mục "Bộ skill và plugin".
 
 ## Không làm
 

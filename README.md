@@ -313,7 +313,27 @@ python3 tools/maintain.py
 
 `tools/cleanup.py` liệt kê rác kèm dung lượng (worktree đã gộp và sạch trong `.claude/worktrees/`, `.tmp/`, `evals/results/` cũ, scratchpad cũ), không dùng model; chỉ xóa khi thêm `--apply`, và chỉ đúng các mục đã liệt kê.
 
-Bộ plugin theo project: `/stack-profile gon` (hay nút "gọn" trong pane Kế hoạch) tắt plugin ít dùng và cho skill ít dùng chỉ còn tên, qua `.claude/settings.local.json` của project; `/stack-profile du` trả lại như cũ. Danh sách ở `profiles.gon` của `.agent/stack.json` (script: `plugin/skills/project-setup/scripts/profile.py`). Có hiệu lực từ phiên mới.
+### Bộ skill và plugin (H5, 20/11/2026)
+
+Mặc định chỉ nạp sẵn bộ lõi; bộ khác bật khi việc cần. Danh sách cố định ở `plugin/lib/bundles.py`. Số ký tự nạp sẵn đo bằng `tools/preload.py` (máy chủ API giả, cấu hình tạm, không tốn tiền) với 8 plugin đang cài: trước 96.437, chỉ bộ lõi 84.250 (−12.187, tức −56% phần do plugin thêm vào; Claude Code không plugin: 74.637).
+
+| Bộ | Gồm | Thêm khi bật (ký tự) |
+|---|---|---|
+| `loi` (luôn bật) | plugin agent-stack (hook, subagent, 10 skill: done-gate, session-keeper, threat-model, vet-skill, task-router, progress, reader-page, reuse-best, aside-web, recursive-session (chỉ người dùng gõ)), differential-review | 9.613 so với không plugin |
+| `bao-mat` | static-analysis, claude-security | 7.237 |
+| `giao-dien` | html-plan, playground, project-artifact, agent-stack-vendor (frontend-design, kaggle-cli) | 2.407 |
+| `ml` | skill kaggle-gpu, agent-stack-vendor | 1.033 |
+| `viet` | skill writing-voice | 274 |
+| `cau-hinh` | skill project-setup | 286 |
+
+`aside-web` nằm trong lõi vì Browser của app đã tắt, Aside là đường duy nhất xem dev server và trang cần đăng nhập (bạn chốt 20/11). Skill agent-stack ngoài lõi có `disable-model-invocation: true`: không nằm trong danh sách nạp sẵn, công cụ Skill không gọi được, người dùng vẫn gõ `/agent-stack:<tên>` được; Claude đọc thẳng `SKILL.md`. Plugin bật hay tắt qua `enabledPlugins` (local của project đè user), có hiệu lực ở phiên mới hay sau khi bạn gõ `/reload-plugins` (Claude không tự nạp lại được).
+
+Ba cách bật:
+1. **Claude tự bật giữa phiên.** Tin của bạn khớp từ khóa của bộ chưa bật thì hook UserPromptSubmit đưa vào context đường dẫn `SKILL.md` để đọc ngay và lệnh `profile.py on <bộ> --project <thư mục>`; router gợi ý skill của plugin chưa bật thì cũng nêu lệnh này. Claude tự chạy được (chỉ ghi `.claude/settings.local.json`, chỉ bật plugin đã cài). Với plugin, bật giữa phiên chưa đủ: đo bằng binary 2.1.326, request kế tiếp trong cùng phiên chưa có skill của plugin vừa bật, và `/reload-plugins` chỉ chạy khi bạn tự gõ. Nên trong phiên đó Claude đọc thẳng `SKILL.md` trong thư mục cài của plugin (lệnh in sẵn đường dẫn); subagent và hook của plugin chỉ có sau `/reload-plugins` hay ở phiên mới.
+2. **Bạn bật đầu phiên:** gõ `/stack-profile on bao-mat` (lệnh của mod, không gọi model, không cần nhớ đường dẫn) rồi `/reload-plugins`; hay nhắn "bật bộ bảo mật" / "tắt bộ ml" (hook nhận câu này, có dấu hay không, và đưa Claude đúng lệnh để chạy). Xem các bộ: `/stack-profile`.
+3. **Phiên điều hành bật cho phiên con.** Lệnh ghi `.claude/settings.local.json` ở gốc git của project, nên có hiệu lực cho **mọi phiên** mở trong project đó (kể cả phiên của bạn), tới khi `off <bộ>` hay `du`. Chép vào brief dòng `Đầu phiên chạy python3 ~/Documents/Claude/agent-stack/plugin/skills/project-setup/scripts/profile.py on <bộ> --project . rồi đọc thẳng các SKILL.md nó in ra.` Bộ có plugin và phiên con chung thư mục: chạy lệnh đó trước khi mở phiên, plugin nạp ngay từ đầu.
+
+Đặt mặc định chỉ lõi cho mọi project (ghi `~/.claude/settings.json`): `python3 plugin/skills/project-setup/scripts/profile.py --user loi`, chạy **sau** `./install.sh --apply`. `claude plugin install … --scope user` bật lại plugin đã tắt (thử 20/11/2026 trên cấu hình tạm), và `install.py` gọi lệnh đó ở `tools/install.py:608`, `:763`, `:780`; nên mỗi lần chạy lại `install.sh --apply` thì chạy lại `--user loi`. Về như cũ: `profile.py --user du` (và `/stack-profile du` cho từng project); lệnh trả đúng giá trị cũ của các khóa đã đổi, giữ khóa bạn tự đổi sau đó. Tắt một bộ: `off <bộ>` (plugin dùng chung với bộ khác đang bật thì giữ). Không với tới: skill có sẵn của Claude Code (tắt được bằng `skillOverrides`, khóa này không có tác dụng với skill của plugin: kiểm bằng binary 2.1.326) và skill đồng bộ từ tài khoản claude.ai (`anthropic-skills:*`, tắt ở cài đặt của claude.ai; chưa kiểm `skillOverrides` với loại này).
 
 Quy ước code: Python 3.11 thư viện chuẩn; docstring và chú thích tiếng Việt ngắn, tên biến và hàm tiếng Anh; file tạm trong `.tmp/`, trạng thái chạy trong `state/`. Tên skill kebab-case tối đa 64 ký tự, `description` tối đa 1.024 ký tự (giới hạn của chuẩn Agent Skills). Chi tiết trong `CLAUDE.md`.
 

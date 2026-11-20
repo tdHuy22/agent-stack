@@ -1127,6 +1127,16 @@
     "test:tests/test_mutation.py::TimeCap"
    ],
    "note": "Test kiểm mutmut chạy trong bản chép dưới thư mục tạm của hệ điều hành, bản chép bị xóa khi xong và khi quá giờ, thư mục làm việc không đổi."
+  },
+  {
+   "id": "P31",
+   "file": "CLAUDE.md",
+   "anchor": "`tools/preload.py` (đo phần nạp sẵn) chạy binary của app trong thư mục tạm",
+   "check": "may-chan",
+   "by": [
+    "test:tests/test_preload.py::PreloadTests"
+   ],
+   "note": "Test thay binary bằng script giả: cấu hình và thư mục chạy tạm bị xóa sau khi đo, thư mục repo không đổi, khóa thật và biến ngoài danh sách cho phép không tới binary."
   }
  ]
 }

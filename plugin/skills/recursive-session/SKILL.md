@@ -43,6 +43,7 @@ Brief tự đủ, người nhận không thấy hội thoại:
 - Phạm vi: file được sửa, file cấm đụng.
 - Ràng buộc: commit hay không; lệnh không được chạy; test khóa không sửa; hook chặn thì không đi vòng, ghi vào báo cáo; không push, không mở PR, không xóa file ngoài thư mục tạm; người dùng vắng thì không dừng hỏi mà gác việc cần duyệt vào báo cáo.
 - Xong khi: tiêu chí đo được.
+- Bộ skill, plugin (khi việc cần bộ ngoài lõi): chép dòng `Đầu phiên chạy python3 ~/Documents/Claude/agent-stack/plugin/skills/project-setup/scripts/profile.py on <bộ> --project . rồi đọc thẳng các SKILL.md nó in ra.` Bộ có plugin (`bao-mat`, `giao-dien`, `ml`) và phiên con chạy chung thư mục (không worktree): chạy lệnh đó trước khi mở phiên, plugin nạp ngay từ đầu phiên con. Lệnh ghi cấu hình local ở gốc git nên áp cho mọi phiên của project đó tới khi `off <bộ>` hay `du`.
 
 ## 4. Khuôn báo về
 

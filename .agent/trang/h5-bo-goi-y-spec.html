@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duyệt spec</title>
+<style>
+:root { --bg:#f5f6f3; --panel:#fff; --fg:#1f2421; --muted:#5c665f; --line:#d8ddd6; --accent:#2f6a52;
+  --ok:#2f6a52; --ok-soft:#e1eee7; --warn:#8a5a12; --warn-soft:#f8edd8; --code-bg:#eceee9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#151916; --panel:#1d221f; --fg:#e3e8e4;
+  --muted:#9aa69e; --line:#313a34; --accent:#79c2a2; --ok:#79c2a2; --ok-soft:#203a2f; --warn:#e0b260;
+  --warn-soft:#3a2f1a; --code-bg:#111512; color-scheme:dark } }
+* { box-sizing:border-box }
+body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, "Segoe UI", sans-serif; margin:0;
+  padding:24px max(16px, env(safe-area-inset-left, 0px)) 64px }
+main { max-width:860px; margin:0 auto; display:grid; gap:28px }
+h1, h2 { margin:0; line-height:1.25 }
+code, pre { font-family:ui-monospace, Menlo, monospace; font-size:.92em; background:var(--code-bg); border-radius:4px;
+  padding:1px 5px; overflow-wrap:anywhere }
+pre { padding:10px; white-space:pre-wrap }
+ol.lines { list-style:none; padding:0; margin:0; display:grid; gap:12px }
+ol.lines li { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+  display:grid; gap:6px }
+ol.lines label { display:flex; gap:10px; align-items:flex-start; cursor:pointer }
+ol.lines input[type=checkbox] { margin-top:5px; width:18px; height:18px; flex:none }
+ol.lines label > code { flex:none; white-space:nowrap }
+samp.dong { font-family:inherit; font-size:1em; overflow-wrap:anywhere }
+.meta { color:var(--muted); font-size:.9em }
+.ok { color:var(--ok) } .warn { color:var(--warn) }
+textarea { width:100%; min-height:2.4em; font:inherit; border:1px solid var(--line); border-radius:6px; padding:6px;
+  background:var(--bg); color:var(--fg) }
+button { font:inherit; padding:10px 16px; border-radius:8px; border:0; background:var(--accent); color:var(--panel);
+  cursor:pointer }
+</style>
+</head>
+<body data-ma="918f9f6c0cf0" data-slug="h5-bo-goi-y">
+<main data-loai="cong-cu">
+<header><h1>Duyệt spec <code>h5-bo-goi-y</code></h1>
+<p class="meta">File <code>.agent/spec/h5-bo-goi-y.txt</code> · mã băm <code>918f9f6c0cf0</code> · 9 dòng</p></header>
+<section data-phan="tom-tat">
+<p>Mỗi dòng dưới đây nói phần mềm phải làm gì trong một tình huống, dạng "khi … thì …". Test được viết từ chính các
+dòng này trước khi có code, rồi bị khóa để người viết code không sửa được. Đọc từng dòng, đánh dấu dòng đúng, ghi góp
+ý cho dòng sai. Đủ hết thì bấm nút và dán câu <code>duyệt spec 918f9f6c0cf0</code> vào chat; còn góp ý thì nút chép danh
+sách cần sửa.</p>
+</section>
+<section><h2>Các dòng</h2><ol class="lines">
+<li><label><input type="checkbox" data-id="S1"> <code>S1</code> <samp class="dong">Khi một bộ ngoài lõi có skill agent-stack (ví dụ `ml`) đang bật cho project, thì hook SessionStart in tên bộ và đường dẫn tuyệt đối `skills/kaggle-gpu/SKILL.md`; không bộ nào ngoài lõi đang bật thì hook không in dòng bộ nào.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S1" aria-label="Góp ý cho dòng S1" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S2"> <code>S2</code> <samp class="dong">Nếu bản ghi trong `state/profiles/` có tên bộ lạ hay đường dẫn lạ, thì hook SessionStart bỏ qua tên đó và không in đường dẫn nào lấy từ bản ghi.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S2" aria-label="Góp ý cho dòng S2" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S3"> <code>S3</code> <samp class="dong">Khi tin người dùng khớp từ khóa của một bộ chưa bật (ví dụ &quot;chạy job train trên kaggle&quot; với bộ `ml`), thì hook UserPromptSubmit đưa vào context đường dẫn `SKILL.md` của skill khớp và lệnh `profile.py on ml`; bộ đó đã bật thì không gợi ý.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S3" aria-label="Góp ý cho dòng S3" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S4"> <code>S4</code> <samp class="dong">Khi router gợi ý skill của plugin thuộc một bộ chưa bật (ví dụ static-analysis cho việc audit cả repo, bộ `bao-mat`), thì gợi ý nêu lệnh `profile.py on bao-mat` thay cho lệnh cài, còn plugin của bộ lõi chưa bật thì giữ lời nhắc cài như cũ.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S4" aria-label="Góp ý cho dòng S4" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S5"> <code>S5</code> <samp class="dong">Khi đọc mọi skill trong `plugin/skills/`, thì mỗi skill thuộc đúng một bộ; skill thuộc bộ ngoài lõi có `disable-model-invocation: true` trong frontmatter, skill của bộ lõi thì không (trừ `recursive-session`, vốn là lệnh người dùng gõ).</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S5" aria-label="Góp ý cho dòng S5" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S6"> <code>S6</code> <samp class="dong">Khi router gợi ý một skill agent-stack ngoài lõi (ví dụ writing-voice, bộ `viet`), thì ghi chú cho context nêu đường dẫn tuyệt đối `SKILL.md` của skill để đọc thẳng (công cụ Skill không gọi được skill ẩn); skill của bộ lõi thì không có ghi chú này.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S6" aria-label="Góp ý cho dòng S6" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S7"> <code>S7</code> <samp class="dong">Khi hook gợi ý một bộ có plugin đã cài (ví dụ `bao-mat` với static-analysis), thì gợi ý nêu đường dẫn tuyệt đối `SKILL.md` của từng skill trong thư mục cài của plugin để đọc thẳng ngay, và nói plugin chỉ nạp đủ sau khi người dùng gõ `/reload-plugins` hay ở phiên mới (đo 20/11/2026 bằng binary 2.1.326: request kế tiếp trong cùng phiên sau `profile.py on` chưa có skill nào của plugin vừa bật).</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S7" aria-label="Góp ý cho dòng S7" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S8"> <code>S8</code> <samp class="dong">Khi chữ của chính người dùng có &quot;bật bộ &lt;tên&gt;&quot; hay &quot;tắt bộ &lt;tên&gt;&quot; (có dấu hay không, tên viết bằng dấu cách hay gạch nối) với tên bộ ngoài lõi có trong danh sách, thì hook UserPromptSubmit đưa vào context đúng lệnh `profile.py on &lt;tên&gt;` hay `profile.py off &lt;tên&gt;` kèm `--project &lt;gốc&gt;` để Claude chạy ngay; tên không có trong danh sách thì không đưa lệnh nào.</samp></label><div class="meta">Test: <code>tests/test_bundles.py</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S8" aria-label="Góp ý cho dòng S8" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li><li><label><input type="checkbox" data-id="S9"> <code>S9</code> <samp class="dong">Khi người dùng gõ `/stack-profile on &lt;bộ&gt;` (lệnh của mod, không gọi model, không cần nhớ đường dẫn), thì mod chạy profile.py với `--project &lt;thư mục phiên&gt;` và đúng tên bộ, rồi hiện các dòng profile.py in ra.</samp></label><div class="meta">Test: <code>plugin/tests/ui.test.tsx</code> · <span class="warn">chưa duyệt</span></div><textarea data-note="S9" aria-label="Góp ý cho dòng S9" placeholder="Góp ý nếu dòng này sai hay thiếu"></textarea></li>
+</ol></section>
+
+<section><h2>Chép về chat</h2>
+<p>Câu duyệt chỉ có tác dụng khi chính bạn gõ hay dán vào chat, và chỉ cho đúng nội dung file lúc dựng trang: sửa
+file thì mã đổi, phải duyệt lại.</p>
+<p>Gửi nguyên văn câu <code>duyệt spec 918f9f6c0cf0</code> thành một tin riêng, khi agent đã dừng lượt: tin gửi lúc agent
+đang chạy có thể không qua hook nên không được ghi; câu thêm chữ khác (như tên lát hay "mã") cũng không được ghi.</p>
+<p><button type="button" data-xuat>Chép kết quả</button></p>
+<pre id="ket-qua" aria-live="polite">duyệt spec 918f9f6c0cf0</pre>
+</section>
+</main>
+<script>
+(function () {
+  var code = document.body.getAttribute('data-ma');
+  var slug = document.body.getAttribute('data-slug');
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input[data-id]'));
+  var out = document.getElementById('ket-qua');
+  function build() {
+    var notes = [];
+    boxes.forEach(function (b) {
+      var id = b.getAttribute('data-id');
+      var note = document.querySelector('textarea[data-note="' + id + '"]').value.trim();
+      if (!b.checked || note) { notes.push(id + ': ' + (note || 'chưa đồng ý')); }
+    });
+    if (!notes.length) { return 'duyệt spec ' + code; }
+    return 'Chưa duyệt spec ' + slug + ' (mã ' + code + '). Cần sửa:\n' + notes.join('\n');
+  }
+  function show() { out.textContent = build(); }
+  boxes.forEach(function (b) { b.addEventListener('change', show); });
+  Array.prototype.forEach.call(document.querySelectorAll('textarea'), function (t) {
+    t.addEventListener('input', show);
+  });
+  document.querySelector('[data-xuat]').addEventListener('click', function () {
+    var text = build();
+    out.textContent = text;
+    try { navigator.clipboard.writeText(text); } catch (e) { /* không chép được thì chép tay từ khung */ }
+  });
+  show();
+})();
+</script>
+</body>
+</html>

@@ -106,6 +106,23 @@ def stale_plugin_note(sid: str):
             f"⚠️ Phiên này chạy agent-stack {running}, máy đã cài {installed}: gõ /reload-plugins hoặc mở lại phiên.")
 
 
+def bundle_note(prompt: str, data: dict, sid: str) -> str:
+    """Dòng gợi ý bật bộ (plugin/lib/bundles.py) khi chữ của người dùng khớp từ khóa của bộ chưa bật; rỗng nếu không.
+    Mỗi bộ nhắc tối đa một lần mỗi phiên trong 6 giờ."""
+    if not prompt.strip() or A.is_automated_prompt(prompt) or A.is_command_prompt(prompt):
+        return ""
+    text = A.routable_text(prompt)
+    if not text:
+        return ""
+    import bundles  # noqa: E402 (cùng thư mục lib với agentstack)
+    root = bundles.settings_root(data["cwd"]) if data.get("cwd") else None
+    order = bundles.asked_note(text, root)  # "bật bộ ml": lời của chính người dùng, luôn báo
+    if order:
+        return order
+    fresh = [n for n in bundles.pending(text, root) if not sid or A.once(f"bundle-{sid}-{n}", 6 * 3600)]
+    return bundles.prompt_hint(text, root, only=fresh) if fresh else ""
+
+
 def main():
     t0 = time.time()  # mốc cho hạn chờ lớp model của router (tính từ lúc hook bắt đầu, không từ lúc gọi model)
     data = A.read_hook_input()
@@ -189,6 +206,12 @@ def main():
                 user.append(suggestion["user"])
         except Exception as exc:  # noqa: BLE001 (router lỗi không được làm mất cảnh báo hạn mức của tin này)
             A.log_event("hook-error", {"hook": "router", "error": repr(exc)[:300]})
+        try:  # bộ chưa bật mà việc cần (H5): đường dẫn SKILL.md và lệnh bật bộ, mỗi bộ một lần mỗi phiên
+            bundle_hint = bundle_note(prompt, data, sid)
+            if bundle_hint:
+                context.append(bundle_hint)
+        except Exception as exc:  # noqa: BLE001
+            A.log_event("hook-error", {"hook": "bundles", "error": repr(exc)[:300]})
         A.emit("UserPromptSubmit", "\n".join(context), " ".join(user))
     finally:
         remember_request(sid, data.get("cwd"), prompt)  # ghi sau khi xử lý như cũ, kể cả khi bước trên lỗi

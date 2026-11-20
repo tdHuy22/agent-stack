@@ -412,6 +412,22 @@ test('/stack-profile xem và đổi bộ gọn/đủ qua profile.py, tham số l
   expect(s.runs.length).toBe(before)
 })
 
+test('/stack-profile on|off <bộ> chuyển tên bộ cho profile.py; tên sai mẫu hay thiếu tên không chạy script', async ($, on) => {
+  const s: Setup = { runs: [], fills: [] }
+  fake(on, s)
+  await $.command.run({ command: 'stack-profile', args: 'on ml viet' })
+  expect(s.runs[0]?.slice(-5)).toEqual(['--project', CWD, 'on', 'ml', 'viet'])
+  await $.command.run({ command: 'stack-profile', args: 'off  bao-mat' })
+  expect(s.runs[1]?.slice(-2)).toEqual(['off', 'bao-mat'])
+  await $.command.run({ command: 'stack-profile', args: 'loi' })
+  expect(s.runs[2]?.[s.runs[2].length - 1]).toBe('loi')
+  const before = s.runs.length
+  for (const args of ['on', 'on ML', 'on ml;rm', 'on --user', 'du x', 'off ../x']) {
+    expect((await $.command.run({ command: 'stack-profile', args })).text).toContain('Dùng: /stack-profile')
+  }
+  expect(s.runs.length).toBe(before)
+})
+
 test('pane có nút gọn/đủ; bấm nút chạy profile.py và hiện lời báo', async ($, on) => {
   const s: Setup = { runs: [], fills: [] }
   fake(on, s)
@@ -537,4 +553,37 @@ test('dải trên ô nhập: gợi ý router của tin vừa gửi, nút chỉ �
   const after = await $.ui.mount({ plugin: 'agent-stack', surface: 'desktop', component: 'AbovePrompt', props: BAND as never })
   expect(await after.find({ type: 'Button', key: 'router-model' })).toBeUndefined()
   await after.unmount()
+})
+
+test('/stack-profile không tham số và on <bộ> hiện đủ các dòng của profile.py, không chỉ dòng cuối', async ($, on) => {
+  on('session.cwd', () => ({ value: CWD }))
+  on('process.run', async (_$, e) => {
+    const stdout = e.argv.includes('show')
+      ? 'Bộ đang bật (local, x): lõi.\n  bao-mat   quét bảo mật\n  ml        chạy job GPU\nĐổi: /stack-profile on|off <bộ>\n'
+      : '  · claude-security@claude-plugins-official chưa cài: không bật\nĐã bật bộ bao-mat (1 plugin chưa cài, không bật).\n'
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const shown = (await $.command.run({ command: 'stack-profile', args: '' })).text
+  expect(shown).toContain('bao-mat')
+  expect(shown).toContain('ml        chạy job GPU')
+  const turned = (await $.command.run({ command: 'stack-profile', args: 'on bao-mat' })).text
+  expect(turned).toContain('chưa cài')
+  expect(turned).toContain('Đã bật bộ bao-mat')
+})
+
+test('/stack-profile on <bộ>: chạy profile.py với --project thư mục phiên và đúng tên bộ, hiện các dòng in ra', async ($, on) => {
+  // spec:h5-bo-goi-y#S9
+  const runs: string[][] = []
+  on('session.cwd', () => ({ value: CWD }))
+  on('process.run', async (_$, e) => {
+    runs.push([...e.argv])
+    const stdout = '  đọc thẳng skill kaggle-gpu: /x/SKILL.md\nĐã bật bộ ml (local): 1 khóa đổi.\n'
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const text = (await $.command.run({ command: 'stack-profile', args: 'on ml' })).text
+  expect(runs.length).toBe(1)
+  expect(runs[0]?.[1]).toMatch(/project-setup\/scripts\/profile\.py$/)
+  expect(runs[0]?.slice(2)).toEqual(['--project', CWD, 'on', 'ml'])
+  expect(text).toContain('đọc thẳng skill kaggle-gpu')
+  expect(text).toContain('Đã bật bộ ml')
 })

@@ -73,6 +73,14 @@ def main():
     # thì giữ: lệnh đó đang chạy dở, ghi chú là yêu cầu của chính nó.
     skip = A.non_interactive(data) and source != "compact"
     last = None if skip else A.last_turn_context(root, sid, source)
+    try:  # bộ skill, plugin ngoài lõi đang bật (H5): tên bộ và đường dẫn SKILL.md để đọc thẳng
+        import bundles  # noqa: E402 (cùng thư mục lib với agentstack)
+        bundle_note = bundles.session_note(bundles.settings_root(cwd))
+    except Exception as exc:  # noqa: BLE001 (việc phụ)
+        A.log_event("hook-error", {"hook": "session-start.bundles", "error": repr(exc)[:300]})
+        bundle_note = ""
+    if bundle_note:
+        drift_note = (drift_note + "\n" + bundle_note).strip()
     if not info and not hint and not drift_note and not last:
         return
     if not info and not hint and not last:
@@ -92,7 +100,7 @@ def main():
         user = f"{user}\n{last['user']}" if user else last["user"]
     if drift_note:
         context = drift_note + "\n" + context
-        user = f"{drift_user} · {user}"
+        user = f"{drift_user} · {user}" if drift_user else user
     A.emit("SessionStart", context, user)
 
 
