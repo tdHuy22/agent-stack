@@ -44,7 +44,7 @@ DEFAULT_PLUGINS_OFF = (
     "claude-security@claude-plugins-official",
 )
 DEFAULT_SKILLS_NAME_ONLY = (
-    "agent-stack:aside-web", "agent-stack:kaggle-gpu", "agent-stack:writing-voice", "agent-stack:remote-mcp",
+    "agent-stack:aside-web", "agent-stack:kaggle-gpu", "agent-stack:writing-voice",
     "agent-stack-vendor:kaggle-cli", "agent-stack-vendor:frontend-design",
     "anthropic-skills:docx", "anthropic-skills:pptx", "anthropic-skills:xlsx", "anthropic-skills:pdf",
     "anthropic-skills:google-workspace", "anthropic-skills:docs", "anthropic-skills:paper-anatomy",

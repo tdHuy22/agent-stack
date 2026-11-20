@@ -19,7 +19,6 @@ ROUTER = "plugin/skills/task-router/SKILL.md"
 PROGRESS = "plugin/skills/progress/SKILL.md"
 READER = "plugin/skills/reader-page/SKILL.md"
 VET = "plugin/skills/vet-skill/SKILL.md"
-REMOTE = "plugin/skills/remote-mcp/SKILL.md"
 REUSE = "plugin/skills/reuse-best/SKILL.md"
 THREAT = "plugin/skills/threat-model/SKILL.md"
 AGENTSTACK = "plugin/lib/agentstack.py"
@@ -241,13 +240,11 @@ RULES = [
     ("M3", "làm việc đó tại chỗ; không có cách an toàn thì hỏi người dùng",
      [(SHARED, ["làm việc đó tại chỗ, không có cách an toàn thì hỏi người dùng"])]),
     ("M4", "MCP tìm web gửi câu tìm và URL tới hãng: không đưa secret, mã riêng tư, dữ liệu cá nhân vào",
-     [(SHARED, ["MCP tìm web gửi câu tìm và URL tới hãng: không đưa secret, mã riêng tư, dữ liệu cá nhân vào"]),
-      (REMOTE, ["Câu tìm và URL đi tới hãng thứ ba: không đưa secret, mã riêng tư, dữ liệu cá nhân vào"])]),
+     [(SHARED, ["MCP tìm web gửi câu tìm và URL tới hãng: không đưa secret, mã riêng tư, dữ liệu cá nhân vào"])]),
     ("M5", "tìm web bằng MCP exa trước, Tavily cho crawl, WebSearch khi hai cái kia lỗi",
-     [(SHARED, ["Thứ tự công cụ tìm web (`exa` trước)"]),
-      (REMOTE, ["MCP `exa` đã cài trước, Tavily cho crawl, WebSearch khi hai cái kia lỗi"])]),
-    ("M6", "repo GitHub công khai thì skill remote-mcp",
-     [(SHARED, ["repo GitHub công khai: `remote-mcp`"])]),
+     [(SHARED, ["Tìm web: `exa`→Tavily→WebSearch"])]),
+    ("M6", "repo GitHub công khai: đọc mã nguồn rồi khẳng định chi tiết",
+     [(SHARED, ["Repo GitHub công khai: đọc mã nguồn rồi khẳng định"])]),
 
     # --- Skill và đồ bên thứ ba ---
     ("S1", "trước việc không tầm thường, xem có skill hợp không; có thì dùng",

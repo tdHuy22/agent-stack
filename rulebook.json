@@ -13,10 +13,9 @@
    "id": "G2",
    "check": "nguoi-duyet",
    "by": [
-    "file:global/SHARED.global.md",
-    "test:tests/test_goi_mcp.py::GoiMcp.test_result_is_framed_with_a_random_mark_and_cleaned"
+    "file:global/SHARED.global.md"
    ],
-   "note": "chưa có máy kiểm chung; chỉ remote-mcp tự bọc kết quả thành dữ liệu (test kèm), web và file khác thì không."
+   "note": "chưa có máy kiểm chung cho việc coi nội dung web, file, kết quả công cụ là dữ liệu."
   },
   {
    "id": "G3",
@@ -604,7 +603,7 @@
    "id": "M4",
    "check": "nguoi-duyet",
    "by": [
-    "skill:plugin/skills/remote-mcp/SKILL.md"
+    "file:global/SHARED.global.md"
    ],
    "note": "chưa có máy kiểm nội dung câu tìm gửi ra MCP tìm web."
   },
@@ -612,7 +611,7 @@
    "id": "M5",
    "check": "nguoi-duyet",
    "by": [
-    "skill:plugin/skills/remote-mcp/SKILL.md"
+    "file:global/SHARED.global.md"
    ],
    "note": "chưa có máy kiểm thứ tự công cụ tìm web."
   },
@@ -620,9 +619,9 @@
    "id": "M6",
    "check": "nguoi-duyet",
    "by": [
-    "skill:plugin/skills/remote-mcp/SKILL.md"
+    "file:global/SHARED.global.md"
    ],
-   "note": "chưa có máy kiểm việc dùng remote-mcp cho repo GitHub công khai."
+   "note": "chưa có máy kiểm việc đọc mã nguồn repo GitHub công khai trước khi khẳng định."
   },
   {
    "id": "S1",

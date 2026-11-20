@@ -88,8 +88,6 @@ plugin/skills/reader-page/SKILL.md
 plugin/skills/reader-page/mau.html
 plugin/skills/reader-page/scripts/check_page.py
 plugin/skills/recursive-session/SKILL.md
-plugin/skills/remote-mcp/SKILL.md
-plugin/skills/remote-mcp/scripts/call.py
 plugin/skills/reuse-best/SKILL.md
 plugin/skills/reuse-best/scripts/scout.py
 plugin/skills/session-keeper/SKILL.md

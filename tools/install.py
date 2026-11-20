@@ -627,7 +627,7 @@ class Installer:
             self.failures.append(f"{item['key']}: URL MCP khác bản đã duyệt")
             return
         if item["scope"] == "skill":
-            self.say(f"  · skill: MCP {name} không cài vào Claude Code, gọi qua skill remote-mcp khi việc cần")
+            self.say(f"  · skill: MCP {name} đã duyệt nhưng không cài vào Claude Code (không có đường gọi từ 20/11/2026)")
             return
         if item["scope"] != "user":
             self.say(f"  · {item['scope']}: tự cài khi cần, trong project: claude mcp add -s project --transport http {name} {url}")

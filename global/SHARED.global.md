@@ -50,7 +50,7 @@
 ## Model ngoài và dữ liệu riêng tư
 
 - Model từ xa (OpenRouter, dịch vụ model miễn phí) nhận toàn bộ prompt và file, nhiều nơi dùng để huấn luyện: không giao file chứa secret, khóa, dữ liệu cá nhân, mã riêng tư của người khác; làm việc đó tại chỗ, không có cách an toàn thì hỏi người dùng.
-- MCP tìm web gửi câu tìm và URL tới hãng: không đưa secret, mã riêng tư, dữ liệu cá nhân vào. Thứ tự công cụ tìm web (`exa` trước) và repo GitHub công khai: `remote-mcp`.
+- MCP tìm web gửi câu tìm và URL tới hãng: không đưa secret, mã riêng tư, dữ liệu cá nhân vào. Tìm web: `exa`→Tavily→WebSearch. Repo GitHub công khai: đọc mã nguồn rồi khẳng định.
 
 ## Skill và đồ bên thứ ba
 

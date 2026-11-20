@@ -544,9 +544,7 @@
     {
       "id": "github-repo-question",
       "desc": "hỏi về một repo mã nguồn mở trên GitHub: nó làm gì, kiến trúc ra sao",
-      "skills": [
-        "remote-mcp"
-      ],
+      "note": "đọc mã nguồn, tài liệu của repo (gh, clone nông vào thư mục tạm) trước khi khẳng định tên hàm, cờ, phiên bản",
       "model": "sonnet",
       "effort": "low",
       "match": [
