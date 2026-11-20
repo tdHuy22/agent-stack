@@ -39,6 +39,10 @@ Lệnh:
       lát trước, được ghi kèm mã băm). Khóa file test và file spec (`.agent/spec/` đổi, cộng `--spec`) kèm bằng chứng
       `red`: loại trượt (assert hay thiếu), dòng trượt đầu, commit gốc. Không ghi biên nhận (lần chạy đỏ không phải
       biên nhận trượt). Bằng chứng xanh sau khi có code: `receipt.py run -- <lệnh test>` đạt, sổ khóa không đổi.
+  receipt.py lock --relock [--project DIR] [--level vua|cao] --tests FILE... -- <lệnh test> [tham số...]
+      Khóa lại file đã từng khóa rồi được mở khóa có lời duyệt (code đã có nên fails-before không chứng minh lại
+      được): file phải đang không khóa và có bản ghi `unlock` trong sổ, lệnh test phải đạt. Mục khóa ghi `relock`
+      (lý do, lúc mở khóa cũ), mức của lần khóa trước. Không thay `lock`/`lock --red` cho file khóa lần đầu (mã 2).
   receipt.py locks [--project DIR]
       Liệt kê test đã khóa và file nào đã bị sửa.
   receipt.py unlock [--project DIR] --reason "<lời người dùng>" FILE...
@@ -232,7 +236,8 @@ def cmd_lock(root: Path, label: str, cmd: list, base: str, tests, links, timeout
             continue
         old = book["files"].get(rel) or {}
         keep = old.get("level") if LEVEL_ORDER.get(old.get("level"), -1) > LEVEL_ORDER[level] else level
-        extra = {"red": old["red"]} if old.get("red") else {}  # giữ bằng chứng viết trước của lần khóa đỏ
+        # giữ bằng chứng viết trước của lần khóa đỏ, và dấu khóa lại sau khi mở khóa
+        extra = {k: old[k] for k in ("red", "relock") if old.get(k)}
         if unproven:
             extra["fails_before"] = A.clip(result["verdict"], 300)
         book["files"][rel] = TL.entry_for(data, keep, cmd=cmd, base=result["base"], label=label,
@@ -393,6 +398,82 @@ def cmd_lock_red(root: Path, label: str, cmd: list, base: str, tests, specs, all
     return 0
 
 
+def cmd_lock_relock(root: Path, label: str, cmd: list, tests, timeout: float, level_arg,
+                    run_dir: Path | None = None) -> int:
+    """Khóa lại file test đã từng khóa rồi được mở khóa có lời duyệt (spec khoa-lai-test, TM-174): fails-before không
+    chứng minh lại được vì code đã có. Chỉ nhận file đang không khóa mà sổ có bản ghi `unlock` cùng đường dẫn, và lệnh
+    test phải đạt. Mục khóa ghi `relock` (lý do, lúc mở khóa của bản ghi gần nhất), không ghi `red`. Mọi file hợp lệ
+    hoặc không file nào. Mã: 0 đã khóa lại; 1 test trượt; 2 đầu vào sai, file không đủ điều kiện, lệnh không chạy."""
+    import fails_before as FB
+    TL = testlock()
+    run_dir = run_dir or root
+    top = git_top(root)
+    if top is None:
+        print("[receipt] không khóa được: cần git repo")
+        return 2
+    if not tests:
+        print("[receipt] lock --relock cần --tests <file…>: chỉ khóa lại đúng file đã nêu")
+        return 2
+    book = TL.load(top)
+    if book.get("broken"):
+        print(f"[receipt] không khóa: {TL.LOCK_REL} hỏng hay quá lớn, ghi đè sẽ mất các khóa cũ.")
+        return 2
+    picked = {}
+    for name in tests:
+        rel = repo_rel(root, top, name)
+        if rel is None or not TL.safe_rel(rel) or not (top / rel).is_file():
+            print(f"[receipt] --tests {name}: không thấy file trong repo")
+            return 2
+        if rel in book["files"]:
+            print(f"[receipt] không khóa lại: {rel} đang khóa (có trong sổ). Sửa kiểu nới thì phải `unlock` (người "
+                  "dùng duyệt); chỉ thêm dòng thì dùng `lock` thường.")
+            return 2
+        records = [a for a in book["approvals"] if a.get("action") == "unlock" and a.get("path") == rel]
+        if not records:
+            print(f"[receipt] không khóa lại: {rel} chưa từng được mở khóa (không có bản ghi unlock trong sổ). Khóa "
+                  "lần đầu thì dùng `lock --red` (test viết trước code) hay `lock` (fails-before chứng minh trượt "
+                  "trên code cũ).")
+            return 2
+        picked[rel] = records[-1]  # bản ghi gần nhất: sổ chỉ nối thêm ở cuối
+    exit_code, output, seconds = FB.run(cmd, run_dir, timeout)
+    if exit_code in FB.SETUP_CODES:
+        print(FB.tail(output))
+        print(f"[receipt] không khóa lại: lệnh {FB.SETUP_CODES[exit_code]} (mã {exit_code})")
+        return 2
+    if exit_code != 0:
+        print(FB.tail(output))
+        print(f"[receipt] không khóa lại: lệnh test trượt (mã {exit_code}); khóa lại chỉ nhận test đang đạt")
+        return 1
+    try:
+        base = FB.git(top, "rev-parse", "--verify", "-q", "HEAD^{commit}").decode().strip()
+    except FB.Problem:
+        base = ""
+    locked = []
+    for rel, record in picked.items():
+        try:
+            data = (top / rel).read_bytes()
+        except OSError as exc:
+            print(f"[receipt] không đọc được {rel} ({exc}): không khóa lại file nào")
+            return 2
+        level = record.get("level") if record.get("level") in LEVEL_ORDER else "cao"
+        if level_arg and LEVEL_ORDER[level_arg] > LEVEL_ORDER[level]:
+            level = level_arg  # chỉ nâng, không hạ dưới mức của lần khóa trước
+        book["files"][rel] = TL.entry_for(data, level, cmd=cmd, base=base, label=label,
+                                          relock={"reason": str(record.get("reason", ""))[:500],
+                                                  "unlocked_at": str(record.get("ts", ""))[:40]},
+                                          **run_place(root, run_dir))
+        locked.append(f"{rel} ({level})")
+    try:
+        TL.save(top, book)
+    except OSError as exc:
+        print(f"[receipt] KHÔNG ghi được sổ khóa ({exc})")
+        return 2
+    print(FB.tail(output))
+    print(f"[receipt] đã khóa lại {len(locked)} file vào {TL.LOCK_REL}: {', '.join(locked)} · test đạt "
+          f"({seconds:.1f} giây) · ghi `relock` kèm lý do mở khóa cũ, không phải khóa đỏ. Commit sổ cùng thay đổi.")
+    return 0
+
+
 def cmd_locks(root: Path) -> int:
     TL = testlock()
     top = git_top(root)
@@ -406,7 +487,8 @@ def cmd_locks(root: Path) -> int:
              "deleted": "bị xóa (nới, cần duyệt)"}
     print(f"Test đã khóa ({TL.LOCK_REL}):")
     for rel, entry in sorted(book["files"].items()):
-        red = " (khóa đỏ: viết trước code)" if entry.get("red") else ""
+        red = (" (khóa đỏ: viết trước code)" if entry.get("red") else "") + \
+            (" (khóa lại sau khi mở khóa)" if entry.get("relock") else "")
         print(f"- {rel}: mức {entry['level']}, khóa {ago(entry.get('ts'))}{red}, {names[TL.status(top, rel, entry)]}")
     return 0
 
@@ -799,6 +881,8 @@ def main(argv=None) -> int:
     lock.add_argument("--level", choices=("vua", "cao"), help="nâng mức khóa (không hạ dưới mức risk.py chấm)")
     lock.add_argument("--red", action="store_true",
                       help="khóa đỏ: test viết trước code, phải trượt trên cây hiện tại (cần --level)")
+    lock.add_argument("--relock", action="store_true",
+                      help="khóa lại file đã từng khóa rồi được mở khóa có lời duyệt; test phải đạt, cần --tests")
     lock.add_argument("--spec", nargs="+", metavar="FILE", help="với --red: khóa thêm file spec này")
     lock.add_argument("--allow", nargs="+", metavar="PATH",
                       help="với --red: file code đã đổi từ lát trước, không chặn khóa, được ghi vào bằng chứng")
@@ -838,6 +922,10 @@ def main(argv=None) -> int:
         return cmd_fails_before(root, label, command, args.base, args.tests, args.link, args.timeout, run_dir)
     if args.cmd == "lock":
         label = args.label or A.clip("lock: " + " ".join(command), 80)
+        if args.relock:
+            if args.red or args.spec or args.allow or args.link or args.base != "HEAD":
+                ap.error("--relock không đi cùng --red, --spec, --allow, --link, --base")
+            return cmd_lock_relock(root, label, command, args.tests, args.timeout, args.level, run_dir)
         if args.red:
             return cmd_lock_red(root, label, command, args.base, args.tests, args.spec, args.allow, args.timeout,
                                 args.level, run_dir)

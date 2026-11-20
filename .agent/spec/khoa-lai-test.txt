@@ -1,0 +1,6 @@
+# Khóa lại test đã mở khóa có lời duyệt (phần 3) · mức cao · threat model TM-174
+S1: Khi file test đang không khóa, sổ khóa có bản ghi `unlock` cho đúng đường dẫn đó, và lệnh test đạt, thì `receipt.py lock --relock --tests <file> -- <lệnh test>` ghi lại file vào sổ ở mức của lần khóa trước (không thấp hơn), mục khóa có `relock` gồm lý do và thời điểm của bản ghi mở khóa gần nhất, không có `red`, và in "đã khóa lại".
+S2: Nếu file chưa từng có bản ghi `unlock` trong sổ (chưa từng khóa, hay khóa lần đầu), thì `lock --relock` thoát mã 2, không ghi sổ, và in rằng phải dùng `lock` (fails-before) hay `lock --red`.
+S3: Nếu lệnh test trượt hay không chạy được, thì `lock --relock` thoát khác 0 và không ghi sổ.
+S4: Nếu file đang khóa (có trong sổ), thì `lock --relock` thoát mã 2 và không đổi mục khóa.
+S5: Khi file đã khóa lại bằng `--relock`, thì `spec.py check` tính các dòng spec có test mang dấu trong file đó là có test khóa, và `receipt.py locks` ghi "(khóa lại sau khi mở khóa)" cho file đó.
