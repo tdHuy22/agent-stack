@@ -421,3 +421,74 @@ class DifferentialReviewHoles(HoleBase):
                     "cd tests; echo ${x:-)}; rm test_b.py", "cd tests && echo ${x%)} && rm test_b.py"]:
             with self.subTest(cmd=cmd):
                 self.assertBlocked(cmd)
+
+
+class TruncatedStatesHoles(HoleBase):
+    """Chuỗi nhiều `cd`/`pushd`/`popd` làm hook phải cắt bớt trạng thái: lệnh ghi/xóa phía sau vẫn không được lọt."""
+    CD7 = ("cd /bin | true; cd /etc | true; cd /var | true; cd /opt | true; cd /sbin | true; "
+           "cd /Library | true; cd /System | true")
+
+    # spec:khoa-test-lo-cu#S8 (7 lệnh `cd … | true` rồi `cd -`: OLDPWD có thể là tests, sau đó xóa hay ghi test_b.py)
+    def test_cd_dash_after_many_cd_still_blocks_write_and_delete(self):
+        self.start("làm tiếp", "h1")
+        for cmd in [f"true | cd tests; cd /usr; {self.CD7}; cd -; rm test_b.py",
+                    f"true | cd tests; cd /usr; {self.CD7}; cd -; echo x > test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S8 (7 lệnh `cd … | true` rồi `popd`: chồng pushd có thể còn tests, sau đó xóa test_b.py)
+    def test_popd_after_many_cd_still_blocks_delete(self):
+        self.start("làm tiếp", "h1")
+        root = str(self.project)
+        for cmd in [f"true | pushd tests; pushd /usr; {self.CD7}; popd; rm test_b.py",
+                    f"true | pushd tests; pushd {root}; {self.CD7}; popd; rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S8 (đối chứng: cùng chuỗi nhưng chỉ `ls`, `cat` thì vẫn qua; lệnh thường không bị vạ lây)
+    def test_same_chain_without_write_or_delete_still_passes(self):
+        self.start("làm tiếp", "h1")
+        for cmd in [f"true | cd tests; cd /usr; {self.CD7}; cd -; ls; cat test_b.py",
+                    "cd tools; rm -f foo.txt"]:
+            with self.subTest(cmd=cmd):
+                self.assertPasses(cmd)
+
+    # spec:khoa-test-lo-cu#S8 (review 21/11: lệnh bọc `receipt.py run --cwd .`, `sh -c` sau chuỗi bị cắt vẫn bị xét)
+    def test_wrapped_write_after_truncation_is_blocked(self):
+        self.start("làm tiếp", "h1")
+        for tail in ["cd -", "popd"]:
+            head = "true | pushd tests; pushd /usr" if tail == "popd" else "true | cd tests; cd /usr"
+            for inner in [f"{R} run --cwd . -- rm test_b.py", f"{R} run --cwd . -- sh -c 'rm test_b.py'"]:
+                cmd = f"{head}; {self.CD7}; {tail}; {inner}"
+                with self.subTest(cmd=cmd):
+                    self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S8 (review 21/11: đúng ngưỡng, tám bản chỉ khác OLDPWD giữ đủ, bản thứ chín bị cắt thì ghi lost)
+    def test_merge_states_marks_lost_exactly_when_it_cuts(self):
+        import sys
+        sys.path.insert(0, str(HOOKS))
+        import pretool_guard as g
+        variants = [("/p/tests", f"/o{i}", []) for i in range(g.MAX_STATES + 1)]
+        lost = []
+        self.assertEqual(len(g.merge_states(variants[:g.MAX_STATES], lost=lost)), g.MAX_STATES)
+        self.assertEqual(lost, [])
+        self.assertEqual(len(g.merge_states(variants, lost=lost)), g.MAX_STATES)
+        self.assertTrue(lost)
+        lost = []
+        stacks = [("/p", None, [f"/s{i}"]) for i in range(g.MAX_STATES)] + [("/p", None, [])]
+        self.assertEqual(len(g.merge_states(stacks, lost=lost)), g.MAX_STATES)
+        self.assertTrue(lost)
+
+    # spec:khoa-test-lo-cu#S8 (review lại 21/11: phiên mở ở thư mục cha, lệnh bọc sau chuỗi bị cắt vẫn bị hỏi)
+    def test_wrapped_write_after_truncation_from_parent_dir_is_blocked(self):
+        self.start("làm tiếp", "h1")
+        rp = "python3 proj/plugin/skills/session-keeper/scripts/receipt.py"
+        for tail in ["cd -", "popd"]:
+            head = "true | pushd proj/tests; pushd /usr" if tail == "popd" else "true | cd proj/tests; cd /usr"
+            for inner in [f"{rp} run --cwd . -- rm test_b.py", f"{rp} run --cwd . -- sh -c 'rm test_b.py'",
+                          f"{rp} lock -- {rp} run --cwd . -- rm test_b.py"]:
+                cmd = f"{head}; {self.CD7}; {tail}; {inner}"
+                with self.subTest(cmd=cmd):
+                    self.assertBlocked(cmd, cwd=self.tmp)
+        self.assertPasses(f"true | cd proj/tests; cd /usr; {self.CD7}; cd -; {rp} run --cwd . -- python3 -m unittest",
+                          cwd=self.tmp)

@@ -2,6 +2,12 @@
 
 Việc đã xong, chuyển ra khỏi `PLAN.md` bằng `state.py trim` để file kế hoạch ngắn (agent đọc §0 mỗi phiên). Đợt mới nhất ở trên. Chỉ đọc khi cần tra lại.
 
+## Đợt 21/11/2026 15:13
+
+### Từ §0 của `PLAN.md`: Xong
+
+- **Xong 19–20/11/2026 (chi tiết ở nhật ký):** gỡ hỗ trợ pi (plugin 0.22.0; khôi phục từ `b1684c3`); F1 `narrow.py` chọn test theo file (`17c0c65`, `0e2ef39`, `facd397`); F2a `narrow.py full` chạy cả bộ song song; F2b chạy test, mutation trên TUF qua SSH (`868108f`; TUF nhanh hơn khoảng 1,75 lần cho mutation, không nhanh hơn cho cả bộ); E skill `recursive-session`, nay là lệnh người dùng gõ đầu phiên điều hành (`disable-model-invocation: true`, kiểm bằng docs và binary app 2.1.326); H đếm dùng thật 14 ngày và eval có/không skill cho 14 skill (khoảng 19,9 USD credit API; số và ghi chú `.tmp/h/eval/GHI-CHU-H.md`, ngoài git); H4 Aside so với Browser (Aside làm được cả 3 việc mẫu); gộp `remote-mcp` vào luật chung, gỡ skill và `call.py` (0 lần dùng 14 ngày).
+
 ## Đợt 20/11/2026, rút §0 bằng tay
 
 ### Từ §0 của `PLAN.md`: toàn văn trước khi rút (18.770 ký tự, 31 dòng; ngưỡng nhắc của hook 12.000)

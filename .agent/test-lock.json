@@ -626,7 +626,7 @@
    "ts": "2026-11-20T23:15:29+07:00"
   },
   ".agent/spec/khoa-test-lo-cu.txt": {
-   "base": "a5e9afbeefdcaa3f61bf6dda1c546fa5b971767f",
+   "base": "8315796650213df36e60309f692cf62527e0d84e",
    "cmd": [
     "python3",
     "-m",
@@ -644,7 +644,8 @@
     "7441e3ac85f8",
     "77caacf8cda1",
     "625780232d1a",
-    "afc39f75a712"
+    "afc39f75a712",
+    "41213ba8ffb0"
    ],
    "red": {
     "allowed": [
@@ -682,8 +683,8 @@
     "line": "AssertionError: hook chạy quá 10 giây (timeout thật là 5): 'cd {tests,zz}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,}'",
     "ts": "2026-11-20T23:15:29+07:00"
    },
-   "sha256": "3a15179cf8f30bbf70dce4919a579aa18489791a90918a5fcc02ee032fe09337",
-   "ts": "2026-11-20T23:15:29+07:00"
+   "sha256": "43ceb3519f40f51f3a7c74d998e145628ca09bea53597544cce3b4bc6de934ee",
+   "ts": "2026-11-21T14:56:22+07:00"
   },
   ".agent/spec/mutation-chon-test.txt": {
    "base": "5fe323d3016a719ca6b96a5b2e6a7c11ff186a70",
@@ -31854,7 +31855,7 @@
    "ts": "2026-11-14T08:06:42+07:00"
   },
   "tests/test_testlock_holes.py": {
-   "base": "75fffbe9dd53f4887fcd8ad5508f734b5513ddd4",
+   "base": "8315796650213df36e60309f692cf62527e0d84e",
    "cmd": [
     "python3",
     "-m",
@@ -32226,7 +32227,70 @@
     "0f61ea8b5e82",
     "47942912ab8c",
     "591b1fd027c7",
-    "d6f3df937e70"
+    "d6f3df937e70",
+    "7973b6e6b474",
+    "c258efa6d48d",
+    "4a8c2303ab19",
+    "b03e0fac8264",
+    "5eb4aa38a91e",
+    "cee8d72f0c6e",
+    "4c522918ad1c",
+    "4f8772b30af6",
+    "7e4b25923e4d",
+    "591b1fd027c7",
+    "d6f3df937e70",
+    "0536e24d708f",
+    "fc7bbe4819b2",
+    "4c522918ad1c",
+    "f99625a497a4",
+    "3b1b55c75bd1",
+    "d2ae65ad588a",
+    "591b1fd027c7",
+    "d6f3df937e70",
+    "e239a44f7689",
+    "010d4dbadf75",
+    "4c522918ad1c",
+    "a869b320e187",
+    "7350ffe9edd1",
+    "591b1fd027c7",
+    "396cce036343",
+    "de59a9187f7f",
+    "76900b04d88b",
+    "4c522918ad1c",
+    "27d069d59cbb",
+    "997be380dca5",
+    "3ecc91bee255",
+    "0e966559ed93",
+    "3818a5988e3d",
+    "8f4b1d34de03",
+    "cc000c41d135",
+    "65047a302be1",
+    "99f436b4ba93",
+    "fbdab18b21f2",
+    "eca27ae00f3d",
+    "83aca6d0fbb4",
+    "a577450ad90d",
+    "989b45737734",
+    "c37397b5562a",
+    "77a7892dfa19",
+    "2e3f8cf9bb74",
+    "a577450ad90d",
+    "31a2bfd4e8d0",
+    "db440c9aabbd",
+    "2e3f8cf9bb74",
+    "956678469202",
+    "2e58aa7e5caa",
+    "4c522918ad1c",
+    "d35e34de96a0",
+    "27d069d59cbb",
+    "9ae88dd8e493",
+    "91a520f955d0",
+    "d6da3c1d32f3",
+    "0e966559ed93",
+    "3818a5988e3d",
+    "bcc3a05644bd",
+    "535afd933a9c",
+    "4d3b9240ae0c"
    ],
    "py": {
     "items": [
@@ -32781,6 +32845,70 @@
       "",
       "102cf474ba3a6c7b",
       "b3d3c207897586c7,9abf2e005174a538,c37ca296afd36d65"
+     ],
+     [
+      "class",
+      "TruncatedStatesHoles",
+      "925e4db3fca5329a",
+      "TruncatedStatesHoles",
+      "",
+      ""
+     ],
+     [
+      "stmt",
+      "TruncatedStatesHoles.",
+      "e1a5449515d270c6",
+      "",
+      "",
+      ""
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_cd_dash_after_many_cd_still_blocks_write_and_delete",
+      "9ad61bf966825360",
+      "",
+      "8ea76d605611a469",
+      "b3d3c207897586c7,b949ef88e58e6bfb"
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_popd_after_many_cd_still_blocks_delete",
+      "2436af7533e2a210",
+      "",
+      "919669ed158da55d",
+      "b3d3c207897586c7,9abf2e005174a538,fccc9a0040449880"
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_same_chain_without_write_or_delete_still_passes",
+      "ae03dcfc1f9e4e63",
+      "",
+      "9f4d1ea409f00d1b",
+      "b3d3c207897586c7,a422abebebed553a"
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_wrapped_write_after_truncation_is_blocked",
+      "b435f8fe2a32e531",
+      "",
+      "17d43bb8dcb6a6ae",
+      "b3d3c207897586c7,9059259e690c101c"
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_merge_states_marks_lost_exactly_when_it_cuts",
+      "4259ba82ad2c6c05",
+      "",
+      "f9fb3f59668802f3",
+      "24200a93f063af94,8e14a59b5104c71e,ae9e7c2db430b61f,689918f6600e5b23,494ad0dac4bf4440,c8a314e647520c21a,dc13b56c40cd1f38a,93ac1610602e9886a,d59581cc78ce6013a,494ad0dac4bf4440,b8387cd89ebe43af,6cb87da90c7e31bba,d59581cc78ce6013a"
+     ],
+     [
+      "def",
+      "TruncatedStatesHoles.test_wrapped_write_after_truncation_from_parent_dir_is_blocked",
+      "8ac6dff47d0de8d5",
+      "",
+      "41b374a8a6ab7fc8",
+      "b3d3c207897586c7,a38e37b1f3bf4d2c,195656a1badb3ab0,35ec2172adaafe9ea"
      ]
     ],
     "v": "3.11"
@@ -32821,8 +32949,8 @@
     "line": "AssertionError: hook chạy quá 10 giây (timeout thật là 5): 'cd {tests,zz}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,}'",
     "ts": "2026-11-20T23:15:29+07:00"
    },
-   "sha256": "fd5be20ba7c81ad6fe1e497bf7b83363ebe465b1b3ee75057b3d0441d4fa64b0",
-   "ts": "2026-11-21T09:31:57+07:00"
+   "sha256": "cd1ade7665ce1794e7f41a3246533ed86ee4afe5a0bd0c24b4f20e0121163a49",
+   "ts": "2026-11-21T14:56:22+07:00"
   }
  },
  "schema": 1

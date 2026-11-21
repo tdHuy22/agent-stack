@@ -87,13 +87,14 @@ MAX_STATES = 8
 def merge_states(*groups, lost=None) -> list:
     """Gộp các trạng thái (thư mục, OLDPWD, chồng pushd) có thể có, bỏ trùng, tối đa MAX_STATES, nhóm trước giữ trước.
     Mỗi thư mục giữ một bản trước, các biến thể khác OLDPWD hay chồng pushd xếp sau, nên khi phải cắt thì biến thể bị
-    bỏ trước. Cắt mất một thư mục thì ghi vào `lost` (check_bash hỏi lại mọi lệnh ghi sau đó, review 21/11)."""
+    bỏ trước. Cắt mất bản nào (kể cả bản chỉ khác OLDPWD hay chồng pushd: `cd -`, `popd` sau đó có thể về thư mục
+    test khóa) thì ghi vào `lost` (check_bash hỏi lại mọi lệnh ghi sau đó; spec khoa-test-lo-cu#S8)."""
     uniq = list({(s[0], s[1], tuple(s[2])): s for group in groups for s in group}.values())
     seen, firsts, rest = set(), [], []
     for s in uniq:
         (rest if s[0] in seen else firsts).append(s)
         seen.add(s[0])
-    if lost is not None and len(firsts) > MAX_STATES:
+    if lost is not None and len(uniq) > MAX_STATES:
         lost.append(True)
     return (firsts + rest)[:MAX_STATES]
 
@@ -404,14 +405,17 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
             # vế của ống: `cd` có thể chạy trong tiến trình con (bash) hay shell hiện tại (vế cuối ở zsh): giữ cả hai
             states = merge_states(states, moved, lost=lost) if piped else moved
             continue
-        if lost and write_targets(argv, Path(cwd or ".")):
+        if lost and writes_any(argv, Path(cwd or ".")):
             found = ("ask", "agent-stack: chuỗi lệnh có quá nhiều `cd` có thể chạy hay không (thư mục không có, ống, "
                      "`&`, `case`), hook không còn biết lệnh ghi này chạy ở thư mục nào nên không kiểm được nó có đụng "
                      "test đã khóa không. Tách thành lệnh ngắn hơn, hay viết đường dẫn tuyệt đối. Người dùng chỉ đồng "
                      "ý khi chắc lệnh không đụng test khóa.")
             if found not in results:
                 results.append(found)
-        for here in dict.fromkeys(st[0] for st in states):
+        heres = list(dict.fromkeys(st[0] for st in states))
+        if lost:  # thư mục bị cắt có thể là bất kỳ đâu: xét thêm như thư mục không biết (lệnh bọc `receipt.py run`, S8)
+            heres.append(str(Path(cwd or ".") / "$OLDPWD"))
+        for here in heres:
             result = check_argv(argv, here, temp_vars, session_id)
             try:
                 unknown = unknown_dir_check(argv, here, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
@@ -429,6 +433,21 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
         results = [r[:3] + (None,) if r[0] == "confirm" else r for r in results]
     gated = [r for r in results if r[0] in ("audit", "confirm")]
     return (gate_user(gated, session_id) if gated else None) or next((r for r in results if r[0] == "ask"), None)
+
+
+def writes_any(argv: list, where: Path, depth: int = 0) -> bool:
+    """Lệnh có đích ghi hay xóa không, kể cả lệnh bên trong `receipt.py run|lock` (lồng nhau): nhánh `lost` của
+    check_bash hỏi lại mọi lệnh ghi, mà thư mục bị cắt có thể ở repo khác (spec khoa-test-lo-cu#S8)."""
+    if write_targets(argv, where):
+        return True
+    sub, rest = receipt_subcommand(argv)
+    if sub not in ("run", "lock"):
+        return False
+    if depth > 4:  # lồng quá sâu: coi là có ghi, chỉ hỏi thừa
+        return True
+    inner = receipt_inner(rest)
+    return any(writes_any(a, where, depth + 1) for a in simple_commands(shlex.join(inner))
+               if a and not a[0].startswith("\x00"))
 
 
 def next_dirs(argv: list, states: list, lost=None) -> list:
