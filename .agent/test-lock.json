@@ -626,14 +626,14 @@
    "ts": "2026-11-20T23:15:29+07:00"
   },
   ".agent/spec/khoa-test-lo-cu.txt": {
-   "base": "8315796650213df36e60309f692cf62527e0d84e",
+   "base": "ea77a56a2b4131af0bdb4bdda6490673c17cb86d",
    "cmd": [
     "python3",
     "-m",
     "unittest",
-    "tests.test_testlock_holes"
+    "tests.test_testlock_holes.HookBudgetAndErrorHoles"
    ],
-   "label": "lock: python3 -m unittest tests.test_testlock_holes",
+   "label": "lock: python3 -m unittest tests.test_testlock_holes.HookBudgetAndErrorHoles",
    "level": "cao",
    "lines": [
     "83b8a173a71e",
@@ -645,46 +645,18 @@
     "77caacf8cda1",
     "625780232d1a",
     "afc39f75a712",
-    "41213ba8ffb0"
+    "41213ba8ffb0",
+    "259c656ab3fb",
+    "4acbb4fc3b2c"
    ],
    "red": {
-    "allowed": [
-     {
-      "path": "plugin/hooks/prompt_submit.py",
-      "sha256": "18defc3ebe84be701cf0e4b43dc88f7ebbc0eea17aeb3150db0a7d7e3761ce02"
-     },
-     {
-      "path": "plugin/hooks/stop.py",
-      "sha256": "df62662f6ba6c5c650e3e0879dfd1cd87601842e2c3f0ae352ee7fc1b4602d36"
-     },
-     {
-      "path": "plugin/lib/agentstack.py",
-      "sha256": "de34ad71a658a928ab5c239200ea3d7f3fd2645906987c0d624e31371884b37d"
-     },
-     {
-      "path": "plugin/lib/client_place.py",
-      "sha256": "b7c0fcee4d1c3376455ab43fafacf25985239d19c7943a6b8e93f3bb99a1a662"
-     },
-     {
-      "path": "plugin/lib/specbook.py",
-      "sha256": "119dda8f21201404959c09a1999181c2ddd990826e93bd3a7209cb7133de37e5"
-     },
-     {
-      "path": "plugin/lib/testlock.py",
-      "sha256": "d7ea54f2567a0f68bef955a4e725acdca0255931b9410b9b39473f7937f22888"
-     },
-     {
-      "path": "plugin/skills/session-keeper/scripts/receipt.py",
-      "sha256": "8f098640958ba38397f88f271fac833fb9d717f60a241f5f7759a643646e2fd9"
-     }
-    ],
-    "base": "a5e9afbeefdcaa3f61bf6dda1c546fa5b971767f",
+    "base": "ea77a56a2b4131af0bdb4bdda6490673c17cb86d",
     "kind": "assert",
-    "line": "AssertionError: hook chạy quá 10 giây (timeout thật là 5): 'cd {tests,zz}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,}'",
-    "ts": "2026-11-20T23:15:29+07:00"
+    "line": "AssertionError: None != 'deny' : 'rm tests/test_b.py; rm -r /tmp/ddddddddd' -> None",
+    "ts": "2026-11-21T15:26:46+07:00"
    },
-   "sha256": "43ceb3519f40f51f3a7c74d998e145628ca09bea53597544cce3b4bc6de934ee",
-   "ts": "2026-11-21T14:56:22+07:00"
+   "sha256": "7be8ab7842f11825690777acb754327b74b617b571643b51bd72826f4e681cff",
+   "ts": "2026-11-21T15:26:46+07:00"
   },
   ".agent/spec/mutation-chon-test.txt": {
    "base": "5fe323d3016a719ca6b96a5b2e6a7c11ff186a70",
@@ -31855,14 +31827,14 @@
    "ts": "2026-11-14T08:06:42+07:00"
   },
   "tests/test_testlock_holes.py": {
-   "base": "8315796650213df36e60309f692cf62527e0d84e",
+   "base": "ea77a56a2b4131af0bdb4bdda6490673c17cb86d",
    "cmd": [
     "python3",
     "-m",
     "unittest",
-    "tests.test_testlock_holes"
+    "tests.test_testlock_holes.HookBudgetAndErrorHoles"
    ],
-   "label": "lock: python3 -m unittest tests.test_testlock_holes",
+   "label": "lock: python3 -m unittest tests.test_testlock_holes.HookBudgetAndErrorHoles",
    "level": "cao",
    "lines": [
     "499b962de201",
@@ -32290,7 +32262,102 @@
     "3818a5988e3d",
     "bcc3a05644bd",
     "535afd933a9c",
-    "4d3b9240ae0c"
+    "4d3b9240ae0c",
+    "ac9ddf6327e0",
+    "499f7688ce15",
+    "92c0c796c0c8",
+    "3741d72f5067",
+    "b10dc6d33ed9",
+    "66e8d391d008",
+    "0f47ec46a327",
+    "87f96406b20b",
+    "3a353f6ca59d",
+    "1cf665b2c5f4",
+    "22945d1953ec",
+    "fcaa0b4f5c9f",
+    "618cf9b5917c",
+    "5683182512ef",
+    "9295d6bdbebf",
+    "14b26c432cf8",
+    "44e31b80c18c",
+    "94b2c4eec2b7",
+    "c48e2c685290",
+    "91e94426d01d",
+    "045f427f2fdb",
+    "861397d5d26d",
+    "8ee21641eb11",
+    "9295366309af",
+    "64ba76c0ef08",
+    "c70c391ae362",
+    "0cc7d0f92cba",
+    "4c522918ad1c",
+    "65dd4ace20be",
+    "7591557252c4",
+    "78430d7a5478",
+    "ca372d4003f8",
+    "097a6d8d07bc",
+    "87fd0ecde100",
+    "cc09ce916d09",
+    "60bd2ef34fa3",
+    "c6a5ddf6d06b",
+    "50cb3cceaf57",
+    "4c522918ad1c",
+    "6243ce7a3206",
+    "88c2b62f696d",
+    "95ded3098448",
+    "d137ced0c12f",
+    "95935f7bd1c2",
+    "99f436b4ba93",
+    "fbdab18b21f2",
+    "eca27ae00f3d",
+    "7640dbe243a8",
+    "2d8104c9115f",
+    "4c522918ad1c",
+    "b1ed4cd5509a",
+    "88c2b62f696d",
+    "95ded3098448",
+    "a133fc65fff6",
+    "241c56d41474",
+    "d2457041a0c2",
+    "4c522918ad1c",
+    "684ecd0c3b90",
+    "35281fabd4bb",
+    "48b8bdfb0ee0",
+    "c935ea887cec",
+    "b28d0e726811",
+    "f040d2aae32f",
+    "17cce64d98e9",
+    "88c2b62f696d",
+    "95ded3098448",
+    "a133fc65fff6",
+    "29b48c96672d",
+    "6624514b16e2",
+    "4c522918ad1c",
+    "7e7fcfe26c82",
+    "4036939f164c",
+    "636cc4194e84",
+    "097a6d8d07bc",
+    "46da08b5d7cf",
+    "f1046b248a54",
+    "2b49630f5499",
+    "2990f220f55d",
+    "4c522918ad1c",
+    "9654a0b005ef",
+    "591b1fd027c7",
+    "396cce036343",
+    "6c82458cf516",
+    "5674c6ef09ca",
+    "0773618aae92",
+    "4c522918ad1c",
+    "65dd4ace20be",
+    "a1a07d93b0a6",
+    "2e9634d28380",
+    "a2fa50d60608",
+    "107ede983d41",
+    "4c522918ad1c",
+    "d82848697add",
+    "ed05bbef8400",
+    "d6f3df937e70"
    ],
    "py": {
     "items": [
@@ -32909,48 +32976,122 @@
       "",
       "41b374a8a6ab7fc8",
       "b3d3c207897586c7,a38e37b1f3bf4d2c,195656a1badb3ab0,35ec2172adaafe9ea"
+     ],
+     [
+      "class",
+      "HookBudgetAndErrorHoles",
+      "db1324f84108f122",
+      "HookBudgetAndErrorHoles",
+      "",
+      ""
+     ],
+     [
+      "stmt",
+      "HookBudgetAndErrorHoles.",
+      "5f2bde3d90619245",
+      "",
+      "",
+      ""
+     ],
+     [
+      "stmt",
+      "HookBudgetAndErrorHoles.",
+      "3f42cb6d717e7026",
+      "",
+      "",
+      ""
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.run_run",
+      "8901d61a5e40e7b3",
+      "",
+      "acfe2b2200218746",
+      "a29690ed893baf73,122d0bdcc760d3b6,fdb33ea09a623f81,3fbd005e6b1597e1,32622cc3321934ba,9e064eb9f1536c9b,28f5e06805f0b217"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.decision_of",
+      "0ea247bd033aff28",
+      "",
+      "867d2244950e4d9f",
+      "0a98f09c6947ed36a,4f804761551f71f2"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_error_in_one_command_keeps_decision_of_the_others",
+      "dc79a95170ddc1c2",
+      "",
+      "5248fd38352d6582",
+      "b3d3c207897586c7,83eb6d023087b127,eef040534ae740d5a,765f7438812d3337,a4fe3909d1a375f2,59bd44dd2b31572fa"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_run_answers_ask_when_check_bash_raises",
+      "2d396e2a16eab7ad",
+      "",
+      "6a29c39edab4f3ea",
+      "b3d3c207897586c7,1e6deec793dc4ef3,86db5a6eb52a9567a,e6d5fbde75f202bca"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_run_answers_ask_under_five_seconds_when_check_bash_hangs",
+      "774e0300543738be",
+      "",
+      "7fa26106a0ec8bd6",
+      "24200a93f063af94,8e14a59b5104c71e,ae9e7c2db430b61f,95f1764ac7729e9ba,ac0299374df801e6a,b3d3c207897586c7,f43bf14229caeaf6,86db5a6eb52a9567a,e6d5fbde75f202bca,ab0d520092099674a"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_run_budget_cuts_even_when_check_bash_swallows_exceptions",
+      "cf91326b0cff32ce",
+      "",
+      "b39509b005f88d6b",
+      "b3d3c207897586c7,30a0f050c3e723d3,07f598a3e073919d,86db5a6eb52a9567a,e6d5fbde75f202bca,ab0d520092099674a"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_truncated_chain_with_long_receipt_run_answers_within_budget",
+      "b377b4d0e2e67f74",
+      "",
+      "89658bd815b24eed",
+      "b3d3c207897586c7,924d38ff86f156df"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_ordinary_commands_still_pass_fast",
+      "9418f6a528dcecaf",
+      "",
+      "a593210f1bcaa845",
+      "b3d3c207897586c7,6ff1a802e599f549"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_long_name_component_keeps_decision_of_the_others",
+      "b9296e14945b86e1",
+      "",
+      "d56315de31473543",
+      "b3d3c207897586c7,83eb6d023087b127,102c09cb23c6e0ce,f7047942da0fadcba"
+     ],
+     [
+      "def",
+      "HookBudgetAndErrorHoles.test_lone_surrogate_in_command_still_decides",
+      "f125b19de8bc6639",
+      "",
+      "eb269e8a85329610",
+      "b3d3c207897586c7,d0c10ebee480c441"
      ]
     ],
     "v": "3.11"
    },
    "red": {
-    "allowed": [
-     {
-      "path": "plugin/hooks/prompt_submit.py",
-      "sha256": "18defc3ebe84be701cf0e4b43dc88f7ebbc0eea17aeb3150db0a7d7e3761ce02"
-     },
-     {
-      "path": "plugin/hooks/stop.py",
-      "sha256": "df62662f6ba6c5c650e3e0879dfd1cd87601842e2c3f0ae352ee7fc1b4602d36"
-     },
-     {
-      "path": "plugin/lib/agentstack.py",
-      "sha256": "de34ad71a658a928ab5c239200ea3d7f3fd2645906987c0d624e31371884b37d"
-     },
-     {
-      "path": "plugin/lib/client_place.py",
-      "sha256": "b7c0fcee4d1c3376455ab43fafacf25985239d19c7943a6b8e93f3bb99a1a662"
-     },
-     {
-      "path": "plugin/lib/specbook.py",
-      "sha256": "119dda8f21201404959c09a1999181c2ddd990826e93bd3a7209cb7133de37e5"
-     },
-     {
-      "path": "plugin/lib/testlock.py",
-      "sha256": "d7ea54f2567a0f68bef955a4e725acdca0255931b9410b9b39473f7937f22888"
-     },
-     {
-      "path": "plugin/skills/session-keeper/scripts/receipt.py",
-      "sha256": "8f098640958ba38397f88f271fac833fb9d717f60a241f5f7759a643646e2fd9"
-     }
-    ],
-    "base": "a5e9afbeefdcaa3f61bf6dda1c546fa5b971767f",
+    "base": "ea77a56a2b4131af0bdb4bdda6490673c17cb86d",
     "kind": "assert",
-    "line": "AssertionError: hook chạy quá 10 giây (timeout thật là 5): 'cd {tests,zz}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,}'",
-    "ts": "2026-11-20T23:15:29+07:00"
+    "line": "AssertionError: None != 'deny' : 'rm tests/test_b.py; rm -r /tmp/ddddddddd' -> None",
+    "ts": "2026-11-21T15:26:46+07:00"
    },
-   "sha256": "cd1ade7665ce1794e7f41a3246533ed86ee4afe5a0bd0c24b4f20e0121163a49",
-   "ts": "2026-11-21T14:56:22+07:00"
+   "sha256": "8b9b81cd9f671b0c3e73675bf480c706ce9210b8bcbef714184405480823b98e",
+   "ts": "2026-11-21T15:50:13+07:00"
   }
  },
  "schema": 1

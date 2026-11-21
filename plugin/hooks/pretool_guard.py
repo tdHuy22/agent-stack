@@ -81,6 +81,21 @@ RM_SCRATCH_NAMES = {".tmp", "tmp", "build", "dist", "node_modules", "__pycache__
 HOME_SET_RE, CDPATH_SET_RE = (re.compile(rf"(?<![$\w{{/.-]){name}\b(?![./-])") for name in ("HOME", "CDPATH"))
 
 
+# Ngân sách giây cho việc xét (spec khoa-test-lo-cu#S10): app cho hook 5 giây (hooks.json) rồi cho lệnh chạy; 3 giây
+# chừa 2 giây cho Python khởi động lúc máy bận và in kết quả, mà vẫn gấp nhiều lần lệnh thường (dưới 0,5 giây).
+BUDGET_SECONDS = 3.0
+
+
+class BudgetExceeded(BaseException):
+    """Hết ngân sách. Kế thừa BaseException để các khối `except Exception` trong hook không nuốt nó."""
+
+
+BUDGET_REASON = ("agent-stack: lệnh này dài hay phức tạp tới mức hook không xét xong trong ngân sách thời gian, nên "
+                 "không kiểm được nó có đụng test đã khóa hay lệnh không đảo ngược được không. Tách thành lệnh ngắn "
+                 "hơn. Người dùng chỉ đồng ý khi đã đọc lệnh và chắc nó an toàn.")
+UNIT_ERROR_REASON = ("agent-stack: hook gặp lỗi khi xét một lệnh trong chuỗi (như đường dẫn quá dài), nên không kiểm "
+                     "được lệnh đó có đụng test đã khóa hay xóa thứ không lấy lại được không. Viết lại lệnh gọn hơn. "
+                     "Người dùng chỉ đồng ý khi đã đọc lệnh và chắc nó an toàn.")
 MAX_STATES = 8
 
 
@@ -141,8 +156,12 @@ MD_DIRS = {".claude", ".agent", ".agents", ".github", ".cursor", "skills", "agen
 
 
 def decide(decision: str, reason: str) -> None:
-    sys.stdout.write(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
-                                                        "permissionDecisionReason": reason}}, ensure_ascii=False))
+    out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
+                                  "permissionDecisionReason": reason}}
+    try:
+        sys.stdout.write(json.dumps(out, ensure_ascii=False))
+    except UnicodeEncodeError:  # lý do chép lệnh có surrogate lẻ (`\ud800`): in dạng ASCII, không bỏ quyết định
+        sys.stdout.write(json.dumps(out))
 
 
 def lib():
@@ -195,7 +214,9 @@ BG_RE = re.compile(r"(?<![&|])&(?![&>])")
 DUP_FD_RE = re.compile(r"(?<![\w&<>])\d*[<>]&(?:\d+|-)(?=$|[\s;|&)])")
 # `&>f`, `&>>f` (ghi cả hai luồng vào f), `>& f`, `<& f`: chuyển hướng, không phải `&` chạy nền.
 # Chữ đứng liền trước `>`: chỉ là số luồng khi cả từ toàn chữ số (`2>f`); `build2>f`, `tests/v2>f` là từ rồi chuyển hướng.
-GLUED_REDIRECT_RE = re.compile(r"([^\s<>&|;()]+)(?=>)")
+# Chỉ bắt đầu khớp ở đầu từ: từ dài không có `>` thì quét một lần (bản cũ bậc hai: 5.000 ký tự mất 0,2 giây mỗi lần,
+# cả chuỗi 3,7 giây; spec khoa-test-lo-cu#S10). Không dùng `++`: cần Python 3.11, máy cloud có thể chạy bản cũ hơn.
+GLUED_REDIRECT_RE = re.compile(r"(?<![^\s<>&|;()])([^\s<>&|;()]+)(?=>)")
 # Lệnh có `case`: dấu `)` của mẫu (`a)`) không phân biệt được với `)` đóng tiến trình con (`case a in esac`, `"case"`,
 # `"esac"` làm đếm sai), nên khi đóng phạm vi thì gộp thư mục trong và ngoài thay vì khôi phục: chỉ hỏi thừa, không lọt.
 QUOTED_PAREN_RE = re.compile(r"\\[()]|\"[^\"]*[()][^\"]*\"|'[^']*[()][^']*'")
@@ -389,42 +410,57 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
             continue
         if argv is PIPE_MARK:
             continue
-        # `HOME=$PWD && rm ~/tests/x.py`: `~` không còn là thư mục nhà của hook; xét đích sau `~` như đường dẫn tương
-        # đối trong một thư mục không biết (TM-173)
-        tilde = home_set and any(a == "~" or a.startswith("~/") for a in argv[1:])
-        if Path(argv[0]).name in ("cd", "pushd", "popd"):  # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
-            if home_set and Path(argv[0]).name != "popd":  # `HOME=$PWD; cd ~`: thư mục nhà không biết
-                argv = [argv[0], "$HOME"] if len(argv) == 1 else \
-                    [argv[0]] + ["$HOME" + a[1:] if a == "~" or a.startswith("~/") else a for a in argv[1:]]
-            if cdpath and Path(argv[0]).name != "popd":
-                argv = cdpath_argv(argv)  # tên không có `/` có thể đi theo CDPATH tới thư mục khác
-            piped = PIPE_MARK in (units[i - 1] if i else None, units[i + 1] if i + 1 < len(units) else None)
-            moved = next_dirs(argv, states, lost)
-            # `cd nope; rm tests/x.py`: cd tới thư mục không có thì thất bại, lệnh sau chạy ở thư mục cũ
-            piped = piped or any(not any(ch in s[0] for ch in DIR_UNKNOWN) and not is_dir(Path(s[0])) for s in moved)
-            # vế của ống: `cd` có thể chạy trong tiến trình con (bash) hay shell hiện tại (vế cuối ở zsh): giữ cả hai
-            states = merge_states(states, moved, lost=lost) if piped else moved
-            continue
-        if lost and writes_any(argv, Path(cwd or ".")):
-            found = ("ask", "agent-stack: chuỗi lệnh có quá nhiều `cd` có thể chạy hay không (thư mục không có, ống, "
-                     "`&`, `case`), hook không còn biết lệnh ghi này chạy ở thư mục nào nên không kiểm được nó có đụng "
-                     "test đã khóa không. Tách thành lệnh ngắn hơn, hay viết đường dẫn tuyệt đối. Người dùng chỉ đồng "
-                     "ý khi chắc lệnh không đụng test khóa.")
+        try:  # lỗi khi xét một lệnh (OSError tên quá dài…) không làm mất quyết định của lệnh khác (S9)
+            # `HOME=$PWD && rm ~/tests/x.py`: `~` không còn là thư mục nhà của hook; xét đích sau `~` như đường dẫn
+            # tương đối trong một thư mục không biết (TM-173)
+            tilde = home_set and any(a == "~" or a.startswith("~/") for a in argv[1:])
+            # `cd <thư mục> && git tag v1`: các lệnh sau chạy ở thư mục mới
+            if Path(argv[0]).name in ("cd", "pushd", "popd"):
+                if home_set and Path(argv[0]).name != "popd":  # `HOME=$PWD; cd ~`: thư mục nhà không biết
+                    argv = [argv[0], "$HOME"] if len(argv) == 1 else \
+                        [argv[0]] + ["$HOME" + a[1:] if a == "~" or a.startswith("~/") else a for a in argv[1:]]
+                if cdpath and Path(argv[0]).name != "popd":
+                    argv = cdpath_argv(argv)  # tên không có `/` có thể đi theo CDPATH tới thư mục khác
+                piped = PIPE_MARK in (units[i - 1] if i else None, units[i + 1] if i + 1 < len(units) else None)
+                moved = next_dirs(argv, states, lost)
+                # `cd nope; rm tests/x.py`: cd tới thư mục không có thì thất bại, lệnh sau chạy ở thư mục cũ
+                piped = piped or any(not any(ch in s[0] for ch in DIR_UNKNOWN) and not is_dir(Path(s[0]))
+                                     for s in moved)
+                # vế của ống: `cd` có thể chạy trong tiến trình con (bash) hay shell hiện tại (vế cuối ở zsh): giữ
+                # cả hai
+                states = merge_states(states, moved, lost=lost) if piped else moved
+                continue
+            if lost and writes_any(argv, Path(cwd or ".")):
+                found = ("ask", "agent-stack: chuỗi lệnh có quá nhiều `cd` có thể chạy hay không (thư mục không có, "
+                         "ống, `&`, `case`), hook không còn biết lệnh ghi này chạy ở thư mục nào nên không kiểm được "
+                         "nó có đụng test đã khóa không. Tách thành lệnh ngắn hơn, hay viết đường dẫn tuyệt đối. Người "
+                         "dùng chỉ đồng ý khi chắc lệnh không đụng test khóa.")
+                if found not in results:
+                    results.append(found)
+            heres = list(dict.fromkeys(st[0] for st in states))
+            # thư mục bị cắt có thể là bất kỳ đâu: xét thêm như thư mục không biết (lệnh bọc `receipt.py run`, S8)
+            if lost:
+                heres.append(str(Path(cwd or ".") / "$OLDPWD"))
+            for here in heres:
+                result = check_argv(argv, here, temp_vars, session_id)
+                try:
+                    unknown = unknown_dir_check(argv, here, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
+                    if tilde and not unknown:
+                        rel = [("." if a == "~" else a[2:]) if a == "~" or a.startswith("~/") else a for a in argv]
+                        unknown = unknown_dir_check(rel, str(Path(here) / "$HOME"), session_id)
+                except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
+                    unknown = None
+                results += [r for r in (result, unknown) if r and r not in results]
+        except Exception as exc:  # noqa: BLE001
+            try:
+                lib().log_event("hook-error", {"hook": "pretool_guard.unit", "error": repr(exc)[:300]})
+            except Exception:  # noqa: BLE001
+                pass
+            if Path(argv[0]).name in ("cd", "pushd", "popd"):
+                lost.append(True)  # không biết thư mục sau lệnh này: hỏi mọi lệnh ghi sau đó
+            found = ("ask", UNIT_ERROR_REASON)
             if found not in results:
                 results.append(found)
-        heres = list(dict.fromkeys(st[0] for st in states))
-        if lost:  # thư mục bị cắt có thể là bất kỳ đâu: xét thêm như thư mục không biết (lệnh bọc `receipt.py run`, S8)
-            heres.append(str(Path(cwd or ".") / "$OLDPWD"))
-        for here in heres:
-            result = check_argv(argv, here, temp_vars, session_id)
-            try:
-                unknown = unknown_dir_check(argv, here, session_id)  # chỉ hỏi: đứng sau mọi chặn và cổng ở trên
-                if tilde and not unknown:
-                    rel = [("." if a == "~" else a[2:]) if a == "~" or a.startswith("~/") else a for a in argv]
-                    unknown = unknown_dir_check(rel, str(Path(here) / "$HOME"), session_id)
-            except Exception:  # noqa: BLE001 (lỗi phần này không được tắt các chốt chặn khác)
-                unknown = None
-            results += [r for r in (result, unknown) if r and r not in results]
     denied = [r for r in results if r[0] == "deny"]
     if denied:
         return denied[0]
@@ -2052,16 +2088,22 @@ def plan_without_criteria(A, root: Path):
     except ValueError:
         return found[0].name
 
-def main():
+def main(ctx: dict | None = None):
+    """(quyết định, lý do) hoặc None cho payload PreToolUse đọc từ stdin. Ghi tên tool vào `ctx` để run() biết hỏi lại
+    khi quá ngân sách hay lỗi."""
     try:
         data = json.loads(sys.stdin.read() or "{}")
     except ValueError:
-        return
+        return None
     if not isinstance(data, dict):
-        return
+        return None
     tool, tool_input = data.get("tool_name"), data.get("tool_input") or {}
+    if ctx is not None:
+        ctx["tool"] = tool
+        if tool == "Bash" and ctx.get("arm"):
+            ctx["arm"]()  # ngân sách chỉ cho Bash; tool khác giữ như cũ
     if not isinstance(tool_input, dict):
-        return
+        return None
     cwd = data.get("cwd") or ""
     if tool == "Bash":
         result = check_bash(str(tool_input.get("command") or ""), cwd, data.get("session_id") or "")
@@ -2071,16 +2113,51 @@ def main():
         result = check_write(tool_input, cwd, data.get("session_id") or "", tool)
     else:
         result = None
-    if result:
-        decide(*result)
+    return result
 
 
-if __name__ == "__main__":
+def _on_alarm(signum, frame):
+    raise BudgetExceeded
+
+
+def run() -> None:
+    """Chạy main trong ngân sách BUDGET_SECONDS (đồng hồ một lần, SIGALRM), rồi in quyết định. Với Bash: quá ngân
+    sách hay lỗi nội bộ thì hỏi lại, không để app hết giờ hay hook sập rồi lệnh qua im lặng (spec khoa-test-lo-cu#S9,
+    S10). Tool khác giữ như cũ: lỗi thì không in gì. Không bao giờ ném lỗi."""
+    import signal
+    armed = []
+
+    def arm():
+        try:
+            signal.signal(signal.SIGALRM, _on_alarm)
+            signal.setitimer(signal.ITIMER_REAL, BUDGET_SECONDS)
+            armed.append(True)
+        except (ValueError, OSError, AttributeError):  # không ở luồng chính hay không có SIGALRM: chạy không ngân sách
+            pass
+
+    ctx: dict = {"arm": arm}
+    result = None
     try:
-        main()
+        try:
+            result = main(ctx)
+        finally:
+            if armed:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+    except BudgetExceeded:
+        result = ("ask", BUDGET_REASON) if ctx.get("tool") == "Bash" else None
     except Exception as exc:  # noqa: BLE001 (hook không được làm kẹt phiên)
         try:
             lib().log_event("hook-error", {"hook": "pretool_guard", "error": repr(exc)[:300]})
         except Exception:  # noqa: BLE001
             pass
+        result = ("ask", UNIT_ERROR_REASON) if ctx.get("tool") == "Bash" else None
+    try:
+        if result:
+            decide(*result)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+if __name__ == "__main__":
+    run()
     sys.exit(0)

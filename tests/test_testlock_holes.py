@@ -492,3 +492,110 @@ class TruncatedStatesHoles(HoleBase):
                     self.assertBlocked(cmd, cwd=self.tmp)
         self.assertPasses(f"true | cd proj/tests; cd /usr; {self.CD7}; cd -; {rp} run --cwd . -- python3 -m unittest",
                           cwd=self.tmp)
+
+
+class HookBudgetAndErrorHoles(HoleBase):
+    """Lỗi nội bộ lúc xét một lệnh không làm mất quyết định các lệnh khác; xét quá ngân sách thì hỏi lại, không để app hết giờ."""
+    LONG = "/tmp/" + "/".join(["d" * 200] * 20)  # ~4.000 ký tự: hệ điều hành báo tên quá dài
+    CUT = f"true | cd tests; cd /usr; {TruncatedStatesHoles.CD7}; cd -"  # chuỗi bị cắt trạng thái
+
+    def run_run(self, body, cmd="ls"):
+        """Chạy `pretool_guard.run()` trong tiến trình con sau khi `body` thay `check_bash`; trả (mã thoát, stdout, giây)."""
+        root = HOOKS.parents[1]
+        script = ("import sys, time\n"
+                  f"sys.path.insert(0, {str(HOOKS)!r})\n"
+                  "import pretool_guard as g\n"
+                  f"{body}\n"
+                  "g.check_bash = boom\n"
+                  "g.run()\n")
+        payload = {"session_id": "h1", "cwd": str(self.project), "tool_name": "Bash",
+                   "tool_input": {"command": cmd}, "hook_event_name": "PreToolUse"}
+        t0 = time.monotonic()
+        try:
+            out = subprocess.run(["python3", "-c", script], input=json.dumps(payload), capture_output=True, text=True,
+                                 cwd=str(root), env=self.env(), timeout=15)
+        except subprocess.TimeoutExpired:
+            self.fail("g.run() không dừng trong 15 giây: ngân sách thời gian không cắt được hàm xét")
+        return out.returncode, out.stdout, time.monotonic() - t0
+
+    def decision_of(self, stdout):
+        self.assertTrue(stdout.strip(), "run() không in quyết định nào")
+        return json.loads(stdout)["hookSpecificOutput"]["permissionDecision"]
+
+    # spec:khoa-test-lo-cu#S9 (lỗi ở một lệnh không làm mất quyết định lệnh còn lại, ở cả hai thứ tự; lệnh lỗi bị hỏi)
+    def test_error_in_one_command_keeps_decision_of_the_others(self):
+        self.start("làm tiếp", "h1")
+        alone = self.bash_in("rm tests/test_b.py")
+        self.assertIn(alone and alone[0], BLOCKED, alone)
+        for cmd in [f"rm tests/test_b.py; rm -r {self.LONG}", f"rm -r {self.LONG}; rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd[:40]):
+                out = self.bash_in(cmd)
+                self.assertEqual(out and out[0], alone[0], f"{cmd[:40]!r} -> {out}")
+        out = self.bash_in(f"rm -r {self.LONG}")
+        self.assertEqual(out and out[0], "ask", f"lệnh gây lỗi phải bị hỏi, không qua im lặng: {out}")
+
+    # spec:khoa-test-lo-cu#S9 (lưới ở run(): check_bash ném lỗi bất kỳ thì in ask, thoát 0)
+    def test_run_answers_ask_when_check_bash_raises(self):
+        self.start("làm tiếp", "h1")
+        code, stdout, _ = self.run_run('def boom(*a, **k):\n    raise RuntimeError("x")')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.decision_of(stdout), "ask")
+
+    # spec:khoa-test-lo-cu#S10 (ngân sách nội bộ thấp hơn hẳn hạn 5 giây của app; hàm xét treo thì hỏi lại dưới 5 giây)
+    def test_run_answers_ask_under_five_seconds_when_check_bash_hangs(self):
+        import sys
+        sys.path.insert(0, str(HOOKS))
+        import pretool_guard as g
+        self.assertTrue(hasattr(g, "BUDGET_SECONDS"), "thiếu hằng BUDGET_SECONDS")
+        self.assertLessEqual(g.BUDGET_SECONDS, 3.0)
+        self.start("làm tiếp", "h1")
+        code, stdout, wall = self.run_run("def boom(*a, **k):\n    time.sleep(20)")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.decision_of(stdout), "ask")
+        self.assertLess(wall, 5.0)
+
+    # spec:khoa-test-lo-cu#S10 (code nuốt `except Exception` rồi ngủ tiếp vẫn bị cắt: ngoại lệ hết giờ không phải Exception thường)
+    def test_run_budget_cuts_even_when_check_bash_swallows_exceptions(self):
+        self.start("làm tiếp", "h1")
+        body = ("def boom(*a, **k):\n"
+                "    while True:\n"
+                "        try:\n"
+                "            time.sleep(20)\n"
+                "        except Exception:\n"
+                "            pass")
+        code, stdout, wall = self.run_run(body)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.decision_of(stdout), "ask")
+        self.assertLess(wall, 5.0)
+
+    # spec:khoa-test-lo-cu#S10 (ca thật: chuỗi bị cắt nối `receipt.py run -- echo <rất dài>` trả lời hỏi lại dưới 3 giây)
+    def test_truncated_chain_with_long_receipt_run_answers_within_budget(self):
+        self.start("làm tiếp", "h1")
+        for n in (5000, 8000):
+            cmd = f"{self.CUT}; {R} run -- echo {'x' * n}"
+            with self.subTest(n=n):
+                out = self.bash_in(cmd)
+                self.assertIn(out[0] if out else None, (None, "ask"), out)
+                self.assertLess(self.wall, 3.0, f"hook mất {self.wall:.1f} s cho {n} ký tự")
+
+    # spec:khoa-test-lo-cu#S10 (đối chứng: lệnh thường vẫn qua không bị hỏi và nhanh)
+    def test_ordinary_commands_still_pass_fast(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["ls -la", "git status", "cat tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertPasses(cmd)
+                self.assertLess(self.wall, 3.0)
+
+    # spec:khoa-test-lo-cu#S9 (review 21/11: một đoạn tên quá 255 ký tự cũng lỗi trên Linux; lệnh khác vẫn bị chặn)
+    def test_long_name_component_keeps_decision_of_the_others(self):
+        self.start("làm tiếp", "h1")
+        alone = self.bash_in("rm tests/test_b.py")
+        out = self.bash_in(f"rm tests/test_b.py; rm -r /tmp/{'d' * 300}")
+        self.assertEqual(out and out[0], alone and alone[0])
+
+    # spec:khoa-test-lo-cu#S9 (review 21/11: lý do chép lệnh có surrogate lẻ thì in lỗi mã hóa; vẫn phải ra quyết định)
+    def test_lone_surrogate_in_command_still_decides(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["git clean -fd . \ud800", "git reset --hard \ud800", "rm tests/test_b.py \ud800"]:
+            with self.subTest(cmd=cmd.encode("unicode_escape")):
+                self.assertBlocked(cmd)
