@@ -5090,7 +5090,7 @@
    "ts": "2026-11-20T16:40:00+07:00"
   },
   "tests/test_consent_origin.py": {
-   "base": "a5e9afbeefdcaa3f61bf6dda1c546fa5b971767f",
+   "base": "75fffbe9dd53f4887fcd8ad5508f734b5513ddd4",
    "cmd": [
     "python3",
     "-m",
@@ -5491,7 +5491,16 @@
     "ba37d789f154",
     "6624ec8e5a31",
     "594a81682f00",
-    "c46ca3174012"
+    "c46ca3174012",
+    "7ea9f2c4e064",
+    "9567f05bf221",
+    "43b21b5bf9d4",
+    "6db692f23f36",
+    "4ba5fd62f862",
+    "7cb4e18043b4",
+    "54645e48595e",
+    "cefb1e231279",
+    "4ffd3ce6d92b"
    ],
    "py": {
     "items": [
@@ -6094,6 +6103,22 @@
       "",
       "a7538725bc8328b0",
       "f029e60f289a0e34,8e598631b2290254"
+     ],
+     [
+      "class",
+      "GluedRedirectIrreversible",
+      "8f70c2254ea34a5b",
+      "GluedRedirectIrreversible",
+      "",
+      ""
+     ],
+     [
+      "def",
+      "GluedRedirectIrreversible.test_push_with_glued_redirect_still_needs_consent",
+      "73b5ea57513c8e8f",
+      "",
+      "0d85347b25f85fda",
+      "f6925eaaeeea210e"
      ]
     ],
     "v": "3.11"
@@ -6114,8 +6139,8 @@
     "line": "AssertionError: None not found in ('deny', 'ask') : phải bị chặn: sau tin app tạo",
     "ts": "2026-11-20T22:49:54+07:00"
    },
-   "sha256": "c73cbcb06165899f058595b577ed740265300cfb5d69c577c378a7e78120247d",
-   "ts": "2026-11-20T23:49:29+07:00"
+   "sha256": "d072990fcd77aae2620d18cba3001c8ecce33ab5f9e4d1fb6c75959eb7aa2a3e",
+   "ts": "2026-11-21T08:32:57+07:00"
   },
   "tests/test_cwd_glob_guard.py": {
    "base": "017aa0d5d8ba140395288d0ebbf2015c7b8ffd68",
@@ -31829,7 +31854,7 @@
    "ts": "2026-11-14T08:06:42+07:00"
   },
   "tests/test_testlock_holes.py": {
-   "base": "a5e9afbeefdcaa3f61bf6dda1c546fa5b971767f",
+   "base": "75fffbe9dd53f4887fcd8ad5508f734b5513ddd4",
    "cmd": [
     "python3",
     "-m",
@@ -32138,7 +32163,70 @@
     "bbe44988eee2",
     "7a72fe5dcd48",
     "591b1fd027c7",
-    "67a90bed6e08"
+    "67a90bed6e08",
+    "d38b97aaef82",
+    "61aa07ba6989",
+    "8447cd0a5b0a",
+    "3cafcc4698da",
+    "4c522918ad1c",
+    "76be361b8fc0",
+    "c6e880a22905",
+    "591b1fd027c7",
+    "f294b5f8f5c1",
+    "a9c203d4ae2c",
+    "93bb6770ee25",
+    "4c522918ad1c",
+    "2b64ad34a5b1",
+    "e9d15e43af63",
+    "e7a7658d353c",
+    "591b1fd027c7",
+    "f294b5f8f5c1",
+    "f04cd89a9747",
+    "648079c3ae6a",
+    "4c522918ad1c",
+    "7700eb52757b",
+    "13d48b77dbc9",
+    "1b2d13b57e8e",
+    "dca28d100f08",
+    "591b1fd027c7",
+    "f294b5f8f5c1",
+    "5beee446b881",
+    "240a3e552a3e",
+    "c24062cffbd7",
+    "c0e847a933df",
+    "2d73d69c1b52",
+    "2be1cc43ec11",
+    "9fa82ce0e090",
+    "7af09e274bff",
+    "4c522918ad1c",
+    "905f2b760f22",
+    "4c3be8605ee3",
+    "26b3ab092690",
+    "4a48ac500a99",
+    "4c522918ad1c",
+    "6316f308b303",
+    "632891dd7e29",
+    "ca938f791c35",
+    "5d3f5466e272",
+    "64fe802c86a8",
+    "591b1fd027c7",
+    "d6f3df937e70",
+    "059a287c28ee",
+    "8bf8221e21c7",
+    "4c522918ad1c",
+    "f4743de2be10",
+    "8ca37da2d821",
+    "99952f71c6b7",
+    "591b1fd027c7",
+    "d6f3df937e70",
+    "393c19361d6d",
+    "9b010752f979",
+    "4c522918ad1c",
+    "f99625a497a4",
+    "0f61ea8b5e82",
+    "47942912ab8c",
+    "591b1fd027c7",
+    "d6f3df937e70"
    ],
    "py": {
     "items": [
@@ -32629,6 +32717,70 @@
       "",
       "bed47e24d4e105c1",
       "b3d3c207897586c7,c51a4fcbb737f891"
+     ],
+     [
+      "class",
+      "DifferentialReviewHoles",
+      "043ce17601cc3e6f",
+      "DifferentialReviewHoles",
+      "",
+      ""
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_redirect_glued_to_the_previous_word",
+      "adeff0cebb521d13",
+      "",
+      "7009a30810839e64",
+      "b3d3c207897586c7,a7715acaa447bf1b"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_case_pattern_paren_is_not_a_subshell_close",
+      "a488e0e110c46264",
+      "",
+      "cb99310c9a03dd1f",
+      "b3d3c207897586c7,8f21f8a2c3c1199e"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_case_words_that_do_not_open_a_case_block",
+      "c2d085e0b51c76df",
+      "",
+      "ca09e89caa94fd5e",
+      "b3d3c207897586c7,3560451116c83e7e"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_word_ending_in_a_digit_before_redirect",
+      "747ece9a13cd1570",
+      "",
+      "b81f3da756e58230",
+      "6102a13bcadb5fa8,ca9e2111c76dff5e,05ddae5214315e9b,50cfed459731c982,591975c035de0e89,cbf1a2164040ba77,b3d3c207897586c7,5fbf0b658514282da,2835ee4254dd812ca"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_many_states_and_quoted_parens_do_not_drop_the_latest_cd",
+      "b1824c63180140fa",
+      "",
+      "99b9136328b73b64",
+      "b3d3c207897586c7,124c7996856d8c81"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_nested_subshells_with_case_word_and_next_dirs_overflow",
+      "409a0b059d3ef2db",
+      "",
+      "329eba722161629c",
+      "b3d3c207897586c7,cb5900a540b1a393"
+     ],
+     [
+      "def",
+      "DifferentialReviewHoles.test_oldpwd_and_pushd_variants_and_unmatched_paren",
+      "c383b17720f96ff1",
+      "",
+      "102cf474ba3a6c7b",
+      "b3d3c207897586c7,9abf2e005174a538,c37ca296afd36d65"
      ]
     ],
     "v": "3.11"
@@ -32669,8 +32821,8 @@
     "line": "AssertionError: hook chạy quá 10 giây (timeout thật là 5): 'cd {tests,zz}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,},{,}}{{,}'",
     "ts": "2026-11-20T23:15:29+07:00"
    },
-   "sha256": "eec13b2de22c572eccd416f48862f3dd64db743890336bb2bc1db3201bce284a",
-   "ts": "2026-11-21T00:03:54+07:00"
+   "sha256": "fd5be20ba7c81ad6fe1e497bf7b83363ebe465b1b3ee75057b3d0441d4fa64b0",
+   "ts": "2026-11-21T09:31:57+07:00"
   }
  },
  "schema": 1

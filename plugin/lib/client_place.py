@@ -156,7 +156,8 @@ def prompt_origin(transcript, digest_value: str, start=None):
     found_kind = None
     try:
         for raw in _origin_lines(Path(transcript), start):
-            if b'"user"' not in raw and b'queued_command' not in raw:
+            # chỉ tin mở lượt (có nguồn hay là tin xếp hàng) mới cần parse; kết quả công cụ lớn thì bỏ qua sớm
+            if b'queued_command' not in raw and (b'"user"' not in raw or (b'Origin"' not in raw and b'"origin"' not in raw)):
                 continue
             try:
                 rec = json.loads(raw.decode("utf-8", "replace"))
@@ -192,12 +193,7 @@ def last_client_platform(transcript):
 
 def transcript_size(transcript):
     """Cỡ transcript lúc người dùng vừa gửi tin: bản ghi nằm từ vị trí này trở đi là tin mới. None khi không biết."""
-    if not isinstance(transcript, str) or not transcript:
-        return None
-    try:
-        return os.path.getsize(transcript)
-    except OSError:
-        return 0 if not os.path.exists(transcript) else None  # phiên mới chưa có file: mọi bản ghi đều mới
+    return A.transcript_size(transcript) if isinstance(transcript, str) and transcript else None
 
 
 def mark_pending(data: dict) -> None:

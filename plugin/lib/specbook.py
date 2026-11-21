@@ -37,7 +37,6 @@ CODE_RE = re.compile(r"^[0-9a-f]{8,64}$")
 # Tin nhắc số dòng spec (S3) là góp ý hay điều kiện: không phải lời duyệt cả file.
 LINE_ID_RE = re.compile(r"(?<![\w-])s\d{1,4}(?![\w-])")
 MENTION_RE = re.compile(r"duyet\s+spec\s+[0-9a-f]{8,64}")
-REMINDER_RE = re.compile(r"<system-reminder\b[^>]*>.*?(?:</system-reminder>|\Z)", re.S | re.I)
 # Từ được đứng sau mã trong câu duyệt (đã bỏ dấu); từ khác thì câu có điều kiện, không tính là lời duyệt.
 _TAIL_OK = {"nhe", "nha", "di", "luon", "nay", "do", "va", "and", "file", "ok", "giup", "gium", "cho", "toi",
             "minh", "spec", "ma", "nhe!", "a", "nhen", "nghen", "nhá", "nha!"}
@@ -156,6 +155,11 @@ def _verify_fields(v) -> bool:
     return isinstance(v, dict) and all(isinstance(v.get(k), str) and v.get(k) for k in ("session", "transcript", "digest"))
 
 
+def _settled(row: dict) -> dict:
+    """Bản duyệt đã xác minh tin do người dùng gõ: bỏ dấu chờ."""
+    return {k: x for k, x in row.items() if k != "verify"}
+
+
 def load_approvals() -> list:
     """Bản duyệt được tính: bản không mang `verify`, và bản mang `verify` mà transcript cho thấy tin do người dùng gõ.
     `verify` sai dạng thì không tính (đóng chứ không mở)."""
@@ -165,7 +169,7 @@ def load_approvals() -> list:
             v = r["verify"]
             if not (_verify_fields(v) and A.prompt_from_human(v["transcript"], v["digest"], v.get("size"))):
                 continue
-            r = rows[i] = {k: x for k, x in r.items() if k != "verify"}
+            r = rows[i] = _settled(r)
             settled = True
         out.append(r)
     if settled:  # chỉ ghi kết luận của phép kiểm vừa đạt: transcript bị dọn sau này không làm mất bản duyệt thật
@@ -200,7 +204,7 @@ def settle_session(session_id, transcript) -> int:
             origin = client_place.prompt_origin(v["transcript"], v["digest"], v.get("size")) \
                 if v["transcript"] == transcript else None
             if origin == "human":
-                r = {k: x for k, x in r.items() if k != "verify"}
+                r = _settled(r)
                 changed += 1
             elif origin is not None:
                 changed += 1
@@ -373,7 +377,7 @@ def approval_text(prompt) -> str:
     thẻ <ide_*>, phần dán, khối code, dòng trích (TM-128)."""
     if not isinstance(prompt, str) or A.is_spawn_brief(prompt):
         return ""
-    return A.own_words(REMINDER_RE.sub(" ", A.routable_text(prompt)))
+    return A.own_words(A.routable_text(prompt))  # own_words bỏ cả khối <system-reminder> nằm giữa tin
 
 
 def approve_from_prompt(own_words: str, cwd, verify=None) -> list:

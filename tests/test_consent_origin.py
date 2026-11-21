@@ -456,3 +456,14 @@ class ReviewFixesOrigin(OriginBase):
                                   "hook_event_name": "Stop"})
             path.unlink()
             self.assertEqual(len(specbook.approved(self.project)), 2)
+
+
+class GluedRedirectIrreversible(OriginBase):
+    # spec:dong-y-tu-nguoi-go#S1 (thêm lúc chốt việc, differential-review 21/11: `git push&>/dev/null` từng lọt cổng)
+    def test_push_with_glued_redirect_still_needs_consent(self):
+        for i, suffix in enumerate(("&>/dev/null", ">/dev/null", "&>>log.txt")):
+            sid = f"gr{i}"
+            with self.subTest(suffix=suffix):
+                path = self.transcript(sid)
+                self.submit("Làm tiếp việc của project", sid, path)
+                self.assert_blocked(self.bash_t(PUSH + suffix, sid, path), suffix)

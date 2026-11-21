@@ -350,3 +350,74 @@ class ReviewRound2Holes(HoleBase):
                     "read -r CDPATH <<< ..; cd tests; rm test_b.py", "CDPATH+=..; cd tests; rm test_b.py"]:
             with self.subTest(cmd=cmd):
                 self.assertBlocked(cmd, cwd=self.project / "tools")
+
+
+class DifferentialReviewHoles(HoleBase):
+    # Thêm lúc chốt việc, theo differential-review ngày 21/11/2026.
+    # spec:khoa-test-lo-cu#S1 (chuyển hướng dính chữ trước, `&>` liền chữ: đích vẫn là test khóa)
+    def test_redirect_glued_to_the_previous_word(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["rm tests/test_b.py&>/dev/null", "rm tests/test_b.py>/dev/null",
+                    "cd tests>/dev/null && rm test_b.py", "cd tests&>/dev/null; rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1 (`)` của mẫu `case` không đóng tiến trình con)
+    def test_case_pattern_paren_is_not_a_subshell_close(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["(cd tools; case a in a) ;; esac; rm ../tests/test_b.py)",
+                    "bash -c 'cd tools; case a in a) ;; esac; rm ../tests/test_b.py'",
+                    "(case x in x) true;; esac; cd tools); rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1 (review lại 21/11: chữ `case`/`esac` không phải từ khóa thật không được làm lệch phạm vi)
+    def test_case_words_that_do_not_open_a_case_block(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["(cd tools; case a in esac); rm tests/test_b.py", "(cd tools; \"case\"); rm tests/test_b.py",
+                    "(cd tools; \\case x); rm tests/test_b.py",
+                    "(cd tools; case a in a) \"esac\";; b) ;; esac; rm ../tests/test_b.py)",
+                    "(cd tools; case b in a|esac) ;; esac; rm ../tests/test_b.py)"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, ("deny",))
+
+    # spec:khoa-test-lo-cu#S1 (chữ số cuối từ không phải số luồng: `tests/v2>/dev/null`)
+    def test_word_ending_in_a_digit_before_redirect(self):
+        sub = self.project / "tests" / "v2"
+        sub.mkdir()
+        (sub / "test_c.py").write_text(B_TEST)
+        write_lock(self.project, "cao", "tests/v2/test_c.py")
+        git(self.project, "add", "-A")
+        git(self.project, "commit", "-q", "-m", "v2")
+        self.start("làm tiếp", "h1")
+        self.assertBlocked("rm -r tests/v2>/dev/null", ("deny",))
+        self.assertBlocked("rm tests/v2/test_c.py>/dev/null", ("deny",))
+
+    # spec:khoa-test-lo-cu#S1 (review lại 21/11: quá 8 trạng thái thì không được bỏ thư mục mới nhất; ngoặc trong nháy)
+    def test_many_states_and_quoted_parens_do_not_drop_the_latest_cd(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["(cd /tmp); (cd /usr); (cd /bin); (cd /etc); cd tests; rm test_b.py; git commit -m 'test case'",
+                    "cd /tmp | true; cd /usr | true; cd /bin | true; cd /etc | true; cd tests; rm test_b.py",
+                    "cd n1; cd n2; cd n3; cd n4; cd tests; rm test_b.py",
+                    "echo \"(\"; cd tests; echo \")\"; rm test_b.py", "echo \\(; cd tests; echo \\); rm test_b.py",
+                    "(echo \")\"; cd tests); rm tests/test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S1 (review lại 21/11: subshell lồng khi có chữ `case`, tràn trạng thái ở `next_dirs`)
+    def test_nested_subshells_with_case_word_and_next_dirs_overflow(self):
+        self.start("làm tiếp", "h1")
+        for cmd in ["(cd tools && echo $(pwd)); rm tests/test_b.py; git commit -m \"fix(hook): x\"",
+                    "(cd tools; (true)); rm tests/test_b.py # case",
+                    "cd tests; cd /usr | true; cd /bin | true; cd /etc | true; cd x*; rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)
+
+    # spec:khoa-test-lo-cu#S1 (review lại 21/11: giữ biến thể OLDPWD và chồng pushd; `)` không có cặp)
+    def test_oldpwd_and_pushd_variants_and_unmatched_paren(self):
+        self.start("làm tiếp", "h1")
+        root = str(self.project)
+        for cmd in [f"true | cd tests; cd {root}; cd -; rm test_b.py", f"true | cd tests; pushd {root}; popd; rm test_b.py",
+                    "cd tests; echo ${x:-)}; rm test_b.py", "cd tests && echo ${x%)} && rm test_b.py"]:
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd)

@@ -75,12 +75,27 @@ REDIRECT_RE = re.compile(r"^\d*(>>?|<)")
 # nó), hay thư mục git bỏ qua mà có tên kiểu tạm, build, cache. Thư mục git bỏ qua khác (backups, state, samples) vẫn hỏi.
 RM_SCRATCH_NAMES = {".tmp", "tmp", "build", "dist", "node_modules", "__pycache__", ".cache", ".venv", "venv",
                     ".pytest_cache", ".mypy_cache", ".ruff_cache"}
-# Gán HOME, CDPATH trong chuỗi lệnh (`HOME=$PWD`, `export CDPATH=.`, `declare -x HOME=…`): `~` và `cd <tên>` không còn
-# tính được từ môi trường của hook (TM-173).
-# Mọi chỗ tên biến đứng như một từ, không phải lúc đọc giá trị (`$HOME`, `${HOME}`): `HOME=`, `HOME+=`, `read HOME`,
-# `for HOME in …`, `export HOME`. Bắt thừa (chữ HOME trong câu) chỉ làm hook xét `~` như thư mục không biết.
-HOME_SET_RE = re.compile(r"(?<![$\w{/.-])HOME\b(?![./-])")
-CDPATH_SET_RE = re.compile(r"(?<![$\w{/.-])CDPATH\b(?![./-])")
+# Lệnh có thể đặt HOME, CDPATH (TM-173): tên biến đứng như một từ, không phải lúc đọc giá trị (`$HOME`, `${HOME}`):
+# `HOME=`, `HOME+=`, `read HOME`, `for HOME in …`, `export HOME`. Khi đó `~` và `cd <tên>` không tính được từ môi
+# trường của hook; bắt thừa (chữ HOME trong câu) chỉ làm hook xét chúng như thư mục không biết.
+HOME_SET_RE, CDPATH_SET_RE = (re.compile(rf"(?<![$\w{{/.-]){name}\b(?![./-])") for name in ("HOME", "CDPATH"))
+
+
+MAX_STATES = 8
+
+
+def merge_states(*groups, lost=None) -> list:
+    """Gộp các trạng thái (thư mục, OLDPWD, chồng pushd) có thể có, bỏ trùng, tối đa MAX_STATES, nhóm trước giữ trước.
+    Mỗi thư mục giữ một bản trước, các biến thể khác OLDPWD hay chồng pushd xếp sau, nên khi phải cắt thì biến thể bị
+    bỏ trước. Cắt mất một thư mục thì ghi vào `lost` (check_bash hỏi lại mọi lệnh ghi sau đó, review 21/11)."""
+    uniq = list({(s[0], s[1], tuple(s[2])): s for group in groups for s in group}.values())
+    seen, firsts, rest = set(), [], []
+    for s in uniq:
+        (rest if s[0] in seen else firsts).append(s)
+        seen.add(s[0])
+    if lost is not None and len(firsts) > MAX_STATES:
+        lost.append(True)
+    return (firsts + rest)[:MAX_STATES]
 
 
 def cdpath_argv(argv: list) -> list:
@@ -178,6 +193,12 @@ BG_RE = re.compile(r"(?<![&|])&(?![&>])")
 # thành một đối số (hook mở khóa từng đọc `2>` thành tên file).
 DUP_FD_RE = re.compile(r"(?<![\w&<>])\d*[<>]&(?:\d+|-)(?=$|[\s;|&)])")
 # `&>f`, `&>>f` (ghi cả hai luồng vào f), `>& f`, `<& f`: chuyển hướng, không phải `&` chạy nền.
+# Chữ đứng liền trước `>`: chỉ là số luồng khi cả từ toàn chữ số (`2>f`); `build2>f`, `tests/v2>f` là từ rồi chuyển hướng.
+GLUED_REDIRECT_RE = re.compile(r"([^\s<>&|;()]+)(?=>)")
+# Lệnh có `case`: dấu `)` của mẫu (`a)`) không phân biệt được với `)` đóng tiến trình con (`case a in esac`, `"case"`,
+# `"esac"` làm đếm sai), nên khi đóng phạm vi thì gộp thư mục trong và ngoài thay vì khôi phục: chỉ hỏi thừa, không lọt.
+QUOTED_PAREN_RE = re.compile(r"\\[()]|\"[^\"]*[()][^\"]*\"|'[^']*[()][^']*'")
+CASE_WORD_RE = re.compile(r"(?<![\w-])case(?![\w-])")
 AMP_REDIRECT_RE = re.compile(r"(?<![&|])&>>?|(?<=[<>])&(?=\s)")
 
 
@@ -236,8 +257,10 @@ def simple_commands(command: str, depth: int = 0, commenters: str = "#", scopes:
     text = CONTINUATION_RE.sub(r"\1 ", HEREDOC_RE.sub(lambda m: " " + m.group(3) + "\n", command))
     text = re.sub(r">\|", ">", text)  # `>|` (ghi đè dù noclobber) là chuyển hướng, không phải ống
     text = DUP_FD_RE.sub(" ", text)
-    text = AMP_REDIRECT_RE.sub(lambda m: ">" if m.group(0).startswith("&>") else "", text)
+    text = AMP_REDIRECT_RE.sub(lambda m: " >" if m.group(0).startswith("&>") else "", text)
     text = re.sub(r">&(?=[^\d\s&-])", ">", text)  # `>&file` ghi vào file, không phải chạy nền
+    # `git push>/dev/null`, `rm x>log`: tách chuyển hướng khỏi chữ đứng trước, kẻo shlex gộp thành một từ lạ
+    text = GLUED_REDIRECT_RE.sub(lambda m: m[1] if m[1].isdigit() else m[1] + " ", text)
     lexer = shlex.shlex(text, posix=True, punctuation_chars=";&|()\n")
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
@@ -336,7 +359,11 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
             return found
     temp_vars = mktemp_vars(command)
     states, saved = [(cwd, None, [])], []
+    initial = states
     list_start = states  # thư mục lúc đầu danh sách lệnh hiện tại (cho `&`)
+    # `)` không chắc đóng tiến trình con (mẫu của `case`, ngoặc trong nháy hay sau `\` mà shlex vẫn trả thành dấu)
+    has_case = bool(CASE_WORD_RE.search(command) or QUOTED_PAREN_RE.search(command))
+    lost: list = []  # quá MAX_STATES thư mục có thể: không biết lệnh ghi chạy ở đâu
     units = simple_commands(command, scopes=True)
     cdpath = bool(CDPATH_SET_RE.search(command) or os.environ.get("CDPATH"))
     home_set = bool(HOME_SET_RE.search(command))
@@ -346,11 +373,15 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
             list_start = states
             continue
         if argv is SCOPE_CLOSE:  # ra khỏi tiến trình con: thư mục trở về như trước khi vào
-            states, list_start = saved.pop() if saved else (states, list_start)
+            saved_at = bool(saved)
+            before, outer = saved.pop() if saved else (initial, list_start)
+            # `)` không chắc đóng tiến trình con (`case`, ngoặc trong nháy): gộp thư mục ngoài với trong, chỉ hỏi thừa
+            # `)` không có cặp (`${x:-)}`) hay không chắc đóng tiến trình con: gộp, chỉ hỏi thừa
+            states, list_start = (merge_states(before, states, lost=lost) if has_case or not saved_at else before), outer
             continue
         if argv is BG_MARK:  # `cd tools && true & rm x`: danh sách chạy nền không đổi thư mục của lệnh sau
             # gộp chứ không thay: đoán nhầm một `&` là chạy nền thì chỉ hỏi thừa, không lọt
-            states = list({(s[0], s[1], tuple(s[2])): s for s in list_start + states}.values())[:8]
+            states = merge_states(list_start, states, lost=lost)
             continue
         if argv is LIST_MARK:
             list_start = states
@@ -367,12 +398,19 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
             if cdpath and Path(argv[0]).name != "popd":
                 argv = cdpath_argv(argv)  # tên không có `/` có thể đi theo CDPATH tới thư mục khác
             piped = PIPE_MARK in (units[i - 1] if i else None, units[i + 1] if i + 1 < len(units) else None)
-            moved = next_dirs(argv, states)
+            moved = next_dirs(argv, states, lost)
             # `cd nope; rm tests/x.py`: cd tới thư mục không có thì thất bại, lệnh sau chạy ở thư mục cũ
             piped = piped or any(not any(ch in s[0] for ch in DIR_UNKNOWN) and not is_dir(Path(s[0])) for s in moved)
             # vế của ống: `cd` có thể chạy trong tiến trình con (bash) hay shell hiện tại (vế cuối ở zsh): giữ cả hai
-            states = list({(s[0], s[1], tuple(s[2])): s for s in states + moved}.values())[:8] if piped else moved
+            states = merge_states(states, moved, lost=lost) if piped else moved
             continue
+        if lost and write_targets(argv, Path(cwd or ".")):
+            found = ("ask", "agent-stack: chuỗi lệnh có quá nhiều `cd` có thể chạy hay không (thư mục không có, ống, "
+                     "`&`, `case`), hook không còn biết lệnh ghi này chạy ở thư mục nào nên không kiểm được nó có đụng "
+                     "test đã khóa không. Tách thành lệnh ngắn hơn, hay viết đường dẫn tuyệt đối. Người dùng chỉ đồng "
+                     "ý khi chắc lệnh không đụng test khóa.")
+            if found not in results:
+                results.append(found)
         for here in dict.fromkeys(st[0] for st in states):
             result = check_argv(argv, here, temp_vars, session_id)
             try:
@@ -393,17 +431,17 @@ def check_bash(command: str, cwd: str, session_id: str = ""):
     return (gate_user(gated, session_id) if gated else None) or next((r for r in results if r[0] == "ask"), None)
 
 
-def next_dirs(argv: list, states: list) -> list:
+def next_dirs(argv: list, states: list, lost=None) -> list:
     """Các trạng thái (thư mục chạy, OLDPWD, chồng pushd) có thể có sau `cd`, `pushd`, `popd`. Lệnh không đoán được
     (`cd -`, `popd` khi chồng rỗng, `cd t*`, `~user` không có) có thể thất bại và đứng nguyên, mà sau `;` lệnh tiếp vẫn
-    chạy: giữ cả thư mục cũ để `popd; rm tests/x.py` vẫn bị chặn như trước. Tối đa 8 trạng thái."""
+    chạy: giữ cả thư mục cũ để `popd; rm tests/x.py` vẫn bị chặn như trước. Gộp bằng merge_states."""
     out = {}
     for cwd, oldpwd, stack in states:
         new = change_dir(argv, cwd, oldpwd, stack)
         out.setdefault((new[0], new[1], tuple(new[2])), new)
         if "$OLDPWD" in new[0] or any(ch in a for a in argv[1:] for ch in GLOB_CHARS):
             out.setdefault((cwd, oldpwd, tuple(stack)), (cwd, oldpwd, stack))
-    return list(out.values())[:8]
+    return merge_states(list(out.values()), lost=lost)
 
 
 def change_dir(argv: list, cwd: str, oldpwd, stack: list) -> tuple:
@@ -1786,7 +1824,7 @@ def expand_glob(full: Path) -> list:
     if top is None or not (top / TL.LOCK_REL).is_file():
         return []
     candidates = [top / rel for rel in TL.load(top)["files"]] + [top / TL.LOCK_REL]
-    fold = str.casefold if TL.case_insensitive(top) else str  # `rm TESTS/*.py` trên APFS (TM-173)
+    fold = TL.fold(top)  # `rm TESTS/*.py` trên APFS (TM-173)
     pats = [fold(p) for p in brace_expand(str(full))]
     return [c for c in candidates if any(fnmatch.fnmatchcase(fold(str(c)), p)
                                          or fnmatch.fnmatchcase(fold(str(c.resolve())), p) for p in pats)]
@@ -1802,7 +1840,7 @@ def locked_inside(TL, folder: Path) -> list:
     if top is None or not (top / TL.LOCK_REL).is_file():
         return []  # project không có sổ khóa: hành vi như cũ
     prefix = "" if rel in (".", "") else rel + "/"
-    fold = str.casefold if TL.case_insensitive(top) else str  # `rm -r TESTS` trên APFS (TM-173)
+    fold = TL.fold(top)  # `rm -r TESTS` trên APFS (TM-173)
     return [top / p for p in [*TL.load(top)["files"], TL.LOCK_REL] if fold(p).startswith(fold(prefix))]
 
 
@@ -1847,7 +1885,7 @@ def unknown_dir_check(argv: list, cwd: str, session_id: str = ""):
             continue
         pats = [q for p in brace_expand(pattern) for q in (p, p.rstrip("/") + "/*")]  # đích có thể là thư mục
         for cand in [top / rel for rel in TL.load(top)["files"]] + [top / TL.LOCK_REL]:
-            fold = str.casefold if TL.case_insensitive(top) else str
+            fold = TL.fold(top)
             if not any(fnmatch.fnmatchcase(fold(str(cand)), fold(p)) for p in pats):
                 continue
             rel = cand.relative_to(top).as_posix()

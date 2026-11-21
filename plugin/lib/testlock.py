@@ -340,6 +340,11 @@ def case_insensitive(top) -> bool:
     return _CASE_CACHE[key]
 
 
+def fold(top):
+    """Hàm chuẩn hóa chữ để so đường dẫn trong repo `top`: casefold khi hệ file không phân biệt hoa thường."""
+    return str.casefold if case_insensitive(top) else str
+
+
 def lookup(full):
     """(gốc repo, đường dẫn tương đối, mục khóa) khi `full` là file đã khóa; không thì None. Trên hệ file không phân
     biệt hoa thường, `TESTS/test_x.py` trả đúng mục `tests/test_x.py`."""
@@ -353,7 +358,7 @@ def lookup(full):
         return None
     book = load(top)
     if rel not in book["files"] and case_insensitive(top):
-        rel = next((k for k in book["files"] if k.casefold() == rel.casefold()), rel)
+        rel = next((k for k in book["files"] if fold(top)(k) == fold(top)(rel)), rel)
     entry = book["files"].get(rel)
     if entry is None and book.get("broken"):
         entry = {"level": "cao", "broken": True}  # sổ hỏng: không biết file nào khóa, coi file test nào cũng khóa
@@ -370,6 +375,6 @@ def is_lock_file(full) -> bool:
         if top is None:
             return False
         lock = (top / LOCK_REL).resolve()
-        return full == lock or (case_insensitive(top) and str(full).casefold() == str(lock).casefold())
+        return fold(top)(str(full)) == fold(top)(str(lock))
     except (OSError, RuntimeError):
         return False
